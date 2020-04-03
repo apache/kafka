@@ -1022,7 +1022,7 @@ class GroupCoordinator(val brokerId: Int,
           protocolType = group.protocolType,
           protocolName = group.protocolName,
           // We want to avoid current leader performing trivial assignment while the group
-          // is in stable sync stage, because the new assignment in leader's next sync call
+          // is in stable stage, because the new assignment in leader's next sync call
           // won't be broadcast by a stable group. This could be guaranteed by
           // always returning the old leader id so that the current leader won't assume itself
           // as a leader based on the returned message, since the new member.id won't match
@@ -1030,6 +1030,10 @@ class GroupCoordinator(val brokerId: Int,
           leaderId = currentLeader,
           error = Errors.NONE))
       case CompletingRebalance =>
+        // if the group is in after-sync stage, upon getting a new join-group of a known static member
+        // we should still trigger a new rebalance, since the old member may already be sent to the leader
+        // for assignment, and hence when the assignment gets back there would be a mismatch of the old member id
+        // with the new replaced member id. As a result the new member id would not get any assignment.
         prepareRebalance(group, s"Updating metadata for static member ${member.memberId} with instance id $groupInstanceId")
       case Empty | Dead =>
         throw new IllegalStateException(s"Group ${group.groupId} was not supposed to be " +

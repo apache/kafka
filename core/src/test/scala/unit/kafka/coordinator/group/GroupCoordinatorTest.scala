@@ -616,7 +616,7 @@ class GroupCoordinatorTest {
       groupId,
       CompletingRebalance,
       Some(protocolType))
-    assertEquals(leaderJoinGroupResult.leaderId, leaderJoinGroupResult.memberId)
+    assertEquals(rebalanceResult.leaderId, leaderJoinGroupResult.memberId)
     assertEquals(rebalanceResult.leaderId, leaderJoinGroupResult.leaderId)
 
     // Old follower shall be getting a successful join group response.
@@ -629,8 +629,13 @@ class GroupCoordinatorTest {
       CompletingRebalance,
       Some(protocolType),
       expectedLeaderId = leaderJoinGroupResult.memberId)
+    assertEquals(rebalanceResult.followerId, oldFollowerJoinGroupResult.memberId)
+    assertEquals(rebalanceResult.leaderId, oldFollowerJoinGroupResult.leaderId)
+    assertTrue(getGroup(groupId).is(CompletingRebalance))
 
-    // Old follower sync callback will return fenced exception while broker replaces the member identity.
+    // Duplicate follower joins group with unknown member id will trigger member.id replacement,
+    // and will also trigger a rebalance under CompletingRebalance state; the old follower sync callback
+    // will return fenced exception while broker replaces the member identity with the duplicate follower joins.
     EasyMock.reset(replicaManager)
     val oldFollowerSyncGroupFuture = sendSyncGroupFollower(groupId, oldFollowerJoinGroupResult.generationId,
       oldFollowerJoinGroupResult.memberId, Some(protocolType), Some(protocolName), followerInstanceId)
@@ -640,9 +645,8 @@ class GroupCoordinatorTest {
     timer.advanceClock(1)
     val oldFollowerSyncGroupResult = Await.result(oldFollowerSyncGroupFuture, Duration(1, TimeUnit.MILLISECONDS))
     assertEquals(Errors.FENCED_INSTANCE_ID, oldFollowerSyncGroupResult.error)
+    assertTrue(getGroup(groupId).is(PreparingRebalance))
 
-    // Duplicate follower joins group with unknown member id will trigger member.id replacement,
-    // and will also trigger a rebalance under CompletingRebalance state
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
     timer.advanceClock(DefaultRebalanceTimeout + 1)
 
@@ -655,6 +659,7 @@ class GroupCoordinatorTest {
       CompletingRebalance,
       Some(protocolType),
       expectedLeaderId = duplicateFollowerJoinGroupResult.memberId)
+    assertTrue(getGroup(groupId).is(CompletingRebalance))
   }
 
   @Test

@@ -893,7 +893,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private synchronized void resetGeneration() {
         this.generation = Generation.NO_GENERATION;
-        rejoinNeeded = true;
 
         // only reset the state to un-joined when it is not already in rebalancing
         if (state != MemberState.REBALANCING)
@@ -901,7 +900,8 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
-        log.debug("Resetting generation after encountering {} from {} response", error, api);
+        log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
+        rejoinNeeded = true;
         resetGeneration();
     }
 
@@ -1013,7 +1013,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
     // visible for testing
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
-        log.debug("Sending Heartbeat request to coordinator {}", coordinator);
+        log.debug("Sending Heartbeat request with generation {} and member id {} to coordinator {}",
+            generation.generationId, generation.memberId, coordinator);
         HeartbeatRequest.Builder requestBuilder =
                 new HeartbeatRequest.Builder(new HeartbeatRequestData()
                         .setGroupId(rebalanceConfig.groupId)
@@ -1021,20 +1022,27 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setGenerationId(this.generation.generationId));
         return client.send(coordinator, requestBuilder)
-                .compose(new HeartbeatResponseHandler());
+                .compose(new HeartbeatResponseHandler(generation));
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
+        private final Generation sentGeneration;
+
+        private HeartbeatResponseHandler(final Generation generation) {
+            this.sentGeneration = generation;
+        }
+
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatSensor.record(response.requestLatencyMs());
             Errors error = heartbeatResponse.error();
+            final Generation currentGeneration = generation();
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response");
                 future.complete(null);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
-                log.info("Attempt to heartbeat failed since coordinator {} is either not started or not valid.",
+                log.info("Attempt to heartbeat failed since coordinator {} is either not started or not valid",
                         coordinator());
                 markCoordinatorUnknown();
                 future.raise(error);
@@ -1043,16 +1051,30 @@ public abstract class AbstractCoordinator implements Closeable {
                 requestRejoin();
                 future.raise(error);
             } else if (error == Errors.ILLEGAL_GENERATION) {
-                log.info("Attempt to heartbeat failed since generation {} is not current", generation.generationId);
-                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
-                future.raise(error);
+                if (sentGeneration.equals(currentGeneration)) {
+                    log.info("Attempt to heartbeat failed since generation {} is not current", sentGeneration.generationId);
+                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
+                    future.raise(error);
+                } else {
+                    log.info("Attempt to heartbeat failed with illegal sent generation {}, while the current generation is {}; " +
+                        "ignoring this error and continue heartbeat since the generation has changed",
+                        sentGeneration, currentGeneration);
+                    future.complete(null);
+                }
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 log.error("Received fatal exception: group.instance.id gets fenced");
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                log.info("Attempt to heartbeat failed for since member id {} is not valid.", generation.memberId);
-                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
-                future.raise(error);
+                if (sentGeneration.equals(currentGeneration)) {
+                    log.info("Attempt to heartbeat failed for since member id {} is not valid.", sentGeneration.memberId);
+                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
+                    future.raise(error);
+                } else {
+                    log.info("Attempt to heartbeat failed with invalid sent member id {}, while the current generation is {}; " +
+                            "ignoring this error and continue heartbeat since the generation has changed",
+                        sentGeneration, currentGeneration);
+                    future.complete(null);
+                }
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
@@ -1291,9 +1313,8 @@ public abstract class AbstractCoordinator implements Closeable {
                             // coordinator disconnected
                             AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else {
-                            heartbeat.sentHeartbeat(now);
-
-                            sendHeartbeatRequest().addListener(new RequestFutureListener<Void>() {
+                            final RequestFuture<Void> heartbeatFuture = sendHeartbeatRequest();
+                            heartbeatFuture.addListener(new RequestFutureListener<Void>() {
                                 @Override
                                 public void onSuccess(Void value) {
                                     synchronized (AbstractCoordinator.this) {
@@ -1322,6 +1343,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                     }
                                 }
                             });
+
+                            heartbeat.sentHeartbeat(now, heartbeatFuture);
                         }
                     }
                 }
@@ -1432,5 +1455,7 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation != Generation.NO_GENERATION && generation.hasMemberId();
     }
 
-
+    final void setNewGeneration(final Generation generation) {
+        this.generation = generation;
+    }
 }
