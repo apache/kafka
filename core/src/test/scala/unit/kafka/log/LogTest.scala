@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.{Callable, Executors}
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
 
@@ -3647,6 +3648,59 @@ class LogTest {
 
     // now there should be no first unstable offset
     assertEquals(None, log.firstUnstableOffset)
+  }
+
+  @Test
+  def testReadCommittedWithConcurrentHighWatermarkUpdates(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    val lastOffset = 50L
+
+    val producerEpoch = 0.toShort
+    val producerId = 15L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    // Thread 1 writes single-record transactions and attempts to read them
+    // before they have been aborted, and then aborts them
+    val txnWriteAndReadLoop: Callable[Int] = () => {
+      var nonEmptyReads = 0
+      while (log.logEndOffset < lastOffset) {
+        val currentLogEndOffset = log.logEndOffset
+
+        appendProducer(1)
+
+        val readInfo = log.read(
+          startOffset = currentLogEndOffset,
+          maxLength = Int.MaxValue,
+          isolation = FetchTxnCommitted,
+          minOneMessage = false)
+
+        if (readInfo.records.sizeInBytes() > 0)
+          nonEmptyReads += 1
+
+        appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
+      }
+      nonEmptyReads
+    }
+
+    // Thread 2 watches the log and updates the high watermark
+    val hwUpdateLoop: Runnable = () => {
+      while (log.logEndOffset < lastOffset) {
+        log.updateHighWatermark(log.logEndOffset)
+      }
+    }
+
+    val executor = Executors.newFixedThreadPool(2)
+    try {
+      executor.submit(hwUpdateLoop)
+
+      val future = executor.submit(txnWriteAndReadLoop)
+      val nonEmptyReads = future.get()
+
+      assertEquals(0, nonEmptyReads)
+    } finally {
+      executor.shutdownNow()
+    }
   }
 
   @Test

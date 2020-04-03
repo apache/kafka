@@ -708,19 +708,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final TaskAssignor<UUID> taskAssignor;
+        final TaskAssignor taskAssignor;
         if (highAvailabilityEnabled) {
             if (lagComputationSuccessful) {
-                taskAssignor = new HighAvailabilityTaskAssignor<>(
+                taskAssignor = new HighAvailabilityTaskAssignor(
                     clientStates,
                     allTasks,
                     statefulTasks,
                     assignmentConfigs);
             } else {
-                taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
+                taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
             }
         } else {
-            taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
+            taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
         }
         taskAssignor.assign();
 
