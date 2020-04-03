@@ -38,7 +38,16 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
   override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,
                                                       initialOffsetAndEpochs: collection.Map[TopicPartition, OffsetAndEpoch]): Unit = {
     val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
-    info(s"Added log dir fetcher for partitions ${initialOffsetAndEpochs.filterKeys(addedPartitions)}")
+    val (addedInitialOffsets, notAddedInitialOffsets) = initialOffsetAndEpochs.partition { case (tp, _) =>
+      addedPartitions.contains(tp)
+    }
+
+    if (addedInitialOffsets.nonEmpty)
+      info(s"Added log dir fetcher for partitions with initial offsets $addedInitialOffsets")
+
+    if (notAddedInitialOffsets.nonEmpty)
+      info(s"Failed to add log dir fetch for partitions ${notAddedInitialOffsets.keySet} " +
+        s"since the log dir reassignment has already completed")
   }
 
   def shutdown(): Unit = {
