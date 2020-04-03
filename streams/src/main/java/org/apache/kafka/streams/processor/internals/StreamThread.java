@@ -447,7 +447,7 @@ public class StreamThread extends Thread {
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
-        this.pollRecordsSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
+        this.pollRecordsSensor = ThreadMetrics.pollRecordsSensor(threadId, streamsMetrics);
         this.pollRatioSensor = ThreadMetrics.pollRatioSensor(threadId, streamsMetrics);
         this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
         this.processRecordsSensor = ThreadMetrics.processRecordsSensor(threadId, streamsMetrics);
@@ -736,10 +736,6 @@ public class StreamThread extends Thread {
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
             taskManager.recordTaskProcessRatio(totalProcessLatency);
         }
-
-        // we record the ratio out of the while loop so that the accumulated latency spans over
-        // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
-        taskManager.recordTaskProcessRatio(totalProcessLatency);
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;

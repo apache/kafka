@@ -60,8 +60,8 @@ public class ClientMetrics {
     private static final String TOPOLOGY_DESCRIPTION_DESCRIPTION =
         "The description of the topology executed in the Kafka Streams client";
     private static final String STATE_DESCRIPTION = "The state of the Kafka Streams client";
-    private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The number of alive stream threads";
-    private static final String ALIVE_CLEANUP_THREADS_DESCRIPTION = "The number of alive cleanup threads";
+    private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The current number of alive stream threads that are running or participating in rebalance";
+    private static final String ALIVE_CLEANUP_THREADS_DESCRIPTION = "The current number of alive local store directory cleanup threads";
 
     public static String version() {
         return VERSION_FROM_FILE;

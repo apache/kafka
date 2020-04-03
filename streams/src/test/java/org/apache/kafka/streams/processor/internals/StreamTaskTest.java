@@ -381,7 +381,7 @@ public class StreamTaskTest {
 
         task.recordProcessBatchTime(10L);
         task.recordProcessBatchTime(15L);
-        task.recordProcessTimeRatio(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L);
 
         assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
 
@@ -390,7 +390,7 @@ public class StreamTaskTest {
         assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
 
         task.recordProcessBatchTime(10L);
-        task.recordProcessTimeRatio(20L);
+        task.recordProcessTimeRatioAndBufferSize(20L);
 
         assertEquals(1.0d, (double) metric.metricValue(), 0.0001d);
     }

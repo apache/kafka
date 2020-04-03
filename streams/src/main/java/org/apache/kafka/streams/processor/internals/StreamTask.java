@@ -629,7 +629,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void recordProcessTimeRatio(final long allTaskProcessMs) {
+    public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {
         bufferedRecordsSensor.record(partitionGroup.numBuffered());
         processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
         processTimeMs = 0L;

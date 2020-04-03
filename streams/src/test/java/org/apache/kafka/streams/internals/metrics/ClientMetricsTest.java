@@ -91,6 +91,42 @@ public class ClientMetricsTest {
         verify(streamsMetrics);
     }
 
+    @Test
+    public void shouldAddAliveStreamThreadsMetric() {
+        final String name = "alive-stream-threads";
+        final String description = "The current number of alive stream threads that are running or participating in rebalance";
+        final Gauge<Integer> stateProvider = (config, now) -> 1;
+        streamsMetrics.addClientLevelMutableMetric(
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(stateProvider)
+        );
+        replay(streamsMetrics);
+
+        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, stateProvider);
+
+        verify(streamsMetrics);
+    }
+
+    @Test
+    public void shouldAddAliveCleanupThreadsMetric() {
+        final String name = "alive-cleanup-threads";
+        final String description = "The current number of alive local store directory cleanup threads";
+        final Gauge<Integer> stateProvider = (config, now) -> 1;
+        streamsMetrics.addClientLevelMutableMetric(
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(stateProvider)
+        );
+        replay(streamsMetrics);
+
+        ClientMetrics.addNumAliveCleanupThreadMetric(streamsMetrics, stateProvider);
+
+        verify(streamsMetrics);
+    }
+
     private void setUpAndVerifyMetric(final String name,
                                       final String description,
                                       final String value,
