@@ -644,7 +644,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
    * Wakeup the thread for selection.
    */
   @Override
-  def wakeup = nioSelector.wakeup()
+  def wakeup(): Unit = nioSelector.wakeup()
 
 }
 
