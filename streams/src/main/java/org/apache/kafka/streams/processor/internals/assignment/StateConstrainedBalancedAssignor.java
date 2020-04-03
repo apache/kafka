@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.List;
@@ -23,12 +24,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.RankedClient;
 
-public interface StateConstrainedBalancedAssignor<ID extends Comparable<? super ID>> {
+public interface StateConstrainedBalancedAssignor {
 
-    Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient<ID>>> statefulTasksToRankedClients,
-                                 final int balanceFactor,
-                                 final Set<ID> clients,
-                                 final Map<ID, Integer> clientsToNumberOfStreamThreads);
+    Map<UUID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
+                                   final int balanceFactor,
+                                   final Set<UUID> clients,
+                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads);
 }
