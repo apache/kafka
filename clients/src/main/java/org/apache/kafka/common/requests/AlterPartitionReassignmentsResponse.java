@@ -66,12 +66,12 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
         Errors topLevelErr = Errors.forCode(data.errorCode());
-        counts.put(topLevelErr, counts.getOrDefault(topLevelErr, 0) + 1);
+        updateErrorCounts(counts, topLevelErr);
 
         for (ReassignableTopicResponse topicResponse : data.responses()) {
             for (ReassignablePartitionResponse partitionResponse : topicResponse.partitions()) {
                 Errors error = Errors.forCode(partitionResponse.errorCode());
-                counts.put(error, counts.getOrDefault(error, 0) + 1);
+                updateErrorCounts(counts, error);
             }
         }
         return counts;

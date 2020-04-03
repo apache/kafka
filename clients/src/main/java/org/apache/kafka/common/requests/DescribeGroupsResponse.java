@@ -129,9 +129,9 @@ public class DescribeGroupsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.groups().forEach(describedGroup -> {
+        for (DescribedGroup describedGroup : data.groups()) {
             updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode()));
-        });
+        }
         return errorCounts;
     }
 

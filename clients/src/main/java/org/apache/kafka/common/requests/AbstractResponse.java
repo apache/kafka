@@ -27,6 +27,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
@@ -55,6 +57,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
         return Collections.singletonMap(error, 1);
+    }
+
+    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
     }
 
     protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {

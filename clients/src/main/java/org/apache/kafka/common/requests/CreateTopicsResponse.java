@@ -73,7 +73,7 @@ public class CreateTopicsResponse extends AbstractResponse {
         HashMap<Errors, Integer> counts = new HashMap<>();
         for (CreatableTopicResult result : data.topics()) {
             Errors error = Errors.forCode(result.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
+            updateErrorCounts(counts, error);
         }
         return counts;
     }

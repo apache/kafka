@@ -102,7 +102,7 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         Map<Errors, Integer> counts = new HashMap<>();
         for (EntryData entry : data.entries()) {
             Errors error = Errors.forCode(entry.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
+            updateErrorCounts(counts, error);
         }
         return counts;
     }

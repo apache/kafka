@@ -54,7 +54,7 @@ public class CreatePartitionsResponse extends AbstractResponse {
         Map<Errors, Integer> counts = new HashMap<>();
         for (CreatePartitionsTopicResult result : data.results()) {
             Errors error = Errors.forCode(result.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
+            updateErrorCounts(counts, error);
         }
         return counts;
     }

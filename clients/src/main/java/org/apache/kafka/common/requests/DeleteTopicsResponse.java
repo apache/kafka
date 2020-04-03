@@ -68,7 +68,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
         HashMap<Errors, Integer> counts = new HashMap<>();
         for (DeletableTopicResult result : data.responses()) {
             Errors error = Errors.forCode(result.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
+            updateErrorCounts(counts, error);
         }
         return counts;
     }
