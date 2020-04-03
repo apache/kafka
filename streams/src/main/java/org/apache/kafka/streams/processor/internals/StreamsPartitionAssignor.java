@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -29,6 +27,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -48,6 +47,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -63,6 +63,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static java.util.UUID.randomUUID;
@@ -160,6 +161,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextProbingRebalanceMs;
+    private Time time;
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
@@ -190,6 +192,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
         nextProbingRebalanceMs = assignorConfiguration.getNextProbingRebalanceMs(configs);
+        time = assignorConfiguration.getTime(configs);
         assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
@@ -996,9 +999,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
 
             if (encodeNextRebalanceTime) {
-                final long nextRebalanceTimeMs = System.currentTimeMillis() + probingRebalanceIntervalMs();
-                encodeNextRebalanceTime = false;
+                final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
+                log.info("Scheduled a followup probing rebalance for {} ms.", nextRebalanceTimeMs);
+                encodeNextRebalanceTime = false;
             }
 
             // finally, encode the assignment and insert into map with all assignments
@@ -1013,6 +1017,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         if (stableAssignment) {
             log.info("Finished stable assignment of tasks, no followup rebalances required.");
+        } else {
+            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
         }
     }
 
@@ -1527,10 +1533,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected void setAssignmentErrorCode(final Integer errorCode) {
         assignmentErrorCode.set(errorCode);
-    }
-
-    Integer assignmentErrorCode() {
-        return assignmentErrorCode.get();
     }
 
     // following functions are for test only

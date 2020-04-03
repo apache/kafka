@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProt
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
@@ -205,6 +206,25 @@ public final class AssignorConfiguration {
         }
 
         return (AtomicLong) al;
+    }
+
+    public Time getTime(final Map<String, ?> configs) {
+        final Object t = configs.get(InternalConfig.TIME);
+        if (t == null) {
+            final KafkaException fatalException = new KafkaException("time is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(t instanceof Time)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", t.getClass().getName(), Time.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        return (Time) t;
     }
 
     public TaskManager getTaskManager() {

@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -359,6 +360,7 @@ public class StreamThread extends Thread {
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
+        consumerConfigs.put(InternalConfig.TIME, time);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
@@ -559,9 +561,9 @@ public class StreamThread extends Thread {
                                  "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
-                } else if (nextProbingRebalanceMs.get() < System.currentTimeMillis()) {
+                } else if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("The probing rebalance interval has elapsed since the last rebalance, triggering a " +
-                                "rebalance to probe for newly aught-up clients");
+                                "rebalance to probe for newly caught-up clients");
                     mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
