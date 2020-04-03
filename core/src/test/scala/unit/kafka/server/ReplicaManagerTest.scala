@@ -196,12 +196,22 @@ class ReplicaManagerTest {
 
   @Test
   def testFencedErrorCausedByBecomeLeader(): Unit = {
+    testFencedErrorCausedByBecomeLeader(0)
+    testFencedErrorCausedByBecomeLeader(1)
+    testFencedErrorCausedByBecomeLeader(10)
+  }
+
+  private[this] def testFencedErrorCausedByBecomeLeader(loopEpochChange: Int): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer)
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
       replicaManager.getOrCreatePartition(topicPartition)
           .getOrCreateReplica(0, isNew = false)
+
+      val replica = replicaManager.localReplicaOrException(topicPartition)
+      assertFalse(replicaManager.futureLogExists(topicPartition))
+      assertEquals(None, replicaManager.futureLocalReplica(topicPartition))
 
       def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(
         ApiKeys.LEADER_AND_ISR.latestVersion,
@@ -214,32 +224,34 @@ class ReplicaManagerTest {
       ).build()
 
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
-      val partition = replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplica.flatMap(_.log).get
-      assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.dir.getParentFile).size)
+      val previousReplicaFolder = replica.log.get.dir.getParentFile
 
       // find the live and different folder
-      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.dir.getParentFile).head
+      assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == previousReplicaFolder).size)
+      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == previousReplicaFolder).head
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
-      assertTrue(replicaManager.futureLocalReplica(topicPartition).flatMap(_.log).isDefined)
-
+      // make sure the future log is created
+      val futureReplica = replicaManager.futureLocalReplicaOrException(topicPartition)
       assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
-      // change the epoch from 0 to 1 in order to make fenced error
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1), (_, _) => ())
-      TestUtils.waitUntilTrue(() => replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.values.forall(_.partitionCount() == 0),
-        s"the partition=$topicPartition should be removed from pending state")
-      // the partition is added to failedPartitions if fenced error happens
-      // if the thread is done before ReplicaManager#becomeLeaderOrFollower updates epoch,the fenced error does
-      // not happen and failedPartitions is empty.
-      if (replicaManager.replicaAlterLogDirsManager.failedPartitions.size != 0) {
+      (1 to loopEpochChange).foreach(epoch => replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(epoch), (_, _) => ()))
+      // wait for the ReplicaAlterLogDirsThread to complete
+      TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-        assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
-        // send request again
-        replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
-        // the future folder exists so it fails to invoke thread
-        assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
-      }
+        replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty
+      }, s"ReplicaAlterLogDirsThread should be gone")
+
+      // the fenced error should be recoverable
+      assertEquals(0, replicaManager.replicaAlterLogDirsManager.failedPartitions.size)
+      // the replica change is completed after retrying
+      assertTrue(futureReplica.log.isEmpty)
+      assertEquals(newReplicaFolder.getAbsolutePath, replica.log.get.dir.getParent)
+      // change the replica folder again
+      val response = replicaManager.alterReplicaLogDirs(Map(topicPartition -> previousReplicaFolder.getAbsolutePath))
+      assertNotEquals(0, response.size)
+      response.values.foreach(assertEquals(Errors.NONE, _))
+      // should succeed to invoke ReplicaAlterLogDirsThread again
+      assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 

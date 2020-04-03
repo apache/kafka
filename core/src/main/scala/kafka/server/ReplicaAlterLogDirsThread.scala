@@ -85,7 +85,7 @@ class ReplicaAlterLogDirsThread(name: String,
       Request.FutureLocalReplicaId,
       request.minBytes,
       request.maxBytes,
-      request.version <= 2,
+      false,
       request.fetchData.asScala.toSeq,
       UnboundedQuota,
       processResponseCallback,
@@ -109,7 +109,11 @@ class ReplicaAlterLogDirsThread(name: String,
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
         topicPartition, fetchOffset, futureReplica.logEndOffset))
 
-    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
+    val logAppendInfo = if (records.sizeInBytes() > 0)
+      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
+    else
+      None
+
     val futureReplicaHighWatermark = futureReplica.logEndOffset.min(partitionData.highWatermark)
     futureReplica.highWatermark = new LogOffsetMetadata(futureReplicaHighWatermark)
     futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
@@ -119,6 +123,20 @@ class ReplicaAlterLogDirsThread(name: String,
 
     quota.record(records.sizeInBytes)
     logAppendInfo
+  }
+
+  override def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): Set[TopicPartition] = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      // It is possible that the log dir fetcher completed just before this call, so we
+      // filter only the partitions which still have a future log dir.
+      val filteredFetchStates = initialFetchStates.filter { case (tp, _) =>
+        replicaMgr.futureLogExists(tp)
+      }
+      super.addPartitions(filteredFetchStates)
+    } finally {
+      partitionMapLock.unlock()
+    }
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
