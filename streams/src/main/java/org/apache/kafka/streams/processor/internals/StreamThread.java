@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
