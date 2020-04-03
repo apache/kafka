@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,14 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-group=org.apache.kafka
-# NOTE: When you change this version number, you should also make sure to update
-# the version numbers in
-#  - docs/js/templateData.js
-#  - tests/kafkatest/__init__.py
-#  - tests/kafkatest/version.py (variable DEV_VERSION)
-#  - kafka-merge-pr.py
-version=6.0.0-ccs-SNAPSHOT
-scalaVersion=2.12.11
-task=build
-org.gradle.jvmargs=-Xmx1024m -Xss2m
+exec "$0.sh" "$@"
