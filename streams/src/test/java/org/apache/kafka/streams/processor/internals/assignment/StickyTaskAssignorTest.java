@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,6 +32,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -63,7 +63,7 @@ import static org.junit.Assert.assertTrue;
 
 public class StickyTaskAssignorTest {
 
-    private final List<Integer> expectedTopicGroupIds = Arrays.asList(1, 2);
+    private final List<Integer> expectedTopicGroupIds = asList(1, 2);
 
     private final Map<UUID, ClientState> clients = new TreeMap<>();
 
@@ -113,7 +113,7 @@ public class StickyTaskAssignorTest {
 
         assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_0));
         assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_1));
-        assertThat(allActiveTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
 
         clients.clear();
 
@@ -126,7 +126,7 @@ public class StickyTaskAssignorTest {
 
         assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_1));
         assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_2));
-        assertThat(allActiveTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
@@ -142,7 +142,7 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(UUID_2).activeTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertThat(clients.get(UUID_1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(UUID_3).activeTasks().size(), equalTo(1));
-        assertThat(allActiveTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
@@ -164,8 +164,8 @@ public class StickyTaskAssignorTest {
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
 
-        final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5));
-        final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(TASK_0_2, TASK_0_3, TASK_0_4));
+        final Set<TaskId> expectedClientITasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5));
+        final Set<TaskId> expectedClientIITasks = new HashSet<>(asList(TASK_0_2, TASK_0_3, TASK_0_4));
 
         taskAssignor.assign();
 
@@ -262,7 +262,7 @@ public class StickyTaskAssignorTest {
         }
 
         assertTrue(nonEmptyStandbyTaskCount >= 3);
-        assertThat(allStandbyTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
     }
 
     @Test
@@ -296,8 +296,8 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(1, TASK_0_0, TASK_0_1, TASK_0_2);
         taskAssignor.assign();
 
-        assertThat(allActiveTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(allStandbyTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
@@ -325,7 +325,7 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(TASK_0_0, TASK_0_1, TASK_0_2);
         taskAssignor.assign();
 
-        assertThat(allActiveTasks(), equalTo(Arrays.asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
@@ -406,6 +406,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
+        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3, UUID_4);
         createClient(UUID_1, 1);
         createClient(UUID_2, 1);
         createClient(UUID_3, 1);
@@ -414,11 +415,11 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         taskAssignor.assign();
 
-        for (int i = 1; i <= 4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
-            for (int j = 1; j <= 4; j++) {
-                if (j != i) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+        for (final UUID uuid : allUUIDs) {
+            final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
+            for (final UUID otherUUID : allUUIDs) {
+                if (!uuid.equals(otherUUID)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -428,6 +429,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
+        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3);
         createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_0_2);
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3);
         createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_0);
@@ -436,11 +438,11 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         taskAssignor.assign();
 
-        for (int i = 1; i <= 4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
-            for (int j = 1; j <= 4; j++) {
-                if (j != i) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+        for (final UUID uuid : allUUIDs) {
+            final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
+            for (final UUID otherUUID : allUUIDs) {
+                if (!uuid.equals(otherUUID)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -450,6 +452,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
+        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3, UUID_4);
+
         final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_0_2);
         c1.addPreviousStandbyTasks(Utils.mkSet(TASK_0_3, TASK_0_0));
         final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3, TASK_0_0);
@@ -461,11 +465,11 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         taskAssignor.assign();
 
-        for (int i = 1; i <= 4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
-            for (int j = 1; j <= 4; j++) {
-                if (j != i) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+        for (final UUID uuid : allUUIDs) {
+            final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
+            for (final UUID otherUUID : allUUIDs) {
+                if (!uuid.equals(otherUUID)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -674,7 +678,7 @@ public class StickyTaskAssignorTest {
     private StickyTaskAssignor createTaskAssignor(final int numStandbys,
                                                   final boolean mustPreserveActiveTaskAssignment,
                                                   final TaskId... tasks) {
-        final List<TaskId> taskIds = Arrays.asList(tasks);
+        final List<TaskId> taskIds = asList(tasks);
         Collections.shuffle(taskIds);
         return new StickyTaskAssignor(
             clients,
