@@ -704,15 +704,13 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         private void updateNextAllowTryMs() {
-            // TODO: change the calculation to exponential backoff
-            this.nextAllowedTryMs = time.milliseconds() + retryBackoffMs;
-            /*
             double jitter = Math.random() * 0.4 + 0.8;
             int failures = tries - 1;
             double exp = Math.pow(2, failures);
             this.nextAllowedTryMs = time.milliseconds() +
                     (long) Math.min(retryBackoffMaxMs, jitter * exp * retryBackoffMs);
-             */
+            // TODO: Remove the line below
+            System.out.println("nextAllow = " +  (long) Math.min(retryBackoffMaxMs, jitter * exp * retryBackoffMs));
         }
 
         public void update(RetryContext failedCallRetryContext) {
