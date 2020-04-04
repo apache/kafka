@@ -786,9 +786,6 @@ public class KafkaStreams implements AutoCloseable {
         return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
             thread.setDaemon(true);
-
-            ClientMetrics.addNumAliveCleanupThreadMetric(streamsMetrics, (metricsConfig, now) -> thread.isAlive() ? 1 : 0);
-
             return thread;
         });
     }

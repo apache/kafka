@@ -375,24 +375,46 @@ public class StreamTaskTest {
     public void shouldRecordProcessRatio() {
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
+        final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertThat(metric.metricValue(), equalTo(0.0d));
+
+        task.addRecords(partition1, asList(
+            getConsumerRecord(partition1, 10),
+            getConsumerRecord(partition1, 20)
+        ));
+        task.recordProcessTimeRatioAndBufferSize(100L);
+
+        assertThat(metric.metricValue(), equalTo(2.0d));
+
+        task.process(0L);
+        task.recordProcessTimeRatioAndBufferSize(100L);
+
+        assertThat(metric.metricValue(), equalTo(1.0d));
+    }
+
+    @Test
+    public void shouldRecordBufferedRecords() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
         final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString(), StreamsConfig.METRICS_LATEST);
 
-        assertEquals(0.0d, (double) metric.metricValue(), 0.0001d);
+        assertThat(metric.metricValue(), equalTo(0.0d));
 
         task.recordProcessBatchTime(10L);
         task.recordProcessBatchTime(15L);
         task.recordProcessTimeRatioAndBufferSize(100L);
 
-        assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
+        assertThat(metric.metricValue(), equalTo(0.25d));
 
         task.recordProcessBatchTime(10L);
 
-        assertEquals(0.25d, (double) metric.metricValue(), 0.0001d);
+        assertThat(metric.metricValue(), equalTo(0.25d));
 
         task.recordProcessBatchTime(10L);
         task.recordProcessTimeRatioAndBufferSize(20L);
 
-        assertEquals(1.0d, (double) metric.metricValue(), 0.0001d);
+        assertThat(metric.metricValue(), equalTo(1.0d));
     }
 
     @Test
@@ -430,6 +452,20 @@ public class StreamTaskTest {
         assertNotNull(getMetric(
             "record-lateness",
             "%s-max",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "active-process",
+            "%s-ratio",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "active-buffer",
+            "%s-count",
             task.id().toString(),
             builtInMetricsVersion
         ));

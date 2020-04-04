@@ -325,6 +325,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "commit-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -332,6 +334,12 @@ public class StreamThreadTest {
             "poll-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -341,6 +349,12 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -349,6 +363,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -356,14 +372,6 @@ public class StreamThreadTest {
             "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "process-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "punctuate-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "commit-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "poll-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
 
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
