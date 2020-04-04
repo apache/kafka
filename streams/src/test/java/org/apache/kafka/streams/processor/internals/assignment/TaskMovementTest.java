@@ -38,6 +38,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -56,14 +57,14 @@ public class TaskMovementTest {
     public void shouldGetMovementsFromStateConstrainedToBalancedAssignment() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_2)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_0)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_2)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_0)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_1))
         );
         final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_2))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_2))
         );
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getMapWithNoCaughtUpClients(
             mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2)
@@ -81,14 +82,14 @@ public class TaskMovementTest {
     public void shouldImmediatelyMoveTasksWithCaughtUpDestinationClients() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_2)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_0)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_2)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_0)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_1))
         );
         final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_2))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_2))
         );
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getMapWithNoCaughtUpClients(
             mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2)
@@ -108,14 +109,14 @@ public class TaskMovementTest {
     public void shouldOnlyGetUpToMaxWarmupReplicaMovements() {
         final int maxWarmupReplicas = 1;
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_2)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_0)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_2)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_0)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_1))
         );
         final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1)),
-            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_2))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_3, mkTaskList(TASK_0_2, TASK_1_2))
         );
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getMapWithNoCaughtUpClients(
             mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2)
@@ -145,12 +146,12 @@ public class TaskMovementTest {
     public void shouldReturnEmptyMovementsWhenPassedIdenticalTaskAssignments() {
         final int maxWarmupReplicas = 2;
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1))
         );
         final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1))
         );
         assertTrue(getMovements(stateConstrainedAssignment, balancedAssignment, emptyMap(), maxWarmupReplicas).isEmpty());
     }
@@ -160,13 +161,17 @@ public class TaskMovementTest {
         final int maxWarmupReplicas = 2;
 
         final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_0_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_0_1))
         );
         final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
-            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
-            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1))
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1))
         );
         assertThrows(IllegalStateException.class, () -> getMovements(stateConstrainedAssignment, balancedAssignment, emptyMap(), maxWarmupReplicas));
+    }
+
+    private static List<TaskId> mkTaskList(final TaskId... tasks) {
+        return new ArrayList<>(asList(tasks));
     }
 
     private static Map<TaskId, SortedSet<UUID>> getMapWithNoCaughtUpClients(final Set<TaskId> tasks) {

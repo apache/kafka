@@ -17,10 +17,12 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
@@ -87,7 +89,9 @@ public class TaskMovement {
         for (final Map.Entry<UUID, List<TaskId>> sourceClientEntry : statefulActiveTaskAssignment.entrySet()) {
             final UUID source = sourceClientEntry.getKey();
 
-            for (final TaskId task : sourceClientEntry.getValue()) {
+            final Iterator<TaskId> sourceClientTasksIterator = sourceClientEntry.getValue().iterator();
+            while (sourceClientTasksIterator.hasNext()) {
+                final TaskId task = sourceClientTasksIterator.next();
                 final UUID destination = taskToDestinationClient.get(task);
                 if (destination == null) {
                     log.error("Task {} is assigned to client {} in initial assignment but has no owner in the final " +
@@ -95,8 +99,9 @@ public class TaskMovement {
                     throw new IllegalStateException("Found task in initial assignment that was not assigned in the final.");
                 } else if (!source.equals(destination)) {
                     // If the destination client is already caught-up, consider this movement "free" and do immediately
-                    if (tasksToCaughtUpClients.get(task).contains(destination)) {
-                        statefulActiveTaskAssignment.get(source).remove(task);
+                    final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
+                    if (caughtUpClients != null && caughtUpClients.contains(destination)) {
+                        sourceClientTasksIterator.remove();
                         statefulActiveTaskAssignment.get(destination).add(task);
                     } else {
                         movements.add(new TaskMovement(task, source, destination));
