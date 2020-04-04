@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -76,6 +77,28 @@ public class RankedClient implements Comparable<RankedClient> {
     @Override
     public int hashCode() {
         return Objects.hash(clientId, rank);
+    }
+
+    /**
+     * Maps tasks to clients with caught-up states for the task.
+     *
+     * @param statefulTasksToRankedClients ranked clients map
+     * @return map from tasks with caught-up clients to the list of client candidates
+     */
+    static Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients) {
+        final Map<TaskId, SortedSet<UUID>> taskToCaughtUpClients = new HashMap<>();
+        for (final SortedMap.Entry<TaskId, SortedSet<RankedClient>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
+            final SortedSet<RankedClient> rankedClients = taskToRankedClients.getValue();
+            for (final RankedClient rankedClient : rankedClients) {
+                if (rankedClient.rank() == Task.LATEST_OFFSET || rankedClient.rank() == 0) {
+                    final TaskId taskId = taskToRankedClients.getKey();
+                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new TreeSet<>()).add(rankedClient.clientId());
+                } else {
+                    break;
+                }
+            }
+        }
+        return taskToCaughtUpClients;
     }
 
     /**

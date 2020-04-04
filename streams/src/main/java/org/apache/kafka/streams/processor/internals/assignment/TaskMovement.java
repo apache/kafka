@@ -21,6 +21,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.SortedSet;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -59,13 +60,17 @@ public class TaskMovement {
     }
 
     /**
-     * Returns a list of the movements of tasks from statefulActiveTaskAssignment to balancedStatefulActiveTaskAssignment
+     * Computes the movement of tasks from the state constrained to the balanced assignment. Tasks whose destination
+     * clients are caught-up, or whose source clients are not caught-up, will be moved immediately.
+     *
      * @param statefulActiveTaskAssignment the initial assignment, with source clients
      * @param balancedStatefulActiveTaskAssignment the final assignment, with destination clients
+     * @return list of the task movements from statefulActiveTaskAssignment to balancedStatefulActiveTaskAssignment
      */
     static List<TaskMovement> getMovements(final Map<UUID, List<TaskId>> statefulActiveTaskAssignment,
-        final Map<UUID, List<TaskId>> balancedStatefulActiveTaskAssignment,
-        final int maxWarmupReplicas) {
+                                           final Map<UUID, List<TaskId>> balancedStatefulActiveTaskAssignment,
+                                           final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
+                                           final int maxWarmupReplicas) {
         if (statefulActiveTaskAssignment.size() != balancedStatefulActiveTaskAssignment.size()) {
             throw new IllegalStateException("Tried to compute movements but assignments differ in size.");
         }
@@ -89,9 +94,15 @@ public class TaskMovement {
                                   "balanced assignment.", task, source);
                     throw new IllegalStateException("Found task in initial assignment that was not assigned in the final.");
                 } else if (!source.equals(destination)) {
-                    movements.add(new TaskMovement(task, source, destination));
-                    if (movements.size() == maxWarmupReplicas) {
-                        return movements;
+                    // If the destination client is already caught-up, consider this movement "free" and do immediately
+                    if (tasksToCaughtUpClients.get(task).contains(destination)) {
+                        statefulActiveTaskAssignment.get(source).remove(task);
+                        statefulActiveTaskAssignment.get(destination).add(task);
+                    } else {
+                        movements.add(new TaskMovement(task, source, destination));
+                        if (movements.size() == maxWarmupReplicas) {
+                            return movements;
+                        }
                     }
                 }
             }

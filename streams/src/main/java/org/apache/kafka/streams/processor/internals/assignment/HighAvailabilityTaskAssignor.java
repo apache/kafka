@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.getMovements;
 
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private final AssignmentConfigs configs;
 
     private final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
+    private final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
 
     public HighAvailabilityTaskAssignor(final Map<UUID, ClientState> clientStates,
                                         final Set<TaskId> allTasks,
@@ -77,6 +79,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         statefulTasksToRankedCandidates =
             buildClientRankingsByTask(statefulTasks, clientStates, configs.acceptableRecoveryLag);
+        tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
     }
 
     @Override
@@ -97,7 +100,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                 statefulTasksToRankedCandidates,
                 configs.balanceFactor,
                 sortedClients,
-                clientsToNumberOfThreads
+                clientsToNumberOfThreads,
+                tasksToCaughtUpClients
             );
 
         // ---------------- Warmup Replica Tasks ---------------- //
@@ -112,6 +116,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final List<TaskMovement> movements = getMovements(
             statefulActiveTaskAssignment,
             balancedStatefulActiveTaskAssignment,
+            tasksToCaughtUpClients,
             configs.maxWarmupReplicas);
 
         for (final TaskMovement movement : movements) {

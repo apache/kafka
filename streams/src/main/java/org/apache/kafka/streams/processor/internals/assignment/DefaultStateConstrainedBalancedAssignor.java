@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,10 +49,10 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
     public Map<UUID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
                                           final int balanceFactor,
                                           final Set<UUID> clients,
-                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads) {
+                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads,
+                                          final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
         checkClientsAndNumberOfStreamThreads(clientsToNumberOfStreamThreads, clients);
         final Map<UUID, List<TaskId>> assignment = initAssignment(clients);
-        final Map<TaskId, List<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedClients);
         assignTasksWithCaughtUpClients(
             assignment,
             tasksToCaughtUpClients,
@@ -102,28 +104,6 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
     }
 
     /**
-     * Maps tasks to clients with caught-up states for the task.
-     *
-     * @param statefulTasksToRankedClients ranked clients map
-     * @return map from tasks with caught-up clients to the list of client candidates
-     */
-    private Map<TaskId, List<UUID>> tasksToCaughtUpClients(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients) {
-        final Map<TaskId, List<UUID>> taskToCaughtUpClients = new HashMap<>();
-        for (final SortedMap.Entry<TaskId, SortedSet<RankedClient>> taskToRankedClients : statefulTasksToRankedClients.entrySet()) {
-            final SortedSet<RankedClient> rankedClients = taskToRankedClients.getValue();
-            for (final RankedClient rankedClient : rankedClients) {
-                if (rankedClient.rank() == Task.LATEST_OFFSET || rankedClient.rank() == 0) {
-                    final TaskId taskId = taskToRankedClients.getKey();
-                    taskToCaughtUpClients.computeIfAbsent(taskId, ignored -> new ArrayList<>()).add(rankedClient.clientId());
-                } else {
-                    break;
-                }
-            }
-        }
-        return taskToCaughtUpClients;
-    }
-
-    /**
      * Maps a task to the client that host the task according to the previous assignment.
      *
      * @return map from task UUIDs to clients hosting the corresponding task
@@ -145,7 +125,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
      * @param tasksToCaughtUpClients map from task UUIDs to lists of caught-up clients
      */
     private void assignTasksWithCaughtUpClients(final Map<UUID, List<TaskId>> assignment,
-                                                final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                                                final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                 final Map<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients) {
         // If a task was previously assigned to a client that is caught-up and still exists, give it back to the client
         final Map<TaskId, UUID> previouslyRunningTasksToPreviousClients =
@@ -157,7 +137,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
         // If a task's previous host client was not caught-up or no longer exists, assign it to the caught-up client
         // with the least tasks
         for (final TaskId taskId : unassignedTasksWithCaughtUpClients) {
-            final List<UUID> caughtUpClients = tasksToCaughtUpClients.get(taskId);
+            final SortedSet<UUID> caughtUpClients = tasksToCaughtUpClients.get(taskId);
             UUID clientWithLeastTasks = null;
             int minTaskPerStreamThread = Integer.MAX_VALUE;
             for (final UUID client : caughtUpClients) {
@@ -179,7 +159,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
      * @param statefulTasksToRankedClients ranked clients map
      */
     private void assignTasksWithoutCaughtUpClients(final Map<UUID, List<TaskId>> assignment,
-                                                   final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                                                   final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                    final Map<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients) {
         final SortedSet<TaskId> unassignedTasksWithoutCaughtUpClients = new TreeSet<>(statefulTasksToRankedClients.keySet());
         unassignedTasksWithoutCaughtUpClients.removeAll(tasksToCaughtUpClients.keySet());
@@ -215,7 +195,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
     private void balance(final Map<UUID, List<TaskId>> assignment,
                          final int balanceFactor,
                          final Map<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
-                         final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                          final Map<UUID, Integer> clientsToNumberOfStreamThreads) {
         final List<UUID> clients = new ArrayList<>(assignment.keySet());
         Collections.sort(clients);
@@ -244,7 +224,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
     private void maybeMoveSourceTasksWithoutCaughtUpClients(final Map<UUID, List<TaskId>> assignment,
                                                             final int balanceFactor,
                                                             final Map<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
-                                                            final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                                                            final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                             final Map<UUID, Integer> clientsToNumberOfStreamThreads,
                                                             final UUID sourceClientId,
                                                             final List<TaskId> sourceTasks) {
@@ -267,7 +247,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
 
     private void maybeMoveSourceTasksWithCaughtUpClients(final Map<UUID, List<TaskId>> assignment,
                                                          final int balanceFactor,
-                                                         final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                                                         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads,
                                                          final UUID sourceClientId,
                                                          final List<TaskId> sourceTasks) {
@@ -295,7 +275,7 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
      * @return a list of task UUIDs that does not have a caught-up client
      */
     private List<TaskId> assignedTasksWithoutCaughtUpClientsThatMightBeMoved(final List<TaskId> tasks,
-                                                                             final Map<TaskId, List<UUID>> tasksToCaughtUpClients) {
+                                                                             final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
         return assignedTasksThatMightBeMoved(tasks, tasksToCaughtUpClients, false);
     }
 
@@ -307,12 +287,12 @@ public class DefaultStateConstrainedBalancedAssignor implements StateConstrained
      * @return a list of task UUIDs that have a caught-up client
      */
     private List<TaskId> assignedTasksWithCaughtUpClientsThatMightBeMoved(final List<TaskId> tasks,
-                                                                          final Map<TaskId, List<UUID>> tasksToCaughtUpClients) {
+                                                                          final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
         return assignedTasksThatMightBeMoved(tasks, tasksToCaughtUpClients, true);
     }
 
     private List<TaskId> assignedTasksThatMightBeMoved(final List<TaskId> tasks,
-                                                       final Map<TaskId, List<UUID>> tasksToCaughtUpClients,
+                                                       final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                        final boolean isCaughtUp) {
         final List<TaskId> tasksWithCaughtUpClients = new ArrayList<>();
         for (int i = tasks.size() - 1; i >= 0; --i) {
