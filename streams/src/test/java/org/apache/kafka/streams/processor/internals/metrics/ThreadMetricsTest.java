@@ -325,14 +325,6 @@ public class ThreadMetricsTest {
             rateDescription,
             totalDescription
         );
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            operationLatency,
-            avgLatencyDescription,
-            maxLatencyDescription
-        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
