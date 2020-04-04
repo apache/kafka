@@ -415,8 +415,7 @@ private[log] object LogValidator extends Logging {
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
         var batchIndex = 0
-        while (recordsIterator.hasNext) {
-          val record = recordsIterator.next()
+        for (record <- recordsIterator.asScala) {
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           val recordError = validateRecordCompression(batchIndex, record).orElse {
             validateRecord(batch, topicPartition, record, batchIndex, now,
