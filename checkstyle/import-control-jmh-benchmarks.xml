@@ -44,6 +44,8 @@
     <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
+    <allow pkg="kafka.common"/>
+    <allow pkg="kafka.message"/>
     <allow pkg="org.mockito"/>
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
