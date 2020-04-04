@@ -100,7 +100,7 @@ public class RecordBatchIterationBenchmark {
     public void init() {
         // For v0 batches a zero starting offset is much faster but that will almost never happen.
         // For v2 batches we use starting offset = 0 as these batches are relative to the base
-        // offset, and measureValidation will mutate these batches between iterations
+        // offset and measureValidation will mutate these batches between iterations
         startingOffset = messageVersion == 2 ? 0 : 42;
 
         if (bufferSupplierStr.equals("NO_CACHING")) {
