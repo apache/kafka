@@ -71,7 +71,7 @@ public class RecordBatchIterationBenchmark {
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
 
-    @Param(value = {"2"})
+    @Param(value = {"1", "2"})
     private byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
@@ -149,8 +149,8 @@ public class RecordBatchIterationBenchmark {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
                 new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
-                CompressionCodec.getCompressionCodec("GZIP"),
-                CompressionCodec.getCompressionCodec("GZIP"),
+                CompressionCodec.getCompressionCodec(compressionType.id),
+                CompressionCodec.getCompressionCodec(compressionType.id),
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),
                 ApiVersion.latestVersion(),
