@@ -3421,6 +3421,48 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testUpdateRetryContext() {
+        long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 4000;
+        MockTime time = new MockTime();
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+                mockCluster(3, 0),
+                newStrMap(
+                        AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoffMs,
+                        AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG, "" + retryBackoffMaxMs))) {
+
+            KafkaAdminClient kafkaAdminClient = (KafkaAdminClient) env.adminClient();
+            KafkaAdminClient.RetryContext retryContext = kafkaAdminClient.new RetryContext();
+
+            // TODO: Remove this line before merge
+            System.out.println(retryContext.getNextAllowedTryMs() + " " + retryContext.getTries());
+
+            long failures = 0;
+            long lastAllowedTryMs = time.milliseconds();
+            long actualRetryBackoffMs = 0;
+
+            while (actualRetryBackoffMs < retryBackoffMaxMs) {
+                time.sleep(actualRetryBackoffMs);
+                failures++;
+                retryContext.update(retryContext);
+                long nextAllowedTryMs = retryContext.getNextAllowedTryMs();
+                actualRetryBackoffMs = nextAllowedTryMs - lastAllowedTryMs;
+                lastAllowedTryMs = nextAllowedTryMs;
+                System.out.println(actualRetryBackoffMs);
+                if (actualRetryBackoffMs == retryBackoffMaxMs) return;
+
+                assertTrue("The actual retry backoff should be greater than or equal to the lower bound value",
+                        actualRetryBackoffMs >= 0.8 * Math.pow(2, failures - 1) * retryBackoffMs);
+                assertTrue("The actual retry backoff should be less than or equal to the lower bound value",
+                        actualRetryBackoffMs <= 1.2 * Math.pow(2, failures - 1) * retryBackoffMs);
+            }
+
+            assertEquals(retryBackoffMaxMs, actualRetryBackoffMs);
+        }
+    }
+
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
                                                                  MemberAssignment assignment) {
         return new MemberDescription(member.memberId(),

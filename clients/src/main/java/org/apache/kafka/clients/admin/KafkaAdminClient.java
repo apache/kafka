@@ -734,7 +734,6 @@ public class KafkaAdminClient extends AdminClient {
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
-            // TODO: change the hard-coded 10000 to retryBackoffMaxMs
             this.retryContext = new RetryContext();
         }
 
