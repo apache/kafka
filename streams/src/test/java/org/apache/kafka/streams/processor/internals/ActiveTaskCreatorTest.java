@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -55,7 +52,6 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -80,7 +76,6 @@ public class ActiveTaskCreatorTest {
     );
     final UUID uuid = UUID.randomUUID();
 
-    private StreamsConfig config;
     private ActiveTaskCreator activeTaskCreator;
 
 
@@ -88,24 +83,6 @@ public class ActiveTaskCreatorTest {
     // non-EOS test
 
     // functional test
-
-    @Test
-    public void shouldCreateThreadProducerIfEosDisabled() {
-        final Map<String, Object> mockProducerConfig = mock(Map.class);
-        expect(mockProducerConfig.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn(false);
-        replay(mockProducerConfig);
-
-        config = new StreamsConfig(properties) {
-            @Override
-            public Map<String, Object> getProducerConfigs(final String clientId) {
-                return mockProducerConfig;
-            }
-        };
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(1));
-        verify(mockProducerConfig);
-    }
 
     @Test
     public void shouldConstructProducerMetricsWithEosDisabled() {
@@ -141,18 +118,6 @@ public class ActiveTaskCreatorTest {
     }
 
     // error handling
-
-    @Test
-    public void shouldFailOnReInitializeProducerIfEosDisabled() {
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::reInitializeThreadProducer
-        );
-
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
-    }
 
     @Test
     public void shouldFailOnStreamsProducerPerTaskIfEosDisabled() {
@@ -197,30 +162,6 @@ public class ActiveTaskCreatorTest {
     // eos-alpha test
 
     // functional test
-
-    @Test
-    public void shouldCreateProducerPerTaskIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        final Map<String, Object> mockProducerConfig = mock(Map.class);
-        expect(mockProducerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-0_0")).andReturn(null);
-        expect(mockProducerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-0_1")).andReturn(null);
-        expect(mockProducerConfig.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
-            .andReturn("appId-0_0").andReturn("appId-0_1");
-        replay(mockProducerConfig);
-
-        config = new StreamsConfig(properties) {
-            @Override
-            public Map<String, Object> getProducerConfigs(final String clientId) {
-                return mockProducerConfig;
-            }
-        };
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(2));
-        verify(mockProducerConfig);
-    }
 
     @Test
     public void shouldReturnStreamsProducerPerTaskIfEosAlphaEnabled() {
@@ -281,21 +222,6 @@ public class ActiveTaskCreatorTest {
     // error handling
 
     @Test
-    public void shouldFailOnReInitializeProducerIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::reInitializeThreadProducer
-        );
-
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
-    }
-    @Test
-
     public void shouldFailForUnknownTaskOnStreamsProducerPerTaskIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -361,29 +287,6 @@ public class ActiveTaskCreatorTest {
     // functional test
 
     @Test
-    public void shouldCreateThreadProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        final String txId = "appId-" + uuid + "-StreamThread-0";
-        final Map<String, Object> mockProducerConfig = mock(Map.class);
-        expect(mockProducerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txId)).andReturn(null);
-        expect(mockProducerConfig.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn(txId);
-        replay(mockProducerConfig);
-
-        config = new StreamsConfig(properties) {
-            @Override
-            public Map<String, Object> getProducerConfigs(final String clientId) {
-                return mockProducerConfig;
-            }
-        };
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(1));
-        verify(mockProducerConfig);
-    }
-
-    @Test
     public void shouldReturnThreadProducerIfEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -394,50 +297,6 @@ public class ActiveTaskCreatorTest {
 
         assertThat(mockClientSupplier.producers.size(), is(1));
         assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
-    }
-
-    @Test
-    public void shouldAbortTransactionAndCloseOldProducerOnReInitializeProducer() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-        activeTaskCreator.threadProducer().initTransaction();
-        activeTaskCreator.threadProducer().send(new ProducerRecord<>("topic", 0, 0L, new byte[0], new byte[0], new RecordHeaders()), null);
-
-        activeTaskCreator.reInitializeThreadProducer();
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-    }
-
-    @Test
-    public void shouldCreateNewProducerOnReInitializeProducer() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        final String txId = "appId-" + uuid + "-StreamThread-0";
-        final Map<String, Object> mockProducerConfig = mock(Map.class);
-        expect(mockProducerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txId)).andReturn(null);
-        expect(mockProducerConfig.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn(txId);
-        replay(mockProducerConfig);
-
-        config = new StreamsConfig(properties) {
-            @Override
-            public Map<String, Object> getProducerConfigs(final String clientId) {
-                return mockProducerConfig;
-            }
-        };
-        createTasks();
-
-        reset(mockProducerConfig);
-        expect(mockProducerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txId)).andReturn(null);
-        expect(mockProducerConfig.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn(txId);
-        replay(mockProducerConfig);
-
-        activeTaskCreator.reInitializeThreadProducer();
-
-        assertThat(mockClientSupplier.producers.size(), is(2));
-        verify(mockProducerConfig);
     }
 
     @Test
@@ -593,25 +452,9 @@ public class ActiveTaskCreatorTest {
         expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
         replay(builder, stateDirectory, topology, sourceNode);
 
-        final StreamThread.ProcessingMode processingMode;
-        final String eosConfig = (String) properties.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
-        if (eosConfig == null || StreamsConfig.AT_LEAST_ONCE.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        } else if (StreamsConfig.EXACTLY_ONCE.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            throw new IllegalArgumentException("argument `" + eosConfig + "` for config `processing.guarantees` invalid.");
-        }
-        if (config == null) {
-            config = new StreamsConfig(properties);
-        }
-
         activeTaskCreator = new ActiveTaskCreator(
             builder,
-            config,
-            processingMode,
+            new StreamsConfig(properties),
             streamsMetrics,
             stateDirectory,
             changeLogReader,

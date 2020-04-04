@@ -317,19 +317,9 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final ProcessingMode processingMode;
-        if (StreamThread.eosAlphaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             builder,
             config,
-            processingMode,
             streamsMetrics,
             stateDirectory,
             changelogReader,
@@ -359,7 +349,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            processingMode
+            StreamThread.processingMode(config)
         );
 
         log.info("Creating consumer client");
@@ -413,16 +403,20 @@ public class StreamThread extends Thread {
         }
     }
 
-    public static boolean eosAlphaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-    }
-
-    public static boolean eosBetaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    public static ProcessingMode processingMode(final StreamsConfig config) {
+        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
     }
 
     public static boolean eosEnabled(final StreamsConfig config) {
-        return eosAlphaEnabled(config) || eosBetaEnabled(config);
+        final ProcessingMode processingMode = processingMode(config);
+        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
+            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
     }
 
     public StreamThread(final Time time,
