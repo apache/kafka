@@ -35,6 +35,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
+import kafka.zookeeper.{ZooKeeperClientException, ZooKeeperClientTimeoutException}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -1493,6 +1494,20 @@ class ReplicaManager(val config: KafkaConfig,
             error(s"Error while making broker the follower for partition $partition with leader " +
               s"$newLeaderBrokerId in dir $dirOpt", e)
             responseMap.put(partition.topicPartition, Errors.KAFKA_STORAGE_ERROR)
+          case e: ZooKeeperClientTimeoutException =>
+            partitionsToMakeFollower.remove(partition)
+            stateChangeLogger.error(s"Skipped the become-follower state change with correlation id $correlationId from " +
+              s"epoch ${partition.getLeaderEpoch} epoch for partition ${partition.topicPartition} with leader $newLeaderBrokerId " +
+              s"because ZooKeeper client timeout exception occurred while making a $partition's follower through $zkClient.", e)
+            error(s"ZooKeeper client timeout exception occurred while making a $partition's follower for $zkClient.'", e)
+            throw e
+          case e: ZooKeeperClientException =>
+            partitionsToMakeFollower.remove(partition)
+            stateChangeLogger.error(s"Because a ZooKeeper client exception occurred " +
+              s"skipped the become follower state change with correlation id $correlationId from " +
+              s"epoch ${partition.getLeaderEpoch} for partition ${partition.topicPartition} with leader $newLeaderBrokerId", e)
+            error(s"ZooKeeper client occurred while making a $partition's follower through $zkClient.'", e)
+            throw e
         }
       }
 
