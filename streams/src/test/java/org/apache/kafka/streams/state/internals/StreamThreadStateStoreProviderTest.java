@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -370,20 +371,15 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
-        final StreamThread.ProcessingMode processingMode;
-        if (StreamThread.eosAlphaEnabled(streamsConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(streamsConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
             new StreamsProducer(
-                clientSupplier.getProducer(new HashMap<>()),
-                processingMode,
+                streamsConfig,
+                "threadId",
+                clientSupplier,
+                new TaskId(0, 0),
+                UUID.randomUUID(),
                 logContext
             ),
             streamsConfig.defaultProductionExceptionHandler(),

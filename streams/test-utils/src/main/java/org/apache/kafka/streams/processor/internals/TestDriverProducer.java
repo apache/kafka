@@ -18,19 +18,22 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
+import java.util.UUID;
 
 public class TestDriverProducer extends StreamsProducer {
 
-    public TestDriverProducer(final Producer<byte[], byte[]> producer,
-                              final StreamThread.ProcessingMode processingMode,
+    public TestDriverProducer(final StreamsConfig config,
+                              final KafkaClientSupplier clientSupplier,
                               final LogContext logContext) {
-        super(producer, processingMode, logContext);
+        super(config, "TopologyTestDriver-Thread", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
     }
 
     @Override
