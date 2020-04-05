@@ -893,6 +893,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private synchronized void resetGeneration() {
         this.generation = Generation.NO_GENERATION;
+        this.rejoinNeeded = true;
 
         // only reset the state to un-joined when it is not already in rebalancing
         if (state != MemberState.REBALANCING)
@@ -901,7 +902,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
-        rejoinNeeded = true;
         resetGeneration();
     }
 
@@ -1051,30 +1051,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 requestRejoin();
                 future.raise(error);
             } else if (error == Errors.ILLEGAL_GENERATION) {
-                if (sentGeneration.equals(currentGeneration)) {
-                    log.info("Attempt to heartbeat failed since generation {} is not current", sentGeneration.generationId);
-                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
-                    future.raise(error);
-                } else {
-                    log.info("Attempt to heartbeat failed with illegal sent generation {}, while the current generation is {}; " +
-                        "ignoring this error and continue heartbeat since the generation has changed",
-                        sentGeneration, currentGeneration);
-                    future.complete(null);
-                }
+                log.info("Attempt to heartbeat failed since generation {} is not current", sentGeneration.generationId);
+                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
+                future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 log.error("Received fatal exception: group.instance.id gets fenced");
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                if (sentGeneration.equals(currentGeneration)) {
-                    log.info("Attempt to heartbeat failed for since member id {} is not valid.", sentGeneration.memberId);
-                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
-                    future.raise(error);
-                } else {
-                    log.info("Attempt to heartbeat failed with invalid sent member id {}, while the current generation is {}; " +
-                            "ignoring this error and continue heartbeat since the generation has changed",
-                        sentGeneration, currentGeneration);
-                    future.complete(null);
-                }
+                log.info("Attempt to heartbeat failed for since member id {} is not valid.", sentGeneration.memberId);
+                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
+                future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
@@ -1289,6 +1275,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
+
+                        System.out.println("Heartbeating with " + heartbeat.lastPollTime());
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

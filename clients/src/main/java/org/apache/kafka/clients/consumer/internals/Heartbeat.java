@@ -54,6 +54,7 @@ public final class Heartbeat {
 
     public void poll(long now) {
         update(now);
+        System.out.println("poll timer reset at poll with " + maxPollIntervalMs + " after " + pollTimer.elapsedMs() + " and " + pollTimer.remainingMs() + " left");
         pollTimer.reset(maxPollIntervalMs);
     }
 
@@ -102,6 +103,7 @@ public final class Heartbeat {
     void resetTimeouts() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
+        System.out.println("poll timer reset at poll with " + maxPollIntervalMs + " after " + pollTimer.elapsedMs() + " and " + pollTimer.remainingMs() + " left");
         pollTimer.reset(maxPollIntervalMs);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }

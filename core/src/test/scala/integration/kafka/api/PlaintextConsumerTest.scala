@@ -173,7 +173,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testMaxPollIntervalMs(): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
 
@@ -187,11 +187,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
 
-    Thread.sleep(3500)
+    // as long as we are part of max.poll no rebalance should be triggered
+    Thread.sleep(500)
+    assertEquals(1, listener.callsToAssigned)
 
-    // we should fall out of the group and need to rebalance
-    awaitRebalance(consumer, listener)
-    assertEquals(2, listener.callsToAssigned)
+    // after we extend longer than max.poll a rebalance should be triggered
+    // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
+    Thread.sleep(3000)
+    TestUtils.pollUntilTrue(consumer, () => listener.callsToAssigned == 2,
+      "Timed out before expected rebalance completed")
     assertEquals(1, listener.callsToRevoked)
   }
 
