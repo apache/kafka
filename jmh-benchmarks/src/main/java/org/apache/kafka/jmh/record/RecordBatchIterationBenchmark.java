@@ -93,11 +93,12 @@ public class RecordBatchIterationBenchmark {
     private ByteBuffer[] batchBuffers;
     private int[] batchSizes;
     private BufferSupplier bufferSupplier;
-
-
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
 
     @Setup
     public void init() {
+        brokerTopicStats = new BrokerTopicStats();
+
         // For v0 batches a zero starting offset is much faster but that will almost never happen.
         // For v2 batches we use starting offset = 0 as these batches are relative to the base
         // offset and measureValidation will mutate these batches between iterations
@@ -156,7 +157,7 @@ public class RecordBatchIterationBenchmark {
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),
                 ApiVersion.latestVersion(),
-                new BrokerTopicStats());
+                brokerTopicStats);
     }
 
     @Benchmark
