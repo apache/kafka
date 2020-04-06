@@ -65,6 +65,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class MetricsIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
+    private static final int NUM_THREADS = 2;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -233,7 +234,7 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
@@ -257,7 +258,7 @@ public class MetricsIntegrationTest {
             timeout,
             () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
 
-        verifyAliveStreamThreadsMetric(2);
+        verifyAliveStreamThreadsMetric(NUM_THREADS);
         verifyStateMetric(State.RUNNING);
     }
 
@@ -528,43 +529,43 @@ public class MetricsIntegrationTest {
                 StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? STREAM_THREAD_NODE_METRICS
                     : STREAM_THREAD_NODE_METRICS_0100_TO_24))
             .collect(Collectors.toList());
-        checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 2);
-        checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 2);
-        checkMetricByName(listMetricThread, POLL_LATENCY_AVG, 2);
-        checkMetricByName(listMetricThread, POLL_LATENCY_MAX, 2);
-        checkMetricByName(listMetricThread, PROCESS_LATENCY_AVG, 2);
-        checkMetricByName(listMetricThread, PROCESS_LATENCY_MAX, 2);
-        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, 2);
-        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, 2);
-        checkMetricByName(listMetricThread, COMMIT_RATE, 2);
-        checkMetricByName(listMetricThread, COMMIT_TOTAL, 2);
-        checkMetricByName(listMetricThread, COMMIT_RATIO, 2);
-        checkMetricByName(listMetricThread, POLL_RATE, 2);
-        checkMetricByName(listMetricThread, POLL_TOTAL, 2);
-        checkMetricByName(listMetricThread, POLL_RATIO, 2);
-        checkMetricByName(listMetricThread, POLL_RECORDS_AVG, 2);
-        checkMetricByName(listMetricThread, POLL_RECORDS_MAX, 2);
-        checkMetricByName(listMetricThread, PROCESS_RATE, 2);
-        checkMetricByName(listMetricThread, PROCESS_TOTAL, 2);
-        checkMetricByName(listMetricThread, PROCESS_RATIO, 2);
-        checkMetricByName(listMetricThread, PROCESS_RECORDS_AVG, 2);
-        checkMetricByName(listMetricThread, PROCESS_RECORDS_MAX, 2);
-        checkMetricByName(listMetricThread, PUNCTUATE_RATE, 2);
-        checkMetricByName(listMetricThread, PUNCTUATE_TOTAL, 2);
-        checkMetricByName(listMetricThread, PUNCTUATE_RATIO, 2);
-        checkMetricByName(listMetricThread, TASK_CREATED_RATE, 2);
-        checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, 2);
-        checkMetricByName(listMetricThread, TASK_CLOSED_RATE, 2);
-        checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, 2);
+        checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RECORDS_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RECORDS_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RECORDS_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RECORDS_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CREATED_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CLOSED_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, NUM_THREADS);
         checkMetricByName(
             listMetricThread,
             SKIPPED_RECORDS_RATE,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 2
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : NUM_THREADS
         );
         checkMetricByName(
             listMetricThread,
             SKIPPED_RECORDS_TOTAL,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 2
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : NUM_THREADS
         );
     }
 
