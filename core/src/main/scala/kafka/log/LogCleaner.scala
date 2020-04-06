@@ -356,17 +356,18 @@ class LogCleaner(initialConfig: CleanerConfig,
     }
 
     private def cleanLog(cleanable: LogToClean): Unit = {
-      var endOffset = cleanable.firstDirtyOffset
+      val startOffset = cleanable.firstDirtyOffset
+      var endOffset = startOffset
       try {
         val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
-        recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
         endOffset = nextDirtyOffset
+        recordStats(cleaner.id, cleanable.log.name, startOffset, endOffset, cleanerStats)
       } catch {
         case _: LogCleaningAbortedException => // task can be aborted, let it go.
         case _: KafkaStorageException => // partition is already offline. let it go.
         case e: IOException =>
           val logDirectory = cleanable.log.parentDir
-          val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${logDirectory} due to IOException"
+          val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir $logDirectory due to IOException"
           logDirFailureChannel.maybeAddOfflineLogDir(logDirectory, msg, e)
       } finally {
         cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.parentDirFile, endOffset)
