@@ -226,8 +226,6 @@ public class TaskManager {
                     task.prepareCloseDirty();
                     dirtyTasks.add(task);
                 }
-
-                iterator.remove();
             }
         }
 
@@ -249,12 +247,8 @@ public class TaskManager {
             } catch (final RuntimeException e) {
                 log.error("Failed to batch commit tasks, " +
                     "will close all tasks involved in this commit as dirty by the end", e);
-
                 dirtyTasks.addAll(additionalTasksForCommitting);
                 dirtyTasks.addAll(checkpointPerTask.keySet());
-
-                // Remove all the closing tasks from the TaskManager bookkeeping to avoid re-closing them.
-                dirtyTasks.forEach(task -> tasks.remove(task.id()));
 
                 checkpointPerTask.clear();
                 // Just add first taskId to re-throw by the end.
@@ -275,12 +269,14 @@ public class TaskManager {
                 task.closeDirty();
             } finally {
                 cleanUpTaskProducer(task, taskCloseExceptions);
+                tasks.remove(task.id());
             }
         }
 
         for (final Task task : dirtyTasks) {
             task.closeDirty();
             cleanUpTaskProducer(task, taskCloseExceptions);
+            tasks.remove(task.id());
         }
 
         if (!taskCloseExceptions.isEmpty()) {
