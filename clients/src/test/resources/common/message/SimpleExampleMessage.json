@@ -44,11 +44,6 @@
           "fields": [
             { "name": "arrayFieldId", "type": "int32", "versions": "2+"}
           ]}
-    ]},
-    { "name": "myNullableStruct", "type": "MyNullableStruct", "versions": "2+", "about": "Test Struct field #2",
-      "nullableVersions": "0-1", "default": null,
-      "fields": [
-        { "name": "structId", "type": "int32", "versions": "2+", "about": "Int field in struct"}
     ]}
   ]
 }

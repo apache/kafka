@@ -301,24 +301,6 @@ public class SimpleExampleMessageTest {
             __ -> { }, (short) 1);
     }
 
-    @Test
-    public void testMyNullableStruct() {
-        // Verify that we can set and retrieve a nullable struct object.
-        SimpleExampleMessageData.MyNullableStruct myNullableStruct =
-                new SimpleExampleMessageData.MyNullableStruct().setStructId(10);
-        testRoundTrip(new SimpleExampleMessageData().setMyNullableStruct(myNullableStruct),
-            message -> assertEquals(myNullableStruct, message.myNullableStruct()), (short) 2);
-    }
-
-    @Test(expected = UnsupportedVersionException.class)
-    public void testMyNullableStructUnsupportedVersion() {
-        SimpleExampleMessageData.MyNullableStruct myNullableStruct =
-                new SimpleExampleMessageData.MyNullableStruct().setStructId(10);
-        // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyNullableStruct(myNullableStruct),
-            message -> assertEquals(myNullableStruct, message.myNullableStruct()), (short) 1);
-    }
-
     private void testRoundTrip(SimpleExampleMessageData message,
                                Consumer<SimpleExampleMessageData> validator) {
         testRoundTrip(message, validator, (short) 1);
