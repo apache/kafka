@@ -68,7 +68,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -252,6 +251,9 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         Objects.requireNonNull(leaderPartitions, "leaderPartitions can not be null");
         Objects.requireNonNull(followerPartitions, "followerPartitions can not be null");
 
+        log.info("Received leadership notifications with leader partitions {} and follower partitions {}",
+                leaderPartitions, followerPartitions);
+
         initialize();
 
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
@@ -271,7 +273,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     private synchronized void initialize() {
-        if(!initialized) {
+        if (!initialized) {
+            log.info("Initializing all the clients and resources.");
             //create clients
             createAdminClient();
             createProducer();
@@ -529,6 +532,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, createClientId("consumer"));
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, 30 * 1000);
+        props.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, false);
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, RLMMDeserializer.class.getName());
 
@@ -548,7 +553,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         private volatile boolean closed = false;
         private volatile boolean reassign = false;
 
-        private Map<Integer, Long> receivedTillEndOffsets = new ConcurrentHashMap<>();
+        private Map<Integer, Long> targetEndOffsets = new ConcurrentHashMap<>();
 
         // map of topic-partition vs committed offsets
         private Map<Integer, Long> committedOffsets = new ConcurrentHashMap<>();
@@ -617,19 +622,35 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                             Set<TopicPartition> assignedTopicPartitions = assignedMetaPartitions.stream()
                                     .map(x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
                                     .collect(Collectors.toSet());
-                            log.info("reassigning partitions to consumer task[{}]", assignedTopicPartitions);
+                            log.info("Reassigning partitions to consumer task [{}]", assignedTopicPartitions);
                             consumer.assign(assignedTopicPartitions);
-                            for (Map.Entry<TopicPartition, Long> entry
-                                    : consumer.endOffsets(assignedTopicPartitions, Duration.ofMillis(Long.MAX_VALUE)).entrySet()) {
-                                if (entry.getValue() > 0) {
-                                    receivedTillEndOffsets.put(entry.getKey().partition(), entry.getValue());
+                            log.info("Reassigned partitions to consumer task [{}]", assignedTopicPartitions);
+
+                            log.info("Fetching end offsets to consumer task [{}]", assignedTopicPartitions);
+                            Map<TopicPartition, Long> endOffsets;
+                            while (true) {
+                                try {
+                                    endOffsets = consumer.endOffsets(assignedTopicPartitions, Duration.ofSeconds(30));
+                                    break;
+                                } catch (Exception e) {
+                                    // ignore exception
+                                    log.info("#### Error encountered in fetching end offsets");
                                 }
                             }
+                            log.info("Fetched end offsets to consumer task [{}]", endOffsets);
+
+                            for (Map.Entry<TopicPartition, Long> entry
+                                    : endOffsets.entrySet()) {
+                                if (entry.getValue() > 0) {
+                                    targetEndOffsets.put(entry.getKey().partition(), entry.getValue());
+                                }
+                            }
+
                             reassign = false;
                         }
                     }
 
-                    log.info("POlling consumer to receive remote log metadata topic records");
+                    log.info("Polling consumer to receive remote log metadata topic records");
                     ConsumerRecords<String, RemoteLogSegmentMetadata> consumerRecords
                             = consumer.poll(Duration.ofSeconds(30L));
                     for (ConsumerRecord<String, RemoteLogSegmentMetadata> record : consumerRecords) {
@@ -645,12 +666,12 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                         }
                     }
 
-                    // check whether messages are received till end offsets or not.
-                    if (!receivedTillEndOffsets.isEmpty()) {
-                        for (Map.Entry<Integer, Long> entry : receivedTillEndOffsets.entrySet()) {
+                    // check whether messages are received till end offsets or not for the assigned metadata partitions.
+                    if (!targetEndOffsets.isEmpty()) {
+                        for (Map.Entry<Integer, Long> entry : targetEndOffsets.entrySet()) {
                             final Long offset = committedOffsets.getOrDefault(entry.getKey(), 0L);
                             if (offset >= entry.getValue()) {
-                                receivedTillEndOffsets.remove(entry.getKey());
+                                targetEndOffsets.remove(entry.getKey());
                             }
                         }
                     }
@@ -662,6 +683,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                 if (closed) {
                     log.info("ConsumerTask is closed");
                 } else {
+                    //todo-tier add a metric that the consumer task is failed. This will allow users can take an action
+                    // based on the error.
                     log.error("Error occurred in consumer task", e);
                 }
             } finally {
@@ -690,6 +713,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         public void reassignForPartitions(Set<TopicPartition> partitions) {
             Objects.requireNonNull(partitions, "partitions can not be null");
 
+            log.info("Reassigning for user partitions {}", partitions);
             synchronized (lock) {
                 // check for the corresponding partitions.
                 Set<Integer> newlyAssignedPartitions = new HashSet<>();
@@ -698,7 +722,9 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                 }
                 reassignedTopicPartitions = new HashSet<>(partitions);
                 assignedMetaPartitions = Collections.unmodifiableSet(newlyAssignedPartitions);
+                log.info("Newly assigned metadata partitions {}", assignedMetaPartitions);
                 reassign = true;
+
                 lock.notifyAll();
             }
         }
@@ -711,6 +737,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                 for (TopicPartition tp : updatedReassignedPartitions) {
                     updatedAssignedMetaPartitions.add(remoteLogSegmentMetadataUpdater.metadataPartitionFor(tp));
                 }
+
                 if (!updatedAssignedMetaPartitions.equals(assignedMetaPartitions)) {
                     reassignedTopicPartitions = Collections.unmodifiableSet(updatedReassignedPartitions);
                     assignedMetaPartitions = Collections.unmodifiableSet(updatedAssignedMetaPartitions);

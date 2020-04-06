@@ -1044,20 +1044,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (aliveBrokers.size < config.remoteLogMetadataTopicReplicationFactor) {
           error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
             s"'${config.remoteLogMetadataTopicReplicationFactor}' for the offsets topic (configured via " +
-            s"'${
-              KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp
-            }'). This error can be ignored if the cluster is starting up " +
-            s"and not all brokers are up yet.")
+            s"'${KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp}'). This error can be ignored if the cluster " +
+            s"is starting up and not all brokers are up yet.")
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true,
             util.Collections.emptyList())
         } else {
-          //todo-tier extract these as props and pass them.
-          // enforce disabled unclean leader election, no compression types, and compact cleanup policy
           val props = new Properties()
+          // enforce unclean leader election as disabled
           props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
           props.put(LogConfig.MinInSyncReplicasProp, ((config.remoteLogMetadataTopicReplicationFactor/2) + 1).toString)
-          //set 1 year as the retention period for remote log metadata.
-          props.put(LogConfig.RetentionMsProp, (365 * 24 * 60 * 60 * 1000).toString)
+          props.put(LogConfig.RetentionMsProp, (config.remoteLogMetadataTopicRetentionMins * 60 * 1000).toString)
 
           createTopic(topic, config.remoteLogMetadataTopicPartitions, config.remoteLogMetadataTopicReplicationFactor, props)
         }

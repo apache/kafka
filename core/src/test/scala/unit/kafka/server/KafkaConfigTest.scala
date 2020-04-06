@@ -768,6 +768,7 @@ class KafkaConfigTest {
         case KafkaConfig.RemoteLogMetadataManagerClassPathProp => // ignore string
         case KafkaConfig.RemoteLogMetadataTopicPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.RemoteLogMetadataTopicRetentionMinsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RemoteLogStorageEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
         case KafkaConfig.RemoteLogRetentionBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RemoteLogRetentionMillisProp=> assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
