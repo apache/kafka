@@ -87,11 +87,11 @@ You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
 ### Running a task with all the scala versions enabled by default ###
 
-Append `All` to the task name:
+Invoke the `gradlewAll` script followed by the task(s):
 
-    ./gradlew testAll
-    ./gradlew jarAll
-    ./gradlew releaseTarGzAll
+    ./gradlewAll test
+    ./gradlewAll jar
+    ./gradlewAll releaseTarGz
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
