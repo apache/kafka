@@ -178,7 +178,7 @@ public class AbstractCoordinatorTest {
         assertEquals(3.0d, getMetric("heartbeat-total").metricValue());
 
         assertEquals(-1.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
-        coordinator.heartbeat().sentHeartbeat(mockTime.milliseconds(), null);
+        coordinator.heartbeat().sentHeartbeat(mockTime.milliseconds());
         assertEquals(0.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
         mockTime.sleep(10 * 1000L);
         assertEquals(10.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
@@ -483,11 +483,11 @@ public class AbstractCoordinatorTest {
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
         long startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasOngoing()) {
+        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
             Thread.sleep(10);
         }
 
-        assertTrue(coordinator.heartbeat().hasOngoing());
+        assertTrue(coordinator.heartbeat().hasInflight());
 
         // set the client to re-join group
         mockClient.respond(heartbeatResponse(Errors.UNKNOWN_MEMBER_ID));
@@ -495,13 +495,13 @@ public class AbstractCoordinatorTest {
         coordinator.requestRejoin();
 
         startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasOngoing()) {
+        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
             Thread.sleep(10);
             // poll the client until the heartbeat response is received
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
         }
 
-        assertFalse(coordinator.heartbeat().hasOngoing());
+        assertFalse(coordinator.heartbeat().hasInflight());
 
         // the generation should be reset but the rebalance should still proceed
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());

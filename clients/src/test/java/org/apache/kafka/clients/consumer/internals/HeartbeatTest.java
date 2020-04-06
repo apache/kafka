@@ -51,21 +51,21 @@ public class HeartbeatTest {
 
     @Test
     public void testShouldHeartbeat() {
-        heartbeat.sentHeartbeat(time.milliseconds(), null);
+        heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep((long) ((float) heartbeatIntervalMs * 1.1));
         assertTrue(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testShouldNotHeartbeat() {
-        heartbeat.sentHeartbeat(time.milliseconds(), null);
+        heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(heartbeatIntervalMs / 2);
         assertFalse(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testTimeToNextHeartbeat() {
-        heartbeat.sentHeartbeat(time.milliseconds(), null);
+        heartbeat.sentHeartbeat(time.milliseconds());
         assertEquals(heartbeatIntervalMs, heartbeat.timeToNextHeartbeat(time.milliseconds()));
 
         time.sleep(heartbeatIntervalMs);
@@ -77,14 +77,14 @@ public class HeartbeatTest {
 
     @Test
     public void testSessionTimeoutExpired() {
-        heartbeat.sentHeartbeat(time.milliseconds(), null);
+        heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(sessionTimeoutMs + 5);
         assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()));
     }
 
     @Test
     public void testResetSession() {
-        heartbeat.sentHeartbeat(time.milliseconds(), null);
+        heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(sessionTimeoutMs + 5);
         heartbeat.resetSessionTimeout();
         assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));

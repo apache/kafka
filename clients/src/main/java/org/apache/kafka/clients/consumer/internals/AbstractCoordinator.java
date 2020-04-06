@@ -1298,6 +1298,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             // coordinator disconnected
                             AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else {
+                            heartbeat.sentHeartbeat(now);
                             final RequestFuture<Void> heartbeatFuture = sendHeartbeatRequest();
                             heartbeatFuture.addListener(new RequestFutureListener<Void>() {
                                 @Override
@@ -1328,8 +1329,6 @@ public abstract class AbstractCoordinator implements Closeable {
                                     }
                                 }
                             });
-
-                            heartbeat.sentHeartbeat(now, heartbeatFuture);
                         }
                     }
                 }
@@ -1438,9 +1437,5 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     final boolean hasValidMemberId() {
         return generation != Generation.NO_GENERATION && generation.hasMemberId();
-    }
-
-    final void setNewGeneration(final Generation generation) {
-        this.generation = generation;
     }
 }

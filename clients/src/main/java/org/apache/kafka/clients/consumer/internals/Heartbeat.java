@@ -32,7 +32,7 @@ public final class Heartbeat {
     private final Timer pollTimer;
 
     private volatile long lastHeartbeatSend = 0L;
-    private RequestFuture<Void> heartbeatFuture = null;
+    private volatile boolean heartbeatInFlight = false;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {
@@ -57,26 +57,26 @@ public final class Heartbeat {
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    boolean hasOngoing() {
-        return heartbeatFuture != null;
+    boolean hasInflight() {
+        return heartbeatInFlight;
     }
 
-    void sentHeartbeat(long now, RequestFuture<Void> future) {
-        this.lastHeartbeatSend = now;
-        this.heartbeatFuture = future;
+    void sentHeartbeat(long now) {
+        lastHeartbeatSend = now;
+        heartbeatInFlight = true;
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
     void failHeartbeat() {
         update(time.milliseconds());
-        heartbeatFuture = null;
+        heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
     }
 
     void receiveHeartbeat() {
         update(time.milliseconds());
-        heartbeatFuture = null;
+        heartbeatInFlight = false;
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
