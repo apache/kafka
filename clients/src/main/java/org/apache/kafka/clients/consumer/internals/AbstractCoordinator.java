@@ -892,21 +892,26 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private synchronized void resetGeneration() {
-        this.generation = Generation.NO_GENERATION;
         this.rejoinNeeded = true;
-
-        // only reset the state to un-joined when it is not already in rebalancing
-        if (state != MemberState.REBALANCING)
-            state = MemberState.UNJOINED;
+        this.generation = Generation.NO_GENERATION;
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
+
+        // only reset the state to un-joined when it is not already in rebalancing
+        if (state != MemberState.REBALANCING)
+            state = MemberState.UNJOINED;
+
         resetGeneration();
     }
 
     synchronized void resetGenerationOnLeaveGroup() {
         log.debug("Resetting generation due to consumer pro-actively leaving the group");
+
+        // always set the state to un-joined
+        state = MemberState.UNJOINED;
+
         resetGeneration();
     }
 
