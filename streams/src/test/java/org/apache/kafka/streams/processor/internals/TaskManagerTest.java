@@ -1278,6 +1278,7 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CLOSED));
         assertThat(task02.state(), is(Task.State.CLOSED));
 
+        // All the tasks involving in the commit should already be removed.
         assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
 
         verify(activeTaskCreator);
@@ -1323,6 +1324,7 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CLOSED));
         assertThat(task02.state(), is(Task.State.CLOSED));
 
+        // All the tasks involving in the commit should already be removed.
         assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
 
         verify(activeTaskCreator);
