@@ -1280,7 +1280,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       authorizeClusterOperation(request, CLUSTER_ACTION)
       val (partition, topicMetadata) = CoordinatorType.forId(findCoordinatorRequest.data.keyType) match {
         case CoordinatorType.GROUP =>
-          authorizeClusterOperation(request, CLUSTER_ACTION)
           val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(GROUP_METADATA_TOPIC_NAME, request.context.listenerName)
           (partition, metadata)
