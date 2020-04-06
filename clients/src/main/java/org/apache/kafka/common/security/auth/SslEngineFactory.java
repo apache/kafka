@@ -45,7 +45,7 @@ public interface SslEngineFactory extends Configurable, Closeable {
     /**
      * Create a new SSLEngine object to be used by the server.
      *
-     * @param peerHost               The peer host to use. This is used in client mode if endpoint validation is enabled.
+     * @param peerHost               The peer host to use. This is a hint and not used for validation.
      * @param peerPort               The peer port to use. This is a hint and not used for validation.
      * @return The new SSLEngine.
      */

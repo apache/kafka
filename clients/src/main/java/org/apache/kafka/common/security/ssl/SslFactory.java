@@ -85,8 +85,7 @@ public class SslFactory implements Reconfigurable {
         }
         this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        Map<String, Object> nextConfigs = new HashMap<>();
-        copyAllConfigs(nextConfigs, configs);
+        Map<String, Object> nextConfigs = new HashMap<>(configs);
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
@@ -190,19 +189,6 @@ public class SslFactory implements Reconfigurable {
 
     public SslEngineFactory sslEngineFactory() {
         return sslEngineFactory;
-    }
-
-    /**
-     * Copy all entries from one map into another.
-     *
-     * @param destMap   The map to copy entries into.
-     * @param srcMap    The map to copy entries from.
-     */
-    private static void copyAllConfigs(Map<String, Object> destMap,
-                                       Map<String, ? extends Object> srcMap) {
-        for (Map.Entry<String, ?> entry : srcMap.entrySet()) {
-            destMap.put(entry.getKey(), entry.getValue());
-        }
     }
 
     /**
@@ -342,6 +328,8 @@ public class SslFactory implements Reconfigurable {
             while (true) {
                 switch (handshakeStatus) {
                     case NEED_WRAP:
+                        if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
+                            return;
                         handshakeResult = sslEngine.wrap(EMPTY_BUF, netBuffer);
                         switch (handshakeResult.getStatus()) {
                             case OK: break;
