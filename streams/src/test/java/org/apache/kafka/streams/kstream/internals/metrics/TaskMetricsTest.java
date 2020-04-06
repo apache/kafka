@@ -102,6 +102,30 @@ public class TaskMetricsTest {
     }
 
     @Test
+    public void shouldGetActiveBufferCountSensor() {
+        final String operation = "active-buffer-count";
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        final String countDescription = "The count of buffered records that are polled " +
+            "from consumer and not yet processed for this active task";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            countDescription
+        );
+
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = TaskMetrics.activeBufferedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))

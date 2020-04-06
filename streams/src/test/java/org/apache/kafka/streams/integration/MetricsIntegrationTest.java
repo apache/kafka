@@ -65,6 +65,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class MetricsIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
+    private static final int NUM_THREADS = 2;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -97,6 +98,7 @@ public class MetricsIntegrationTest {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
     private static final String PUT_LATENCY_MAX = "put-latency-max";
     private static final String PUT_IF_ABSENT_LATENCY_AVG = "put-if-absent-latency-avg";
@@ -151,8 +153,12 @@ public class MetricsIntegrationTest {
     private static final String DESTROY_LATENCY_MAX = "destroy-latency-max";
     private static final String PROCESS_RATE = "process-rate";
     private static final String PROCESS_TOTAL = "process-total";
+    private static final String PROCESS_RATIO = "process-ratio";
+    private static final String PROCESS_RECORDS_AVG = "process-records-avg";
+    private static final String PROCESS_RECORDS_MAX = "process-records-max";
     private static final String PUNCTUATE_RATE = "punctuate-rate";
     private static final String PUNCTUATE_TOTAL = "punctuate-total";
+    private static final String PUNCTUATE_RATIO = "punctuate-ratio";
     private static final String CREATE_RATE = "create-rate";
     private static final String CREATE_TOTAL = "create-total";
     private static final String DESTROY_RATE = "destroy-rate";
@@ -166,14 +172,20 @@ public class MetricsIntegrationTest {
     private static final String POLL_LATENCY_MAX = "poll-latency-max";
     private static final String COMMIT_RATE = "commit-rate";
     private static final String COMMIT_TOTAL = "commit-total";
+    private static final String COMMIT_RATIO = "commit-ratio";
     private static final String ENFORCED_PROCESSING_RATE = "enforced-processing-rate";
     private static final String ENFORCED_PROCESSING_TOTAL = "enforced-processing-total";
     private static final String POLL_RATE = "poll-rate";
     private static final String POLL_TOTAL = "poll-total";
+    private static final String POLL_RATIO = "poll-ratio";
+    private static final String POLL_RECORDS_AVG = "poll-records-avg";
+    private static final String POLL_RECORDS_MAX = "poll-records-max";
     private static final String TASK_CREATED_RATE = "task-created-rate";
     private static final String TASK_CREATED_TOTAL = "task-created-total";
     private static final String TASK_CLOSED_RATE = "task-closed-rate";
     private static final String TASK_CLOSED_TOTAL = "task-closed-total";
+    private static final String ACTIVE_PROCESS_RATIO = "active-process-ratio";
+    private static final String ACTIVE_BUFFER_COUNT = "active-buffer-count";
     private static final String SKIPPED_RECORDS_RATE = "skipped-records-rate";
     private static final String SKIPPED_RECORDS_TOTAL = "skipped-records-total";
     private static final String RECORD_LATENESS_AVG = "record-lateness-avg";
@@ -192,30 +204,6 @@ public class MetricsIntegrationTest {
     private static final String SUPPRESSION_BUFFER_COUNT_MAX = "suppression-buffer-count-max";
     private static final String EXPIRED_WINDOW_RECORD_DROP_RATE = "expired-window-record-drop-rate";
     private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL = "expired-window-record-drop-total";
-
-    // RocksDB metrics
-    private static final String BYTES_WRITTEN_RATE = "bytes-written-rate";
-    private static final String BYTES_WRITTEN_TOTAL = "bytes-written-total";
-    private static final String BYTES_READ_RATE = "bytes-read-rate";
-    private static final String BYTES_READ_TOTAL = "bytes-read-total";
-    private static final String MEMTABLE_BYTES_FLUSHED_RATE = "memtable-bytes-flushed-rate";
-    private static final String MEMTABLE_BYTES_FLUSHED_TOTAL = "memtable-bytes-flushed-total";
-    private static final String MEMTABLE_HIT_RATIO = "memtable-hit-ratio";
-    private static final String MEMTABLE_FLUSH_TIME_AVG = "memtable-flush-time-avg";
-    private static final String MEMTABLE_FLUSH_TIME_MIN = "memtable-flush-time-min";
-    private static final String MEMTABLE_FLUSH_TIME_MAX = "memtable-flush-time-max";
-    private static final String WRITE_STALL_DURATION_AVG = "write-stall-duration-avg";
-    private static final String WRITE_STALL_DURATION_TOTAL = "write-stall-duration-total";
-    private static final String BLOCK_CACHE_DATA_HIT_RATIO = "block-cache-data-hit-ratio";
-    private static final String BLOCK_CACHE_INDEX_HIT_RATIO = "block-cache-index-hit-ratio";
-    private static final String BLOCK_CACHE_FILTER_HIT_RATIO = "block-cache-filter-hit-ratio";
-    private static final String BYTES_READ_DURING_COMPACTION_RATE = "bytes-read-compaction-rate";
-    private static final String BYTES_WRITTEN_DURING_COMPACTION_RATE = "bytes-written-compaction-rate";
-    private static final String COMPACTION_TIME_AVG = "compaction-time-avg";
-    private static final String COMPACTION_TIME_MIN = "compaction-time-min";
-    private static final String COMPACTION_TIME_MAX = "compaction-time-max";
-    private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
-    private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors-total";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -246,6 +234,7 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
@@ -258,6 +247,7 @@ public class MetricsIntegrationTest {
         final Topology topology = builder.build();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
+        verifyAliveStreamThreadsMetric(0);
         verifyStateMetric(State.CREATED);
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric();
@@ -267,6 +257,9 @@ public class MetricsIntegrationTest {
             () -> kafkaStreams.state() == State.RUNNING,
             timeout,
             () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
+
+        verifyAliveStreamThreadsMetric(NUM_THREADS);
+        verifyStateMetric(State.RUNNING);
     }
 
     private void produceRecordsForTwoSegments(final Duration segmentInterval) throws Exception {
@@ -481,6 +474,15 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
+    private void verifyAliveStreamThreadsMetric(final int numThreads) {
+        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().name().equals(ALIVE_STREAM_THREADS) &&
+                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
+            .collect(Collectors.toList());
+        assertThat(metricsList.size(), is(1));
+        assertThat(metricsList.get(0).metricValue(), is(numThreads));
+    }
+
     private void verifyStateMetric(final State state) {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(STATE) &&
@@ -518,6 +520,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, APPLICATION_ID, 1);
         checkMetricByName(listMetricThread, TOPOLOGY_DESCRIPTION, 1);
         checkMetricByName(listMetricThread, STATE, 1);
+        checkMetricByName(listMetricThread, ALIVE_STREAM_THREADS, 1);
     }
 
     private void checkThreadLevelMetrics(final String builtInMetricsVersion) {
@@ -526,35 +529,43 @@ public class MetricsIntegrationTest {
                 StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? STREAM_THREAD_NODE_METRICS
                     : STREAM_THREAD_NODE_METRICS_0100_TO_24))
             .collect(Collectors.toList());
-        checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
-        checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
-        checkMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);
-        checkMetricByName(listMetricThread, POLL_LATENCY_MAX, 1);
-        checkMetricByName(listMetricThread, PROCESS_LATENCY_AVG, 1);
-        checkMetricByName(listMetricThread, PROCESS_LATENCY_MAX, 1);
-        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, 1);
-        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, 1);
-        checkMetricByName(listMetricThread, COMMIT_RATE, 1);
-        checkMetricByName(listMetricThread, COMMIT_TOTAL, 1);
-        checkMetricByName(listMetricThread, POLL_RATE, 1);
-        checkMetricByName(listMetricThread, POLL_TOTAL, 1);
-        checkMetricByName(listMetricThread, PROCESS_RATE, 1);
-        checkMetricByName(listMetricThread, PROCESS_TOTAL, 1);
-        checkMetricByName(listMetricThread, PUNCTUATE_RATE, 1);
-        checkMetricByName(listMetricThread, PUNCTUATE_TOTAL, 1);
-        checkMetricByName(listMetricThread, TASK_CREATED_RATE, 1);
-        checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, 1);
-        checkMetricByName(listMetricThread, TASK_CLOSED_RATE, 1);
-        checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, 1);
+        checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, COMMIT_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RECORDS_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, POLL_RECORDS_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RECORDS_AVG, NUM_THREADS);
+        checkMetricByName(listMetricThread, PROCESS_RECORDS_MAX, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, PUNCTUATE_RATIO, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CREATED_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CLOSED_RATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, NUM_THREADS);
         checkMetricByName(
             listMetricThread,
             SKIPPED_RECORDS_RATE,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 1
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : NUM_THREADS
         );
         checkMetricByName(
             listMetricThread,
             SKIPPED_RECORDS_TOTAL,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 1
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : NUM_THREADS
         );
     }
 
@@ -563,11 +574,12 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS))
             .collect(Collectors.toList());
         final int numberOfAddedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 0 : 4;
-        final int numberOfMetricsWithRemovedParent = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 5 : 4;
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_RATE, 4);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_TOTAL, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
+        checkMetricByName(listMetricTask, ACTIVE_PROCESS_RATIO, 4);
+        checkMetricByName(listMetricTask, ACTIVE_BUFFER_COUNT, 4);
         checkMetricByName(listMetricTask, PROCESS_LATENCY_AVG, numberOfAddedMetrics);
         checkMetricByName(listMetricTask, PROCESS_LATENCY_MAX, numberOfAddedMetrics);
         checkMetricByName(listMetricTask, PUNCTUATE_LATENCY_AVG, numberOfAddedMetrics);

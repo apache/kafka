@@ -192,6 +192,7 @@ public class KafkaStreamsTest {
         ClientMetrics.addApplicationIdMetric(anyObject(StreamsMetricsImpl.class), EasyMock.eq(APPLICATION_ID));
         ClientMetrics.addTopologyDescriptionMetric(anyObject(StreamsMetricsImpl.class), anyString());
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
+        ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);

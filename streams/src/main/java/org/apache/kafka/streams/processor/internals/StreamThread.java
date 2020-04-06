@@ -259,7 +259,9 @@ public class StreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
     private final Sensor pollSensor;
+    private final Sensor pollRecordsSensor;
     private final Sensor punctuateSensor;
+    private final Sensor processRecordsSensor;
     private final Sensor processLatencySensor;
     private final Sensor processRateSensor;
     private final Sensor pollRatioSensor;
@@ -439,12 +441,14 @@ public class StreamThread extends Thread {
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
-        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
-        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
-        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
-        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
-        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
+        this.pollRecordsSensor = ThreadMetrics.pollRecordsSensor(threadId, streamsMetrics);
         this.pollRatioSensor = ThreadMetrics.pollRatioSensor(threadId, streamsMetrics);
+        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
+        this.processRecordsSensor = ThreadMetrics.processRecordsSensor(threadId, streamsMetrics);
+        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
+        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
+        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
+        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
@@ -624,6 +628,7 @@ public class StreamThread extends Thread {
 
         if (records != null && !records.isEmpty()) {
             pollSensor.record(pollLatency, now);
+            pollRecordsSensor.record(records.count());
             addRecordsToTasks(records);
         }
 
@@ -657,6 +662,7 @@ public class StreamThread extends Thread {
         //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
 
+        int totalProcessed = 0;
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
@@ -684,6 +690,8 @@ public class StreamThread extends Thread {
                     // as well as total time ratio spent on processing compared with polling / committing etc
                     // are reported on other metrics.
                     processLatencySensor.record(processLatency / (double) processed, now);
+
+                    totalProcessed += processed;
                 }
 
                 final int punctuated = taskManager.punctuate();
@@ -725,6 +733,7 @@ public class StreamThread extends Thread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
+        processRecordsSensor.record(totalProcessed);
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
         pollRatioSensor.record((double) pollLatency / runOnceLatency);

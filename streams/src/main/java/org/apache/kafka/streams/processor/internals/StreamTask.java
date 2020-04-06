@@ -95,6 +95,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
     private final Sensor punctuateLatencySensor;
+    private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
     private final InternalProcessorContext processorContext;
 
@@ -137,6 +138,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
+        bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
@@ -627,7 +629,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void recordProcessTimeRatio(final long allTaskProcessMs) {
+    public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {
+        bufferedRecordsSensor.record(partitionGroup.numBuffered());
         processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
         processTimeMs = 0L;
     }

@@ -848,7 +848,7 @@ public class TaskManager {
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs) {
         for (final Task task : activeTaskIterable()) {
-            task.recordProcessTimeRatio(totalProcessLatencyMs);
+            task.recordProcessTimeRatioAndBufferSize(totalProcessLatencyMs);
         }
     }
 
