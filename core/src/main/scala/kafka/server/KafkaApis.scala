@@ -1681,8 +1681,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
-      val authorizedTopics = if (hasClusterAuthorization) topics.toSet
-        else filterAuthorized(request.context, CREATE, TOPIC, topics.toSeq)
+      val authorizedTopics = if (hasClusterAuthorization) {
+        topics.toSet
+      } else {
+        filterAuthorized(request.context, CREATE, TOPIC, topics.toSeq)
+      }
       val authorizedForDescribeConfigs = filterAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
         topics.toSeq, logIfDenied = false).map(name => name -> results.find(name)).toMap
 
@@ -2898,9 +2901,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                                        resourceNames: Seq[String],
                                        logIfAllowed: Boolean = true,
                                        logIfDenied: Boolean = true): Set[String] = {
+    val uniqueResourceNames = resourceNames.distinct
     authorizer match {
       case Some(authZ) =>
-        val uniqueResourceNames = resourceNames.distinct
         val groupedResourceNames = resourceNames.groupBy(identity)
         val actions = uniqueResourceNames.map { resourceName =>
           val count = groupedResourceNames(resourceName).size
@@ -2912,7 +2915,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .filter { case (authzResult, _) => authzResult == AuthorizationResult.ALLOWED }
           .map { case (_, resourceName) => resourceName }.toSet
       case None =>
-        resourceNames.toSet
+        uniqueResourceNames.toSet
     }
   }
 

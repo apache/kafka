@@ -139,7 +139,7 @@ class KafkaApisTest {
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
     val resourceName = "topic-1"
-    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(),
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
       clientId, 0)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
@@ -179,7 +179,7 @@ class KafkaApisTest {
     val resourceName1 = "topic-1"
     val resourceName2 = "topic-2"
     val resourceName3 = "topic-3"
-    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(),
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
       clientId, 0)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
