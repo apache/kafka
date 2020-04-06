@@ -126,16 +126,13 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
     }
 
     @Override
-    public <K1 extends K, V1 extends V> void forward(final K1 key,
-                               final V1 value) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
         forward(key, value, SEND_TO_ALL);
     }
 
     @Override
     @Deprecated
-    public <K1 extends K, V1 extends V> void forward(final K1 key,
-                               final V1 value,
-                               final int childIndex) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         forward(
             key,
             value,
@@ -144,17 +141,13 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
 
     @Override
     @Deprecated
-    public <K1 extends K, V1 extends V> void forward(final K1 key,
-                               final V1 value,
-                               final String childName) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1 extends K, V1 extends V> void forward(final K1 key,
-                               final V1 value,
-                               final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         final ProcessorNode<?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
@@ -189,9 +182,7 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         }
     }
 
-    private <K1 extends K, V1 extends V> void forward(final ProcessorNode<K1, V1> child,
-                                final K1 key,
-                                final V1 value) {
+    private <K1 extends K, V1 extends V> void forward(final ProcessorNode<K1, V1> child, final K1 key, final V1 value) {
         setCurrentNode(child);
         child.process(key, value);
     }
