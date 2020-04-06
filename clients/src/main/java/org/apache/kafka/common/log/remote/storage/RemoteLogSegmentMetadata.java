@@ -23,6 +23,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Metadata about the log segment stored in remote tier storage.
@@ -151,8 +152,13 @@ public class RemoteLogSegmentMetadata implements Serializable {
         return remoteLogSegmentContext;
     }
 
-    //todo Add efficient ser/des mechanism, may be avro/protobuf or any other.
-    public static byte[] asBytes(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
+    public static RemoteLogSegmentMetadata markForDeletion(RemoteLogSegmentMetadata original) {
+        return new RemoteLogSegmentMetadata(original.remoteLogSegmentId, original.startOffset, original.endOffset,
+                original.maxTimestamp, original.leaderEpoch, original.createdTimestamp, true,
+                original.remoteLogSegmentContext);
+    }
+
+    public static byte[] asBytesWithJavaSerde(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(512);
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(baos)) {
             objectOutputStream.writeObject(remoteLogSegmentMetadata);
@@ -160,16 +166,10 @@ public class RemoteLogSegmentMetadata implements Serializable {
         }
     }
 
-    public static RemoteLogSegmentMetadata fromBytes(byte[] bytes) throws IOException, ClassNotFoundException {
+    public static RemoteLogSegmentMetadata fromBytesWithJavaSerde(byte[] bytes) throws IOException, ClassNotFoundException {
         try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
             return (RemoteLogSegmentMetadata) objectInputStream.readObject();
         }
-    }
-
-    public static RemoteLogSegmentMetadata markForDeletion(RemoteLogSegmentMetadata original) {
-        return new RemoteLogSegmentMetadata(original.remoteLogSegmentId, original.startOffset, original.endOffset,
-                original.maxTimestamp, original.leaderEpoch, original.createdTimestamp, true,
-                original.remoteLogSegmentContext);
     }
 
     @Override
@@ -184,5 +184,29 @@ public class RemoteLogSegmentMetadata implements Serializable {
                 ", markedForDeletion=" + markedForDeletion +
                 ", remoteLogSegmentContext=" + Arrays.toString(remoteLogSegmentContext) +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RemoteLogSegmentMetadata that = (RemoteLogSegmentMetadata) o;
+        return startOffset == that.startOffset &&
+                endOffset == that.endOffset &&
+                leaderEpoch == that.leaderEpoch &&
+                maxTimestamp == that.maxTimestamp &&
+                createdTimestamp == that.createdTimestamp &&
+                markedForDeletion == that.markedForDeletion &&
+                Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
+                Arrays.equals(remoteLogSegmentContext, that.remoteLogSegmentContext);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(remoteLogSegmentId, startOffset, endOffset, leaderEpoch, maxTimestamp,
+                createdTimestamp,
+                markedForDeletion);
+        result = 31 * result + Arrays.hashCode(remoteLogSegmentContext);
+        return result;
     }
 }

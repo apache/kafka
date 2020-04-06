@@ -24,7 +24,8 @@ import java.util.{Collections, UUID}
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.log.remote.storage.{RLMMWithTopicStorage, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
+import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
+import org.apache.kafka.common.log.remote.storage.{RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Before, Test}
 
 import scala.collection.JavaConverters._
