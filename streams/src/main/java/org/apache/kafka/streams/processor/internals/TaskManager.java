@@ -277,6 +277,7 @@ public class TaskManager {
         for (final Task task : dirtyTasks) {
             task.closeDirty();
             cleanUpTaskProducer(task, taskCloseExceptions);
+            tasks.remove(task.id());
         }
 
         if (!taskCloseExceptions.isEmpty()) {
