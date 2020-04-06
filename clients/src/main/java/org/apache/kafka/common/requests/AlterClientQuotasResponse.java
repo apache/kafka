@@ -100,10 +100,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (EntryData entry : data.entries()) {
-            Errors error = Errors.forCode(entry.errorCode());
-            updateErrorCounts(counts, error);
-        }
+        data.entries().forEach(entry ->
+            updateErrorCounts(counts, Errors.forCode(entry.errorCode()))
+        );
         return counts;
     }
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -66,10 +65,9 @@ public class DeleteTopicsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
-        for (DeletableTopicResult result : data.responses()) {
-            Errors error = Errors.forCode(result.errorCode());
-            updateErrorCounts(counts, error);
-        }
+        data.responses().forEach(result ->
+            updateErrorCounts(counts, Errors.forCode(result.errorCode()))
+        );
         return counts;
     }
 

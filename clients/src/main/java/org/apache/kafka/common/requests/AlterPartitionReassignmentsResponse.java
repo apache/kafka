@@ -18,8 +18,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -68,12 +66,11 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         Errors topLevelErr = Errors.forCode(data.errorCode());
         updateErrorCounts(counts, topLevelErr);
 
-        for (ReassignableTopicResponse topicResponse : data.responses()) {
-            for (ReassignablePartitionResponse partitionResponse : topicResponse.partitions()) {
-                Errors error = Errors.forCode(partitionResponse.errorCode());
-                updateErrorCounts(counts, error);
-            }
-        }
+        data.responses().forEach(topicResponse ->
+                topicResponse.partitions().forEach(partitionResponse ->
+                updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
+            )
+        );
         return counts;
     }
 
