@@ -32,7 +32,6 @@ import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
