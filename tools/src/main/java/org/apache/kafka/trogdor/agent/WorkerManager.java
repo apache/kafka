@@ -316,7 +316,9 @@ public final class WorkerManager {
     }
 
     public KafkaFuture<String> createWorker(long workerId, String taskId, TaskSpec spec) throws Throwable {
-        try (ShutdownManager.Reference ref = shutdownManager.takeReference()) {
+        ShutdownManager.Reference ref = null;
+        try {
+            ref = shutdownManager.takeReference();
             final Worker worker = stateChangeExecutor.
                 submit(new CreateWorker(workerId, taskId, spec, time.milliseconds())).get();
             if (worker.doneFuture != null) {
@@ -363,6 +365,10 @@ public final class WorkerManager {
                     nodeName, workerId, taskId, spec, e);
             }
             throw e.getCause();
+        } finally {
+            if (ref != null) {
+                ref.close();
+            }
         }
     }
 
@@ -525,10 +531,16 @@ public final class WorkerManager {
     }
 
     public void stopWorker(long workerId, boolean mustDestroy) throws Throwable {
-        try (ShutdownManager.Reference ref = shutdownManager.takeReference()) {
+        ShutdownManager.Reference ref = null;
+        try {
+            ref = shutdownManager.takeReference();
             stateChangeExecutor.submit(new StopWorker(workerId, mustDestroy)).get();
         } catch (ExecutionException e) {
             throw e.getCause();
+        } finally {
+            if (ref != null) {
+                ref.close();
+            }
         }
     }
 
@@ -614,8 +626,14 @@ public final class WorkerManager {
     }
 
     public TreeMap<Long, WorkerState> workerStates() throws Exception {
-        try (ShutdownManager.Reference ref = shutdownManager.takeReference()) {
+        ShutdownManager.Reference ref = null;
+        try {
+            ref = shutdownManager.takeReference();
             return stateChangeExecutor.submit(new GetWorkerStates()).get();
+        } finally {
+            if (ref != null) {
+                ref.close();
+            }
         }
     }
 
