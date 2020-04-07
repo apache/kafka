@@ -1846,6 +1846,28 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
+    public void shouldGetNextProbingRebalanceMs() {
+        nextProbingRebalanceMs.set(5 * 60 * 1000L);
+
+        createDefaultMockTaskManager();
+        final Map<String, Object> props = configProps();
+        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
+
+        assertThat(assignorConfiguration.getNextProbingRebalanceMs(props).get(), equalTo(5 * 60 * 1000L));
+    }
+
+    @Test
+    public void shouldGetTime() {
+        time.setCurrentTimeMs(Long.MAX_VALUE);
+
+        createDefaultMockTaskManager();
+        final Map<String, Object> props = configProps();
+        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
+
+        assertThat(assignorConfiguration.getTime(props).milliseconds(), equalTo(Long.MAX_VALUE));
+    }
+
+    @Test
     public void shouldThrowIllegalStateExceptionIfAnyPartitionsMissingFromChangelogEndOffsets() {
         final int changelogNumPartitions = 3;
         builder.addSource(null, "source1", null, null, null, "topic1");
