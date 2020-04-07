@@ -156,46 +156,37 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff the given leader epoch is newer than the last seen leader epoch
+     * Request an update for the partition metadata iff we encounter a leader epoch that is newer than the last seen leader epoch
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
         if (leaderEpoch < 0)
             throw new IllegalArgumentException("Invalid leader epoch " + leaderEpoch + " (must be non-negative)");
 
-        // We don't want to overwrite a null epoch with an epoch from something other than a metadata update
-        boolean updated = updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch, false);
+        Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
+        log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, leaderEpoch);
+
+        final boolean updated;
+        if (oldEpoch == null) {
+            log.debug("Not replacing null epoch with new epoch {} for partition {}", leaderEpoch, topicPartition);
+            updated = false;
+        } else {
+            if (leaderEpoch > oldEpoch) {
+                log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
+                lastSeenLeaderEpochs.put(topicPartition, leaderEpoch);
+                updated = true;
+            } else {
+                log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
+                updated = false;
+            }
+        }
+
         this.needFullUpdate = this.needFullUpdate || updated;
         return updated;
     }
 
     public Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
         return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition));
-    }
-
-    /**
-     * Conditionally update the leader epoch for a partition
-     *
-     * @param topicPartition       topic+partition to update the epoch for
-     * @param epoch                the new epoch
-     * @param epochTest            a predicate to determine if the old epoch should be replaced
-     * @param overwriteNullEpoch   if we should allow overwriting a missing epoch
-     * @return true if the epoch was updated, false otherwise
-     */
-    private synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition,
-                                                     int epoch,
-                                                     Predicate<Integer> epochTest,
-                                                     boolean overwriteNullEpoch) {
-        Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
-        log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, epoch);
-        if (oldEpoch == null || epochTest.test(oldEpoch)) {
-            log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, epoch, topicPartition);
-            lastSeenLeaderEpochs.put(topicPartition, epoch);
-            return true;
-        } else {
-            log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, epoch, topicPartition);
-            return false;
-        }
     }
 
     /**
@@ -376,10 +367,14 @@ public class Metadata implements Closeable {
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
             // If the received leader epoch is at least the same as the previous one, update the metadata
-            if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, true)) {
+            Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
+            if (currentEpoch == null || newEpoch >= currentEpoch) {
+                log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
+                lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
+                log.debug("Got metadata for an older epoch {} (current is {}) for partition {}, not updating", newEpoch, currentEpoch, tp);
                 return cache.partitionMetadata(tp);
             }
         } else {
