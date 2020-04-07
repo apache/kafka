@@ -564,7 +564,15 @@ public class RecordCollectorTest {
         assertEquals(1.0, metric.metricValue());
 
         final List<String> messages = logCaptureAppender.getMessages();
-        assertTrue(messages.get(messages.size() - 1).endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded."));
+        final StringBuilder errorMessage = new StringBuilder("Messages received:");
+        for (final String error : messages) {
+            errorMessage.append("\n - ").append(error);
+        }
+        assertTrue(
+            errorMessage.toString(),
+            messages.get(messages.size() - 1)
+                .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
+        );
         LogCaptureAppender.unregister(logCaptureAppender);
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);

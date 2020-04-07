@@ -40,6 +40,7 @@ import kafka.network.RequestChannel.SendResponse
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
@@ -59,7 +60,12 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
+import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.server.authorizer.Action
+import org.apache.kafka.server.authorizer.AuthorizationResult
 import org.apache.kafka.server.authorizer.Authorizer
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer}
@@ -82,7 +88,6 @@ class KafkaApisTest {
   private val metrics = new Metrics()
   private val brokerId = 1
   private val metadataCache = new MetadataCache(brokerId)
-  private val authorizer: Option[Authorizer] = None
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
@@ -101,7 +106,8 @@ class KafkaApisTest {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): KafkaApis = {
+  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
+                      authorizer: Option[Authorizer] = None): KafkaApis = {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
@@ -124,6 +130,93 @@ class KafkaApisTest {
       time,
       null
     )
+  }
+
+  @Test
+  def testAuthorize(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.WRITE
+    val resourceType = ResourceType.TOPIC
+    val resourceName = "topic-1"
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
+      clientId, 0)
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    EasyMock.expect(authorizer.authorize(
+      requestContext, expectedActions.asJava
+    )).andReturn(
+      Seq(AuthorizationResult.ALLOWED).asJava
+    ).once()
+
+    EasyMock.replay(authorizer)
+
+    val result = createKafkaApis(authorizer = Some(authorizer)).authorize(
+      requestContext,
+      operation,
+      resourceType,
+      resourceName,
+    )
+
+    verify(authorizer)
+
+    assertEquals(true, result)
+  }
+
+  @Test
+  def testFilterAuthorized(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.WRITE
+    val resourceType = ResourceType.TOPIC
+    val resourceName1 = "topic-1"
+    val resourceName2 = "topic-2"
+    val resourceName3 = "topic-3"
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
+      clientId, 0)
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName1, PatternType.LITERAL),
+        2, true, true),
+      new Action(operation, new ResourcePattern(resourceType, resourceName2, PatternType.LITERAL),
+        1, true, true),
+      new Action(operation, new ResourcePattern(resourceType, resourceName3, PatternType.LITERAL),
+        1, true, true),
+    )
+
+    EasyMock.expect(authorizer.authorize(
+      requestContext, expectedActions.asJava
+    )).andReturn(
+      Seq(
+        AuthorizationResult.ALLOWED,
+        AuthorizationResult.DENIED,
+        AuthorizationResult.ALLOWED
+      ).asJava
+    ).once()
+
+    EasyMock.replay(authorizer)
+
+    val result = createKafkaApis(authorizer = Some(authorizer)).filterAuthorized(
+      requestContext,
+      operation,
+      resourceType,
+      // Duplicate resource names should not trigger multiple calls to authorize
+      Seq(resourceName1, resourceName2, resourceName1, resourceName3)
+    )
+
+    verify(authorizer)
+
+    assertEquals(Set(resourceName1, resourceName3), result)
   }
 
   @Test
