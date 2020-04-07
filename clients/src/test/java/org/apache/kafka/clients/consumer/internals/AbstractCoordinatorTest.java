@@ -482,10 +482,8 @@ public class AbstractCoordinatorTest {
         // let the heartbeat request to send out a request
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
-        long startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
-        }
+        TestUtils.waitForCondition(() -> coordinator.heartbeat().hasInflight(), 2000,
+            "The heartbeat request was not sent in time after 2000ms elapsed");
 
         assertTrue(coordinator.heartbeat().hasInflight());
 
@@ -494,12 +492,12 @@ public class AbstractCoordinatorTest {
 
         coordinator.requestRejoin();
 
-        startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
-            // poll the client until the heartbeat response is received
+        TestUtils.waitForCondition(() -> {
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
-        }
+            return !coordinator.heartbeat().hasInflight();
+            },
+            2000,
+            "The heartbeat response was not been received in time after 2000ms elapsed");
 
         assertFalse(coordinator.heartbeat().hasInflight());
 

@@ -187,15 +187,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
 
-    // as long as we are part of max.poll no rebalance should be triggered
-    Thread.sleep(500)
-    assertEquals(1, listener.callsToAssigned)
-
     // after we extend longer than max.poll a rebalance should be triggered
     // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
     Thread.sleep(3000)
-    TestUtils.pollUntilTrue(consumer, () => listener.callsToAssigned == 2,
-      "Timed out before expected rebalance completed")
+
+    awaitRebalance(consumer, listener)
+    assertEquals(2, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
   }
 
