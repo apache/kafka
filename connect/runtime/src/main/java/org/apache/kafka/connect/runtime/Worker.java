@@ -341,7 +341,8 @@ public class Worker {
      */
     public List<Map<String, String>> connectorTaskConfigs(String connName, ConnectorConfig connConfig) {
         List<Map<String, String>> result = new ArrayList<>();
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             log.trace("Reconfiguring connector tasks for {}", connName);
 
             WorkerConnector workerConnector = connectors.get(connName);
@@ -371,6 +372,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
 
         return result;
@@ -505,7 +508,8 @@ public class Worker {
             TargetState initialState
     ) {
         final WorkerTask workerTask;
-        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
+        LoggingContext loggingContext = LoggingContext.forTask(id);
+        try {
             log.info("Creating task {}", id);
 
             if (tasks.containsKey(id))
@@ -577,6 +581,8 @@ public class Worker {
             }
             workerMetricsGroup.recordTaskSuccess();
             return true;
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -826,7 +832,8 @@ public class Worker {
     }
 
     private void stopTask(ConnectorTaskId taskId) {
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        LoggingContext loggingContext = LoggingContext.forTask(taskId);
+        try {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
                 log.warn("Ignoring stop request for unowned task {}", taskId);
@@ -844,6 +851,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -856,6 +865,7 @@ public class Worker {
     }
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
+
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.remove(taskId);
             if (task == null) {

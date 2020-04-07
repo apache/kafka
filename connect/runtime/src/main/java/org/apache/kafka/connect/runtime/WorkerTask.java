@@ -226,8 +226,8 @@ abstract class WorkerTask implements Runnable {
     public void run() {
         // Clear all MDC parameters, in case this thread is being reused
         LoggingContext.clear();
-
-        try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
+        LoggingContext loggingContext = LoggingContext.forTask(id());
+        try {
             ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
@@ -244,6 +244,8 @@ abstract class WorkerTask implements Runnable {
                 Plugins.compareAndSwapLoaders(savedLoader);
                 shutdownLatch.countDown();
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
