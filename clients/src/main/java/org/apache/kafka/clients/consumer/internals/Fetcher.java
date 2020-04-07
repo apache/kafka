@@ -1096,22 +1096,16 @@ public class Fetcher<K, V> implements Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
-        // Ensure the position has an up-to-date leader, if the leader is set and it's ApiVersion is new enough
+        // Ensure the position has an up-to-date leader (if the leader is non-null and the broker is new enough)
         subscriptions.assignedPartitions().forEach(tp -> {
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-            final boolean offsetForEpochAvailable;
             if (leaderAndEpoch.leader.isPresent()) {
                 NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
-                if (nodeApiVersions == null) {
-                    client.tryConnect(leaderAndEpoch.leader.get());
-                    return;
+                if (nodeApiVersions == null || hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
+                    subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.currentLeader(tp));
+                } else {
+                    subscriptions.completeValidation(tp);
                 }
-                offsetForEpochAvailable = hasUsableOffsetForLeaderEpochVersion(nodeApiVersions);
-            } else {
-                offsetForEpochAvailable = false;
-            }
-            if (offsetForEpochAvailable) {
-                subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.currentLeader(tp));
             } else {
                 subscriptions.completeValidation(tp);
             }
