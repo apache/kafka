@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.ArrayList;
@@ -54,6 +55,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import java.security.Security;
+import java.util.Set;
 
 @RunWith(value = Parameterized.class)
 public class SslFactoryTest {
@@ -368,6 +370,55 @@ public class SslFactoryTest {
         assertNotEquals(SslFactory.CertificateEntries.create(ks1), SslFactory.CertificateEntries.create(ks3));
     }
 
+    /**
+     * Tests client side ssl.engine.factory configuration is used when specified
+     */
+    @Test
+    public void testClientSpecifiedSslEngineFactoryUsed() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+                .createNewTrustStore(trustStoreFile)
+                .useClientCert(false)
+                .build();
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        sslFactory.configure(clientSslConfig);
+        assertTrue("SslEngineFactory must be of expected type",
+                sslFactory.sslEngineFactory() instanceof TestSslEngineFactory);
+    }
+
+    /**
+     * Tests server side ssl.engine.factory configuration is used when specified
+     */
+    @Test
+    public void testServerSpecifiedSslEngineFactoryUsed() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .useClientCert(false)
+                .build();
+        serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
+        assertTrue("SslEngineFactory must be of expected type",
+                sslFactory.sslEngineFactory() instanceof TestSslEngineFactory);
+    }
+
+    /**
+     * Tests invalid ssl.engine.factory configuration
+     */
+    @Test(expected = ClassCastException.class)
+    public void testInvalidSslEngineFactory() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+                .createNewTrustStore(trustStoreFile)
+                .useClientCert(false)
+                .build();
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        sslFactory.configure(clientSslConfig);
+    }
+
     private DefaultSslEngineFactory.SecurityStore sslKeyStore(Map<String, Object> sslConfig) {
         return new DefaultSslEngineFactory.SecurityStore(
                 (String) sslConfig.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
@@ -379,5 +430,50 @@ public class SslFactoryTest {
 
     private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(Mode mode) {
         return new TestSslUtils.SslConfigsBuilder(mode).tlsProtocol(tlsProtocol);
+    }
+
+    public static final class TestSslEngineFactory implements SslEngineFactory {
+
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+
+        @Override
+        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
+            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
+        }
+
+        @Override
+        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
+            return defaultSslEngineFactory.createServerSslEngine(peerHost, peerPort);
+        }
+
+        @Override
+        public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) {
+            return defaultSslEngineFactory.shouldBeRebuilt(nextConfigs);
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return defaultSslEngineFactory.reconfigurableConfigs();
+        }
+
+        @Override
+        public KeyStore keystore() {
+            return defaultSslEngineFactory.keystore();
+        }
+
+        @Override
+        public KeyStore truststore() {
+            return defaultSslEngineFactory.truststore();
+        }
+
+        @Override
+        public void close() throws IOException {
+            defaultSslEngineFactory.close();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            defaultSslEngineFactory.configure(configs);
+        }
     }
 }

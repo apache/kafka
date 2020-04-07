@@ -24,6 +24,8 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
@@ -48,6 +50,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -55,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -916,7 +920,7 @@ public class SslTransportLayerTest {
     public void testClosePlaintext() throws Exception {
         testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
     }
-    
+
     private SslChannelBuilder newClientChannelBuilder() {
         return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext());
     }
@@ -1117,6 +1121,64 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
     }
 
+    /**
+     * Tests if client can plugin customize ssl.engine.factory
+     */
+    @Test
+    public void testCustomClientSslEngineFactory() throws Exception {
+        String node = "0";
+        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests if server can plugin customize ssl.engine.factory
+     */
+    @Test
+    public void testCustomServerSslEngineFactory() throws Exception {
+        String node = "0";
+        sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests if client and server both can plugin customize ssl.engine.factory and talk to each other!
+     */
+    @Test
+    public void testCustomClientAndServerSslEngineFactory() throws Exception {
+        String node = "0";
+        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+        sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests invalid ssl.engine.factory plugin class
+     */
+    @Test(expected = KafkaException.class)
+    public void testInvalidSslEngineFactory() throws Exception {
+        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
+        createSelector(sslClientConfigs);
+    }
+
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
                                           Map<String, Object>  invalidConfigs, String errorMessage) {
         try {
@@ -1295,6 +1357,51 @@ public class SslTransportLayerTest {
                 }
                 return size;
             }
+        }
+    }
+
+    public static final class TestSslEngineFactory implements SslEngineFactory {
+
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+
+        @Override
+        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
+            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
+        }
+
+        @Override
+        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
+            return defaultSslEngineFactory.createServerSslEngine(peerHost, peerPort);
+        }
+
+        @Override
+        public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) {
+            return defaultSslEngineFactory.shouldBeRebuilt(nextConfigs);
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return defaultSslEngineFactory.reconfigurableConfigs();
+        }
+
+        @Override
+        public KeyStore keystore() {
+            return defaultSslEngineFactory.keystore();
+        }
+
+        @Override
+        public KeyStore truststore() {
+            return defaultSslEngineFactory.truststore();
+        }
+
+        @Override
+        public void close() throws IOException {
+            defaultSslEngineFactory.close();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            defaultSslEngineFactory.configure(configs);
         }
     }
 }
