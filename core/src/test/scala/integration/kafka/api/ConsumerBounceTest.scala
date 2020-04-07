@@ -58,6 +58,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    properties.put(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
 
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, properties))
