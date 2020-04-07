@@ -495,7 +495,7 @@ public class AbstractCoordinatorTest {
         TestUtils.waitForCondition(() -> {
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
             return !coordinator.heartbeat().hasInflight();
-            },
+        },
             2000,
             "The heartbeat response was not been received in time after 2000ms elapsed");
 
