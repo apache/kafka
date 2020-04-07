@@ -454,6 +454,11 @@ public class MetadataTest {
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
         assertEquals(0, metadata.partitionMetadataIfCurrent(tp).get().partition());
         assertEquals(Optional.of(0), metadata.partitionMetadataIfCurrent(tp).get().leaderId);
+
+        // Since epoch was null, this shouldn't update it
+        metadata.updateLastSeenEpochIfNewer(tp, 10);
+        assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
+        assertFalse(metadata.partitionMetadataIfCurrent(tp).get().leaderEpoch.isPresent());
     }
 
     @Test
