@@ -173,7 +173,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testMaxPollIntervalMs(): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
 
@@ -187,9 +187,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
 
-    Thread.sleep(3500)
+    // after we extend longer than max.poll a rebalance should be triggered
+    // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
+    Thread.sleep(3000)
 
-    // we should fall out of the group and need to rebalance
     awaitRebalance(consumer, listener)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
