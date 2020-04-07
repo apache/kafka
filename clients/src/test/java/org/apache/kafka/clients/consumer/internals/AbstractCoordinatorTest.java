@@ -466,6 +466,52 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testHeartbeatUnknownMemberResponseDuringRebalancing() throws InterruptedException {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        // let the heartbeat request to send out a request
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        TestUtils.waitForCondition(() -> coordinator.heartbeat().hasInflight(), 2000,
+            "The heartbeat request was not sent in time after 2000ms elapsed");
+
+        assertTrue(coordinator.heartbeat().hasInflight());
+
+        // set the client to re-join group
+        mockClient.respond(heartbeatResponse(Errors.UNKNOWN_MEMBER_ID));
+
+        coordinator.requestRejoin();
+
+        TestUtils.waitForCondition(() -> {
+            coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
+            return !coordinator.heartbeat().hasInflight();
+        },
+            2000,
+            "The heartbeat response was not been received in time after 2000ms elapsed");
+
+        assertFalse(coordinator.heartbeat().hasInflight());
+
+        // the generation should be reset but the rebalance should still proceed
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+
+        mockClient.respond(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+        assertEquals(currGen, coordinator.generation());
+    }
+
+    @Test
     public void testHeartbeatRequestWithFencedInstanceIdException() throws InterruptedException {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
