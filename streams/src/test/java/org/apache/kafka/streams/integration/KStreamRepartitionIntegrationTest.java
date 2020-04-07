@@ -47,12 +47,16 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +78,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(value = Parameterized.class)
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -90,6 +95,22 @@ public class KStreamRepartitionIntegrationTest {
     private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
 
+    @Parameters(name = "Optimization = {0}")
+    public static Collection<Object[]> data() {
+        final List<Object[]> values = new ArrayList<>();
+
+        Arrays.asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION)
+              .forEach(x -> values.add(new Object[]{x}));
+
+        return values;
+    }
+
+    public KStreamRepartitionIntegrationTest(final String topologyOptimization) {
+        streamsConfiguration = new Properties();
+        kafkaStreamsInstances = new ArrayList<>();
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, topologyOptimization);
+    }
+
     @Before
     public void before() throws InterruptedException {
         final int testNum = TEST_NUM.incrementAndGet();
@@ -102,9 +123,6 @@ public class KStreamRepartitionIntegrationTest {
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
 
-        streamsConfiguration = new Properties();
-        kafkaStreamsInstances = new ArrayList<>();
-
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -112,7 +130,6 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
     }
 
     @After
