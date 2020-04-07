@@ -272,6 +272,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    private Exception invokeOnAssignment(final ConsumerPartitionAssignor assignor, final Assignment assignment) {
+        log.info("Notifying assignor about the new {}", assignment);
+
+        try {
+            assignor.onAssignment(assignment, groupMetadata);
+        } catch (Exception e) {
+            return e;
+        }
+
+        return null;
+    }
+
     private Exception invokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
@@ -351,7 +363,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // should at least encode the short version
         if (assignmentBuffer.remaining() < 2)
-            throw new IllegalStateException("There is insufficient bytes available to read assignment from the sync-group response (" +
+            throw new IllegalStateException("There are insufficient bytes available to read assignment from the sync-group response (" +
                 "actual byte size " + assignmentBuffer.remaining() + ") , this is not expected; " +
                 "it is possible that the leader's assign function is buggy and did not return any assignment for this member, " +
                 "or because static member is configured and the protocol is buggy hence did not get the assignment for this member");
@@ -406,11 +418,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // Catch any exception here to make sure we could complete the user callback.
-        try {
-            assignor.onAssignment(assignment, groupMetadata);
-        } catch (Exception e) {
-            firstException.compareAndSet(null, e);
-        }
+        firstException.compareAndSet(null, invokeOnAssignment(assignor, assignment));
 
         // Reschedule the auto commit starting from now
         if (autoCommitEnabled)
