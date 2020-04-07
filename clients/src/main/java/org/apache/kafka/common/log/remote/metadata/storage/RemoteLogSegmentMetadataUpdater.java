@@ -21,11 +21,32 @@ import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 
 import java.io.IOException;
 
-interface RemoteLogSegmentMetadataUpdater {
+/**
+ * This is invoked by {@link ConsumerTask} whenever there are updates for a topic partition on
+ * RemoteLogSegmentMetadata.
+ */
+public interface RemoteLogSegmentMetadataUpdater {
 
+    /**
+     * Update RemoteLogSegmentMetadata for a topic partition.
+     *
+     * @param tp
+     * @param remoteLogSegmentMetadata
+     */
     void updateRemoteLogSegmentMetadata(TopicPartition tp, RemoteLogSegmentMetadata remoteLogSegmentMetadata);
 
+    /**
+     * Sync the remote log metadata state maintained for this broker.
+     *
+     * @throws IOException
+     */
     void syncLogMetadataDataFile() throws IOException;
 
+    /**
+     * It returns partition number of remote log metadata topic for the given topic partition.
+     *
+     * @param tp
+     * @return
+     */
     int metadataPartitionFor(TopicPartition tp);
 }

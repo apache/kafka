@@ -82,13 +82,17 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
 
         @Override
         public byte[] serialize(String topic, RemoteLogSegmentMetadata data) {
+            return serialize(topic, data, true);
+        }
+
+        public byte[] serialize(String topic, RemoteLogSegmentMetadata data, boolean includeVersion) {
             Struct tpStruct = new Struct(TOPIC_PARTITION_SCHEMA);
             tpStruct.set(TOPIC_FIELD, data.remoteLogSegmentId().topicPartition().topic());
             tpStruct.set(PARTITION_FIELD, data.remoteLogSegmentId().topicPartition().partition());
 
             Struct rlsIdStruct = new Struct(REMOTE_LOG_SEGMENT_ID_SCHEMA_V0);
             rlsIdStruct.set(TOPIC_PARTITION, tpStruct);
-            rlsIdStruct.set("id", data.remoteLogSegmentId().id());
+            rlsIdStruct.set(ID, data.remoteLogSegmentId().id());
 
             Struct rlsmStruct = new Struct(SCHEMA_V0);
             rlsmStruct.set(REMOTE_LOG_SEGMENT_ID_NAME, rlsIdStruct);
@@ -102,10 +106,16 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
             rlsmStruct.set(REMOTE_LOG_SEGMENT_CONTEXT_NAME, value != null ? ByteBuffer.wrap(value) : null);
 
             final int size = SCHEMA_V0.sizeOf(rlsmStruct);
-            final ByteBuffer byteBuffer = ByteBuffer.allocate(size + 2);
-            byteBuffer.putShort((short) 0);
+            ByteBuffer byteBuffer;
+            if(includeVersion) {
+                byteBuffer = ByteBuffer.allocate(size + 2);
+                byteBuffer.putShort((short) 0);
+            } else {
+                byteBuffer = ByteBuffer.allocate(size);
+            }
+
             SCHEMA_V0.write(byteBuffer, rlsmStruct);
-            byteBuffer.flip();
+
             return byteBuffer.array();
         }
     }
@@ -116,7 +126,10 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
         public RemoteLogSegmentMetadata deserialize(String topic, byte[] data) {
             final ByteBuffer byteBuffer = ByteBuffer.wrap(data);
             short version = byteBuffer.getShort();
+            return deserialize(topic, version, byteBuffer);
+        }
 
+        public RemoteLogSegmentMetadata deserialize(String topic, short version, ByteBuffer byteBuffer) {
             final Struct struct = SCHEMAS[version].read(byteBuffer);
             final Struct rlsIdStruct = (Struct) struct.get(REMOTE_LOG_SEGMENT_ID_NAME);
             final Struct tpStruct = (Struct) rlsIdStruct.get(TOPIC_PARTITION);
@@ -139,8 +152,7 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
                     struct.get(LEADER_EPOCH_FIELD),
                     struct.get(CREATED_TIMESTAMP_FIELD),
                     struct.get(MARKED_FOR_DELETION_FIELD),
-                    contextBytes
-            );
+                    contextBytes);
         }
     }
 }

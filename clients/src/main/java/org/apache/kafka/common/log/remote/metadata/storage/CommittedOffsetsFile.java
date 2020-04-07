@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.log.remote.metadata.storage;
 
 import org.apache.kafka.common.utils.Utils;
@@ -14,9 +30,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-// There are similar implementations in core/streams about offset checkpoint file.
-// We can not reuse them as they exist in core and streams modules and we do not need to store topic name as it is
-// same. We do not want this class to be moved into core, better to keep this out in clients or a new module.
 class CommittedOffsetsFile {
     private final File offsetsFile;
 

@@ -158,20 +158,6 @@ public class RemoteLogSegmentMetadata implements Serializable {
                 original.remoteLogSegmentContext);
     }
 
-    public static byte[] asBytesWithJavaSerde(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(512);
-             ObjectOutputStream objectOutputStream = new ObjectOutputStream(baos)) {
-            objectOutputStream.writeObject(remoteLogSegmentMetadata);
-            return baos.toByteArray();
-        }
-    }
-
-    public static RemoteLogSegmentMetadata fromBytesWithJavaSerde(byte[] bytes) throws IOException, ClassNotFoundException {
-        try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
-            return (RemoteLogSegmentMetadata) objectInputStream.readObject();
-        }
-    }
-
     @Override
     public String toString() {
         return "RemoteLogSegmentMetadata{" +
