@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -23,7 +24,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
     private final String storeName;
 
-    KTableSourceValueGetterSupplier(final String storeName) {
+    public KTableSourceValueGetterSupplier(final String storeName) {
         this.storeName = storeName;
     }
 
@@ -49,6 +50,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 }

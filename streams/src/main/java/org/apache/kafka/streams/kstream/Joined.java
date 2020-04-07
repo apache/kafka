@@ -20,7 +20,8 @@ import org.apache.kafka.common.serialization.Serde;
 
 /**
  * The {@code Joined} class represents optional params that can be passed to
- * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations.
+ * {@link KStream#join(KTable, ValueJoiner, Joined) KStream#join(KTable,...)} and
+ * {@link KStream#leftJoin(KTable, ValueJoiner) KStream#leftJoin(KTable,...)} operations.
  */
 public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
 

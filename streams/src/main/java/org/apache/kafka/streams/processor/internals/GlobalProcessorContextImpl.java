@@ -37,9 +37,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
-import java.util.List;
 
-public class GlobalProcessorContextImpl extends AbstractProcessorContext {
+public class GlobalProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> {
 
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
@@ -49,21 +48,20 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
         final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+            return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+            return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
+            return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
         } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
+            return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
         }
 
         return store;
@@ -71,12 +69,12 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
+        final ProcessorNode<?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
+            for (final ProcessorNode<?, ?> child :  currentNode().children()) {
                 setCurrentNode(child);
-                child.process(key, value);
+                ((ProcessorNode<K, V>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);
@@ -87,7 +85,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      * No-op. This should only be called on GlobalStateStore#flush and there should be no child nodes
      */
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         if (!currentNode().children().isEmpty()) {
             throw new IllegalStateException("This method should only be called on 'GlobalStateStore.flush' that should not have any children.");
         }
@@ -98,7 +96,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      */
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
@@ -107,7 +105,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      */
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 

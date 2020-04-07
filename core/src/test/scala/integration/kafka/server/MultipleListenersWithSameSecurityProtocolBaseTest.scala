@@ -148,7 +148,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
     TestUtils.shutdownServers(servers)

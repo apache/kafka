@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -70,16 +70,16 @@ public class KStreamTransformIntegrationTest {
     }
 
     private void verifyResult(final List<KeyValue<Integer, Integer>> expected) {
-        final ConsumerRecordFactory<Integer, Integer> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, Arrays.asList(new KeyValue<>(1, 1),
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(topic, new IntegerSerializer(), new IntegerSerializer());
+            inputTopic.pipeKeyValueList(Arrays.asList(new KeyValue<>(1, 1),
                                                                        new KeyValue<>(2, 2),
                                                                        new KeyValue<>(3, 3),
                                                                        new KeyValue<>(2, 1),
                                                                        new KeyValue<>(2, 3),
-                                                                       new KeyValue<>(1, 3))));
+                                                                       new KeyValue<>(1, 3)));
         }
         assertThat(results, equalTo(expected));
     }

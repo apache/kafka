@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -39,7 +39,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 /**
- * Utility to simplify creating and managing topics via the {@link org.apache.kafka.clients.admin.AdminClient}.
+ * Utility to simplify creating and managing topics via the {@link Admin}.
  */
 public class TopicAdmin implements AutoCloseable {
 
@@ -158,19 +158,19 @@ public class TopicAdmin implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(TopicAdmin.class);
     private final Map<String, Object> adminConfig;
-    private final AdminClient admin;
+    private final Admin admin;
 
     /**
      * Create a new topic admin component with the given configuration.
      *
-     * @param adminConfig the configuration for the {@link AdminClient}
+     * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig, AdminClient.create(adminConfig));
+        this(adminConfig, Admin.create(adminConfig));
     }
 
     // visible for testing
-    TopicAdmin(Map<String, Object> adminConfig, AdminClient adminClient) {
+    TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
         this.admin = adminClient;
         this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
     }

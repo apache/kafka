@@ -64,4 +64,8 @@ public class ByteBufferSend implements Send {
         pending = TransportLayers.hasPendingWrites(channel);
         return written;
     }
+
+    public long remaining() {
+        return remaining;
+    }
 }

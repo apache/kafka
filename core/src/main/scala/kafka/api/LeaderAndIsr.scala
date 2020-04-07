@@ -40,6 +40,10 @@ case class LeaderAndIsr(leader: Int,
 
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
+  def leaderOpt: Option[Int] = {
+    if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
+  }
+
   override def toString: String = {
     s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
   }

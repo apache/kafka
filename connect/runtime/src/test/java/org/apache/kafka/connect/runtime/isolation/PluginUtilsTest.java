@@ -142,6 +142,12 @@ public class PluginUtilsTest {
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.file.FileStreamSinkConnector")
         );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.mirror.MirrorSourceTask")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.mirror.MirrorSourceConnector")
+        );
         assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.converters."));
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.converters.ByteArrayConverter")

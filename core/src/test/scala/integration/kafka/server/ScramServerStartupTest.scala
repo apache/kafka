@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Tests that there are no failed authentications during broker startup. This is to verify
@@ -46,7 +46,7 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create credentials before starting brokers

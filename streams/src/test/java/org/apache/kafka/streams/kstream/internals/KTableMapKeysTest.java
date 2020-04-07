@@ -19,12 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -36,8 +37,6 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KTableMapKeysTest {
-    private final ConsumerRecordFactory<Integer, String> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -54,16 +53,20 @@ public class KTableMapKeysTest {
 
         final KStream<String, String> convertedStream = table1.toStream((key, value) -> keyMap.get(key));
 
-        final String[] expected = new String[]{"ONE:V_ONE (ts: 5)", "TWO:V_TWO (ts: 10)", "THREE:V_THREE (ts: 15)"};
-        final int[] originalKeys = new int[]{1, 2, 3};
-        final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("ONE", "V_ONE", 5),
+            new KeyValueTimestamp<>("TWO", "V_TWO", 10),
+            new KeyValueTimestamp<>("THREE", "V_THREE", 15)};
+        final int[] originalKeys = new int[] {1, 2, 3};
+        final String[] values = new String[] {"V_ONE", "V_TWO", "V_THREE"};
 
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
         convertedStream.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (int i = 0; i < originalKeys.length; i++) {
-                driver.pipeInput(recordFactory.create(topic1, originalKeys[i], values[i], 5 + i * 5));
+                final TestInputTopic<Integer, String> inputTopic =
+                        driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
+                inputTopic.pipeInput(originalKeys[i], values[i], 5 + i * 5);
             }
         }
 

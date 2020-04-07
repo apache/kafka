@@ -48,7 +48,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
 
     @Override
     public String metricsScope() {
-        return "rocksdb-session-state";
+        return "rocksdb-session";
     }
 
     @Override

@@ -20,9 +20,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#describeCluster()}.
+ * Options for {@link Admin#describeCluster()}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
@@ -30,7 +30,7 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
     private boolean includeAuthorizedOperations;
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */

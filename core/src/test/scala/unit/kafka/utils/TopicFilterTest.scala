@@ -24,7 +24,7 @@ import org.junit.Test
 class TopicFilterTest {
 
   @Test
-  def testWhitelists() {
+  def testWhitelists(): Unit = {
 
     val topicFilter1 = Whitelist("white1,white2")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))

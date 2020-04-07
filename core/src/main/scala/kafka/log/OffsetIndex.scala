@@ -51,7 +51,7 @@ import org.apache.kafka.common.errors.InvalidOffsetException
  */
 // Avoid shadowing mutable `file` in AbstractIndex
 class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Int](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import OffsetIndex._
 
   override def entrySize = 8
@@ -138,7 +138,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    * @throws IndexOffsetOverflowException if the offset causes index offset to overflow
    */
-  def append(offset: Long, position: Int) {
+  def append(offset: Long, position: Int): Unit = {
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
@@ -147,7 +147,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
-        require(_entries * entrySize == mmap.position(), entries + " entries but file position in index is " + mmap.position() + ".")
+        require(_entries * entrySize == mmap.position(), s"$entries entries but file position in index is ${mmap.position()}.")
       } else {
         throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to position $entries no larger than" +
           s" the last offset appended (${_lastOffset}) to ${file.getAbsolutePath}.")
@@ -157,7 +157,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
   override def truncate() = truncateToEntries(0)
 
-  override def truncateTo(offset: Long) {
+  override def truncateTo(offset: Long): Unit = {
     inLock(lock) {
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.KEY)
@@ -181,7 +181,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   /**
    * Truncates index to a known number of entries.
    */
-  private def truncateToEntries(entries: Int) {
+  private def truncateToEntries(entries: Int): Unit = {
     inLock(lock) {
       _entries = entries
       mmap.position(_entries * entrySize)
@@ -191,7 +191,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     }
   }
 
-  override def sanityCheck() {
+  override def sanityCheck(): Unit = {
     if (_entries != 0 && _lastOffset < baseOffset)
       throw new CorruptIndexException(s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size " +
         s"but the last offset is ${_lastOffset} which is less than the base offset $baseOffset.")
@@ -204,38 +204,4 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
 object OffsetIndex extends Logging {
   override val loggerName: String = classOf[OffsetIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw OffsetIndex object to avoid initialization on construction. This defers the OffsetIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyOffsetIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  @volatile private var offsetIndex: Option[OffsetIndex] = None
-
-  def file: File = {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file
-    else
-      _file
-  }
-
-  def file_=(f: File) {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file = f
-    else
-      _file = f
-  }
-
-  def get: OffsetIndex = {
-    if (offsetIndex.isEmpty)
-      offsetIndex = Some(new OffsetIndex(_file, baseOffset, maxIndexSize, writable))
-    offsetIndex.get
-  }
 }

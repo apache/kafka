@@ -173,11 +173,6 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
         }
 
         @Override
-        public void remove() {
-            iter.remove();
-        }
-
-        @Override
         public void close() {
             // do nothing
         }

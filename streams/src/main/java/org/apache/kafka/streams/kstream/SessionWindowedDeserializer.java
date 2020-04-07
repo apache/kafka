@@ -59,6 +59,8 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
 
     @Override
     public Windowed<T> deserialize(final String topic, final byte[] data) {
+        WindowedSerdes.verifyInnerDeserializerNotNull(inner, this);
+
         if (data == null || data.length == 0) {
             return null;
         }
@@ -69,7 +71,9 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
     // Only for testing

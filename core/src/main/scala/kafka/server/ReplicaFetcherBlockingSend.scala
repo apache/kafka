@@ -29,15 +29,15 @@ import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpda
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
-  def initiateClose()
+  def initiateClose(): Unit
 
-  def close()
+  def close(): Unit
 }
 
 class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
@@ -59,7 +59,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
       time,
-      brokerConfig.saslInterBrokerHandshakeRequestEnable
+      brokerConfig.saslInterBrokerHandshakeRequestEnable,
+      logContext
     )
     val reconfigurableChannelBuilder = channelBuilder match {
       case reconfigurable: Reconfigurable =>

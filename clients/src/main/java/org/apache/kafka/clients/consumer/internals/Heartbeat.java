@@ -31,7 +31,7 @@ public final class Heartbeat {
     private final Timer sessionTimer;
     private final Timer pollTimer;
 
-    private volatile long lastHeartbeatSend;
+    private volatile long lastHeartbeatSend = 0L;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {

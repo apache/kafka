@@ -19,6 +19,7 @@ package kafka.admin
 import java.util
 import java.util.Properties
 
+import kafka.controller.ReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
@@ -37,7 +38,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
 
 class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -45,13 +46,13 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   var servers: Seq[KafkaServer] = Seq()
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
-  def testManualReplicaAssignment() {
+  def testManualReplicaAssignment(): Unit = {
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
@@ -87,11 +88,11 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
                          1 -> List(1, 2, 3))
     adminZkClient.createTopicWithAssignment("test", topicConfig, assignment)
     val found = zkClient.getPartitionAssignmentForTopics(Set("test"))
-    assertEquals(assignment, found("test"))
+    assertEquals(assignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) }, found("test"))
   }
 
   @Test
-  def testTopicCreationInZK() {
+  def testTopicCreationInZK(): Unit = {
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
       1  -> List(1, 2, 3),
@@ -139,7 +140,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
-  def testTopicCreationWithCollision() {
+  def testTopicCreationWithCollision(): Unit = {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
@@ -153,13 +154,13 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
-  def testMockedConcurrentTopicCreation() {
+  def testMockedConcurrentTopicCreation(): Unit = {
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
     val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
     EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
-    EasyMock.expect(zkMock.getAllTopicsInCluster).andReturn(Set("some.topic", topic, "some.other.topic"))
+    EasyMock.expect(zkMock.getAllTopicsInCluster(false)).andReturn(Set("some.topic", topic, "some.other.topic"))
     EasyMock.replay(zkMock)
     val adminZkClient = new AdminZkClient(zkMock)
 
@@ -169,7 +170,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
-  def testConcurrentTopicCreation() {
+  def testConcurrentTopicCreation(): Unit = {
     val topic = "test-concurrent-topic-creation"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     val props = new Properties
@@ -179,8 +180,9 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       catch { case _: TopicExistsException => () }
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
-      partitionAssignment.foreach { case (partition, replicas) =>
-        assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
+      partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
+        assertEquals(s"Unexpected replication factor for $partition",
+          1, partitionReplicaAssignment.replicas.size)
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)
@@ -195,7 +197,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
    * then changes the config and checks that the new values take effect.
    */
   @Test
-  def testTopicConfigChange() {
+  def testTopicConfigChange(): Unit = {
     val partitions = 3
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
@@ -210,7 +212,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean): Unit = {
       def checkList(actual: util.List[String], expected: String): Unit = {
         assertNotNull(actual)
         if (expected == "")
@@ -268,11 +270,11 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
-  def shouldPropagateDynamicBrokerConfigs() {
+  def shouldPropagateDynamicBrokerConfigs(): Unit = {
     val brokerIds = Seq(0, 1, 2)
     servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
 
-    def checkConfig(limit: Long) {
+    def checkConfig(limit: Long): Unit = {
       retry(10000) {
         for (server <- servers) {
           assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
@@ -313,7 +315,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
    * Basically, it asserts that notifications are bootstrapped from ZK
    */
   @Test
-  def testBootstrapClientIdConfig() {
+  def testBootstrapClientIdConfig(): Unit = {
     val clientId = "my-client"
     val props = new Properties()
     props.setProperty("producer_byte_rate", "1000")
@@ -334,7 +336,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
-  def testGetBrokerMetadatas() {
+  def testGetBrokerMetadatas(): Unit = {
     // broker 4 has no rack information
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")

@@ -49,9 +49,4 @@ class WrappedSessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, b
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
         return KeyValue.pair(SessionKeySchema.from(next.key), next.value);
     }
-
-    @Override
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
-    }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
@@ -388,6 +389,8 @@ public final class ProducerBatch {
     }
 
     public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
+        log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
+                this.baseSequence(), this.topicPartition, baseSequence);
         reopened = true;
         recordsBuilder.reopenAndRewriteProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
     }
@@ -451,6 +454,10 @@ public final class ProducerBatch {
 
     public int baseSequence() {
         return recordsBuilder.baseSequence();
+    }
+
+    public int lastSequence() {
+        return recordsBuilder.baseSequence() + recordsBuilder.numRecords() - 1;
     }
 
     public boolean hasSequence() {

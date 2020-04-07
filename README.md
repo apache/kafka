@@ -2,19 +2,11 @@ Apache Kafka
 =================
 See our [web site](https://kafka.apache.org) for details on the project.
 
-You need to have [Gradle](https://www.gradle.org/installation) and [Java](https://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
-
-Kafka requires Gradle 5.0 or higher.
+You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
 Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
 
 Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
-
-### First bootstrap and download the wrapper ###
-    cd kafka_source_dir
-    gradle
-
-Now everything else will work.
 
 ### Build a jar and run it ###
     ./gradlew jar
@@ -56,6 +48,13 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
 
     ./gradlew clients:test --tests RequestResponseTest
 
+### Specifying test retries ###
+By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
+    
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
@@ -77,7 +76,7 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task with one of the Scala versions available (2.11.x, 2.12.x or 2.13.x) ###
+### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
 *Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
@@ -177,7 +176,7 @@ You can run checkstyle using:
     ./gradlew checkstyleMain checkstyleTest
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
-subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
+subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
@@ -199,6 +198,20 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+* `maxTestRetries`: the maximum number of retries for a failing test case.
+* `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
+
+### Dependency Analysis ###
+
+The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
+
+Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
+
+    ./gradlew allDeps
+
+    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+
+These take the same arguments as the builtin variants.
 
 ### Running system tests ###
 

@@ -18,53 +18,44 @@ package org.apache.kafka.common.security.ssl;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.DEFAULT_SSL_PRINCIPAL_MAPPING_RULES;
+
 public class SslPrincipalMapper {
 
-    private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:(([^/]*)/([^/]*))/([LU])?))");
+    private static final String RULE_PATTERN = "(DEFAULT)|RULE:((\\\\.|[^\\\\/])*)/((\\\\.|[^\\\\/])*)/([LU]?).*?|(.*?)";
+    private static final Pattern RULE_SPLITTER = Pattern.compile("\\s*(" + RULE_PATTERN + ")\\s*(,\\s*|$)");
+    private static final Pattern RULE_PARSER = Pattern.compile(RULE_PATTERN);
 
     private final List<Rule> rules;
 
-    public SslPrincipalMapper(List<Rule> sslPrincipalMappingRules) {
-        this.rules = sslPrincipalMappingRules;
+    public SslPrincipalMapper(String sslPrincipalMappingRules) {
+        this.rules = parseRules(splitRules(sslPrincipalMappingRules));
     }
 
-    public static SslPrincipalMapper fromRules(List<String> sslPrincipalMappingRules) {
-        List<String> rules = sslPrincipalMappingRules == null ? Collections.singletonList("DEFAULT") : sslPrincipalMappingRules;
-        return new SslPrincipalMapper(parseRules(rules));
+    public static SslPrincipalMapper fromRules(String sslPrincipalMappingRules) {
+        return new SslPrincipalMapper(sslPrincipalMappingRules);
     }
 
-    private static List<String> joinSplitRules(List<String> rules) {
-        String rule = "RULE:";
-        String defaultRule = "DEFAULT";
-        List<String> retVal = new ArrayList<>();
-        StringBuilder currentRule = new StringBuilder();
-        for (String r : rules) {
-            if (currentRule.length() > 0) {
-                if (r.startsWith(rule) || r.equals(defaultRule)) {
-                    retVal.add(currentRule.toString());
-                    currentRule.setLength(0);
-                    currentRule.append(r);
-                } else {
-                    currentRule.append(String.format(",%s", r));
-                }
-            } else {
-                currentRule.append(r);
-            }
+    private static List<String> splitRules(String sslPrincipalMappingRules) {
+        if (sslPrincipalMappingRules == null) {
+            sslPrincipalMappingRules = DEFAULT_SSL_PRINCIPAL_MAPPING_RULES;
         }
-        if (currentRule.length() > 0) {
-            retVal.add(currentRule.toString());
+
+        List<String> result = new ArrayList<>();
+        Matcher matcher = RULE_SPLITTER.matcher(sslPrincipalMappingRules.trim());
+        while (matcher.find()) {
+            result.add(matcher.group(1));
         }
-        return retVal;
+
+        return result;
     }
 
     private static List<Rule> parseRules(List<String> rules) {
-        rules = joinSplitRules(rules);
         List<Rule> result = new ArrayList<>();
         for (String rule : rules) {
             Matcher matcher = RULE_PARSER.matcher(rule);
@@ -74,15 +65,18 @@ public class SslPrincipalMapper {
             if (rule.length() != matcher.end()) {
                 throw new IllegalArgumentException("Invalid rule: `" + rule + "`, unmatched substring: `" + rule.substring(matcher.end()) + "`");
             }
-            if (matcher.group(2) != null) {
+
+            // empty rules are ignored
+            if (matcher.group(1) != null) {
                 result.add(new Rule());
-            } else {
-                result.add(new Rule(matcher.group(5),
-                                    matcher.group(6),
-                                    "L".equals(matcher.group(7)),
-                                    "U".equals(matcher.group(7))));
+            } else if (matcher.group(2) != null) {
+                result.add(new Rule(matcher.group(2),
+                                    matcher.group(4),
+                                    "L".equals(matcher.group(6)),
+                                    "U".equals(matcher.group(6))));
             }
         }
+
         return result;
     }
 

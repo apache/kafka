@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.server.ConfigType;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.test.TestCondition;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
@@ -94,6 +97,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicReplicationFactorProp(), (short) 1);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicPartitionsProp(), 5);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
 
         for (int i = 0; i < brokers.length; i++) {
@@ -116,8 +120,25 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * Stop the Kafka cluster.
      */
     private void stop() {
+        if (brokers.length > 1) {
+            // delete the topics first to avoid cascading leader elections while shutting down the brokers
+            final Set<String> topics = getAllTopicsInCluster();
+            if (!topics.isEmpty()) {
+                try (final Admin adminClient = brokers[0].createAdminClient()) {
+                    adminClient.deleteTopics(topics).all().get();
+                } catch (final InterruptedException e) {
+                    log.warn("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
+                    throw new RuntimeException(e);
+                } catch (final ExecutionException | RuntimeException e) {
+                    log.warn("Couldn't delete all topics before stopping brokers", e);
+                }
+            }
+        }
         for (final KafkaEmbedded broker : brokers) {
-            broker.stop();
+            broker.stopAsync();
+        }
+        for (final KafkaEmbedded broker : brokers) {
+            broker.awaitStoppedAndPurge();
         }
         zookeeper.shutdown();
     }
@@ -272,7 +293,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
      */
     public void deleteAllTopicsAndWait(final long timeoutMs) throws InterruptedException {
-        final Set<String> topics = JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava();
+        final Set<String> topics = JavaConverters.setAsJavaSetConverter(
+            brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
@@ -311,8 +333,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>(
-                    JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava());
+            final Set<String> allTopics = new HashSet<>(JavaConverters.setAsJavaSetConverter(
+                brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava());
             return !allTopics.removeAll(deletedTopics);
         }
     }
@@ -326,7 +348,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava();
+            final Set<String> allTopics = JavaConverters.setAsJavaSetConverter(
+                brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
             return allTopics.equals(remainingTopics);
         }
     }
@@ -337,5 +360,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             servers.add(broker.kafkaServer());
         }
         return servers;
+    }
+
+    public Properties getLogConfig(final String topic) {
+        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.Topic(), topic);
+    }
+
+    public Set<String> getAllTopicsInCluster() {
+        return JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
     }
 }

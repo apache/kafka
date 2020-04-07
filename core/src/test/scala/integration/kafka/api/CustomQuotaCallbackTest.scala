@@ -26,7 +26,7 @@ import kafka.server._
 import kafka.utils.JaasTestUtils.ScramLoginModule
 import kafka.utils.{JaasTestUtils, Logging, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Cluster, Reconfigurable}
@@ -39,7 +39,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
@@ -54,7 +54,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  private val adminClients = new ArrayBuffer[AdminClient]()
+  private val adminClients = new ArrayBuffer[Admin]()
   private var producerWithoutQuota: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   val defaultRequestQuota = 1000
@@ -62,7 +62,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   val defaultConsumeQuota = 1000 * 1000 * 1000
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
@@ -85,14 +85,14 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     super.tearDown()
   }
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
   @Test
-  def testCustomQuotaCallback() {
+  def testCustomQuotaCallback(): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)
@@ -100,9 +100,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     quotaLimitCalls.values.foreach(_.set(0))
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
 
-    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once for each new client
+    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once per throttled produce request for each client
     assertEquals(1, quotaLimitCalls(ClientQuotaType.PRODUCE).get)
-    assertEquals(1, quotaLimitCalls(ClientQuotaType.FETCH).get)
+    // ClientQuotaCallback#quotaLimit is invoked once per each unthrottled and two for each throttled request
+    // since we don't know the total number of requests, we verify it was called at least twice (at least one throttled request)
+    assertTrue("quotaLimit must be called at least twice", quotaLimitCalls(ClientQuotaType.FETCH).get > 2)
     assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10) // sanity check
     // Large quota updated to small quota, should throttle
     user.configureAndWaitForQuota(9000, 3000)
@@ -157,7 +159,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val newProps = new Properties
     newProps.put(GroupedUserQuotaCallback.DefaultProduceQuotaProp, "8000")
     newProps.put(GroupedUserQuotaCallback.DefaultFetchQuotaProp, "2500")
-    TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
+    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
@@ -181,7 +183,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.createTopic(zkClient, topic, assignment, servers)
   }
 
-  private def createAdminClient(): AdminClient = {
+  private def createAdminClient(): Admin = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
       TestUtils.bootstrapServers(servers, new ListenerName("BROKER")))
@@ -190,7 +192,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
       ScramLoginModule(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword).toString)
-    val adminClient = AdminClient.create(config)
+    val adminClient = Admin.create(config)
     adminClients += adminClient
     adminClient
   }
@@ -363,8 +365,8 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value))
-    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value))
+    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value.toDouble))
+    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value.toDouble))
     customQuotasUpdated.values.foreach(_.set(true))
   }
 

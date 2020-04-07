@@ -19,16 +19,16 @@ package kafka.server
 import java.util
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
-  var adminClient: AdminClient = null
+  var adminClient: Admin = null
 
   override def brokerCount = 1
 
@@ -48,7 +48,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = AdminClient.create(createAdminConfig)
+    adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
     intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]

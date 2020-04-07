@@ -16,15 +16,16 @@
  */
 package kafka.admin
 
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -64,7 +65,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       println(s"Warning: --zookeeper is deprecated and will be removed in a future version of Kafka.")
       println(s"Use --bootstrap-server instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
-              JaasUtils.isZkSecurityEnabled,
+              JaasUtils.isZkSaslEnabled,
               timeout)
     } else {
         val adminProps = if (commandOpts.options.has(commandOpts.adminClientConfigOpt))
@@ -73,6 +74,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           new Properties()
         adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
         adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
+        adminProps.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, (timeout * 2).toString)
         new AdminClientCommand(adminProps)
     }
 
@@ -105,7 +107,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   def writePreferredReplicaElectionData(zkClient: KafkaZkClient,
-                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]) {
+                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]): Unit = {
     try {
       zkClient.createPreferredReplicaElection(partitionsUndergoingPreferredReplicaElection.toSet)
       println("Created preferred replica election path with %s".format(partitionsUndergoingPreferredReplicaElection.mkString(",")))
@@ -158,8 +160,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     /** Elect the preferred leader for the given {@code partitionsForElection}.
       * If the given {@code partitionsForElection} are None then elect the preferred leader for all partitions.
       */
-    def electPreferredLeaders(partitionsForElection: Option[Set[TopicPartition]]) : Unit
-    def close() : Unit
+    def electPreferredLeaders(partitionsForElection: Option[Set[TopicPartition]]): Unit
+    def close(): Unit
   }
 
   class ZkCommand(zkConnect: String, isSecure: Boolean, timeout: Int)
@@ -169,7 +171,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkConnect, isSecure, timeout, timeout, Int.MaxValue, time)
 
-    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]) {
+    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       try {
         val topics =
           partitionsFromUser match {
@@ -209,7 +211,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   class AdminClientCommand(adminClientProps: Properties)
     extends Command with Logging {
 
-    val adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminClientProps)
+    val adminClient = Admin.create(adminClientProps)
 
     override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       val partitions = partitionsFromUser match {
@@ -283,7 +285,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 }
 
 class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
-  def moveLeaderToPreferredReplica() = {
+  def moveLeaderToPreferredReplica(): Unit = {
     try {
       val topics = partitionsFromUser.map(_.topic).toSet
       val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap { case (topic, partitions) =>

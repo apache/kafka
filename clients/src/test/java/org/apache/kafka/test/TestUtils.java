@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,8 +63,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -82,6 +85,7 @@ public class TestUtils {
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
+    public static final long DEFAULT_POLL_INTERVAL_MS = 100;
     public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
     public static Cluster singletonCluster() {
@@ -155,9 +159,10 @@ public class TestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Node> replicas = Collections.singletonList(leader);
+                List<Integer> replicaIds = Collections.singletonList(leader.id());
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, i, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
+                        Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
+                        replicaIds, replicaIds, replicaIds));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
@@ -176,12 +181,12 @@ public class TestUtils {
     @FunctionalInterface
     public interface PartitionMetadataSupplier {
         MetadataResponse.PartitionMetadata supply(Errors error,
-                              int partition,
-                              Node leader,
+                              TopicPartition partition,
+                              Optional<Integer> leaderId,
                               Optional<Integer> leaderEpoch,
-                              List<Node> replicas,
-                              List<Node> isr,
-                              List<Node> offlineReplicas);
+                              List<Integer> replicas,
+                              List<Integer> isr,
+                              List<Integer> offlineReplicas);
     }
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
@@ -259,14 +264,11 @@ public class TestUtils {
         }
         file.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Utils.delete(file);
-                } catch (IOException e) {
-                    log.error("Error deleting {}", file.getAbsolutePath(), e);
-                }
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
             }
         });
 
@@ -274,27 +276,26 @@ public class TestUtils {
     }
 
     public static Properties producerConfig(final String bootstrapServers,
-                                            final Class keySerializer,
-                                            final Class valueSerializer,
+                                            final Class<?> keySerializer,
+                                            final Class<?> valueSerializer,
                                             final Properties additional) {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         properties.put(ProducerConfig.ACKS_CONFIG, "all");
-        properties.put(ProducerConfig.RETRIES_CONFIG, 0);
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
         properties.putAll(additional);
         return properties;
     }
 
-    public static Properties producerConfig(final String bootstrapServers, final Class keySerializer, final Class valueSerializer) {
+    public static Properties producerConfig(final String bootstrapServers, final Class<?> keySerializer, final Class<?> valueSerializer) {
         return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer,
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer,
                                             final Properties additional) {
 
         final Properties consumerConfig = new Properties();
@@ -309,8 +310,8 @@ public class TestUtils {
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer) {
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             groupId,
             keyDeserializer,
@@ -321,7 +322,7 @@ public class TestUtils {
     /**
      * returns consumer config with random UUID for the Group ID
      */
-    public static Properties consumerConfig(final String bootstrapServers, final Class keyDeserializer, final Class valueDeserializer) {
+    public static Properties consumerConfig(final String bootstrapServers, final Class<?> keyDeserializer, final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             UUID.randomUUID().toString(),
             keyDeserializer,
@@ -352,7 +353,7 @@ public class TestUtils {
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
     }
-    
+
     /**
      * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
      * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
@@ -360,20 +361,71 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        final long startTime = System.currentTimeMillis();
+        String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+        String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
+        retryOnExceptionWithTimeout(maxWaitMs, () -> {
+            assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
+                testCondition.conditionMet());
+        });
+    }
 
-        boolean testConditionMet;
-        while (!(testConditionMet = testCondition.conditionMet()) && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
-            Thread.sleep(Math.min(maxWaitMs, 100L));
-        }
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+                                                   final ValuelessCallable runnable) throws InterruptedException {
+        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, timeoutMs, runnable);
+    }
 
-        // don't re-evaluate testCondition.conditionMet() because this might slow down some tests significantly (this
-        // could be avoided by making the implementations more robust, but we have a large number of such implementations
-        // and it's easier to simply avoid the issue altogether)
-        if (!testConditionMet) {
-            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
-            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
-            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the default timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
+        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, DEFAULT_MAX_WAIT_MS, runnable);
+    }
+
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
+     * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final long pollIntervalMs,
+                                                   final long timeoutMs,
+                                                   final ValuelessCallable runnable) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + timeoutMs;
+
+        while (true) {
+            try {
+                runnable.call();
+                return;
+            } catch (final NoRetryException e) {
+                throw e;
+            } catch (final AssertionError t) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw t;
+                }
+            } catch (final Exception e) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw new AssertionError(e);
+                }
+            }
+            Thread.sleep(Math.min(pollIntervalMs, timeoutMs));
         }
     }
 
@@ -446,6 +498,33 @@ public class TestUtils {
         return buffer;
     }
 
+    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
+        Set<TopicPartition> tps = new HashSet<>();
+        for (int i = 0; i < numTopic; i++) {
+            String topic = randomString(32);
+            for (int j = 0; j < numPartitionPerTopic; j++) {
+                tps.add(new TopicPartition(topic, j));
+            }
+        }
+        return tps;
+    }
+
+    /**
+     * Assert that a future raises an expected exception cause type. Return the exception cause
+     * if the assertion succeeds; otherwise raise AssertionError.
+     *
+     * @param future The future to await
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param <T> Exception cause type parameter
+     * @return The caught exception cause
+     */
+    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
+        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
+        assertTrue("Unexpected exception cause " + exception.getCause(),
+                exceptionCauseClass.isInstance(exception.getCause()));
+        return exceptionCauseClass.cast(exception.getCause());
+    }
+
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
@@ -480,5 +559,11 @@ public class TestUtils {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
     }
 }

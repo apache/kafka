@@ -33,7 +33,7 @@ import EasyMock._
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
@@ -212,9 +212,8 @@ class ReplicaManagerQuotasTest {
     //if we ask for len 1 return a message
     expect(log.read(anyObject(),
       maxLength = geq(1),
-      maxOffset = anyObject(),
-      minOneMessage = anyBoolean(),
-      includeAbortedTxns = EasyMock.eq(false))).andReturn(
+      isolation = anyObject(),
+      minOneMessage = anyBoolean())).andReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
@@ -223,9 +222,8 @@ class ReplicaManagerQuotasTest {
     //if we ask for len = 0, return 0 messages
     expect(log.read(anyObject(),
       maxLength = EasyMock.eq(0),
-      maxOffset = anyObject(),
-      minOneMessage = anyBoolean(),
-      includeAbortedTxns = EasyMock.eq(false))).andReturn(
+      isolation = anyObject(),
+      minOneMessage = anyBoolean())).andReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
@@ -254,7 +252,9 @@ class ReplicaManagerQuotasTest {
 
       partition.updateAssignmentAndIsr(
         assignment = Seq(leaderBrokerId, configs.last.brokerId),
-        isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId)
+        isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId),
+        addingReplicas = Seq.empty,
+        removingReplicas = Seq.empty
       )
     }
   }

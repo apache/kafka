@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -26,7 +28,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext extends ProcessorContext {
+public interface InternalProcessorContext<K, V> extends ProcessorContext<K, V> {
 
     @Override
     StreamsMetricsImpl metrics();
@@ -45,12 +47,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode currentNode);
+    void setCurrentNode(ProcessorNode<?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode currentNode();
+    ProcessorNode<?, ?> currentNode();
 
     /**
      * Get the thread-global cache
@@ -66,4 +68,12 @@ public interface InternalProcessorContext extends ProcessorContext {
      * Mark this context as being uninitialized
      */
     void uninitialize();
+
+    /**
+     * Get a correctly typed state store, given a handle on the original builder.
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return (T) getStateStore(builder.name());
+    }
 }

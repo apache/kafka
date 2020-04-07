@@ -27,7 +27,7 @@ import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest {
   import CreateTopicsRequestWithPolicyTest._
@@ -38,7 +38,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   }
 
   @Test
-  def testValidCreateTopicsRequests() {
+  def testValidCreateTopicsRequests(): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
       numPartitions = 5))))
 
@@ -56,7 +56,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   }
 
   @Test
-  def testErrorCreateTopicsRequests() {
+  def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 1, 1)
 

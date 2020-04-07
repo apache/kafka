@@ -58,11 +58,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.consumer.group_id = "group"
 
     def bounce(self):
-        self.kafka.start_minikdc()
-        for node in self.kafka.nodes:
-            self.kafka.stop_node(node)
-            self.kafka.start_node(node)
-            time.sleep(10)
+        self.kafka.start_minikdc_if_necessary()
+        self.kafka.restart_cluster(after_each_broker_restart = lambda: time.sleep(10))
 
     def roll_in_secured_settings(self, client_protocol, broker_protocol):
         # Roll cluster to include inter broker security protocol.
@@ -73,8 +70,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.close_port(SecurityConfig.PLAINTEXT)
         self.set_authorizer_and_bounce(client_protocol, broker_protocol)
 
-    def set_authorizer_and_bounce(self, client_protocol, broker_protocol):
-        self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
+    def set_authorizer_and_bounce(self, client_protocol, broker_protocol, authorizer_class_name = KafkaService.ACL_AUTHORIZER):
+        self.kafka.authorizer_class_name = authorizer_class_name
         self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
         self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
         self.bounce()
@@ -82,12 +79,12 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
     def open_secured_port(self, client_protocol):
         self.kafka.security_protocol = client_protocol
         self.kafka.open_port(client_protocol)
-        self.kafka.start_minikdc()
+        self.kafka.start_minikdc_if_necessary()
         self.bounce()
 
     def add_sasl_mechanism(self, new_client_sasl_mechanism):
         self.kafka.client_sasl_mechanism = new_client_sasl_mechanism
-        self.kafka.start_minikdc()
+        self.kafka.start_minikdc_if_necessary()
         self.bounce()
 
     def roll_in_sasl_mechanism(self, security_protocol, new_sasl_mechanism):
@@ -95,8 +92,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.interbroker_sasl_mechanism = new_sasl_mechanism
         self.bounce()
 
-        # Bounce again with ACLs for new mechanism
-        self.set_authorizer_and_bounce(security_protocol, security_protocol)
+        # Bounce again with ACLs for new mechanism. Use old SimpleAclAuthorizer here to ensure that is also tested.
+        self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.SIMPLE_AUTHORIZER)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):
         self.kafka.setup_interbroker_listener(broker_security_protocol, True)

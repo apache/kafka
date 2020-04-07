@@ -31,6 +31,7 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -271,7 +272,7 @@ public class ImplicitLinkedHashCollectionTest {
     @Test
     public void testEmptyListIterator() {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
-        ListIterator iter = coll.valuesList().listIterator();
+        ListIterator<TestElement> iter = coll.valuesList().listIterator();
         assertFalse(iter.hasNext());
         assertFalse(iter.hasPrevious());
         assertEquals(0, iter.nextIndex());
@@ -492,6 +493,19 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @Test
+    public void testInsertingTheSameObjectMultipleTimes() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        TestElement element = new TestElement(123);
+        assertTrue(coll.add(element));
+        assertFalse(coll.add(element));
+        assertFalse(coll.add(element));
+        assertTrue(coll.remove(element));
+        assertFalse(coll.remove(element));
+        assertTrue(coll.add(element));
+        assertFalse(coll.add(element));
+    }
+
+    @Test
     public void testEquals() {
         ImplicitLinkedHashCollection<TestElement> coll1 = new ImplicitLinkedHashCollection<>();
         coll1.add(new TestElement(1));
@@ -513,6 +527,14 @@ public class ImplicitLinkedHashCollectionTest {
         assertNotEquals(coll2, coll3);
     }
 
+    @Test
+    public void testFindContainsRemoveOnEmptyCollection() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        assertNull(coll.find(new TestElement(2)));
+        assertFalse(coll.contains(new TestElement(2)));
+        assertFalse(coll.remove(new TestElement(2)));
+    }
+
     private void addRandomElement(Random random, LinkedHashSet<Integer> existing,
                                   ImplicitLinkedHashCollection<TestElement> set) {
         int next;
@@ -523,6 +545,7 @@ public class ImplicitLinkedHashCollectionTest {
         set.add(new TestElement(next));
     }
 
+    @SuppressWarnings("unlikely-arg-type")
     private void removeRandomElement(Random random, Collection<Integer> existing,
                                      ImplicitLinkedHashCollection<TestElement> coll) {
         int removeIdx = random.nextInt(existing.size());

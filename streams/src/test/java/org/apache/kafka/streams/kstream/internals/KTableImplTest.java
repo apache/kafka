@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -41,7 +42,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -69,8 +70,6 @@ public class KTableImplTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
@@ -92,7 +91,7 @@ public class KTableImplTest {
         final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        final KTable<String, Integer> table2 = table1.mapValues(Integer::new);
+        final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
         table2.toStream().process(supplier);
 
         final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);
@@ -103,19 +102,41 @@ public class KTableImplTest {
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02", 100L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "03", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "04", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "05", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "06", 8L));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("A", "01", 5L);
+            inputTopic.pipeInput("B", "02", 100L);
+            inputTopic.pipeInput("C", "03", 0L);
+            inputTopic.pipeInput("D", "04", 0L);
+            inputTopic.pipeInput("A", "05", 10L);
+            inputTopic.pipeInput("A", "06", 8L);
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(0).processed);
-        assertEquals(asList("A:1 (ts: 5)", "B:2 (ts: 100)", "C:3 (ts: 0)", "D:4 (ts: 0)", "A:5 (ts: 10)", "A:6 (ts: 8)"), processors.get(1).processed);
-        assertEquals(asList("A:null (ts: 5)", "B:2 (ts: 100)", "C:null (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 10)", "A:6 (ts: 8)"), processors.get(2).processed);
-        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(3).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", 3, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", 5, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", null, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", null, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed);
     }
 
     @Test
@@ -253,7 +274,7 @@ public class KTableImplTest {
         builder.table(topic2, consumed);
 
         final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -273,7 +294,7 @@ public class KTableImplTest {
             (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
         final KTableImpl<String, Integer, Integer> table1MappedFiltered =
             (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);

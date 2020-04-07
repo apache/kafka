@@ -47,12 +47,15 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     private String connectorName;
     private Map<String, String> commonConfigs;
+    private ConnectorHandle connectorHandle;
 
     @Override
     public void start(Map<String, String> props) {
+        connectorHandle = RuntimeHandles.get().connectorHandle(props.get("name"));
         connectorName = props.get("name");
         commonConfigs = props;
         log.info("Starting connector {}", props.get("name"));
+        connectorHandle.recordConnectorStart();
     }
 
     @Override
@@ -74,6 +77,8 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     @Override
     public void stop() {
+        log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
+        connectorHandle.recordConnectorStop();
     }
 
     @Override
@@ -107,6 +112,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
             connectorName = props.get("connector.name");
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             log.debug("Starting task {}", taskId);
+            taskHandle.recordTaskStart();
         }
 
         @Override
@@ -148,6 +154,8 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void stop() {
+            log.info("Stopped {} task {}", this.getClass().getSimpleName(), taskId);
+            taskHandle.recordTaskStop();
         }
     }
 }

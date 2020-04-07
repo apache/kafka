@@ -91,7 +91,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      */
     @Override
     int findElementToRemove(Object key) {
-        if (key == null) {
+        if (key == null || size() == 0) {
             return INVALID_INDEX;
         }
         int slot = slot(elements, key);
@@ -120,7 +120,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      * @return          All of the matching elements.
      */
     final public List<E> findAll(E key) {
-        if (key == null) {
+        if (key == null || size() == 0) {
             return Collections.<E>emptyList();
         }
         ArrayList<E> results = new ArrayList<>();

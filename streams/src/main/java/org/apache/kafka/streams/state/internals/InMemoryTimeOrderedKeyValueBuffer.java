@@ -35,9 +35,10 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.metrics.Sensors;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -61,6 +62,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
+    private static final String METRIC_SCOPE = "in-memory-suppression";
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
     private final TreeMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
@@ -78,6 +80,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private String changelogTopic;
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
+    private StreamsMetricsImpl streamsMetrics;
+    private String threadId;
+    private String taskId;
 
     private volatile boolean open;
 
@@ -89,6 +94,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         private final Serde<K> keySerde;
         private final Serde<V> valSerde;
         private boolean loggingEnabled = true;
+        private Map<String, String> logConfig = new HashMap<>();
 
         public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valSerde) {
             this.storeName = storeName;
@@ -122,7 +128,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withLoggingEnabled(final Map<String, String> config) {
-            throw new UnsupportedOperationException();
+            logConfig = config;
+            return this;
         }
 
         @Override
@@ -138,7 +145,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public Map<String, String> logConfig() {
-            return Collections.emptyMap();
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
         }
 
         @Override
@@ -181,10 +188,25 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        taskId = context.taskId().toString();
         final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+        streamsMetrics = internalProcessorContext.metrics();
 
-        bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
-        bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
+        threadId = Thread.currentThread().getName();
+        bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
+            threadId,
+            taskId,
+            METRIC_SCOPE,
+            storeName,
+            streamsMetrics
+        );
+        bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
+            threadId,
+            taskId,
+            METRIC_SCOPE,
+            storeName,
+            streamsMetrics
+        );
 
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         if (loggingEnabled) {
@@ -210,6 +232,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
+        streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, storeName);
     }
 
     @Override
@@ -461,7 +484,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final byte[] serializedPriorValue;
         if (buffered == null) {
             final V priorValue = value.oldValue;
-            serializedPriorValue = valueSerde.innerSerde().serializer().serialize(changelogTopic, priorValue);
+            serializedPriorValue = (priorValue == null) ? null : valueSerde.innerSerde().serializer().serialize(changelogTopic, priorValue);
         } else {
             serializedPriorValue = buffered.priorValue();
         }

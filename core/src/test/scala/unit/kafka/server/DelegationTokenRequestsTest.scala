@@ -20,7 +20,7 @@ import java.util
 
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
@@ -28,7 +28,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
@@ -37,7 +37,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: AdminClient = null
+  var adminClient: Admin = null
 
   override def brokerCount = 1
 
@@ -67,7 +67,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = AdminClient.create(createAdminConfig)
+    adminClient = Admin.create(createAdminConfig)
 
     // create token1 with renewer1
     val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:renewer1")).asJava

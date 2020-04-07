@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -131,7 +131,7 @@ public final class WorkerUtils {
         // this method wraps the call to createTopics() that takes admin client, so that we can
         // unit test the functionality with MockAdminClient. The exception is caught and
         // re-thrown so that admin client is closed when the method returns.
-        try (AdminClient adminClient
+        try (Admin adminClient
                  = createAdminClient(bootstrapServers, commonClientConf, adminClientConf)) {
             createTopics(log, adminClient, topics, failOnExisting);
         } catch (Exception e) {
@@ -148,7 +148,7 @@ public final class WorkerUtils {
      * @throws Throwable if creation of one or more topics fails (except for the cases above).
      */
     static void createTopics(
-        Logger log, AdminClient adminClient,
+        Logger log, Admin adminClient,
         Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
         if (topics.isEmpty()) {
             log.warn("Request to create topics has an empty topic list.");
@@ -174,7 +174,7 @@ public final class WorkerUtils {
      * @return                Collection of topics names that already exist.
      * @throws Throwable if creation of one or more topics fails (except for topic exists case).
      */
-    private static Collection<String> createTopics(Logger log, AdminClient adminClient,
+    private static Collection<String> createTopics(Logger log, Admin adminClient,
                                                    Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
         int tries = 0;
@@ -249,7 +249,7 @@ public final class WorkerUtils {
      * described in 'topicsInfo'
      */
     static void verifyTopics(
-        Logger log, AdminClient adminClient,
+        Logger log, Admin adminClient,
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
 
         Map<String, TopicDescription> topicDescriptionMap = topicDescriptions(topicsToVerify, adminClient,
@@ -270,7 +270,7 @@ public final class WorkerUtils {
     }
 
     private static Map<String, TopicDescription> topicDescriptions(Collection<String> topicsToVerify,
-                                                                   AdminClient adminClient,
+                                                                   Admin adminClient,
                                                                    int retryCount, long retryBackoffMs)
             throws ExecutionException, InterruptedException {
         UnknownTopicOrPartitionException lastException = null;
@@ -300,7 +300,7 @@ public final class WorkerUtils {
      * @throws Throwable      If failed to get list of existing topics
      */
     static Collection<TopicPartition> getMatchingTopicPartitions(
-        AdminClient adminClient, String topicRegex, int startPartition, int endPartition)
+        Admin adminClient, String topicRegex, int startPartition, int endPartition)
         throws Throwable {
         final Pattern topicNamePattern = Pattern.compile(topicRegex);
 
@@ -332,7 +332,7 @@ public final class WorkerUtils {
         return out;
     }
 
-    private static AdminClient createAdminClient(
+    private static Admin createAdminClient(
         String bootstrapServers,
         Map<String, String> commonClientConf, Map<String, String> adminClientConf) {
         Properties props = new Properties();
@@ -341,6 +341,6 @@ public final class WorkerUtils {
         // first add common client config, and then admin client config to properties, possibly
         // over-writing default or common properties.
         addConfigsToProperties(props, commonClientConf, adminClientConf);
-        return AdminClient.create(props);
+        return Admin.create(props);
     }
 }

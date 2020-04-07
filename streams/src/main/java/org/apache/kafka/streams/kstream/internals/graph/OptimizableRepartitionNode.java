@@ -22,17 +22,19 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
     OptimizableRepartitionNode(final String nodeName,
                                final String sourceName,
-                               final ProcessorParameters processorParameters,
+                               final ProcessorParameters<K, V> processorParameters,
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final String sinkName,
-                               final String repartitionTopic) {
+                               final String repartitionTopic,
+                               final StreamPartitioner<K, V> partitioner) {
 
         super(
             nodeName,
@@ -41,9 +43,9 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             keySerde,
             valueSerde,
             sinkName,
-            repartitionTopic
+            repartitionTopic,
+            partitioner
         );
-
     }
 
     public Serde<K> keySerde() {
@@ -91,7 +93,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             repartitionTopic,
             keySerializer,
             getValueSerializer(),
-            null,
+            partitioner,
             processorParameters.processorName()
         );
 
@@ -114,17 +116,18 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     public static final class OptimizableRepartitionNodeBuilder<K, V> {
 
         private String nodeName;
-        private ProcessorParameters processorParameters;
+        private ProcessorParameters<K, V> processorParameters;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
         private String sourceName;
         private String repartitionTopic;
+        private StreamPartitioner<K, V> partitioner;
 
         private OptimizableRepartitionNodeBuilder() {
         }
 
-        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
@@ -160,6 +163,11 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             return this;
         }
 
+        public OptimizableRepartitionNodeBuilder<K, V> withPartitioner(final StreamPartitioner<K, V> partitioner) {
+            this.partitioner = partitioner;
+            return this;
+        }
+
         public OptimizableRepartitionNode<K, V> build() {
 
             return new OptimizableRepartitionNode<>(
@@ -169,7 +177,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                 keySerde,
                 valueSerde,
                 sinkName,
-                repartitionTopic
+                repartitionTopic,
+                partitioner
             );
 
         }

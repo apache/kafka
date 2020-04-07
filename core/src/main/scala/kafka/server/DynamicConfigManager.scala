@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 
 /**
@@ -108,7 +108,7 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
       }
     }
 
-    private def processEntityConfigChangeVersion1(jsonBytes: Array[Byte], js: JsonObject) {
+    private def processEntityConfigChangeVersion1(jsonBytes: Array[Byte], js: JsonObject): Unit = {
       val validConfigTypes = Set(ConfigType.Topic, ConfigType.Client)
       val entityType = js.get("entity_type").flatMap(_.to[Option[String]]).filter(validConfigTypes).getOrElse {
         throw new IllegalArgumentException("Version 1 config change notification must have 'entity_type' set to " +
@@ -126,7 +126,7 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
 
     }
 
-    private def processEntityConfigChangeVersion2(jsonBytes: Array[Byte], js: JsonObject) {
+    private def processEntityConfigChangeVersion2(jsonBytes: Array[Byte], js: JsonObject): Unit = {
 
       val entityPath = js.get("entity_path").flatMap(_.to[Option[String]]).getOrElse {
         throw new IllegalArgumentException(s"Version 2 config change notification must specify 'entity_path'. " +

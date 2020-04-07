@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
 import java.time.Duration;
@@ -53,7 +54,7 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class InternalMockProcessorContext extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
 
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
@@ -69,7 +70,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
@@ -78,14 +79,56 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
-        this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            config,
+            null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final StreamsMetricsImpl streamsMetrics) {
+        this(
+            null,
+            null,
+            null,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final StreamsConfig config,
+                                        final RecordCollector collector) {
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            config,
+            () -> collector,
+            null
+        );
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valSerde,
                                         final StreamsConfig config) {
-        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(
+            stateDir,
+            keySerde,
+            valSerde,
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            config,
+            null,
+            null
+        );
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -100,7 +143,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock"),
+            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null
@@ -115,7 +158,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(stateDir,
             keySerde,
             valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
@@ -134,11 +177,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
-        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
+        super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
     }
 
     @Override
@@ -209,20 +253,17 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void commit() {}
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
         forward(key, value, To.all());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
@@ -236,12 +277,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode thisNode = currentNode;
+        final ProcessorNode<?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    childNode.process(key, value);
+                    ((ProcessorNode<K, V>) childNode).process(key, value);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
                 }
             }

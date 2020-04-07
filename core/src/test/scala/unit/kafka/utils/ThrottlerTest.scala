@@ -25,7 +25,7 @@ import org.junit.Assert.{assertTrue, assertEquals}
 
 class ThrottlerTest {
   @Test
-  def testThrottleDesiredRate() {
+  def testThrottleDesiredRate(): Unit = {
     val throttleCheckIntervalMs = 100
     val desiredCountPerSec = 1000.0
     val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0

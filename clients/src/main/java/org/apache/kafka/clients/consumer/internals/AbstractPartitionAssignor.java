@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -33,7 +34,7 @@ import java.util.Set;
  * Abstract assignor implementation which does some common grunt work (in particular collecting
  * partition counts which are always needed in assignors).
  */
-public abstract class AbstractPartitionAssignor implements PartitionAssignor {
+public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractPartitionAssignor.class);
 
     /**
@@ -47,12 +48,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                                                              Map<String, Subscription> subscriptions);
 
     @Override
-    public Subscription subscription(Set<String> topics) {
-        return new Subscription(new ArrayList<>(topics));
-    }
-
-    @Override
-    public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
+        Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
         Set<String> allSubscribedTopics = new HashSet<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
             allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
@@ -72,12 +69,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
-        return assignments;
-    }
-
-    @Override
-    public void onAssignment(Assignment assignment) {
-        // this assignor maintains no internal state, so nothing to do
+        return new GroupAssignment(assignments);
     }
 
     protected static <K, V> void put(Map<K, List<V>> map, K key, V value) {

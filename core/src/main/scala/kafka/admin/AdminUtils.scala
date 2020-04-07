@@ -31,58 +31,70 @@ object AdminUtils extends Logging {
   /**
    * There are 3 goals of replica assignment:
    *
-   * 1. Spread the replicas evenly among brokers.
-   * 2. For partitions assigned to a particular broker, their other replicas are spread over the other brokers.
-   * 3. If all brokers have rack information, assign the replicas for each partition to different racks if possible
+   * <ol>
+   * <li> Spread the replicas evenly among brokers.</li>
+   * <li> For partitions assigned to a particular broker, their other replicas are spread over the other brokers.</li>
+   * <li> If all brokers have rack information, assign the replicas for each partition to different racks if possible</li>
+   * </ol>
    *
    * To achieve this goal for replica assignment without considering racks, we:
-   * 1. Assign the first replica of each partition by round-robin, starting from a random position in the broker list.
-   * 2. Assign the remaining replicas of each partition with an increasing shift.
+   * <ol>
+   * <li> Assign the first replica of each partition by round-robin, starting from a random position in the broker list.</li>
+   * <li> Assign the remaining replicas of each partition with an increasing shift.</li>
+   * </ol>
    *
    * Here is an example of assigning
-   * broker-0  broker-1  broker-2  broker-3  broker-4
-   * p0        p1        p2        p3        p4       (1st replica)
-   * p5        p6        p7        p8        p9       (1st replica)
-   * p4        p0        p1        p2        p3       (2nd replica)
-   * p8        p9        p5        p6        p7       (2nd replica)
-   * p3        p4        p0        p1        p2       (3nd replica)
-   * p7        p8        p9        p5        p6       (3nd replica)
+   * <table cellpadding="2" cellspacing="2">
+   * <tr><th>broker-0</th><th>broker-1</th><th>broker-2</th><th>broker-3</th><th>broker-4</th><th>&nbsp;</th></tr>
+   * <tr><td>p0      </td><td>p1      </td><td>p2      </td><td>p3      </td><td>p4      </td><td>(1st replica)</td></tr>
+   * <tr><td>p5      </td><td>p6      </td><td>p7      </td><td>p8      </td><td>p9      </td><td>(1st replica)</td></tr>
+   * <tr><td>p4      </td><td>p0      </td><td>p1      </td><td>p2      </td><td>p3      </td><td>(2nd replica)</td></tr>
+   * <tr><td>p8      </td><td>p9      </td><td>p5      </td><td>p6      </td><td>p7      </td><td>(2nd replica)</td></tr>
+   * <tr><td>p3      </td><td>p4      </td><td>p0      </td><td>p1      </td><td>p2      </td><td>(3nd replica)</td></tr>
+   * <tr><td>p7      </td><td>p8      </td><td>p9      </td><td>p5      </td><td>p6      </td><td>(3nd replica)</td></tr>
+   * </table>
    *
+   * <p>
    * To create rack aware assignment, this API will first create a rack alternated broker list. For example,
-   * from this brokerID -> rack mapping:
-   *
+   * from this brokerID -> rack mapping:</p>
    * 0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> "rack2", 5 -> "rack1"
-   *
+   * <br><br>
+   * <p>
    * The rack alternated list will be:
-   *
+   * </p>
    * 0, 3, 1, 5, 4, 2
-   *
+   * <br><br>
+   * <p>
    * Then an easy round-robin assignment can be applied. Assume 6 partitions with replication factor of 3, the assignment
    * will be:
-   *
-   * 0 -> 0,3,1
-   * 1 -> 3,1,5
-   * 2 -> 1,5,4
-   * 3 -> 5,4,2
-   * 4 -> 4,2,0
-   * 5 -> 2,0,3
-   *
+   * </p>
+   * 0 -> 0,3,1 <br>
+   * 1 -> 3,1,5 <br>
+   * 2 -> 1,5,4 <br>
+   * 3 -> 5,4,2 <br>
+   * 4 -> 4,2,0 <br>
+   * 5 -> 2,0,3 <br>
+   * <br>
+   * <p>
    * Once it has completed the first round-robin, if there are more partitions to assign, the algorithm will start
    * shifting the followers. This is to ensure we will not always get the same set of sequences.
    * In this case, if there is another partition to assign (partition #6), the assignment will be:
-   *
+   * </p>
    * 6 -> 0,4,2 (instead of repeating 0,3,1 as partition 0)
-   *
+   * <br><br>
+   * <p>
    * The rack aware assignment always chooses the 1st replica of the partition using round robin on the rack alternated
    * broker list. For rest of the replicas, it will be biased towards brokers on racks that do not have
    * any replica assignment, until every rack has a replica. Then the assignment will go back to round-robin on
    * the broker list.
-   *
+   * </p>
+   * <br>
+   * <p>
    * As the result, if the number of replicas is equal to or greater than the number of racks, it will ensure that
    * each rack will get at least one replica. Otherwise, each rack will get at most one replica. In a perfect
    * situation where the number of replicas is the same as the number of racks and each rack has the same number of
    * brokers, it guarantees that the replica distribution is even across brokers and racks.
-   *
+   * </p>
    * @return a Map from partition id to replica ids
    * @throws AdminOperationException If rack information is supplied but it is incomplete, or if it is not possible to
    *                                 assign each replica to a unique rack.
@@ -199,7 +211,7 @@ object AdminUtils extends Logging {
     */
   private[admin] def getRackAlternatedBrokerList(brokerRackMap: Map[Int, String]): IndexedSeq[Int] = {
     val brokersIteratorByRack = getInverseMap(brokerRackMap).map { case (rack, brokers) =>
-      (rack, brokers.toIterator)
+      (rack, brokers.iterator)
     }
     val racks = brokersIteratorByRack.keys.toArray.sorted
     val result = new mutable.ArrayBuffer[Int]

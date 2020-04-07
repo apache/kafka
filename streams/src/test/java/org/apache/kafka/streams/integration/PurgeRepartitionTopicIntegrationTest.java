@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -60,7 +60,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static final String APPLICATION_ID = "restore-test";
     private static final String REPARTITION_TOPIC = APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition";
 
-    private static AdminClient adminClient;
+    private static Admin adminClient;
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
@@ -148,7 +148,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         // create admin client for verification
         final Properties adminConfig = new Properties();
         adminConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        adminClient = AdminClient.create(adminConfig);
+        adminClient = Admin.create(adminConfig);
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);

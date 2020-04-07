@@ -29,13 +29,33 @@ import java.util.stream.Collectors;
 /**
  * A class representing a alter configuration entry containing name, value and operation type.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class AlterConfigOp {
 
     public enum OpType {
-        SET((byte) 0), DELETE((byte) 1), APPEND((byte) 2), SUBTRACT((byte) 3);
+        /**
+         * Set the value of the configuration entry.
+         */
+        SET((byte) 0),
+        /**
+         * Revert the configuration entry to the default value (possibly null).
+         */
+        DELETE((byte) 1),
+        /**
+         * (For list-type configuration entries only.) Add the specified values to the
+         * current value of the configuration entry. If the configuration value has not been set,
+         * adds to the default value.
+         */
+        APPEND((byte) 2),
+        /**
+         * (For list-type configuration entries only.) Removes the specified values from the current
+         * value of the configuration entry. It is legal to remove values that are not currently in the
+         * configuration entry. Removing all entries from the current configuration value leaves an empty
+         * list and does NOT revert to the default value of the entry.
+         */
+        SUBTRACT((byte) 3);
 
         private static final Map<Byte, OpType> OP_TYPES = Collections.unmodifiableMap(
                 Arrays.stream(values()).collect(Collectors.toMap(OpType::id, Function.identity()))

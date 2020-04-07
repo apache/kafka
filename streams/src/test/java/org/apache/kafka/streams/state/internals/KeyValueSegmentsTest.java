@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -46,6 +46,7 @@ public class KeyValueSegmentsTest {
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
+    private static final String METRICS_SCOPE = "test-state-id";
     private InternalMockProcessorContext context;
     private KeyValueSegments segments;
     private File stateDirectory;
@@ -58,10 +59,11 @@ public class KeyValueSegmentsTest {
             stateDirectory,
             Serdes.String(),
             Serdes.Long(),
-            new NoOpRecordCollector(),
+            new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        segments = new KeyValueSegments(storeName, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments.openExisting(context, -1L);
     }
 
     @After
@@ -79,7 +81,7 @@ public class KeyValueSegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final KeyValueSegments segments = new KeyValueSegments("test", 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
+        final KeyValueSegments segments = new KeyValueSegments("test", METRICS_SCOPE, 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(SEGMENT_INTERVAL));
         assertEquals(1, segments.segmentId(2 * SEGMENT_INTERVAL));
@@ -152,7 +154,8 @@ public class KeyValueSegmentsTest {
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new KeyValueSegments("test", 4, 1);
+        segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         segments.getOrCreateSegmentIfLive(2, context, -1L);
@@ -161,7 +164,7 @@ public class KeyValueSegmentsTest {
         // close existing.
         segments.close();
 
-        segments = new KeyValueSegments("test", 4, 1);
+        segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());
@@ -252,7 +255,7 @@ public class KeyValueSegmentsTest {
     public void shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat() throws Exception {
         final long segmentInterval = 60_000L; // the old segment file's naming system maxes out at 1 minute granularity.
 
-        segments = new KeyValueSegments(storeName, NUM_SEGMENTS * segmentInterval, segmentInterval);
+        segments = new KeyValueSegments(storeName,  METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
         final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);

@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-
 public class ControlledShutdownRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
@@ -63,19 +62,10 @@ public class ControlledShutdownRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ControlledShutdownResponseData response = new ControlledShutdownResponseData();
-        response.setErrorCode(Errors.forException(e).code());
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new ControlledShutdownResponse(response);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
-        }
+    public ControlledShutdownResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
+                .setErrorCode(Errors.forException(e).code());
+        return new ControlledShutdownResponse(data);
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {

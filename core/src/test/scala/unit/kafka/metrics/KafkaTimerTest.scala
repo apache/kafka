@@ -25,7 +25,7 @@ import com.yammer.metrics.core.{MetricsRegistry, Clock}
 class KafkaTimerTest {
 
   @Test
-  def testKafkaTimer() {
+  def testKafkaTimer(): Unit = {
     val clock = new ManualClock
     val testRegistry = new MetricsRegistry(clock)
     val metric = testRegistry.newTimer(this.getClass, "TestTimer")
@@ -52,7 +52,7 @@ class KafkaTimerTest {
       TimeUnit.NANOSECONDS.toMillis(ticksInNanos)
     }
 
-    def addMillis(millis: Long) {
+    def addMillis(millis: Long): Unit = {
       ticksInNanos += TimeUnit.MILLISECONDS.toNanos(millis)
     }
   }

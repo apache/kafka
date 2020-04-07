@@ -265,7 +265,7 @@ public class AbstractConfigTest {
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
                 if (name.equals(ClassTestConfig.DEFAULT_CLASS.getName()) || name.equals(ClassTestConfig.RESTRICTED_CLASS.getName()))
-                    return null;
+                    throw new ClassNotFoundException();
                 else
                     return ClassTestConfig.class.getClassLoader().loadClass(name);
             }
@@ -407,7 +407,7 @@ public class AbstractConfigTest {
             "org.apache.kafka.common.config.provider.InvalidConfigProvider");
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
         try {
-            TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+            new TestIndirectConfigResolution(props);
             fail("Expected a config exception due to invalid props :" + props);
         } catch (KafkaException e) {
             // this is good

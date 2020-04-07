@@ -23,6 +23,8 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -34,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.MockInternalProcessorContext.MockRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,6 +69,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     private final Function<String, B> bufferSupplier;
     private final String testName;
 
+    public static final class NullRejectingStringSerializer extends StringSerializer {
+        @Override
+        public byte[] serialize(final String topic, final String data) {
+            if (data == null) {
+                throw new IllegalArgumentException();
+            }
+            return super.serialize(topic, data);
+        }
+    }
+
     // As we add more buffer implementations/configurations, we can add them here
     @Parameterized.Parameters(name = "{index}: test={0}")
     public static Collection<Object[]> parameters() {
@@ -75,7 +87,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 "in-memory buffer",
                 (Function<String, InMemoryTimeOrderedKeyValueBuffer<String, String>>) name ->
                     new InMemoryTimeOrderedKeyValueBuffer
-                        .Builder<>(name, Serdes.String(), Serdes.String())
+                        .Builder<>(name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer()))
                         .build()
             }
         );
@@ -306,7 +318,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                     if (pr.value() == null) {
                         niceValue = null;
                     } else {
-                        final byte[] serializedValue = pr.value();
+                        final byte[] serializedValue = (byte[]) pr.value();
                         final ByteBuffer valueBuffer = ByteBuffer.wrap(serializedValue);
                         final BufferValue contextualRecord = BufferValue.deserialize(valueBuffer);
                         final long timestamp = valueBuffer.getLong();
@@ -316,7 +328,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                     return new ProducerRecord<>(pr.topic(),
                                                 pr.partition(),
                                                 pr.timestamp(),
-                                                new String(pr.key(), UTF_8),
+                                                pr.key().toString(),
                                                 niceValue,
                                                 pr.headers());
                 })
@@ -599,7 +611,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize(0).array();
         final byte[] asdfValue = getBufferValue("qwer", 1).serialize(0).array();
-        final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.wrap(Serdes.String());
         final byte[] zxcvValue1 =
             new BufferValue(
                 Serdes.String().serializer().serialize(null, "previous"),
@@ -607,7 +618,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 Serdes.String().serializer().serialize(null, "3o4im"),
                 getContext(2L)
             ).serialize(0).array();
-        final FullChangeSerde<String> fullChangeSerde1 = FullChangeSerde.wrap(Serdes.String());
         final byte[] zxcvValue2 =
             new BufferValue(
                 Serdes.String().serializer().serialize(null, "previous"),

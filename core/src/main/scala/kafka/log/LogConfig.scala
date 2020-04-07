@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.{Collections, Locale, Properties}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.api.{ApiVersion, ApiVersionValidator}
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -112,8 +112,8 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
 object LogConfig {
 
-  def main(args: Array[String]) {
-    println(configDef.toHtmlTable)
+  def main(args: Array[String]): Unit = {
+    println(configDef.toHtml)
   }
 
   val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
@@ -181,9 +181,17 @@ object LogConfig {
     "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
     "all replicas for this topic."
 
-  private class LogConfigDef extends ConfigDef {
+  private[log] val ServerDefaultHeaderName = "Server Default Property"
+
+  // Package private for testing
+  private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
+    def this() = this(new ConfigDef)
 
     private final val serverDefaultConfigNames = mutable.Map[String, String]()
+    base match {
+      case b: LogConfigDef => serverDefaultConfigNames ++= b.serverDefaultConfigNames
+      case _ =>
+    }
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Any, validator: Validator,
                importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String): LogConfigDef = {
@@ -206,17 +214,21 @@ object LogConfig {
       this
     }
 
-    override def headers = List("Name", "Description", "Type", "Default", "Valid Values", "Server Default Property", "Importance").asJava
+    override def headers = List("Name", "Description", "Type", "Default", "Valid Values", ServerDefaultHeaderName,
+      "Importance").asJava
 
     override def getConfigValue(key: ConfigKey, headerName: String): String = {
       headerName match {
-        case "Server Default Property" => serverDefaultConfigNames.get(key.name).get
+        case ServerDefaultHeaderName => serverDefaultConfigNames.getOrElse(key.name, null)
         case _ => super.getConfigValue(key, headerName)
       }
     }
 
     def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
+
+  // Package private for testing, return a copy since it's a mutable global variable
+  private[log] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
 
   private val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
@@ -287,6 +299,10 @@ object LogConfig {
 
   def serverConfigName(configName: String): Option[String] = configDef.serverConfigName(configName)
 
+  def configType(configName: String): Option[ConfigDef.Type] = {
+    Option(configDef.configKeys.get(configName)).map(_.`type`)
+  }
+
   /**
    * Create a log config instance using the given properties and defaults
    */
@@ -301,7 +317,7 @@ object LogConfig {
   /**
    * Check that property names are valid
    */
-  def validateNames(props: Properties) {
+  def validateNames(props: Properties): Unit = {
     val names = configNames
     for(name <- props.asScala.keys)
       if (!names.contains(name))
@@ -322,7 +338,7 @@ object LogConfig {
   /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */
-  def validate(props: Properties) {
+  def validate(props: Properties): Unit = {
     validateNames(props)
     val valueMaps = configDef.parse(props)
     validateValues(valueMaps)

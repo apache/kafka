@@ -48,7 +48,10 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.12.8
+  SCALA_VERSION=2.12.11
+  if [[ -f "$base_dir/gradle.properties" ]]; then
+    SCALA_VERSION=`grep "^scalaVersion=" "$base_dir/gradle.properties" | cut -d= -f 2`
+  fi
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -57,10 +60,12 @@ fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH="$CLASSPATH:$dir/*"
-done
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
+  do
+    CLASSPATH="$CLASSPATH:$dir/*"
+  done
+fi
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
@@ -72,11 +77,11 @@ done
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   clients_lib_dir=$(dirname $0)/../clients/build/libs
   streams_lib_dir=$(dirname $0)/../streams/build/libs
-  rocksdb_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+  streams_dependant_clients_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
 else
   clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
   streams_lib_dir=$clients_lib_dir
-  rocksdb_lib_dir=$streams_lib_dir
+  streams_dependant_clients_lib_dir=$streams_lib_dir
 fi
 
 
@@ -110,9 +115,22 @@ else
       CLASSPATH="$file":"$CLASSPATH"
     fi
   done
+  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
+  fi
+  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
+  fi
 fi
 
-for file in "$rocksdb_lib_dir"/rocksdb*.jar;
+for file in "$streams_dependant_clients_lib_dir"/rocksdb*.jar;
+do
+  CLASSPATH="$CLASSPATH":"$file"
+done
+
+for file in "$streams_dependant_clients_lib_dir"/*hamcrest*.jar;
 do
   CLASSPATH="$CLASSPATH":"$file"
 done
@@ -129,7 +147,7 @@ do
   CLASSPATH="$CLASSPATH:$dir/*"
 done
 
-for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools" "basic-auth-extension"
+for cc_pkg in "api" "transforms" "runtime" "file" "mirror" "mirror-client" "json" "tools" "basic-auth-extension"
 do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
@@ -234,8 +252,9 @@ if [ -z "$KAFKA_HEAP_OPTS" ]; then
 fi
 
 # JVM performance options
+# MaxInlineLevel=15 is the default since JDK 14 and can be removed once older JDKs are no longer supported
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
 fi
 
 while [ $# -gt 0 ]; do
@@ -294,7 +313,7 @@ CLASSPATH=${CLASSPATH#:}
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
+  nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
 else
-  exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@"
+  exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@"
 fi

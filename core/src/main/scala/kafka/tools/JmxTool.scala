@@ -26,7 +26,7 @@ import javax.rmi.ssl.SslRMIClientSocketFactory
 
 import joptsimple.OptionParser
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.math._
 import kafka.utils.{CommandLineUtils, Exit, Logging}
@@ -40,7 +40,7 @@ import kafka.utils.{CommandLineUtils, Exit, Logging}
   */
 object JmxTool extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     // Parse command line
     val parser = new OptionParser(false)
     val objectNameOpt =
@@ -258,8 +258,8 @@ object JmxTool extends Logging {
         attributesWhitelist match {
           case Some(allowedAttributes) =>
             if (allowedAttributes.contains(attr.getName))
-              attributes(name + ":" + attr.getName) = attr.getValue
-          case None => attributes(name + ":" + attr.getName) = attr.getValue
+              attributes(name.toString + ":" + attr.getName) = attr.getValue
+          case None => attributes(name.toString + ":" + attr.getName) = attr.getValue
         }
       }
     }

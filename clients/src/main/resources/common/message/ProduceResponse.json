@@ -27,7 +27,11 @@
   //
   // Version 5 added LogStartOffset to filter out spurious
   // OutOfOrderSequenceExceptions on the client.
-  "validVersions": "0-7",
+  //
+  // Version 8 added RecordErrors and ErrorMessage to include information about
+  // records that cause the whole batch to be dropped.  See KIP-467 for details.
+  "validVersions": "0-8",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [
@@ -44,7 +48,16 @@
         { "name": "LogAppendTimeMs", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
           "about": "The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1.  If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended." },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
-          "about": "The log start offset." }
+          "about": "The log start offset." },
+        { "name": "RecordErrors", "type": "[]BatchIndexAndErrorMessage", "versions": "8+", "ignorable": true,
+          "about": "The batch indices of records that caused the batch to be dropped", "fields": [
+          { "name":  "BatchIndex", "type": "int32", "versions":  "8+",
+            "about":  "The batch index of the record that cause the batch to be dropped" },
+          { "name": "BatchIndexErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+",
+            "about":  "The error message of the record that caused the batch to be dropped"}
+        ]},
+        { "name":  "ErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+", "ignorable":  true,
+          "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"}
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

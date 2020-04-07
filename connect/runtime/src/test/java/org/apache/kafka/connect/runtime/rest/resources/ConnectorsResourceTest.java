@@ -18,7 +18,10 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import javax.crypto.Mac;
 import javax.ws.rs.core.HttpHeaders;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
@@ -26,12 +29,15 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
@@ -50,23 +56,30 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestClient.class)
-@PowerMockIgnore("javax.management.*")
+@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings("unchecked")
 public class ConnectorsResourceTest {
     // Note trailing / and that we do *not* use LEADER_URL to construct our reference values. This checks that we handle
@@ -124,16 +137,26 @@ public class ConnectorsResourceTest {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
     }
 
+    private static final Set<String> CONNECTOR_ACTIVE_TOPICS = new HashSet<>(
+            Arrays.asList("foo_topic", "bar_topic"));
+    private static final Set<String> CONNECTOR2_ACTIVE_TOPICS = new HashSet<>(
+            Arrays.asList("foo_topic", "baz_topic"));
+
     @Mock
     private Herder herder;
     private ConnectorsResource connectorsResource;
     private UriInfo forward;
+    @Mock
+    private WorkerConfig workerConfig;
 
     @Before
     public void setUp() throws NoSuchMethodException {
         PowerMock.mockStatic(RestClient.class,
                 RestClient.class.getMethod("httpRequest", String.class, String.class, HttpHeaders.class, Object.class, TypeReference.class, WorkerConfig.class));
-        connectorsResource = new ConnectorsResource(herder, null);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
         forward = EasyMock.mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
         queryParams.putSingle("forward", "true");
@@ -428,8 +451,8 @@ public class ConnectorsResourceTest {
         herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
-        EasyMock.expect(RestClient.httpRequest("http://leader:8083/connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, null))
-                .andReturn(new RestClient.HttpResponse<>(204, new HashMap<String, String>(), null));
+        EasyMock.expect(RestClient.httpRequest("http://leader:8083/connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, workerConfig))
+                .andReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
 
         PowerMock.replayAll();
 
@@ -622,27 +645,76 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testPutConnectorTaskConfigs() throws Throwable {
+    public void testPutConnectorTaskConfigsNoInternalRequestSignature() throws Throwable {
         final Capture<Callback<Void>> cb = Capture.newInstance();
-        herder.putTaskConfigs(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(TASK_CONFIGS), EasyMock.capture(cb));
+        herder.putTaskConfigs(
+            EasyMock.eq(CONNECTOR_NAME),
+            EasyMock.eq(TASK_CONFIGS),
+            EasyMock.capture(cb),
+            EasyMock.anyObject(InternalRequestSignature.class)
+        );
         expectAndCallbackResult(cb, null);
 
         PowerMock.replayAll();
 
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, TASK_CONFIGS);
+        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(TASK_CONFIGS));
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPutConnectorTaskConfigsWithInternalRequestSignature() throws Throwable {
+        final String signatureAlgorithm = "HmacSHA256";
+        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
+
+        final Capture<Callback<Void>> cb = Capture.newInstance();
+        final Capture<InternalRequestSignature> signatureCapture = Capture.newInstance();
+        herder.putTaskConfigs(
+            EasyMock.eq(CONNECTOR_NAME),
+            EasyMock.eq(TASK_CONFIGS),
+            EasyMock.capture(cb),
+            EasyMock.capture(signatureCapture)
+        );
+        expectAndCallbackResult(cb, null);
+
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        EasyMock.expect(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
+            .andReturn(signatureAlgorithm)
+            .once();
+        EasyMock.expect(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
+            .andReturn(encodedSignature)
+            .once();
+
+        PowerMock.replayAll(headers);
+
+        connectorsResource.putTaskConfigs(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(TASK_CONFIGS));
+
+        PowerMock.verifyAll();
+        InternalRequestSignature expectedSignature = new InternalRequestSignature(
+            serializeAsBytes(TASK_CONFIGS),
+            Mac.getInstance(signatureAlgorithm),
+            Base64.getDecoder().decode(encodedSignature)
+        );
+        assertEquals(
+            expectedSignature,
+            signatureCapture.getValue()
+        );
     }
 
     @Test(expected = NotFoundException.class)
     public void testPutConnectorTaskConfigsConnectorNotFound() throws Throwable {
         final Capture<Callback<Void>> cb = Capture.newInstance();
-        herder.putTaskConfigs(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(TASK_CONFIGS), EasyMock.capture(cb));
+        herder.putTaskConfigs(
+            EasyMock.eq(CONNECTOR_NAME),
+            EasyMock.eq(TASK_CONFIGS),
+            EasyMock.capture(cb),
+            EasyMock.anyObject(InternalRequestSignature.class)
+        );
         expectAndCallbackException(cb, new NotFoundException("not found"));
 
         PowerMock.replayAll();
 
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, TASK_CONFIGS);
+        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(TASK_CONFIGS));
 
         PowerMock.verifyAll();
     }
@@ -746,6 +818,94 @@ public class ConnectorsResourceTest {
         connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, true);
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorActiveTopicsWithTopicTrackingDisabled() {
+        PowerMock.reset(workerConfig);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(false);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(false);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Exception e = assertThrows(ConnectRestException.class,
+            () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
+        assertEquals("Topic tracking is disabled.", e.getMessage());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testResetConnectorActiveTopicsWithTopicTrackingDisabled() {
+        PowerMock.reset(workerConfig);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(false);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Exception e = assertThrows(ConnectRestException.class,
+            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+        assertEquals("Topic tracking is disabled.", e.getMessage());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testResetConnectorActiveTopicsWithTopicTrackingEnabled() {
+        PowerMock.reset(workerConfig);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(false);
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Exception e = assertThrows(ConnectRestException.class,
+            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+        assertEquals("Topic tracking reset is disabled.", e.getMessage());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorActiveTopics() {
+        PowerMock.reset(workerConfig);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        EasyMock.expect(herder.connectorActiveTopics(CONNECTOR_NAME))
+                .andReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        Map<String, Map<String, Object>> body = (Map<String, Map<String, Object>>) response.getEntity();
+        assertEquals(CONNECTOR_NAME, ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).connector());
+        assertEquals(new HashSet<>(CONNECTOR_ACTIVE_TOPICS),
+                ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).topics());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testResetConnectorActiveTopics() {
+        PowerMock.reset(workerConfig);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).andReturn(true);
+        EasyMock.expect(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).andReturn(true);
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        herder.resetConnectorActiveTopics(CONNECTOR_NAME);
+        EasyMock.expectLastCall();
+        PowerMock.replay(workerConfig);
+        connectorsResource = new ConnectorsResource(herder, workerConfig);
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
+        assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
+        PowerMock.verifyAll();
+    }
+
+    private <T> byte[] serializeAsBytes(final T value) throws IOException {
+        return new ObjectMapper().writeValueAsBytes(value);
     }
 
     private  <T> void expectAndCallbackResult(final Capture<Callback<T>> cb, final T value) {

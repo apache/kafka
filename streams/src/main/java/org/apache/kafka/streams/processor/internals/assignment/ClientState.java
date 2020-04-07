@@ -16,12 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class ClientState {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientState.class);
+
     private final Set<TaskId> activeTasks;
     private final Set<TaskId> standbyTasks;
     private final Set<TaskId> assignedTasks;
@@ -29,15 +41,27 @@ public class ClientState {
     private final Set<TaskId> prevStandbyTasks;
     private final Set<TaskId> prevAssignedTasks;
 
-    private int capacity;
+    private final Map<TopicPartition, String> ownedPartitions;
+    private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
+    private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
 
+    private int capacity;
 
     public ClientState() {
         this(0);
     }
 
     ClientState(final int capacity) {
-        this(new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), capacity);
+        this(new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashMap<>(),
+             new HashMap<>(),
+             new HashMap<>(),
+             capacity);
     }
 
     private ClientState(final Set<TaskId> activeTasks,
@@ -46,6 +70,9 @@ public class ClientState {
                         final Set<TaskId> prevActiveTasks,
                         final Set<TaskId> prevStandbyTasks,
                         final Set<TaskId> prevAssignedTasks,
+                        final Map<TopicPartition, String> ownedPartitions,
+                        final Map<TaskId, Long> taskOffsetSums,
+                        final Map<TaskId, Long> taskLagTotals,
                         final int capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
@@ -53,6 +80,9 @@ public class ClientState {
         this.prevActiveTasks = prevActiveTasks;
         this.prevStandbyTasks = prevStandbyTasks;
         this.prevAssignedTasks = prevAssignedTasks;
+        this.ownedPartitions = ownedPartitions;
+        this.taskOffsetSums = taskOffsetSums;
+        this.taskLagTotals = taskLagTotals;
         this.capacity = capacity;
     }
 
@@ -64,17 +94,30 @@ public class ClientState {
             new HashSet<>(prevActiveTasks),
             new HashSet<>(prevStandbyTasks),
             new HashSet<>(prevAssignedTasks),
+            new HashMap<>(ownedPartitions),
+            new HashMap<>(taskOffsetSums),
+            new HashMap<>(taskLagTotals),
             capacity);
     }
 
-    public void assign(final TaskId taskId, final boolean active) {
-        if (active) {
-            activeTasks.add(taskId);
-        } else {
-            standbyTasks.add(taskId);
-        }
+    void assignActive(final TaskId task) {
+        activeTasks.add(task);
+        assignedTasks.add(task);
+    }
 
-        assignedTasks.add(taskId);
+    void assignStandby(final TaskId task) {
+        standbyTasks.add(task);
+        assignedTasks.add(task);
+    }
+
+    public void assignActiveTasks(final Collection<TaskId> tasks) {
+        activeTasks.addAll(tasks);
+        assignedTasks.addAll(tasks);
+    }
+
+    void assignStandbyTasks(final Collection<TaskId> tasks) {
+        standbyTasks.addAll(tasks);
+        assignedTasks.addAll(tasks);
     }
 
     public Set<TaskId> activeTasks() {
@@ -85,12 +128,16 @@ public class ClientState {
         return standbyTasks;
     }
 
-    public Set<TaskId> prevActiveTasks() {
+    Set<TaskId> prevActiveTasks() {
         return prevActiveTasks;
     }
 
-    public Set<TaskId> prevStandbyTasks() {
+    Set<TaskId> prevStandbyTasks() {
         return prevStandbyTasks;
+    }
+
+    public Map<TopicPartition, String> ownedPartitions() {
+        return ownedPartitions;
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -102,35 +149,104 @@ public class ClientState {
         capacity++;
     }
 
-    @SuppressWarnings("WeakerAccess")
     public int activeTaskCount() {
         return activeTasks.size();
     }
 
-    public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
+    int standbyTaskCount() {
+        return standbyTasks.size();
+    }
+
+    void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
     }
 
-    public void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
+    void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
         prevStandbyTasks.addAll(standbyTasks);
         prevAssignedTasks.addAll(standbyTasks);
     }
 
-    @Override
-    public String toString() {
-        return "[activeTasks: (" + activeTasks +
-                ") standbyTasks: (" + standbyTasks +
-                ") assignedTasks: (" + assignedTasks +
-                ") prevActiveTasks: (" + prevActiveTasks +
-                ") prevStandbyTasks: (" + prevStandbyTasks +
-                ") prevAssignedTasks: (" + prevAssignedTasks +
-                ") capacity: " + capacity +
-                "]";
+    public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
+        for (final TopicPartition tp : ownedPartitions) {
+            this.ownedPartitions.put(tp, consumer);
+        }
+    }
+
+    public void addPreviousTasksAndOffsetSums(final Map<TaskId, Long> taskOffsetSums) {
+        this.taskOffsetSums.putAll(taskOffsetSums);
+    }
+
+    public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap) {
+        if (!prevActiveTasks.isEmpty() || !prevStandbyTasks.isEmpty()) {
+            throw new IllegalStateException("Already added previous tasks to this client state.");
+        }
+        initializePrevActiveTasksFromOwnedPartitions(taskForPartitionMap);
+        initializeRemainingPrevTasksFromTaskOffsetSums();
+    }
+
+    /**
+     * Compute the lag for each stateful task, including tasks this client did not previously have.
+     */
+    public void computeTaskLags(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
+        if (!taskLagTotals.isEmpty()) {
+            throw new IllegalStateException("Already computed task lags for this client.");
+        }
+
+        for (final Map.Entry<TaskId, Long> taskEntry : allTaskEndOffsetSums.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            final Long endOffsetSum = taskEntry.getValue();
+            final Long offsetSum = taskOffsetSums.getOrDefault(task, 0L);
+
+            if (endOffsetSum < offsetSum) {
+                LOG.warn("Task " + task + " had endOffsetSum=" + endOffsetSum + " smaller than offsetSum=" +
+                             offsetSum + " on member " + uuid + ". This probably means the task is corrupted," +
+                             " which in turn indicates that it will need to restore from scratch if it gets assigned." +
+                             " The assignor will de-prioritize returning this task to this member in the hopes that" +
+                             " some other member may be able to re-use its state.");
+                taskLagTotals.put(task, endOffsetSum);
+            } else if (offsetSum == Task.LATEST_OFFSET) {
+                taskLagTotals.put(task, Task.LATEST_OFFSET);
+            } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
+                taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);
+            } else {
+                taskLagTotals.put(task, endOffsetSum - offsetSum);
+            }
+        }
+    }
+
+    /**
+     * Returns the total lag across all logged stores in the task. Equal to the end offset sum if this client
+     * did not have any state for this task on disk.
+     *
+     * @return end offset sum - offset sum
+     *          Task.LATEST_OFFSET if this was previously an active running task on this client
+     */
+    long lagFor(final TaskId task) {
+        final Long totalLag = taskLagTotals.get(task);
+
+        if (totalLag == null) {
+            throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
+        } else {
+            return totalLag;
+        }
+    }
+
+    public void removeFromAssignment(final TaskId task) {
+        activeTasks.remove(task);
+        assignedTasks.remove(task);
     }
 
     boolean reachedCapacity() {
         return assignedTasks.size() >= capacity;
+    }
+
+    int capacity() {
+        return capacity;
+    }
+
+    boolean hasUnfulfilledQuota(final int tasksPerThread) {
+        return activeTasks.size() < capacity * tasksPerThread;
     }
 
     boolean hasMoreAvailableCapacityThan(final ClientState other) {
@@ -154,18 +270,66 @@ public class ClientState {
         }
     }
 
-    Set<TaskId> previousStandbyTasks() {
-        final Set<TaskId> standby = new HashSet<>(prevAssignedTasks);
-        standby.removeAll(prevActiveTasks);
-        return standby;
-    }
-
-    Set<TaskId> previousActiveTasks() {
-        return prevActiveTasks;
-    }
-
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
+    }
+
+    private void initializePrevActiveTasksFromOwnedPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap) {
+        // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
+        // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
+        // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
+        // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
+        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions().entrySet()) {
+            final TopicPartition tp = partitionEntry.getKey();
+            final TaskId task = taskForPartitionMap.get(tp);
+            if (task != null) {
+                addPreviousActiveTask(task);
+            } else {
+                LOG.error("No task found for topic partition {}", tp);
+            }
+        }
+    }
+
+    private void initializeRemainingPrevTasksFromTaskOffsetSums() {
+        if (prevActiveTasks.isEmpty() && !ownedPartitions.isEmpty()) {
+            LOG.error("Tried to process tasks in offset sum map before processing tasks from ownedPartitions = {}", ownedPartitions);
+            throw new IllegalStateException("Must initialize prevActiveTasks from ownedPartitions before initializing remaining tasks.");
+        }
+        for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            if (!prevActiveTasks.contains(task)) {
+                final long offsetSum = taskEntry.getValue();
+                if (offsetSum == Task.LATEST_OFFSET) {
+                    addPreviousActiveTask(task);
+                } else {
+                    addPreviousStandbyTask(task);
+                }
+            }
+        }
+    }
+
+    private void addPreviousActiveTask(final TaskId task) {
+        prevActiveTasks.add(task);
+        prevAssignedTasks.add(task);
+    }
+
+    private void addPreviousStandbyTask(final TaskId task) {
+        prevStandbyTasks.add(task);
+        prevAssignedTasks.add(task);
+    }
+
+    @Override
+    public String toString() {
+        return "[activeTasks: (" + activeTasks +
+            ") standbyTasks: (" + standbyTasks +
+            ") assignedTasks: (" + assignedTasks +
+            ") prevActiveTasks: (" + prevActiveTasks +
+            ") prevStandbyTasks: (" + prevStandbyTasks +
+            ") prevAssignedTasks: (" + prevAssignedTasks +
+            ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
+            ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
+            ") capacity: " + capacity +
+            "]";
     }
 
     // Visible for testing
@@ -177,11 +341,4 @@ public class ClientState {
         return prevAssignedTasks;
     }
 
-    int capacity() {
-        return capacity;
-    }
-
-    boolean hasUnfulfilledQuota(final int tasksPerThread) {
-        return activeTasks.size() < capacity * tasksPerThread;
-    }
 }

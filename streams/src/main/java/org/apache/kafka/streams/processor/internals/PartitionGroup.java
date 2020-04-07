@@ -41,8 +41,8 @@ import java.util.Set;
  *
  * PartitionGroup also maintains a stream-time for the group as a whole.
  * This is defined as the highest timestamp of any record yet polled from the PartitionGroup.
- * The PartitionGroup's stream-time is also the stream-time of its task and is used as the
- * stream-time for any computations that require it.
+ * Note however that any computation that depends on stream-time should track it on a per-operator basis to obtain an
+ * accurate view of the local time as seen by that processor.
  *
  * The PartitionGroups's stream-time is initially UNKNOWN (-1), and it set to a known value upon first poll.
  * As a consequence of the definition, the PartitionGroup's stream-time is non-decreasing
@@ -59,14 +59,14 @@ public class PartitionGroup {
     private boolean allBuffered;
 
 
-    public static class RecordInfo {
+    static class RecordInfo {
         RecordQueue queue;
 
-        public ProcessorNode node() {
+        ProcessorNode<?, ?> node() {
             return queue.source();
         }
 
-        public TopicPartition partition() {
+        TopicPartition partition() {
             return queue.partition();
         }
 
@@ -76,12 +76,32 @@ public class PartitionGroup {
     }
 
     PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues, final Sensor recordLatenessSensor) {
-        nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
+        nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
         this.recordLatenessSensor = recordLatenessSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
+    }
+
+    // visible for testing
+    long partitionTimestamp(final TopicPartition partition) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+        return queue.partitionTime();
+    }
+
+    void setPartitionTime(final TopicPartition partition, final long partitionTime) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+        if (streamTime < partitionTime) {
+            streamTime = partitionTime;
+        }
+        queue.setPartitionTime(partitionTime);
     }
 
     /**
@@ -109,7 +129,7 @@ public class PartitionGroup {
                     nonEmptyQueuesByTime.offer(queue);
                 }
 
-                // always update the stream time to the record's timestamp yet to be processed if it is larger
+                // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
                     streamTime = record.timestamp;
                     recordLatenessSensor.record(0);
@@ -132,6 +152,10 @@ public class PartitionGroup {
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
@@ -140,8 +164,8 @@ public class PartitionGroup {
             nonEmptyQueuesByTime.offer(recordQueue);
 
             // if all partitions now are non-empty, set the flag
-            // we do not need to update the stream time here since this task will definitely be
-            // processed next, and hence the stream time will be updated when we retrieved records by then
+            // we do not need to update the stream-time here since this task will definitely be
+            // processed next, and hence the stream-time will be updated when we retrieved records by then
             if (nonEmptyQueuesByTime.size() == this.partitionQueues.size()) {
                 allBuffered = true;
             }
@@ -152,16 +176,25 @@ public class PartitionGroup {
         return newSize;
     }
 
-    public Set<TopicPartition> partitions() {
+    Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
     /**
-     * Return the timestamp of this partition group as the smallest
-     * partition timestamp among all its partitions
+     * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
      */
-    public long timestamp() {
+    long streamTime() {
         return streamTime;
+    }
+
+    Long headRecordOffset(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordOffset();
     }
 
     /**
@@ -171,7 +204,7 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null) {
-            throw new IllegalStateException(String.format("Record's partition %s does not belong to this partition-group.", partition));
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
 
         return recordQueue.size();
@@ -185,15 +218,16 @@ public class PartitionGroup {
         return allBuffered;
     }
 
-    public void close() {
+    void close() {
         clear();
-        partitionQueues.clear();
     }
 
-    public void clear() {
-        nonEmptyQueuesByTime.clear();
+    void clear() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
+        nonEmptyQueuesByTime.clear();
+        totalBuffered = 0;
+        streamTime = RecordQueue.UNKNOWN;
     }
 }

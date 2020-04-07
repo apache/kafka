@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -46,7 +45,7 @@ public class FrequenciesTest {
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
-        metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
     }
 
     @After
@@ -102,7 +101,6 @@ public class FrequenciesTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testUseWithMetrics() {
         MetricName name1 = name("1");
         MetricName name2 = name("2");

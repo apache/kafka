@@ -44,7 +44,7 @@ class ConnectRestApiTest(KafkaTest):
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
-    TOPIC = "${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
+    TOPIC = "topic-${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
     TOPIC_TEST = "test"
 
     DEFAULT_BATCH_SIZE = "2000"
@@ -91,7 +91,10 @@ class ConnectRestApiTest(KafkaTest):
 
         assert self.cc.list_connectors() == []
 
-        assert set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]) == {self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR}
+        # After MM2 and the connector classes that it added, the assertion here checks that the registered
+        # Connect plugins are a superset of the connectors expected to be present.
+        assert set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]).issuperset(
+            {self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR})
 
         source_connector_props = self.render("connect-file-source.properties")
         sink_connector_props = self.render("connect-file-sink.properties")

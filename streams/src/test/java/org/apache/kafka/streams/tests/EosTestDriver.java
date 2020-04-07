@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -28,11 +27,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -70,11 +69,11 @@ public class EosTestDriver extends SmokeTestUtil {
 
     static void generate(final String kafka) {
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-eos-test-driver-shutdown-hook", () -> {
             System.out.println("Terminating");
             System.out.flush();
             isRunning = false;
-        }));
+        });
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "EosTest");
@@ -146,7 +145,7 @@ public class EosTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
 
         final Map<TopicPartition, Long> committedOffsets;
-        try (final AdminClient adminClient = KafkaAdminClient.create(props)) {
+        try (final Admin adminClient = Admin.create(props)) {
             ensureStreamsApplicationDown(adminClient);
 
             committedOffsets = getCommittedOffsets(adminClient, withRepartitioning);
@@ -218,7 +217,7 @@ public class EosTestDriver extends SmokeTestUtil {
         System.out.flush();
     }
 
-    private static void ensureStreamsApplicationDown(final AdminClient adminClient) {
+    private static void ensureStreamsApplicationDown(final Admin adminClient) {
 
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         ConsumerGroupDescription description;
@@ -236,7 +235,7 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
 
-    private static Map<TopicPartition, Long> getCommittedOffsets(final AdminClient adminClient,
+    private static Map<TopicPartition, Long> getCommittedOffsets(final Admin adminClient,
                                                                  final boolean withRepartitioning) {
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataMap;
 
@@ -617,7 +616,7 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
 
-    private static ConsumerGroupDescription getConsumerGroupDescription(final AdminClient adminClient) {
+    private static ConsumerGroupDescription getConsumerGroupDescription(final Admin adminClient) {
         final ConsumerGroupDescription description;
         try {
             description = adminClient.describeConsumerGroups(Collections.singleton(EosTestClient.APP_ID))

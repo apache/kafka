@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -62,6 +63,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.easymock.EasyMock.strictMock;
@@ -115,10 +117,10 @@ public class AbstractHerderTest {
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
-    private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+    private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
-    private static final ClusterConfigState SNAPSHOT_NO_TASKS = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+    private static final ClusterConfigState SNAPSHOT_NO_TASKS = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
             Collections.emptyMap(), Collections.<String>emptySet());
 
@@ -474,6 +476,32 @@ public class AbstractHerderTest {
         assertFalse(reverseTransformed.get(0).containsKey(TEST_KEY3));
     }
 
+    @Test
+    public void testConfigProviderRegex() {
+        testConfigProviderRegex("\"${::}\"");
+        testConfigProviderRegex("${::}");
+        testConfigProviderRegex("\"${:/a:somevar}\"");
+        testConfigProviderRegex("\"${file::somevar}\"");
+        testConfigProviderRegex("${file:/a/b/c:}");
+        testConfigProviderRegex("${file:/tmp/somefile.txt:somevar}");
+        testConfigProviderRegex("\"${file:/tmp/somefile.txt:somevar}\"");
+        testConfigProviderRegex("plain.PlainLoginModule required username=\"${file:/tmp/somefile.txt:somevar}\"");
+        testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar}");
+        testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} not null");
+        testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} password=${file:/tmp/somefile.txt:othervar}");
+        testConfigProviderRegex("plain.PlainLoginModule required username", false);
+    }
+
+    private void testConfigProviderRegex(String rawConnConfig) {
+        testConfigProviderRegex(rawConnConfig, true);
+    }
+    
+    private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
+        Set<String> keys = keysWithVariableValues(Collections.singletonMap("key", rawConnConfig), ConfigTransformer.DEFAULT_PATTERN);
+        boolean actual = keys != null && !keys.isEmpty() && keys.contains("key");
+        assertEquals(String.format("%s should have matched regex", rawConnConfig), expected, actual);
+    }
+
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
                                                         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
 
@@ -496,8 +524,8 @@ public class AbstractHerderTest {
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
         final Connector connector;
         try {
-            connector = connectorClass.newInstance();
-        } catch (InstantiationException | IllegalAccessException e) {
+            connector = connectorClass.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Couldn't create connector", e);
         }
         EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector);

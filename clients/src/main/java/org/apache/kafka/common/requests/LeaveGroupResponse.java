@@ -17,32 +17,71 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+/**
+ * Possible error codes.
+ *
+ * Top level errors:
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *
+ * Member level errors:
+ * - {@link Errors#FENCED_INSTANCE_ID}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ *
+ * If the top level error code is set, normally this indicates that broker early stops the request
+ * handling due to some severe global error, so it is expected to see the member level errors to be empty.
+ * For older version response, we may populate member level error towards top level because older client
+ * couldn't parse member level.
+ */
 public class LeaveGroupResponse extends AbstractResponse {
 
-    private final LeaveGroupResponseData data;
+    public final LeaveGroupResponseData data;
 
     public LeaveGroupResponse(LeaveGroupResponseData data) {
         this.data = data;
+    }
+
+    public LeaveGroupResponse(List<MemberResponse> memberResponses,
+                              Errors topLevelError,
+                              final int throttleTimeMs,
+                              final short version) {
+        if (version <= 2) {
+            // Populate member level error.
+            final short errorCode = getError(topLevelError, memberResponses).code();
+
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(errorCode);
+        } else {
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(topLevelError.code())
+                            .setMembers(memberResponses);
+        }
+
+        if (version >= 1) {
+            this.data.setThrottleTimeMs(throttleTimeMs);
+        }
     }
 
     public LeaveGroupResponse(Struct struct) {
         short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
         this.data = new LeaveGroupResponseData(struct, latestVersion);
     }
+
     public LeaveGroupResponse(Struct struct, short version) {
         this.data = new LeaveGroupResponseData(struct, version);
-    }
-
-    public LeaveGroupResponseData data() {
-        return data;
     }
 
     @Override
@@ -50,13 +89,49 @@ public class LeaveGroupResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    public List<MemberResponse> memberResponses() {
+        return data.members();
+    }
+
     public Errors error() {
+        return getError(Errors.forCode(data.errorCode()), data.members());
+    }
+
+    public Errors topLevelError() {
         return Errors.forCode(data.errorCode());
+    }
+
+    private static Errors getError(Errors topLevelError, List<MemberResponse> memberResponses) {
+        if (topLevelError != Errors.NONE) {
+            return topLevelError;
+        } else {
+            for (MemberResponse memberResponse : memberResponses) {
+                Errors memberError = Errors.forCode(memberResponse.errorCode());
+                if (memberError != Errors.NONE) {
+                    return memberError;
+                }
+            }
+            return Errors.NONE;
+        }
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
+        // Top level error.
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            updateErrorCounts(combinedErrorCounts, topLevelError);
+        }
+
+        // Member level error.
+        for (MemberResponse memberResponse : data.members()) {
+            Errors memberError = Errors.forCode(memberResponse.errorCode());
+            if (memberError != Errors.NONE) {
+                updateErrorCounts(combinedErrorCounts, memberError);
+            }
+        }
+        return combinedErrorCounts;
     }
 
     @Override
@@ -71,5 +146,16 @@ public class LeaveGroupResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof LeaveGroupResponse &&
+                   ((LeaveGroupResponse) other).data.equals(this.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(data);
     }
 }

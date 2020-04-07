@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,19 +33,18 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -53,6 +54,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -75,7 +77,8 @@ public final class Utils {
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
     // Prints up to 2 decimal digits. Used for human readable printing
-    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##");
+    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
+        DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
@@ -282,20 +285,6 @@ public final class Utils {
      */
     public static byte[] copyArray(byte[] src) {
         return Arrays.copyOf(src, src.length);
-    }
-
-    /**
-     * Check that the parameter t is not null
-     *
-     * @param t The object to check
-     * @return t if it isn't null
-     * @throws NullPointerException if t is null.
-     */
-    public static <T> T notNull(T t) {
-        if (t == null)
-            throw new NullPointerException();
-        else
-            return t;
     }
 
     /**
@@ -566,8 +555,19 @@ public final class Utils {
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
+     * @return the loaded properties
      */
     public static Properties loadProps(String filename) throws IOException {
+        return loadProps(filename, null);
+    }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     * @param onlyIncludeKeys When non-null, only return values associated with these keys and ignore all others
+     * @return the loaded properties
+     */
+    public static Properties loadProps(String filename, List<String> onlyIncludeKeys) throws IOException {
         Properties props = new Properties();
 
         if (filename != null) {
@@ -578,7 +578,15 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
-        return props;
+        if (onlyIncludeKeys == null || onlyIncludeKeys.isEmpty())
+            return props;
+        Properties requestedProps = new Properties();
+        onlyIncludeKeys.forEach(key -> {
+            String value = props.getProperty(key);
+            if (value != null)
+                requestedProps.setProperty(key, value);
+        });
+        return requestedProps;
     }
 
     /**
@@ -612,7 +620,7 @@ public final class Utils {
         } else {
             buffer.mark();
             buffer.position(offset);
-            buffer.get(dest, 0, length);
+            buffer.get(dest);
             buffer.reset();
         }
         return dest;
@@ -626,21 +634,16 @@ public final class Utils {
     }
 
     /**
-     * Attempt to read a file as a string
-     * @throws IOException
+     * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
+     * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
-    public static String readFileAsString(String path, Charset charset) throws IOException {
-        if (charset == null) charset = Charset.defaultCharset();
-
-        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
-            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-            return charset.decode(bb).toString();
-        }
-
-    }
-
     public static String readFileAsString(String path) throws IOException {
-        return Utils.readFileAsString(path, Charset.defaultCharset());
+        try {
+            byte[] allBytes = Files.readAllBytes(Paths.get(path));
+            return new String(allBytes, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IOException("Unable to read file " + path, ex);
+        }
     }
 
     /**
@@ -659,7 +662,7 @@ public final class Utils {
         return existingBuffer;
     }
 
-    /*
+    /**
      * Creates a set
      * @param elems the elements
      * @param <T> the type of element
@@ -668,6 +671,20 @@ public final class Utils {
     @SafeVarargs
     public static <T> Set<T> mkSet(T... elems) {
         Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
+        for (T elem : elems)
+            result.add(elem);
+        return result;
+    }
+
+    /**
+     * Creates a sorted set
+     * @param elems the elements
+     * @param <T> the type of element, must be comparable
+     * @return SortedSet
+     */
+    @SafeVarargs
+    public static <T extends Comparable<T>> SortedSet<T> mkSortedSet(T... elems) {
+        SortedSet<T> result = new TreeSet<>();
         for (T elem : elems)
             result.add(elem);
         return result;
@@ -735,29 +752,56 @@ public final class Utils {
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
-     * @param file The root file at which to begin deleting
+     * @param rootFile The root file at which to begin deleting
      */
-    public static void delete(final File file) throws IOException {
-        if (file == null)
+    public static void delete(final File rootFile) throws IOException {
+        delete(rootFile, Collections.emptyList());
+    }
+
+    /**
+     * Recursively delete the subfiles (if any exist) of the passed in root file that are not included
+     * in the list to keep
+     *
+     * @param rootFile The root file at which to begin deleting
+     * @param filesToKeep The subfiles to keep (note that if a subfile is to be kept, so are all its parent
+     *                    files in its pat)h; if empty we would also delete the root file
+     */
+    public static void delete(final File rootFile, final List<File> filesToKeep) throws IOException {
+        if (rootFile == null)
             return;
-        Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
+                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
                     return FileVisitResult.TERMINATE;
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                if (!filesToKeep.contains(path.toFile())) {
+                    Files.delete(path);
+                }
                 return FileVisitResult.CONTINUE;
             }
 
             @Override
             public FileVisitResult postVisitDirectory(Path path, IOException exc) throws IOException {
-                Files.delete(path);
+                // KAFKA-8999: if there's an exception thrown previously already, we should throw it
+                if (exc != null) {
+                    throw exc;
+                }
+
+                if (rootFile.toPath().equals(path)) {
+                    // only delete the parent directory if there's nothing to keep
+                    if (filesToKeep.isEmpty()) {
+                        Files.delete(path);
+                    }
+                } else if (!filesToKeep.contains(path.toFile())) {
+                    Files.delete(path);
+                }
+
                 return FileVisitResult.CONTINUE;
             }
         });

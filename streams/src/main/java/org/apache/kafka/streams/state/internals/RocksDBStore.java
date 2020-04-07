@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -27,9 +28,11 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -46,6 +49,7 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Statistics;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -63,6 +67,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -97,6 +103,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     private RocksDBConfigSetter configSetter;
 
+    private final RocksDBMetricsRecorder metricsRecorder;
+    private boolean isStatisticsRegistered = false;
+
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
     // visible for testing
@@ -104,16 +113,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     protected volatile boolean open = false;
 
-    RocksDBStore(final String name) {
-        this(name, DB_FILE_DIR);
+    RocksDBStore(final String name,
+                 final String metricsScope) {
+        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name));
     }
 
     RocksDBStore(final String name,
-                 final String parentDir) {
+                 final String parentDir,
+                 final RocksDBMetricsRecorder metricsRecorder) {
         this.name = name;
         this.parentDir = parentDir;
+        this.metricsRecorder = metricsRecorder;
     }
-
 
     @SuppressWarnings("unchecked")
     void openDB(final ProcessorContext context) {
@@ -177,8 +188,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
+        // Setup metrics before the database is opened, otherwise the metrics are not updated
+        // with the measurements from Rocks DB
+        maybeSetUpMetricsRecorder(context, configs);
+
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
+    }
+
+    private void maybeSetUpMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
+        if (userSpecifiedOptions.statistics() == null &&
+            RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+
+            isStatisticsRegistered = true;
+            // metrics recorder will clean up statistics object
+            final Statistics statistics = new Statistics();
+            userSpecifiedOptions.setStatistics(statistics);
+            metricsRecorder.addStatistics(name, statistics);
+        }
     }
 
     void openRocksDB(final DBOptions dbOptions,
@@ -195,10 +222,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
     }
 
+    @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
         internalProcessorContext = context;
+        metricsRecorder.init((StreamsMetricsImpl) context.metrics(), context.taskId());
         openDB(context);
         batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
@@ -402,11 +431,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter = null;
         }
 
+        maybeRemoveStatisticsFromMetricsRecorder();
+
+        // Important: do not rearrange the order in which the below objects are closed!
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
         dbAccessor.close();
+        db.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
-        db.close();
         filter.close();
         cache.close();
 
@@ -417,6 +450,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         db = null;
         filter = null;
         cache = null;
+    }
+
+    private void maybeRemoveStatisticsFromMetricsRecorder() {
+        if (isStatisticsRegistered) {
+            metricsRecorder.removeStatistics(name);
+            isStatisticsRegistered = false;
+        }
     }
 
     private void closeOpenIterators() {
@@ -431,8 +471,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             }
         }
     }
-
-
 
     interface RocksDBAccessor {
 

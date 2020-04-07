@@ -27,7 +27,7 @@ import kafka.utils.json.JsonValue
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 object JsonTest {
@@ -37,7 +37,7 @@ object JsonTest {
 class JsonTest {
 
   @Test
-  def testJsonParse() {
+  def testJsonParse(): Unit = {
     val jnf = JsonNodeFactory.instance
 
     assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
@@ -66,7 +66,7 @@ class JsonTest {
   }
 
   @Test
-  def testLegacyEncodeAsString() {
+  def testLegacyEncodeAsString(): Unit = {
     assertEquals("null", Json.legacyEncodeAsString(null))
     assertEquals("1", Json.legacyEncodeAsString(1))
     assertEquals("1", Json.legacyEncodeAsString(1L))
@@ -88,7 +88,7 @@ class JsonTest {
   }
 
   @Test
-  def testEncodeAsString() {
+  def testEncodeAsString(): Unit = {
     assertEquals("null", Json.encodeAsString(null))
     assertEquals("1", Json.encodeAsString(1))
     assertEquals("1", Json.encodeAsString(1L))
@@ -111,7 +111,7 @@ class JsonTest {
   }
 
   @Test
-  def testEncodeAsBytes() {
+  def testEncodeAsBytes(): Unit = {
     assertEquals("null", new String(Json.encodeAsBytes(null), StandardCharsets.UTF_8))
     assertEquals("1", new String(Json.encodeAsBytes(1), StandardCharsets.UTF_8))
     assertEquals("1", new String(Json.encodeAsBytes(1L), StandardCharsets.UTF_8))
@@ -140,15 +140,12 @@ class JsonTest {
 
     val result = Json.parseStringAs[TestObject](s"""{"foo": "$foo", "bar": $bar}""")
 
-    assertTrue(result.isRight)
-    assertEquals(TestObject(foo, bar), result.right.get)
+    assertEquals(Right(TestObject(foo, bar)), result)
   }
 
   @Test
   def testParseToWithInvalidJson() = {
     val result = Json.parseStringAs[TestObject]("{invalid json}")
-
-    assertTrue(result.isLeft)
-    assertEquals(classOf[JsonParseException], result.left.get.getClass)
+    assertEquals(Left(classOf[JsonParseException]), result.left.map(_.getClass))
   }
 }

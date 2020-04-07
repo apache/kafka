@@ -25,7 +25,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -40,7 +40,6 @@ import static org.junit.Assert.assertEquals;
 public class KStreamForeachTest {
 
     private final String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -71,8 +70,9 @@ public class KStreamForeachTest {
 
         // Then
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
             for (final KeyValue<Integer, String> record : inputRecords) {
-                driver.pipeInput(recordFactory.create(topicName, record.key, record.value));
+                inputTopic.pipeInput(record.key, record.value);
             }
         }
 

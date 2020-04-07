@@ -21,6 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -30,88 +34,217 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static java.util.Collections.unmodifiableList;
+import static java.lang.String.format;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
+/**
+ * ProcessorStateManager is the source of truth for the current offset for each state store,
+ * which is either the read offset during restoring, or the written offset during normal processing.
+ *
+ * The offset is initialized as null when the state store is registered, and then it can be updated by
+ * loading checkpoint file, restore state stores, or passing from the record collector's written offsets.
+ *
+ * When checkpointing, if the offset is not null it would be written to the file.
+ *
+ * The manager is also responsible for restoring state stores via their registered restore callback,
+ * which is used for both updating standby tasks as well as restoring active tasks.
+ */
+public class ProcessorStateManager implements StateManager {
 
-public class ProcessorStateManager extends AbstractStateManager {
+    public static class StateStoreMetadata {
+        private final StateStore stateStore;
+
+        // corresponding changelog partition of the store, this and the following two fields
+        // will only be not-null if the state store is logged (i.e. changelog partition and restorer provided)
+        private final TopicPartition changelogPartition;
+
+        // could be used for both active restoration and standby
+        private final StateRestoreCallback restoreCallback;
+
+        // record converters used for restoration and standby
+        private final RecordConverter recordConverter;
+
+        // indicating the current snapshot of the store as the offset of last changelog record that has been
+        // applied to the store used for both restoration (active and standby tasks restored offset) and
+        // normal processing that update stores (written offset); could be null (when initialized)
+        //
+        // the offset is updated in three ways:
+        //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
+        //      directory lock and have registered all the state store; it is only one-time
+        //   2. when updating with restore records (by both restoring active and standby),
+        //      update to the last restore record's offset
+        //   3. when checkpointing with the given written offsets from record collector,
+        //      update blindly with the given offset
+        private Long offset;
+
+        // corrupted state store should not be included in checkpointing
+        private boolean corrupted;
+
+        private StateStoreMetadata(final StateStore stateStore) {
+            this.stateStore = stateStore;
+            this.restoreCallback = null;
+            this.recordConverter = null;
+            this.changelogPartition = null;
+            this.corrupted = false;
+            this.offset = null;
+        }
+
+        private StateStoreMetadata(final StateStore stateStore,
+                                   final TopicPartition changelogPartition,
+                                   final StateRestoreCallback restoreCallback,
+                                   final RecordConverter recordConverter) {
+            if (restoreCallback == null) {
+                throw new IllegalStateException("Log enabled store should always provide a restore callback upon registration");
+            }
+
+            this.stateStore = stateStore;
+            this.changelogPartition = changelogPartition;
+            this.restoreCallback = restoreCallback;
+            this.recordConverter = recordConverter;
+            this.offset = null;
+        }
+
+        private void setOffset(final Long offset) {
+            this.offset = offset;
+        }
+
+        // the offset is exposed to the changelog reader to determine if restoration is completed
+        Long offset() {
+            return this.offset;
+        }
+
+        TopicPartition changelogPartition() {
+            return this.changelogPartition;
+        }
+
+        StateStore store() {
+            return this.stateStore;
+        }
+
+        @Override
+        public String toString() {
+            return "StateStoreMetadata (" + stateStore.name() + " : " + changelogPartition + " @ " + offset;
+        }
+    }
+
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
     private final Logger log;
     private final TaskId taskId;
     private final String logPrefix;
-    private final boolean isStandby;
-    private final ChangelogReader changelogReader;
-    private final Map<TopicPartition, Long> offsetLimits;
-    private final Map<TopicPartition, Long> standbyRestoredOffsets;
-    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
-    private final Map<String, RecordConverter> recordConverters; // used for standby tasks, keyed by state topic name
+    private final TaskType taskType;
+    private final boolean eosEnabled;
+    private final ChangelogRegister changelogReader;
     private final Map<String, String> storeToChangelogTopic;
+    private final Collection<TopicPartition> sourcePartitions;
 
     // must be maintained in topological order
-    private final FixedOrderMap<String, Optional<StateStore>> registeredStores = new FixedOrderMap<>();
+    private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
+    private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
-    private final List<TopicPartition> changelogPartitions = new ArrayList<>();
+    private final File baseDir;
+    private final OffsetCheckpoint checkpointFile;
 
-    // TODO: this map does not work with customized grouper where multiple partitions
-    // of the same topic can be assigned to the same topic.
-    private final Map<String, TopicPartition> partitionForTopic;
+    public static String storeChangelogTopic(final String applicationId, final String storeName) {
+        return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    }
 
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
-     * @throws IOException if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(final TaskId taskId,
-                                 final Collection<TopicPartition> sources,
-                                 final boolean isStandby,
-                                 final StateDirectory stateDirectory,
-                                 final Map<String, String> storeToChangelogTopic,
-                                 final ChangelogReader changelogReader,
+                                 final TaskType taskType,
                                  final boolean eosEnabled,
-                                 final LogContext logContext) throws IOException {
-        super(stateDirectory.directoryForTask(taskId), eosEnabled);
+                                 final LogContext logContext,
+                                 final StateDirectory stateDirectory,
+                                 final ChangelogRegister changelogReader,
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
 
         this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
+        this.taskType = taskType;
+        this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
-        logPrefix = String.format("task [%s] ", taskId);
+        this.sourcePartitions = sourcePartitions;
+        this.storeToChangelogTopic = storeToChangelogTopic;
 
-        partitionForTopic = new HashMap<>();
-        for (final TopicPartition source : sources) {
-            partitionForTopic.put(source.topic(), source);
-        }
-        offsetLimits = new HashMap<>();
-        standbyRestoredOffsets = new HashMap<>();
-        this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<>() : null;
-        recordConverters = isStandby ? new HashMap<>() : null;
-        this.storeToChangelogTopic = new HashMap<>(storeToChangelogTopic);
+        this.baseDir = stateDirectory.directoryForTask(taskId);
+        this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
-        // load the checkpoint information
-        checkpointableOffsets.putAll(checkpoint.read());
-
-        log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
-
-        if (eosEnabled) {
-            // delete the checkpoint file after finish loading its stored offsets
-            checkpoint.delete();
-            checkpoint = null;
-        }
-
-        log.debug("Created state store manager for task {} with the acquired state dir lock", taskId);
+        log.debug("Created state store manager for task {}", taskId);
     }
 
+    void registerGlobalStateStores(final List<StateStore> stateStores) {
+        log.debug("Register global stores {}", stateStores);
+        for (final StateStore stateStore : stateStores) {
+            globalStores.put(stateStore.name(), stateStore);
+        }
+    }
 
-    public static String storeChangelogTopic(final String applicationId,
-                                             final String storeName) {
-        return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    @Override
+    public StateStore getGlobalStore(final String name) {
+        return globalStores.get(name);
+    }
+
+    // package-private for test only
+    void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
+        try {
+            final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
+
+            log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
+
+            for (final StateStoreMetadata store : stores.values()) {
+                if (store.changelogPartition == null) {
+                    log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
+                } else {
+                    if (loadedCheckpoints.containsKey(store.changelogPartition)) {
+                        store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
+
+                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                            store.stateStore.name(), store.offset, store.changelogPartition);
+                    } else {
+                        // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
+                        // and hence we are uncertain the the current local state only contains committed data;
+                        // in that case we need to treat it as a task-corrupted exception
+                        if (eosEnabled && !storeDirIsEmpty) {
+                            log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
+                                "since under EOS it has the risk of getting uncommitted data in stores we have to " +
+                                "treat it as a task corruption error and wipe out the local state of task {} " +
+                                "before re-bootstrapping", store.stateStore.name(), taskId);
+
+                            throw new TaskCorruptedException(Collections.singletonMap(taskId, changelogPartitions()));
+                        } else {
+                            log.info("State store {} did not find checkpoint offset, hence would " +
+                                "default to the starting offset at changelog {}",
+                                store.stateStore.name(), store.changelogPartition);
+                        }
+                    }
+                }
+            }
+
+            if (!loadedCheckpoints.isEmpty()) {
+                log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
+            }
+
+            checkpointFile.delete();
+        } catch (final TaskCorruptedException e) {
+            throw e;
+        } catch (final IOException | RuntimeException e) {
+            // both IOException or runtime exception like number parsing can throw
+            throw new ProcessorStateException(format("%sError loading and deleting checkpoint file when creating the state manager",
+                logPrefix), e);
+        }
     }
 
     @Override
@@ -120,140 +253,163 @@ public class ProcessorStateManager extends AbstractStateManager {
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         final String storeName = store.name();
-        log.debug("Registering state store {} to its state manager", storeName);
 
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
-            throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
+            throw new IllegalArgumentException(format("%sIllegal store name: %s, which collides with the pre-defined " +
+                "checkpoint file name", logPrefix, storeName));
         }
 
-        if (registeredStores.containsKey(storeName) && registeredStores.get(storeName).isPresent()) {
-            throw new IllegalArgumentException(String.format("%sStore %s has already been registered.", logPrefix, storeName));
+        if (stores.containsKey(storeName)) {
+            throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
-        // check that the underlying change log topic exist or not
         final String topic = storeToChangelogTopic.get(storeName);
-        if (topic == null) {
-            registeredStores.put(storeName, Optional.of(store));
+
+        // if the store name does not exist in the changelog map, it means the underlying store
+        // is not log enabled (including global stores), and hence it does not need to be restored
+        if (topic != null) {
+            // NOTE we assume the partition of the topic can always be inferred from the task id;
+            // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
+            // it is not a regression (it would always break anyways)
+            final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
+            final StateStoreMetadata storeMetadata = new StateStoreMetadata(
+                store,
+                storePartition,
+                stateRestoreCallback,
+                converterForStore(store));
+            stores.put(storeName, storeMetadata);
+
+            changelogReader.register(storePartition, this);
         } else {
-
-            final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
-
-            final RecordConverter recordConverter = converterForStore(store);
-
-            if (isStandby) {
-                log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
-
-                restoreCallbacks.put(topic, stateRestoreCallback);
-                recordConverters.put(topic, recordConverter);
-            } else {
-                log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
-
-                final StateRestorer restorer = new StateRestorer(
-                    storePartition,
-                    new CompositeRestoreListener(stateRestoreCallback),
-                    checkpointableOffsets.get(storePartition),
-                    offsetLimit(storePartition),
-                    store.persistent(),
-                    storeName,
-                    recordConverter
-                );
-
-                changelogReader.register(restorer);
-            }
-            changelogPartitions.add(storePartition);
-
-            registeredStores.put(storeName, Optional.of(store));
-        }
-    }
-
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
-        reinitializeStateStoresForPartitions(
-            log,
-            registeredStores,
-            storeToChangelogTopic,
-            partitions,
-            processorContext);
-    }
-
-    @Override
-    public Map<TopicPartition, Long> checkpointed() {
-        final Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
-
-        for (final Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
-            final String topicName = entry.getKey();
-            final int partition = getPartition(topicName);
-            final TopicPartition storePartition = new TopicPartition(topicName, partition);
-
-            partitionsAndOffsets.put(storePartition, checkpointableOffsets.getOrDefault(storePartition, -1L));
-        }
-        return partitionsAndOffsets;
-    }
-
-    void updateStandbyStates(final TopicPartition storePartition,
-                             final List<ConsumerRecord<byte[], byte[]>> restoreRecords,
-                             final long lastOffset) {
-        // restore states from changelog records
-        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreCallbacks.get(storePartition.topic()));
-
-        if (!restoreRecords.isEmpty()) {
-            final RecordConverter converter = recordConverters.get(storePartition.topic());
-            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(restoreRecords.size());
-            for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
-                convertedRecords.add(converter.convert(record));
-            }
-
-            try {
-                restoreCallback.restoreBatch(convertedRecords);
-            } catch (final Exception e) {
-                throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
-            }
+            stores.put(storeName, new StateStoreMetadata(store));
         }
 
-        // record the restored offset for its change log partition
-        standbyRestoredOffsets.put(storePartition, lastOffset + 1);
-    }
-
-    void putOffsetLimit(final TopicPartition partition,
-                        final long limit) {
-        log.trace("Updating store offset limit for partition {} to {}", partition, limit);
-        offsetLimits.put(partition, limit);
-    }
-
-    long offsetLimit(final TopicPartition partition) {
-        final Long limit = offsetLimits.get(partition);
-        return limit != null ? limit : Long.MAX_VALUE;
+        log.debug("Registered state store {} to its state manager", storeName);
     }
 
     @Override
     public StateStore getStore(final String name) {
-        return registeredStores.getOrDefault(name, Optional.empty()).orElse(null);
+        if (stores.containsKey(name)) {
+            return stores.get(name).stateStore;
+        } else {
+            return null;
+        }
+    }
+
+    Collection<TopicPartition> changelogPartitions() {
+        return changelogOffsets().keySet();
+    }
+
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (partitions.contains(storeMetadata.changelogPartition)) {
+                storeMetadata.corrupted = true;
+                partitions.remove(storeMetadata.changelogPartition);
+            }
+        }
+
+        if (!partitions.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
+                taskId + " marking as corrupted, this is not expected");
+        }
     }
 
     @Override
+    public Map<TopicPartition, Long> changelogOffsets() {
+        // return the current offsets for those logged stores
+        final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (storeMetadata.changelogPartition != null) {
+                // for changelog whose offset is unknown, use 0L indicating earliest offset
+                // otherwise return the current offset + 1 as the next offset to fetch
+                changelogOffsets.put(
+                    storeMetadata.changelogPartition,
+                    storeMetadata.offset == null ? 0L : storeMetadata.offset + 1L);
+            }
+        }
+        return changelogOffsets;
+    }
+
+    TaskId taskId() {
+        return taskId;
+    }
+
+    // used by the changelog reader only
+    boolean changelogAsSource(final TopicPartition partition) {
+        return sourcePartitions.contains(partition);
+    }
+
+    // used by the changelog reader only
+    TaskType taskType() {
+        return taskType;
+    }
+
+    // used by the changelog reader only
+    StateStoreMetadata storeMetadata(final TopicPartition partition) {
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (partition.equals(storeMetadata.changelogPartition)) {
+                return storeMetadata;
+            }
+        }
+        return null;
+    }
+
+    // used by the changelog reader only
+    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+        if (!stores.values().contains(storeMetadata)) {
+            throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
+                "this should not happen.");
+        }
+
+        if (!restoreRecords.isEmpty()) {
+            // restore states from changelog records and update the snapshot offset as the batch end record's offset
+            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
+            final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
+            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
+                .map(storeMetadata.recordConverter::convert)
+                .collect(Collectors.toList());
+
+            try {
+                restoreCallback.restoreBatch(convertedRecords);
+            } catch (final RuntimeException e) {
+                throw new ProcessorStateException(
+                    format("%sException caught while trying to restore state from %s", logPrefix, storeMetadata.changelogPartition),
+                    e
+                );
+            }
+
+            storeMetadata.setOffset(batchEndOffset);
+        }
+    }
+
+    /**
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
+    @Override
     public void flush() {
-        ProcessorStateException firstException = null;
+        RuntimeException firstException = null;
         // attempting to flush the stores
-        if (!registeredStores.isEmpty()) {
-            log.debug("Flushing all stores registered in the state manager");
-            for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-                if (entry.getValue().isPresent()) {
-                    final StateStore store = entry.getValue().get();
-                    log.trace("Flushing store {}", store.name());
-                    try {
-                        store.flush();
-                    } catch (final Exception e) {
-                        if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
-                        }
-                        log.error("Failed to flush state store {}: ", store.name(), e);
+        if (!stores.isEmpty()) {
+            log.debug("Flushing all stores registered in the state manager: {}", stores);
+            for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
+                final StateStore store = entry.getValue().stateStore;
+                log.trace("Flushing store {}", store.name());
+                try {
+                    store.flush();
+                } catch (final RuntimeException exception) {
+                    if (firstException == null) {
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        if (exception instanceof StreamsException)
+                            firstException = exception;
+                        else
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
                     }
-                } else {
-                    throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
+                    log.error("Failed to flush state store {}: ", store.name(), exception);
                 }
             }
         }
@@ -266,42 +422,35 @@ public class ProcessorStateManager extends AbstractStateManager {
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exception and re-throw the first exception that did occur at the end.
+     *
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final boolean clean) throws ProcessorStateException {
-        ProcessorStateException firstException = null;
+    public void close() throws ProcessorStateException {
+        RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
-        if (!registeredStores.isEmpty()) {
-            log.debug("Closing its state manager and all the registered state stores");
-            for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-                if (entry.getValue().isPresent()) {
-                    final StateStore store = entry.getValue().get();
-                    log.debug("Closing storage engine {}", store.name());
-                    try {
-                        store.close();
-                        registeredStores.put(store.name(), Optional.empty());
-                    } catch (final Exception e) {
-                        if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, store.name()), e);
-                        }
-                        log.error("Failed to close state store {}: ", store.name(), e);
+        if (!stores.isEmpty()) {
+            log.debug("Closing its state manager and all the registered state stores: {}", stores);
+            for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
+                final StateStore store = entry.getValue().stateStore;
+                log.trace("Closing store {}", store.name());
+                try {
+                    store.close();
+                } catch (final RuntimeException exception) {
+                    if (firstException == null) {
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        if (exception instanceof StreamsException)
+                            firstException = exception;
+                        else
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to close state store %s", logPrefix, store.name()), exception);
                     }
-                } else {
-                    log.info("Skipping to close non-initialized store {}", entry.getKey());
+                    log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
-        }
 
-        if (!clean && eosEnabled && checkpoint != null) {
-            // delete the checkpoint file if this is an unclean close
-            try {
-                checkpoint.delete();
-                checkpoint = null;
-            } catch (final IOException e) {
-                throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
-            }
+            stores.clear();
         }
 
         if (firstException != null) {
@@ -309,75 +458,51 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
     }
 
-    // write the checkpoint
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
-        this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
-        log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
-        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-            if (entry.getValue().isPresent()) {
-                final StateStore store = entry.getValue().get();
-                final String storeName = store.name();
-                // only checkpoint the offset to the offsets file if
-                // it is persistent AND changelog enabled
-                if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
-                    final String changelogTopic = storeToChangelogTopic.get(storeName);
-                    final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                    if (checkpointableOffsets.containsKey(topicPartition)) {
-                        // store the last offset + 1 (the log position after restoration)
-                        this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
-                    } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
-                        this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
-                    }
-                }
-            } else {
-                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
+    public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
+        // first update each state store's current offset, then checkpoint
+        // those stores that are only logged and persistent to the checkpoint file
+        for (final Map.Entry<TopicPartition, Long> entry : writtenOffsets.entrySet()) {
+            final StateStoreMetadata store = findStore(entry.getKey());
+
+            if (store != null) {
+                store.setOffset(entry.getValue());
+
+                log.debug("State store {} updated to written offset {} at changelog {}",
+                    store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
 
-        log.trace("Checkpointable offsets updated with active acked offsets: {}", this.checkpointableOffsets);
+        final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            // store is logged, persistent, not corrupted, and has a valid current offset
+            if (storeMetadata.changelogPartition != null &&
+                storeMetadata.stateStore.persistent() &&
+                storeMetadata.offset != null &&
+                !storeMetadata.corrupted) {
 
-        // write the checkpoint file before closing
-        if (checkpoint == null) {
-            checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+                checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
+            }
         }
 
-        log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
+        log.debug("Writing checkpoint: {}", checkpointingOffsets);
         try {
-            checkpoint.write(this.checkpointableOffsets);
+            checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to [{}]", checkpoint, e);
+            log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
         }
     }
 
-    private int getPartition(final String topic) {
-        final TopicPartition partition = partitionForTopic.get(topic);
-        return partition == null ? taskId.partition : partition.partition();
-    }
+    private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
+        final List<StateStoreMetadata> found = stores.values().stream()
+            .filter(metadata -> changelogPartition.equals(metadata.changelogPartition))
+            .collect(Collectors.toList());
 
-    void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.debug("Register global stores {}", stateStores);
-        for (final StateStore stateStore : stateStores) {
-            globalStores.put(stateStore.name(), Optional.of(stateStore));
+        if (found.size() > 1) {
+            throw new IllegalStateException("Multiple state stores are found for changelog partition " + changelogPartition +
+                ", this should never happen: " + found);
         }
-    }
 
-    @Override
-    public StateStore getGlobalStore(final String name) {
-        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
-    }
-
-    Collection<TopicPartition> changelogPartitions() {
-        return unmodifiableList(changelogPartitions);
-    }
-
-    void ensureStoresRegistered() {
-        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-            if (!entry.getValue().isPresent()) {
-                throw new IllegalStateException(
-                    "store [" + entry.getKey() + "] has not been correctly registered. This is a bug in Kafka Streams."
-                );
-            }
-        }
+        return found.isEmpty() ? null : found.get(0);
     }
 }
