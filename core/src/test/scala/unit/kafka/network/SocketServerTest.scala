@@ -54,7 +54,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.ControlThrowable
@@ -1016,7 +1016,7 @@ class SocketServerTest {
   }
 
   @Test
-  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend() {
+  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
@@ -1135,7 +1135,7 @@ class SocketServerTest {
 
     // legacy metrics not tagged
     val yammerMetricsNames = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getType.equals("Processor"))
+      .filter { case (k, _) => k.getType.equals("Processor") }
       .collect { case (k, _: Gauge[_]) => k }
     assertFalse(yammerMetricsNames.isEmpty)
 
@@ -1683,8 +1683,9 @@ class SocketServerTest {
 
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
-    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
+    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == blockedPercentMetricMBeanName
+    }.values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate

@@ -186,7 +186,6 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public static final class PartitionData {
         public final long timestamp;
-        @Deprecated
         public final int maxNumOffsets; // only supported in v0
         public final Optional<Integer> currentLeaderEpoch;
 
@@ -196,7 +195,7 @@ public class ListOffsetRequest extends AbstractRequest {
             this.currentLeaderEpoch = currentLeaderEpoch;
         }
 
-        @Deprecated
+        // For V0
         public PartitionData(long timestamp, int maxNumOffsets) {
             this(timestamp, maxNumOffsets, Optional.empty());
         }

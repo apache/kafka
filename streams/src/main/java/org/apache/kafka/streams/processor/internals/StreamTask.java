@@ -89,13 +89,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
 
+    private long processTimeMs = 0L;
+
     private final Sensor closeTaskSensor;
+    private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
     private final Sensor punctuateLatencySensor;
+    private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
     private final InternalProcessorContext processorContext;
 
-    private long idleStartTime;
+    private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
@@ -131,8 +135,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
         }
+        processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
+        bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
@@ -205,7 +211,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             initializeMetadata();
             initializeTopology();
             processorContext.initialize();
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
+
             transitionTo(State.RUNNING);
 
             log.info("Restored and ready to run");
@@ -534,14 +541,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         if (partitionGroup.allPartitionsBuffered()) {
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
             return true;
         } else if (partitionGroup.numBuffered() > 0) {
-            if (idleStartTime == RecordQueue.UNKNOWN) {
-                idleStartTime = wallClockTime;
+            if (idleStartTimeMs == RecordQueue.UNKNOWN) {
+                idleStartTimeMs = wallClockTime;
             }
 
-            if (wallClockTime - idleStartTime >= maxTaskIdleMs) {
+            if (wallClockTime - idleStartTimeMs >= maxTaskIdleMs) {
                 enforcedProcessingSensor.record();
                 return true;
             } else {
@@ -550,7 +557,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             // there's no data in any of the topics; we should reset the enforced
             // processing timer
-            idleStartTime = RecordQueue.UNKNOWN;
+            idleStartTimeMs = RecordQueue.UNKNOWN;
             return false;
         }
     }
@@ -614,6 +621,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return true;
+    }
+
+    @Override
+    public void recordProcessBatchTime(final long processBatchTime) {
+        processTimeMs += processBatchTime;
+    }
+
+    @Override
+    public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {
+        bufferedRecordsSensor.record(partitionGroup.numBuffered());
+        processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
+        processTimeMs = 0L;
     }
 
     private String getStacktraceString(final RuntimeException e) {

@@ -35,8 +35,6 @@ import org.apache.kafka.streams.kstream.{
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
 
-import scala.language.implicitConversions
-
 /**
  * Implicit conversions between the Scala wrapper objects and the underlying Java
  * objects.

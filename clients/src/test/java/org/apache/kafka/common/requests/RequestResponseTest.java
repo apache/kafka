@@ -399,8 +399,10 @@ public class RequestResponseTest {
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
         checkRequest(createTxnOffsetCommitRequest(0), true);
         checkRequest(createTxnOffsetCommitRequest(3), true);
+        checkRequest(createTxnOffsetCommitRequestWithAutoDowngrade(2), true);
         checkErrorResponse(createTxnOffsetCommitRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createTxnOffsetCommitRequest(3), new UnknownServerException(), true);
+        checkErrorResponse(createTxnOffsetCommitRequestWithAutoDowngrade(2), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
         checkRequest(createDescribeAclsRequest(), true);
         checkErrorResponse(createDescribeAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
@@ -872,9 +874,7 @@ public class RequestResponseTest {
                 setTransactionalId("abracadabra").
                 setProducerId(123));
         final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
-                bld.build((short) 2).toStruct();
-            });
+            UnsupportedVersionException.class, () -> bld.build((short) 2).toStruct());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
     }
@@ -1682,7 +1682,8 @@ public class RequestResponseTest {
                 "groupId",
                 21L,
                 (short) 42,
-                offsets).build();
+                offsets,
+                false).build();
         } else {
             return new TxnOffsetCommitRequest.Builder("transactionalId",
                 "groupId",
@@ -1691,8 +1692,27 @@ public class RequestResponseTest {
                 offsets,
                 "member",
                 2,
-                Optional.of("instance")).build();
+                Optional.of("instance"),
+                false).build();
         }
+    }
+
+    private TxnOffsetCommitRequest createTxnOffsetCommitRequestWithAutoDowngrade(int version) {
+        final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("topic", 73),
+            new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
+        offsets.put(new TopicPartition("topic", 74),
+            new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
+
+        return new TxnOffsetCommitRequest.Builder("transactionalId",
+            "groupId",
+            21L,
+            (short) 42,
+            offsets,
+            "member",
+            2,
+            Optional.of("instance"),
+            true).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

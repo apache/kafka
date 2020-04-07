@@ -100,8 +100,8 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
-import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -188,7 +188,7 @@ public class StreamThreadTest {
             clientSupplier.setApplicationIdForProducer(APPLICATION_ID);
         }
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -325,6 +325,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "commit-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -332,6 +334,12 @@ public class StreamThreadTest {
             "poll-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -341,6 +349,12 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -349,6 +363,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -356,6 +372,7 @@ public class StreamThreadTest {
             "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
                 "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -372,10 +389,6 @@ public class StreamThreadTest {
         final Map<String, String> taskTags =
             mkMap(mkEntry("task-id", "all"), mkEntry(getThreadTagKey(builtInMetricsVersion), thread.getName()));
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(
                 "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
         } else {
@@ -483,10 +496,7 @@ public class StreamThreadTest {
         final TaskId task1 = new TaskId(0, t1p1.partition());
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
-        thread.taskManager().handleAssignment(
-            Collections.singletonMap(task1, assignedPartitions),
-            emptyMap()
-        );
+        thread.taskManager().handleAssignment(Collections.singletonMap(task1, assignedPartitions), emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer;
         mockConsumer.assign(Collections.singleton(t1p1));
@@ -511,18 +521,25 @@ public class StreamThreadTest {
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation halves to 1
+        // system time based punctutation without processing any record, iteration stays as 2
         mockTime.sleep(11L);
+
+        thread.runOnce();
+        assertThat(thread.currentNumIterations(), equalTo(2));
+
+        // system time based punctutation after processing a record, half iteration to 1
+        mockTime.sleep(11L);
+        addRecord(mockConsumer, ++offset, 5L);
 
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(1));
 
-        // processed two records, bumping up iterations to 2
+        // processed two records, bumping up iterations to 3 (1 + 2)
         addRecord(mockConsumer, ++offset, 5L);
         addRecord(mockConsumer, ++offset, 6L);
         thread.runOnce();
 
-        assertThat(thread.currentNumIterations(), equalTo(2));
+        assertThat(thread.currentNumIterations(), equalTo(3));
 
         // stream time based punctutation halves to 1
         addRecord(mockConsumer, ++offset, 11L);
@@ -542,15 +559,29 @@ public class StreamThreadTest {
         addRecord(mockConsumer, ++offset, 15L);
         thread.runOnce();
 
-        // user requested commit should not impact on iteration adjustment
+        // user requested commit should half iteration to 1
+        assertThat(thread.currentNumIterations(), equalTo(1));
+
+        // processed three records, bumping up iterations to 3 (1 + 2)
+        addRecord(mockConsumer, ++offset, 15L);
+        addRecord(mockConsumer, ++offset, 16L);
+        addRecord(mockConsumer, ++offset, 17L);
+        thread.runOnce();
+
         assertThat(thread.currentNumIterations(), equalTo(3));
 
-        // time based commit, halves iterations to 3 / 2 = 1
+        // time based commit without processing, should keep the iteration as 3
         mockTime.sleep(90L);
         thread.runOnce();
 
-        assertThat(thread.currentNumIterations(), equalTo(1));
+        assertThat(thread.currentNumIterations(), equalTo(3));
 
+        // time based commit without processing, should half the iteration to 1
+        mockTime.sleep(90L);
+        addRecord(mockConsumer, ++offset, 18L);
+        thread.runOnce();
+
+        assertThat(thread.currentNumIterations(), equalTo(1));
     }
 
     @Test
@@ -1151,7 +1182,7 @@ public class StreamThreadTest {
     public void shouldReturnActiveTaskMetadataWhileRunningState() {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -1373,8 +1404,7 @@ public class StreamThreadTest {
             }
 
             @Override
-            public void process(final Object key,
-                                final Object value) {}
+            public void process(final Object key, final Object value) {}
 
             @Override
             public void close() {}

@@ -31,7 +31,7 @@ import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.

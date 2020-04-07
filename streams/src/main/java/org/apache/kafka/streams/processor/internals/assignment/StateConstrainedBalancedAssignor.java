@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.List;
@@ -24,43 +25,10 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 
-public interface StateConstrainedBalancedAssignor<ID extends Comparable<? super ID>> {
+public interface StateConstrainedBalancedAssignor {
 
-    class ClientIdAndRank<ID extends Comparable<? super ID>> implements Comparable<ClientIdAndRank<ID>> {
-        private final ID clientId;
-        private final long rank;
-
-        public ClientIdAndRank(final ID clientId, final long rank) {
-            this.clientId = clientId;
-            this.rank = rank;
-        }
-
-        public static <ID extends Comparable<? super ID>> ClientIdAndRank<ID> make(final ID clientId, final long rank) {
-            return new ClientIdAndRank<>(clientId, rank);
-        }
-
-        public ID clientId() {
-            return clientId;
-        }
-
-        public long rank() {
-            return rank;
-        }
-
-        @Override
-        public int compareTo(final ClientIdAndRank<ID> clientIdAndRank) {
-            if (rank < clientIdAndRank.rank) {
-                return -1;
-            } else if (rank > clientIdAndRank.rank) {
-                return 1;
-            } else {
-                return clientId.compareTo(clientIdAndRank.clientId);
-            }
-        }
-    }
-
-    Map<ID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<ClientIdAndRank<ID>>> statefulTasksToRankedClients,
-                                 final int balanceFactor,
-                                 final Set<ID> clients,
-                                 final Map<ID, Integer> clientsToNumberOfStreamThreads);
+    Map<UUID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
+                                   final int balanceFactor,
+                                   final Set<UUID> clients,
+                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads);
 }

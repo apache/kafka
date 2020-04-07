@@ -478,6 +478,7 @@ import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapt
  *       this.consumer = consumer;
  *     }
  *
+ *     {@literal}@Override
  *     public void run() {
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));

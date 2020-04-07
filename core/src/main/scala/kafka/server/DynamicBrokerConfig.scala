@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:
@@ -85,8 +85,8 @@ object DynamicBrokerConfig {
     SocketServer.ReconfigurableConfigs
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp)
-  private val PerBrokerConfigs = DynamicSecurityConfigs  ++
-    DynamicListenerConfig.ReconfigurableConfigs -- ClusterLevelListenerConfigs
+  private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
+    ClusterLevelListenerConfigs)
   private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
     KafkaConfig.SaslLoginCallbackHandlerClassProp,
     KafkaConfig.SaslLoginClassProp,
@@ -168,10 +168,12 @@ object DynamicBrokerConfig {
   }
 
   private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
-    KafkaConfig.configKeys.filterKeys(AllDynamicConfigs.contains).values.foreach { config =>
-      configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
-        config.importance, config.documentation, config.group, config.orderInGroup, config.width,
-        config.displayName, config.dependents, config.recommender)
+    KafkaConfig.configKeys.foreach { case (configName, config) =>
+      if (AllDynamicConfigs.contains(configName)) {
+        configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
+          config.importance, config.documentation, config.group, config.orderInGroup, config.width,
+          config.displayName, config.dependents, config.recommender)
+      }
     }
   }
 
@@ -352,7 +354,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         props.setProperty(configName, passwordEncoder.encode(new Password(value)))
       }
     }
-    configProps.asScala.filterKeys(isPasswordConfig).foreach { case (name, value) => encodePassword(name, value) }
+    configProps.asScala.foreach { case (name, value) =>
+      if (isPasswordConfig(name))
+        encodePassword(name, value)
+    }
     props
   }
 
@@ -386,7 +391,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       }
     }
 
-    props.asScala.filterKeys(isPasswordConfig).foreach { case (name, value) => decodePassword(name, value) }
+    props.asScala.foreach { case (name, value) =>
+      if (isPasswordConfig(name))
+        decodePassword(name, value)
+    }
     props
   }
 
@@ -398,8 +406,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val props = persistentProps.clone().asInstanceOf[Properties]
     if (props.asScala.keySet.exists(isPasswordConfig)) {
       maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderOldSecret).foreach { passwordDecoder =>
-        persistentProps.asScala.filterKeys(isPasswordConfig).foreach { case (configName, value) =>
-          if (value != null) {
+        persistentProps.asScala.foreach { case (configName, value) =>
+          if (isPasswordConfig(configName) && value != null) {
             val decoded = try {
               Some(passwordDecoder.decode(value).value)
             } catch {
@@ -633,7 +641,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
     logManager.allLogs.foreach { log =>
       val props = mutable.Map.empty[Any, Any]
       props ++= newBrokerDefaults
-      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
+      props ++= log.config.originals.asScala.filter { case (k, _) => log.config.overriddenConfigs.contains(k) }
 
       val logConfig = LogConfig(props.asJava, log.config.overriddenConfigs)
       log.updateConfig(logConfig)
@@ -644,8 +652,8 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
     val currentLogConfig = logManager.currentDefaultConfig
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
-    newConfig.valuesFromThisConfig.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
-      if (v != null) {
+    newConfig.valuesFromThisConfig.asScala.foreach { case (k, v) =>
+      if (DynamicLogConfig.ReconfigurableConfigs.contains(k) && v != null) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
           newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
         }
@@ -678,17 +686,19 @@ class DynamicThreadPool(server: KafkaServer) extends BrokerReconfigurable {
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    newConfig.values.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).foreach { case (k, v) =>
-      val newValue = v.asInstanceOf[Int]
-      val oldValue = currentValue(k)
-      if (newValue != oldValue) {
-        val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
-        if (newValue <= 0)
-          throw new ConfigException(s"$errorMsg, value should be at least 1")
-        if (newValue < oldValue / 2)
-          throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
-        if (newValue > oldValue * 2)
-          throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+    newConfig.values.asScala.foreach { case (k, v) =>
+      if (DynamicThreadPool.ReconfigurableConfigs.contains(k)) {
+        val newValue = v.asInstanceOf[Int]
+        val oldValue = currentValue(k)
+        if (newValue != oldValue) {
+          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
+          if (newValue <= 0)
+            throw new ConfigException(s"$errorMsg, value should be at least 1")
+          if (newValue < oldValue / 2)
+            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
+          if (newValue > oldValue * 2)
+            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+        }
       }
     }
   }
@@ -762,7 +772,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     val updatedMetricsReporters = metricsReporterClasses(configs)
-    val deleted = currentReporters.keySet -- updatedMetricsReporters
+    val deleted = currentReporters.keySet.toSet -- updatedMetricsReporters
     deleted.foreach(removeReporter)
     currentReporters.values.foreach {
       case reporter: Reconfigurable => dynamicConfig.maybeReconfigure(reporter, dynamicConfig.currentKafkaConfig, configs)

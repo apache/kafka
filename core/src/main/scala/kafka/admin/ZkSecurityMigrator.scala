@@ -30,7 +30,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._

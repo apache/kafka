@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
@@ -1062,17 +1062,16 @@ object ReassignPartitionsCommand extends Logging {
   def curReassignmentsToString(adminClient: Admin): String = {
     val currentReassignments = adminClient.
       listPartitionReassignments().reassignments().get().asScala
-    val text = currentReassignments.keySet.toBuffer.sortWith(compareTopicPartitions).map {
-      case part =>
-        val reassignment = currentReassignments(part)
-        val replicas = reassignment.replicas().asScala
-        val addingReplicas = reassignment.addingReplicas().asScala
-        val removingReplicas = reassignment.removingReplicas().asScala
-        "%s: replicas: %s.%s%s".format(part, replicas.mkString(","),
-          if (addingReplicas.isEmpty) "" else
-            " adding: %s.".format(addingReplicas.mkString(",")),
-          if (removingReplicas.isEmpty) "" else
-            " removing: %s.".format(removingReplicas.mkString(",")))
+    val text = currentReassignments.keySet.toBuffer.sortWith(compareTopicPartitions).map { part =>
+      val reassignment = currentReassignments(part)
+      val replicas = reassignment.replicas().asScala
+      val addingReplicas = reassignment.addingReplicas().asScala
+      val removingReplicas = reassignment.removingReplicas().asScala
+      "%s: replicas: %s.%s%s".format(part, replicas.mkString(","),
+        if (addingReplicas.isEmpty) "" else
+          " adding: %s.".format(addingReplicas.mkString(",")),
+        if (removingReplicas.isEmpty) "" else
+          " removing: %s.".format(removingReplicas.mkString(",")))
     }.mkString(System.lineSeparator())
     if (text.isEmpty) {
       "No partition reassignments found."
@@ -1155,7 +1154,7 @@ object ReassignPartitionsCommand extends Logging {
   def currentPartitionReplicaAssignmentToString(proposedParts: Map[TopicPartition, Seq[Int]],
                                                 currentParts: Map[TopicPartition, Seq[Int]]): String = {
     "Current partition replica assignment%n%n%s%n%nSave this to use as the %s".
-        format(formatAsReassignmentJson(currentParts.filterKeys(proposedParts.contains(_)).toMap, Map.empty),
+        format(formatAsReassignmentJson(currentParts.filter { case (k, _) => proposedParts.contains(k) }.toMap, Map.empty),
               "--reassignment-json-file option during rollback")
   }
 
@@ -1192,13 +1191,10 @@ object ReassignPartitionsCommand extends Logging {
    * @return                  A map from partition objects to error strings.
    */
   def alterPartitionReassignments(adminClient: Admin,
-                                  reassignments: Map[TopicPartition, Seq[Int]])
-                                  : Map[TopicPartition, Throwable] = {
+                                  reassignments: Map[TopicPartition, Seq[Int]]): Map[TopicPartition, Throwable] = {
     val results: Map[TopicPartition, KafkaFuture[Void]] =
-      adminClient.alterPartitionReassignments(reassignments.map {
-        case (part, replicas) => {
-          (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf(_)).asJava)))
-        }
+      adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
+        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf(_)).asJava)))
       }.asJava).values().asScala
     results.flatMap {
       case (part, future) => {

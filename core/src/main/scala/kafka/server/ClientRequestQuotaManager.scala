@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,

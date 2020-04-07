@@ -372,6 +372,52 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRecordBufferedRecords() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertThat(metric.metricValue(), equalTo(0.0d));
+
+        task.addRecords(partition1, asList(
+            getConsumerRecord(partition1, 10),
+            getConsumerRecord(partition1, 20)
+        ));
+        task.recordProcessTimeRatioAndBufferSize(100L);
+
+        assertThat(metric.metricValue(), equalTo(2.0d));
+
+        task.process(0L);
+        task.recordProcessTimeRatioAndBufferSize(100L);
+
+        assertThat(metric.metricValue(), equalTo(1.0d));
+    }
+
+    @Test
+    public void shouldRecordProcessRatio() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertThat(metric.metricValue(), equalTo(0.0d));
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessBatchTime(15L);
+        task.recordProcessTimeRatioAndBufferSize(100L);
+
+        assertThat(metric.metricValue(), equalTo(0.25d));
+
+        task.recordProcessBatchTime(10L);
+
+        assertThat(metric.metricValue(), equalTo(0.25d));
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessTimeRatioAndBufferSize(20L);
+
+        assertThat(metric.metricValue(), equalTo(1.0d));
+    }
+
+    @Test
     public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
@@ -410,6 +456,20 @@ public class StreamTaskTest {
             builtInMetricsVersion
         ));
 
+        assertNotNull(getMetric(
+            "active-process",
+            "%s-ratio",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "active-buffer",
+            "%s-count",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             testMetricsForBuiltInMetricsVersion0100To24();
         } else {
@@ -442,8 +502,8 @@ public class StreamTaskTest {
         assertNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
         assertNull(getMetric("commit", "%s-total", "all", builtInMetricsVersion));
 
-        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
 
         assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
@@ -453,8 +513,6 @@ public class StreamTaskTest {
 
     private void testMetricsForBuiltInMetricsVersion0100To24() {
         final String builtInMetricsVersion = StreamsConfig.METRICS_0100_TO_24;
-        assertNotNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
-        assertNotNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
         assertNotNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
 
         assertNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));

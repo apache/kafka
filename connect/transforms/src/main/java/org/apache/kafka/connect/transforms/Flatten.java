@@ -69,7 +69,9 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
 
     @Override
     public R apply(R record) {
-        if (operatingSchema(record) == null) {
+        if (operatingValue(record) == null) {
+            return record;
+        } else if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
             return applyWithSchema(record);
@@ -194,7 +196,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     break;
                 default:
                     throw new DataException("Flatten transformation does not support " + field.schema().type()
-                            + " for record without schemas (for field " + fieldName + ").");
+                            + " for record with schemas (for field " + fieldName + ").");
             }
         }
     }
@@ -242,7 +244,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     break;
                 default:
                     throw new DataException("Flatten transformation does not support " + field.schema().type()
-                            + " for record without schemas (for field " + fieldName + ").");
+                            + " for record with schemas (for field " + fieldName + ").");
             }
         }
     }
