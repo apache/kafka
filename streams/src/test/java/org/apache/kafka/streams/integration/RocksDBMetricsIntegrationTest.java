@@ -101,8 +101,9 @@ public class RocksDBMetricsIntegrationTest {
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
+            {StreamsConfig.AT_LEAST_ONCE},
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.AT_LEAST_ONCE}
+            {StreamsConfig.EXACTLY_ONCE_BETA}
         });
     }
 
