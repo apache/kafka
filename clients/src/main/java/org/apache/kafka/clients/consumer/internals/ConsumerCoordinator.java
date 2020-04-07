@@ -1143,14 +1143,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
-                .compose(new OffsetCommitResponseHandler(offsets));
+                .compose(new OffsetCommitResponseHandler(offsets, generation));
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
-
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation) {
+            super(generation);
             this.offsets = offsets;
         }
 
@@ -1198,8 +1198,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
-                            log.error("Received fatal exception: group.instance.id gets fenced");
-                            future.raise(error);
+                            log.info("OffsetCommit failed with {} due to group instance id {} fenced", sentGeneration, rebalanceConfig.groupInstanceId);
+
+                            // if the generation has changed, do not raise the fatal error but rebalance-in-progress
+                            if (generationUnchanged()) {
+                                future.raise(error);
+                            } else {
+                                future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                    "consumer member's old generation is fenced by its group instance id, it is possible that " +
+                                    "this consumer has already participated another rebalance and got a new generation"));
+                            }
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                             /* Consumer should not try to commit offset in between join-group and sync-group,
@@ -1217,9 +1225,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID
                                 || error == Errors.ILLEGAL_GENERATION) {
-                            // need to reset generation and re-join group
-                            resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                            future.raise(new CommitFailedException());
+                            log.info("OffsetCommit failed with {}: {}", sentGeneration, error.message());
+
+                            // only need to reset generation and re-join group if generation has not changed;
+                            // otherwise only raise rebalance-in-progress error
+                            if (generationUnchanged()) {
+                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                                future.raise(new CommitFailedException());
+                            } else {
+                                future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                    "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
+                                    "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again"));
+                            }
                             return;
                         } else {
                             future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
@@ -1261,6 +1278,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class OffsetFetchResponseHandler extends CoordinatorResponseHandler<OffsetFetchResponse, Map<TopicPartition, OffsetAndMetadata>> {
+        private OffsetFetchResponseHandler() {
+            super(Generation.NO_GENERATION);
+        }
+
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
             if (response.hasError()) {

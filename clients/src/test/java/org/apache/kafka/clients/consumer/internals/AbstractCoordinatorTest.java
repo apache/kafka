@@ -466,6 +466,98 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testHeartbeatIllegalGenerationResponseWithOldGeneration() throws InterruptedException {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        // let the heartbeat request to send out a request
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        long startMs = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
+            Thread.sleep(10);
+        }
+
+        assertTrue(coordinator.heartbeat().hasInflight());
+
+        // change the generation
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId + 1,
+            currGen.memberId,
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.respond(heartbeatResponse(Errors.ILLEGAL_GENERATION));
+
+        // the heartbeat error code should be ignored
+        startMs = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
+            Thread.sleep(10);
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+        }
+
+        assertFalse(coordinator.heartbeat().hasInflight());
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
+    }
+
+    @Test
+    public void testHeartbeatUnknownMemberResponseWithOldGeneration() throws InterruptedException {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        // let the heartbeat request to send out a request
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        long startMs = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
+            Thread.sleep(10);
+        }
+
+        assertTrue(coordinator.heartbeat().hasInflight());
+
+        // change the generation
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId,
+            currGen.memberId + "-new",
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.respond(heartbeatResponse(Errors.UNKNOWN_MEMBER_ID));
+
+        // the heartbeat error code should be ignored
+        startMs = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
+            Thread.sleep(10);
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+        }
+
+        assertFalse(coordinator.heartbeat().hasInflight());
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
+    }
+
+    @Test
     public void testHeartbeatUnknownMemberResponseDuringRebalancing() throws InterruptedException {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
