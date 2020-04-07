@@ -98,9 +98,7 @@ public class TaskMovement {
                                   "balanced assignment.", task, source);
                     throw new IllegalStateException("Found task in initial assignment that was not assigned in the final.");
                 } else if (!source.equals(destination)) {
-                    // If the destination client is already caught-up, consider this movement "free" and do immediately
-                    final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
-                    if (caughtUpClients != null && caughtUpClients.contains(destination)) {
+                    if (destinationClientIsCaughtUp(task, destination, tasksToCaughtUpClients)) {
                         sourceClientTasksIterator.remove();
                         statefulActiveTaskAssignment.get(destination).add(task);
                     } else {
@@ -113,5 +111,12 @@ public class TaskMovement {
             }
         }
         return movements;
+    }
+
+    private static boolean destinationClientIsCaughtUp(final TaskId task,
+                                                       final UUID destination,
+                                                       final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
+        return caughtUpClients != null && caughtUpClients.contains(destination);
     }
 }
