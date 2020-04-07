@@ -97,7 +97,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
-    private final InternalProcessorContext processorContext;
+    private final InternalProcessorContext<Object, Object> processorContext;
 
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
@@ -153,7 +153,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
+        processorContext = new ProcessorContextImpl<>(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -940,7 +940,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public ProcessorContext context() {
+    public ProcessorContext<Object, Object> context() {
         return processorContext;
     }
 
@@ -1011,7 +1011,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
-    InternalProcessorContext processorContext() {
+    InternalProcessorContext<Object, Object> processorContext() {
         return processorContext;
     }
 

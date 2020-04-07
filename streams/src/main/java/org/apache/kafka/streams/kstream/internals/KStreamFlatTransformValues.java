@@ -39,14 +39,14 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
     public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> implements Processor<KIn, VIn> {
 
         private final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer;
-        private ProcessorContext context;
+        private ProcessorContext<Object, Object> context;
 
         KStreamFlatTransformValuesProcessor(final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
             this.context = context;
         }

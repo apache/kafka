@@ -57,7 +57,7 @@ public class SessionTupleForwarderTest {
 
     private void shouldForwardRecordsIfWrappedStateStoreDoesNotCache(final boolean sendOldValued) {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<Object, Object> context = mock(ProcessorContext.class);
 
         expect(store.setFlushListener(null, sendOldValued)).andReturn(false);
         if (sendOldValued) {
@@ -83,7 +83,7 @@ public class SessionTupleForwarderTest {
     @Test
     public void shouldNotForwardRecordsIfWrappedStateStoreDoesCache() {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<Object, Object> context = mock(ProcessorContext.class);
 
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
