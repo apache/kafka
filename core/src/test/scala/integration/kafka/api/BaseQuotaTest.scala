@@ -59,7 +59,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   // Low enough quota that a producer sending a small payload in a tight loop should get throttled
   val defaultProducerQuota: Long = 8000
   val defaultConsumerQuota: Long = 2500
-  val defaultRequestQuota: Double = Long.MaxValue
+  val defaultRequestQuota: Double = Long.MaxValue.toDouble
 
   val topic1 = "topic-1"
   var leaderNode: KafkaServer = _
@@ -95,8 +95,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, Long.MaxValue.toString)
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, Long.MaxValue.toString)
 
-    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue)
-    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue)
+    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
 
     val numRecords = 1000
     assertEquals(numRecords, quotaTestClients.produceUntilThrottled(numRecords))
@@ -112,8 +112,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
     // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
     // In this case, 250 * 10 < 4096
-    quotaTestClients.overrideQuotas(2000, 250, Long.MaxValue)
-    quotaTestClients.waitForQuotaUpdate(2000, 250, Long.MaxValue)
+    quotaTestClients.overrideQuotas(2000, 250, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(2000, 250, Long.MaxValue.toDouble)
 
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
@@ -127,8 +127,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   @Test
   def testQuotaOverrideDelete(): Unit = {
     // Override producer and consumer quotas to unlimited
-    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue)
-    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue)
+    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
 
     val numRecords = 1000
     assertEquals(numRecords, quotaTestClients.produceUntilThrottled(numRecords))
