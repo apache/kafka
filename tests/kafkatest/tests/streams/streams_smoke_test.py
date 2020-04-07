@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsSmokeTestEOSJobRunnerService
-
+from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 
 class StreamsSmokeTest(KafkaTest):
     """
