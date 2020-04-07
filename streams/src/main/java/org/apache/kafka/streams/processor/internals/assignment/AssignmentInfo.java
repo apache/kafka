@@ -192,7 +192,6 @@ public class AssignmentInfo {
             }
 
             out.flush();
-            out.close();
 
             return ByteBuffer.wrap(baos.toByteArray());
         } catch (final IOException ex) {
