@@ -261,7 +261,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * 0. decode the subscriptions to assemble the metadata for each client and check for version probing
      *
      * 1. check all repartition source topics and use internal topic manager to make sure
-     *    they have been created with the right number of partitions. also verify and/or create
+     *    they have been created with the right number of partitions. Also verify and/or create
      *    any changelog topics with the correct number of partitions.
      *
      * 2. use the partition grouper to generate tasks along with their assigned partitions, then use
@@ -691,10 +691,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return true if a followup rebalance should be triggered
      */
     private boolean assignTasksToClients(final Set<String> allSourceTopics,
-                                      final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                      final Map<Integer, TopicsInfo> topicGroups,
-                                      final Map<UUID, ClientMetadata> clientMetadataMap,
-                                      final Cluster fullMetadata) {
+                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                         final Map<Integer, TopicsInfo> topicGroups,
+                                         final Map<UUID, ClientMetadata> clientMetadataMap,
+                                         final Cluster fullMetadata) {
         final Map<TopicPartition, TaskId> taskForPartition = new HashMap<>();
         final Map<Integer, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
         populateTasksForMaps(taskForPartition, tasksForTopicGroup, allSourceTopics, partitionsForTask, fullMetadata);
@@ -975,13 +975,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final List<TaskId> assignedActiveList = new ArrayList<>();
 
             if (populateActiveTaskAndPartitionsLists(
-                activePartitionsList,
-                assignedActiveList,
-                consumer,
-                clientMetadata.state,
-                activeTasksForConsumer,
-                partitionsForTask,
-                allOwnedPartitions)) {
+                    activePartitionsList,
+                    assignedActiveList,
+                    consumer,
+                    clientMetadata.state,
+                    activeTasksForConsumer,
+                    partitionsForTask,
+                    allOwnedPartitions)
+            ) {
                 stableAssignment = false;
             }
 
