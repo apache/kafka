@@ -47,7 +47,7 @@ public class SmokeTestUtil {
                     private int numRecordsProcessed = 0;
 
                     @Override
-                    public void init(final ProcessorContext context) {
+                    public void init(final ProcessorContext<Object, Object> context) {
                         super.init(context);
                         System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;

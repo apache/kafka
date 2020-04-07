@@ -18,7 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Properties;
@@ -42,9 +42,9 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      * @param processorName processor name to set as current node
      * @return the processor context
      */
-    public ProcessorContext setCurrentNodeForProcessorContext(final String processorName) {
-        final ProcessorContext context = task.context();
-        ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
+    public ProcessorContext<Object, Object> setCurrentNodeForProcessorContext(final String processorName) {
+        final ProcessorContext<Object, Object> context = task.context();
+        ((InternalProcessorContext<Object, Object>) context).setCurrentNode(getProcessor(processorName));
         return context;
     }
 
