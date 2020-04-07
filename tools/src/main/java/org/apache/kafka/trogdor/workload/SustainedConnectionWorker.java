@@ -140,6 +140,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         boolean needsRefresh(long milliseconds);
         void refresh();
         void claim();
+        void close();
     }
 
     private abstract class ClaimableConnection implements SustainedConnection {
@@ -159,7 +160,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             this.closeQuietly();
         }
 
