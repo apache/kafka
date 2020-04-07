@@ -44,7 +44,8 @@ public class TestRecord<K, V> {
      *
      * @param key The key that will be included in the record
      * @param value The value of the record
-     * @param headers the record headers that will be included in the record
+     * @param partition The partition of the record
+     * @param headers The record headers that will be included in the record
      * @param recordTime The timestamp of the record.
      */
     public TestRecord(final K key, final V value, final Integer partition, final Headers headers, final Instant recordTime) {
