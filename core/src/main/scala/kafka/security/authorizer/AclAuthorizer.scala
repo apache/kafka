@@ -139,14 +139,7 @@ class AclAuthorizer extends Authorizer with Logging {
   override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    configs.foreach { case (key, value) =>
-      value match {
-        case password: Password => props.put(key, password)
-        case list: util.List[_] => props.put(key, list.asScala.map(_.toString).mkString(","))
-        case clazz: Class[_] => props.put(key, clazz.getName())
-        case _ => props.put(key, value.toString)
-      }
-    }
+    configs.foreach { case (key, value) => props.put(key, value.toString) }
 
     superUsers = configs.get(AclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(";").map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet

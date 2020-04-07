@@ -233,7 +233,6 @@ object Defaults {
   val SslClientAuthentication = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT)
   val SslClientAuthenticationValidValues = SslClientAuth.VALUES.asScala.map(v => v.toString().toLowerCase(Locale.ROOT)).asJava.toArray(new Array[String](0))
   val SslPrincipalMappingRules = BrokerSecurityConfigs.DEFAULT_SSL_PRINCIPAL_MAPPING_RULES
-  val SslEngineFactoryClass = SslConfigs.DEFAULT_SSL_ENGINE_FACTORY_CLASS
 
     /** ********* General Security configuration ***********/
   val ConnectionsMaxReauthMsDefault = 0L
@@ -1176,7 +1175,7 @@ object KafkaConfig {
       .define(SslClientAuthProp, STRING, Defaults.SslClientAuthentication, in(Defaults.SslClientAuthenticationValidValues:_*), MEDIUM, SslClientAuthDoc)
       .define(SslCipherSuitesProp, LIST, Collections.emptyList(), MEDIUM, SslCipherSuitesDoc)
       .define(SslPrincipalMappingRulesProp, STRING, Defaults.SslPrincipalMappingRules, LOW, SslPrincipalMappingRulesDoc)
-      .define(SslEngineFactoryClassProp, CLASS, Defaults.SslEngineFactoryClass, LOW, SslEngineFactoryClassDoc)
+      .define(SslEngineFactoryClassProp, CLASS, null, LOW, SslEngineFactoryClassDoc)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslMechanismInterBrokerProtocolProp, STRING, Defaults.SaslMechanismInterBrokerProtocol, MEDIUM, SaslMechanismInterBrokerProtocolDoc)

@@ -125,7 +125,12 @@ public class SslFactory implements Reconfigurable {
         @SuppressWarnings("unchecked")
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
                 (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
-        SslEngineFactory sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
+        SslEngineFactory sslEngineFactory;
+        if (sslEngineFactoryClass == null) {
+            sslEngineFactory = new DefaultSslEngineFactory();
+        } else {
+            sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
+        }
         sslEngineFactory.configure(configs);
         this.sslEngineFactoryConfig = configs;
         return sslEngineFactory;
