@@ -469,6 +469,74 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldEnforceRebalanceAfterNextScheduledProbingRebalanceTime() throws InterruptedException {
+        final StreamsConfig config = new StreamsConfig(configProps(false));
+        internalTopologyBuilder.buildTopology();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
+        
+        final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
+        final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
+
+        mockClientSupplier.setClusterForAdminClient(createCluster());
+        final StreamThread thread = StreamThread.create(
+            internalTopologyBuilder,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            threadIdx
+        );
+
+        mockConsumer.enforceRebalance();
+        EasyMock.replay(mockConsumer);
+        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
+
+        thread.start();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.STARTING,
+            10 * 1000,
+            "Thread never started.");
+
+        thread.shutdown();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+
+        EasyMock.verify(mockConsumer);
+    }
+
+    private static class EasyMockConsumerClientSupplier extends MockClientSupplier {
+        final Consumer<byte[], byte[]> mockConsumer;
+        final Map<String, Object> consumerConfigs = new HashMap<>();
+
+        EasyMockConsumerClientSupplier(final Consumer<byte[], byte[]> mockConsumer) {
+            this.mockConsumer = mockConsumer;
+        }
+
+        @Override
+        public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+            consumerConfigs.putAll(config);
+            return mockConsumer;
+        }
+
+        AtomicLong nextRebalanceMs() {
+            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        }
+    }
+
+    @Test
     public void shouldRespectNumIterationsInMainLoop() {
         final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
