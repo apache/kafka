@@ -380,11 +380,11 @@ public class SslFactoryTest {
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
-        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(clientSslConfig);
         assertTrue("SslEngineFactory must be of expected type",
-                sslFactory.sslEngineFactory() instanceof TestSslEngineFactory);
+                sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory);
     }
 
     /**
@@ -397,11 +397,11 @@ public class SslFactoryTest {
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
-        serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+        serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertTrue("SslEngineFactory must be of expected type",
-                sslFactory.sslEngineFactory() instanceof TestSslEngineFactory);
+                sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory);
     }
 
     /**
@@ -430,50 +430,5 @@ public class SslFactoryTest {
 
     private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(Mode mode) {
         return new TestSslUtils.SslConfigsBuilder(mode).tlsProtocol(tlsProtocol);
-    }
-
-    public static final class TestSslEngineFactory implements SslEngineFactory {
-
-        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
-
-        @Override
-        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
-            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
-        }
-
-        @Override
-        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
-            return defaultSslEngineFactory.createServerSslEngine(peerHost, peerPort);
-        }
-
-        @Override
-        public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) {
-            return defaultSslEngineFactory.shouldBeRebuilt(nextConfigs);
-        }
-
-        @Override
-        public Set<String> reconfigurableConfigs() {
-            return defaultSslEngineFactory.reconfigurableConfigs();
-        }
-
-        @Override
-        public KeyStore keystore() {
-            return defaultSslEngineFactory.keystore();
-        }
-
-        @Override
-        public KeyStore truststore() {
-            return defaultSslEngineFactory.truststore();
-        }
-
-        @Override
-        public void close() throws IOException {
-            defaultSslEngineFactory.close();
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
-            defaultSslEngineFactory.configure(configs);
-        }
     }
 }
