@@ -415,7 +415,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
             final List<ConsumerRecord<byte[], byte[]>> partitionMin = partitionRecords.getValue();
 
-            if (partitionInput.size() != partitionMin.size()) {
+            if (partitionInput.size() != partitionMin.size() - 1) {
                 throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
                     + partitionRecords.getKey() + " but received " + partitionMin.size());
             }
@@ -457,7 +457,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
             final List<ConsumerRecord<byte[], byte[]>> partitionSum = partitionRecords.getValue();
 
-            if (partitionInput.size() != partitionSum.size()) {
+            if (partitionInput.size() != partitionSum.size() - 1) {
                 throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
                     + partitionRecords.getKey() + " but received " + partitionSum.size());
             }
@@ -498,7 +498,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
             final List<ConsumerRecord<byte[], byte[]>> partitionMax = partitionRecords.getValue();
 
-            if (partitionInput.size() != partitionMax.size()) {
+            if (partitionInput.size() != partitionMax.size() - 1) {
                 throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
                     + partitionRecords.getKey() + " but received " + partitionMax.size());
             }
@@ -539,7 +539,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
             final List<ConsumerRecord<byte[], byte[]>> partitionCnt = partitionRecords.getValue();
 
-            if (partitionInput.size() != partitionCnt.size()) {
+            if (partitionInput.size() != partitionCnt.size() - 1) {
                 throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
                     + partitionRecords.getKey() + " but received " + partitionCnt.size());
             }
