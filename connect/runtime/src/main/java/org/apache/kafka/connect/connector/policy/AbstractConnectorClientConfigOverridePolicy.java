@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 public abstract class AbstractConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
 
     @Override
-    public void close() throws Exception {
+    public void close() {
 
     }
 
