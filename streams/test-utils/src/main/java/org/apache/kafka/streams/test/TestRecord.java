@@ -36,6 +36,7 @@ public class TestRecord<K, V> {
     private final Headers headers;
     private final K key;
     private final V value;
+    private final Integer partition;
     private final Instant recordTime;
 
     /**
@@ -46,9 +47,10 @@ public class TestRecord<K, V> {
      * @param headers the record headers that will be included in the record
      * @param recordTime The timestamp of the record.
      */
-    public TestRecord(final K key, final V value, final Headers headers, final Instant recordTime) {
+    public TestRecord(final K key, final V value, final Integer partition, final Headers headers, final Instant recordTime) {
         this.key = key;
         this.value = value;
+        this.partition = partition;
         this.recordTime = recordTime;
         this.headers = new RecordHeaders(headers);
     }
@@ -58,10 +60,23 @@ public class TestRecord<K, V> {
      * 
      * @param key The key that will be included in the record
      * @param value The value of the record
-     * @param headers the record headers that will be included in the record
+     * @param headers The record headers that will be included in the record
      * @param timestampMs The timestamp of the record, in milliseconds since the beginning of the epoch.
      */
     public TestRecord(final K key, final V value, final Headers headers, final Long timestampMs) {
+        this(key, value, null, headers, timestampMs);
+    }
+
+    /**
+     * Creates a record.
+     *
+     * @param key The key that will be included in the record
+     * @param value The value of the record
+     * @param partition The partition of the record
+     * @param headers The record headers that will be included in the record
+     * @param timestampMs The timestamp of the record, in milliseconds since the beginning of the epoch.
+     */
+    public TestRecord(final K key, final V value, Integer partition, final Headers headers, final Long timestampMs) {
         if (timestampMs != null) {
             if (timestampMs < 0) {
                 throw new IllegalArgumentException(
@@ -73,6 +88,7 @@ public class TestRecord<K, V> {
         }
         this.key = key;
         this.value = value;
+        this.partition = partition;
         this.headers = new RecordHeaders(headers);
     }
 
@@ -84,7 +100,7 @@ public class TestRecord<K, V> {
      * @param recordTime The timestamp of the record as Instant.
      */
     public TestRecord(final K key, final V value, final Instant recordTime) {
-        this(key, value, null, recordTime);
+        this(key, value, null, null, recordTime);
     }
 
     /**
@@ -97,6 +113,7 @@ public class TestRecord<K, V> {
     public TestRecord(final K key, final V value, final Headers headers) {
         this.key = key;
         this.value = value;
+        this.partition = null;
         this.headers = new RecordHeaders(headers);
         this.recordTime = null;
     }
@@ -108,10 +125,7 @@ public class TestRecord<K, V> {
      * @param value The value of the record
      */
     public TestRecord(final K key, final V value) {
-        this.key = key;
-        this.value = value;
-        this.headers = new RecordHeaders();
-        this.recordTime = null;
+        this(key, value, new RecordHeaders());
     }
 
     /**
@@ -132,6 +146,7 @@ public class TestRecord<K, V> {
         Objects.requireNonNull(record);
         this.key = record.key();
         this.value = record.value();
+        this.partition = record.partition();
         this.headers = record.headers();
         this.recordTime = Instant.ofEpochMilli(record.timestamp());
     }
@@ -145,6 +160,7 @@ public class TestRecord<K, V> {
         Objects.requireNonNull(record);
         this.key = record.key();
         this.value = record.value();
+        this.partition = record.partition();
         this.headers = record.headers();
         this.recordTime = Instant.ofEpochMilli(record.timestamp());
     }
@@ -168,6 +184,13 @@ public class TestRecord<K, V> {
      */
     public V value() {
         return value;
+    }
+
+    /**
+     * @return The record partition.
+     */
+    public Integer partition() {
+        return partition;
     }
 
     /**
@@ -205,11 +228,19 @@ public class TestRecord<K, V> {
         return recordTime;
     }
 
+    /**
+     * @return The record partition.
+     */
+    public Integer getPartition() {
+        return partition;
+    }
+
     @Override
     public String toString() {
         return new StringJoiner(", ", TestRecord.class.getSimpleName() + "[", "]")
                 .add("key=" + key)
                 .add("value=" + value)
+                .add("partition=" + partition)
                 .add("headers=" + headers)
                 .add("recordTime=" + recordTime)
                 .toString();
@@ -227,11 +258,12 @@ public class TestRecord<K, V> {
         return Objects.equals(headers, that.headers) &&
             Objects.equals(key, that.key) &&
             Objects.equals(value, that.value) &&
+            Objects.equals(partition, that.partition) &&
             Objects.equals(recordTime, that.recordTime);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(headers, key, value, recordTime);
+        return Objects.hash(headers, key, value, partition, recordTime);
     }
 }

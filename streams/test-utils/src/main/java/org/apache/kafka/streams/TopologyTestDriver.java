@@ -853,7 +853,7 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new TestRecord<>(key, value, record.headers(), record.timestamp());
+        return new TestRecord<>(key, value, record.partition(), record.headers(), record.timestamp());
     }
 
     <K, V> void pipeRecord(final String topic,

@@ -36,6 +36,7 @@ import static org.junit.Assert.assertNotEquals;
 
 public class TestRecordTest {
     private final String key = "testKey";
+    private final Integer partition = 1;
     private final int value = 1;
     private final Headers headers = new RecordHeaders(
             new Header[]{
@@ -48,21 +49,23 @@ public class TestRecordTest {
 
     @Test
     public void testFields() {
-        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, partition, headers, recordTime);
         assertThat(testRecord.key(), equalTo(key));
         assertThat(testRecord.value(), equalTo(value));
         assertThat(testRecord.headers(), equalTo(headers));
         assertThat(testRecord.timestamp(), equalTo(recordMs));
+        assertThat(testRecord.partition(), equalTo(partition));
 
         assertThat(testRecord.getKey(), equalTo(key));
         assertThat(testRecord.getValue(), equalTo(value));
         assertThat(testRecord.getHeaders(), equalTo(headers));
         assertThat(testRecord.getRecordTime(), equalTo(recordTime));
+        assertThat(testRecord.getPartition(), equalTo(partition));
     }
 
     @Test
     public void testMultiFieldMatcher() {
-        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, partition, headers, recordTime);
 
         assertThat(testRecord, allOf(
                 hasProperty("key", equalTo(key)),
@@ -72,6 +75,7 @@ public class TestRecordTest {
         assertThat(testRecord, allOf(
                 hasProperty("key", equalTo(key)),
                 hasProperty("value", equalTo(value)),
+                hasProperty("partition", equalTo(partition)),
                 hasProperty("headers", equalTo(headers)),
                 hasProperty("recordTime", equalTo(recordTime))));
 
@@ -83,15 +87,15 @@ public class TestRecordTest {
 
     @Test
     public void testEqualsAndHashCode() {
-        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, partition, headers, recordTime);
         assertEquals(testRecord, testRecord);
         assertEquals(testRecord.hashCode(), testRecord.hashCode());
 
-        final TestRecord<String, Integer> equalRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> equalRecord = new TestRecord<>(key, value, partition, headers, recordTime);
         assertEquals(testRecord, equalRecord);
         assertEquals(testRecord.hashCode(), equalRecord.hashCode());
 
-        final TestRecord<String, Integer> equalRecordMs = new TestRecord<>(key, value, headers, recordMs);
+        final TestRecord<String, Integer> equalRecordMs = new TestRecord<>(key, value, partition, headers, recordMs);
         assertEquals(testRecord, equalRecordMs);
         assertEquals(testRecord.hashCode(), equalRecordMs.hashCode());
 
@@ -100,19 +104,19 @@ public class TestRecordTest {
                     new RecordHeader("foo", "value".getBytes()),
                     new RecordHeader("bar", (byte[]) null),
                 });
-        final TestRecord<String, Integer> headerMismatch = new TestRecord<>(key, value, headers2, recordTime);
+        final TestRecord<String, Integer> headerMismatch = new TestRecord<>(key, value, partition, headers2, recordTime);
         assertNotEquals(testRecord, headerMismatch);
 
-        final TestRecord<String, Integer> keyMisMatch = new TestRecord<>("test-mismatch", value, headers, recordTime);
+        final TestRecord<String, Integer> keyMisMatch = new TestRecord<>("test-mismatch", value, partition, headers, recordTime);
         assertNotEquals(testRecord, keyMisMatch);
 
-        final TestRecord<String, Integer> valueMisMatch = new TestRecord<>(key, 2, headers, recordTime);
+        final TestRecord<String, Integer> valueMisMatch = new TestRecord<>(key, 2, partition, headers, recordTime);
         assertNotEquals(testRecord, valueMisMatch);
 
-        final TestRecord<String, Integer> timeMisMatch = new TestRecord<>(key, value, headers, recordTime.plusMillis(1));
+        final TestRecord<String, Integer> timeMisMatch = new TestRecord<>(key, value, partition, headers, recordTime.plusMillis(1));
         assertNotEquals(testRecord, timeMisMatch);
 
-        final TestRecord<String, Integer> nullFieldsRecord = new TestRecord<>(null, null, null, (Instant) null);
+        final TestRecord<String, Integer> nullFieldsRecord = new TestRecord<>(null, null, null, null, (Instant) null);
         assertEquals(nullFieldsRecord, nullFieldsRecord);
         assertEquals(nullFieldsRecord.hashCode(), nullFieldsRecord.hashCode());
     }
@@ -120,10 +124,10 @@ public class TestRecordTest {
     @Test
     public void testPartialConstructorEquals() {
         final TestRecord<String, Integer> record1 = new TestRecord<>(value);
-        assertThat(record1, equalTo(new TestRecord<>(null, value, null, (Instant) null)));
+        assertThat(record1, equalTo(new TestRecord<>(null, value, null, null, (Instant) null)));
 
         final TestRecord<String, Integer> record2 = new TestRecord<>(key, value);
-        assertThat(record2, equalTo(new TestRecord<>(key, value, null, (Instant) null)));
+        assertThat(record2, equalTo(new TestRecord<>(key, value, null, null, (Instant) null)));
 
         final TestRecord<String, Integer> record3 = new TestRecord<>(key, value, headers);
         assertThat(record3, equalTo(new TestRecord<>(key, value, headers, (Long) null)));
@@ -139,8 +143,8 @@ public class TestRecordTest {
 
     @Test
     public void testToString() {
-        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
-        assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, "
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, partition, headers, recordTime);
+        assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, partition=1, "
                 + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
                 + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
                 + "recordTime=2019-06-01T10:00:00Z]"));
@@ -152,7 +156,7 @@ public class TestRecordTest {
         final ConsumerRecord<String, Integer> consumerRecord =
             new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0L, 0, 0, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(consumerRecord);
-        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, partition, headers, recordTime);
         assertEquals(expectedRecord, testRecord);
     }
 
@@ -160,9 +164,9 @@ public class TestRecordTest {
     public void testProducerRecord() {
         final String topicName = "topic";
         final ProducerRecord<String, Integer> producerRecord =
-            new ProducerRecord<>(topicName, 1, recordMs, key, value, headers);
+            new ProducerRecord<>(topicName, partition, recordMs, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(producerRecord);
-        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, partition, headers, recordTime);
         assertEquals(expectedRecord, testRecord);
         assertNotEquals(expectedRecord, producerRecord);
     }

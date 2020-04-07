@@ -253,7 +253,7 @@ public class TestTopicsTest {
         final Instant recordInstant = testBaseTime.plus(Duration.ofDays(1));
         inputTopic.pipeValueList(inputList, recordInstant, advance);
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "Advancing", recordInstant))));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "time", null, recordInstant.plus(advance)))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "time", null, null, recordInstant.plus(advance)))));
     }
 
     @Test

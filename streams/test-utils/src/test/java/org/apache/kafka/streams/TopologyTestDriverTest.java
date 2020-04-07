@@ -23,6 +23,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -32,6 +34,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -1693,6 +1696,39 @@ public class TopologyTestDriverTest {
                     new KeyValue<>("B", "beta")
                 ))
             );
+        }
+    }
+
+    @Test
+    public void shouldRecordPartition() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
+
+        final Produced<Integer, String> produced = Produced.streamPartitioner((topic, key, value, numPartitions) -> 123);
+
+        builder.stream("input-topic", Consumed.with(Serdes.Integer(), Serdes.String()))
+               .to("sink-topic", produced);
+
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(builder.build(), properties)) {
+            topologyTestDriver.pipeRecord("input-topic",
+                                          new TestRecord<>(0, "x0"),
+                                          new IntegerSerializer(),
+                                          new StringSerializer(),
+                                          Instant.now());
+
+            final TestOutputTopic<Integer, String> testOutputTopic = topologyTestDriver.createOutputTopic("sink-topic",
+                                                                                                          new IntegerDeserializer(),
+                                                                                                          new StringDeserializer());
+
+            final TestRecord<Integer, String> record = testOutputTopic.readRecord();
+
+            assertTrue(testOutputTopic.isEmpty());
+            assertThat(record.partition(), is(equalTo(123)));
+            assertThat(record.key(), is(equalTo(0)));
+            assertThat(record.value(), is(equalTo("x0")));
         }
     }
 }
