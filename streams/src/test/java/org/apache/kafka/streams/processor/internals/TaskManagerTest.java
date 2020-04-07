@@ -1529,6 +1529,28 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldNotCommitOffsetsIfOnlyStandbyTasksAssigned() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+        expectLastCall();
+
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        task00.setCommitNeeded();
+
+        assertThat(taskManager.commitAll(), equalTo(1));
+        assertThat(task00.commitNeeded, is(false));
+    }
+
+    @Test
     public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws IOException {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
