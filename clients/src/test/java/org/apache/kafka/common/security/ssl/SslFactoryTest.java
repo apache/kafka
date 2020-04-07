@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.ArrayList;
@@ -55,7 +54,6 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import java.security.Security;
-import java.util.Set;
 
 @RunWith(value = Parameterized.class)
 public class SslFactoryTest {
