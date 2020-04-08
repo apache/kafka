@@ -481,7 +481,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
 
-        mockClientSupplier.setClusterForAdminClient(createCluster());
+        mockClientSupplier.setCluster(createCluster());
         final StreamThread thread = StreamThread.create(
             internalTopologyBuilder,
             config,
