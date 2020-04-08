@@ -272,7 +272,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         this.context.close();
     }
 }

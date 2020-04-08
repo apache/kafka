@@ -217,7 +217,7 @@ class ProcessingContext implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         for (ErrorReporter reporter : reporters) {
             reporter.close();
         }
