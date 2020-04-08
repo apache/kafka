@@ -100,29 +100,28 @@ class SocketServer(val config: KafkaConfig,
 
   private var nextProcessorId = 0
   private var connectionQuotas: ConnectionQuotas = _
+  private var startedProcessingRequests = false
   private var stoppedProcessingRequests = false
 
   /**
-   * Start the socket server. Acceptors for all the listeners are started. Processors
-   * are started if `startupProcessors` is true. If not, processors are only started when
-   * [[kafka.network.SocketServer#startDataPlaneProcessors()]] or
-   * [[kafka.network.SocketServer#startControlPlaneProcessor()]] is invoked. Delayed starting of processors
-   * is used to delay processing client connections until server is fully initialized, e.g.
-   * to ensure that all credentials have been loaded before authentications are performed.
-   * Acceptors are always started during `startup` so that the bound port is known when this
-   * method completes even when ephemeral ports are used. Incoming connections on this server
-   * are processed when processors start up and invoke [[org.apache.kafka.common.network.Selector#poll]].
+   * Starts the socket server and creates all the Acceptors and the Processors. The Acceptors
+   * start listening at this stage. Acceptors and Processors are started if `startProcessingRequests`
+   * is true. If not, acceptors and processors are only started when
+   * [[kafka.network.SocketServer#startProcessingRequests()]]  is invoked. Delayed starting of
+   * acceptors and processors is used to delay processing client connections until server is
+   * fully initialized, e.g. to ensure that all credentials have been loaded before authentications
+   * are performed. Incoming connections on this server are processed when processors start up
+   * and invoke [[org.apache.kafka.common.network.Selector#poll]].
    *
-   * @param startupProcessors Flag indicating whether `Processor`s must be started.
+   * @param startProcessingRequests Flag indicating whether `Processor`s must be started.
    */
-  def startup(startupProcessors: Boolean = true): Unit = {
+  def startup(startProcessingRequests: Boolean = true): Unit = {
     this.synchronized {
       connectionQuotas = new ConnectionQuotas(config, time)
       createControlPlaneAcceptorAndProcessor(config.controlPlaneListener)
       createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, config.dataPlaneListeners)
-      if (startupProcessors) {
-        startControlPlaneProcessor(Map.empty)
-        startDataPlaneProcessors(Map.empty)
+      if (startProcessingRequests) {
+        this.startProcessingRequests()
       }
     }
 
@@ -160,22 +159,66 @@ class SocketServer(val config: KafkaConfig,
         Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
       }.getOrElse(0.0)
     })
-    info(s"Started ${dataPlaneAcceptors.size} acceptor threads for data-plane")
-    if (controlPlaneAcceptorOpt.isDefined)
-      info("Started control-plane acceptor thread")
   }
 
   /**
-   * Starts processors of all the data-plane acceptors of this server if they have not already been started.
-   * This method is used for delayed starting of data-plane processors if [[kafka.network.SocketServer#startup]]
-   * was invoked with `startupProcessors=false`.
+   * Start processing requests and new connections. This method is used for delayed starting of
+   * data-plane processors if [[kafka.network.SocketServer#startup]] was invoked with
+   * `startProcessingRequests=false`.
    *
    * Before starting processors for each endpoint, we ensure that authorizer has all the metadata
-   * to authorize requests on that endpoint by waiting on the provided future. We start inter-broker listener
-   * before other listeners. This allows authorization metadata for other listeners to be stored in Kafka topics
-   * in this cluster.
+   * to authorize requests on that endpoint by waiting on the provided future. We start inter-broker
+   * listener before other listeners. This allows authorization metadata for other listeners to be
+   * stored in Kafka topics in this cluster.
+   *
+   * @param authorizerFutures
    */
-  def startDataPlaneProcessors(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
+  def startProcessingRequests(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = {
+    info("Starting socket server acceptors and processors")
+    this.synchronized {
+      if (!startedProcessingRequests) {
+        startControlPlaneProcessorAndAcceptor(authorizerFutures)
+        startDataPlaneProcessorsAndAcceptors(authorizerFutures)
+        startedProcessingRequests = true
+      } else {
+        info("Socket server acceptors and processors already started")
+      }
+    }
+    info("Started socket server acceptors and processors")
+  }
+
+  /**
+   * Starts processors of the provided acceptor and the acceptor itself.
+   *
+   * Before starting them, we ensure that authorizer has all the metadata to authorize
+   * requests on that endpoint by waiting on the provided future.
+   */
+  private def startAcceptorAndProcessors(threadPrefix: String,
+                                         endpoint: EndPoint,
+                                         acceptor: Acceptor,
+                                         authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = {
+    debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
+    waitForAuthorizerFuture(acceptor, authorizerFutures)
+    debug(s"Start processors on listener ${endpoint.listenerName}")
+    acceptor.startProcessors(DataPlaneThreadPrefix)
+    debug(s"Start acceptor thread on listener ${endpoint.listenerName}")
+    if (!acceptor.isStarted()) {
+      KafkaThread.nonDaemon(
+        s"${threadPrefix}-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}",
+        acceptor
+      ).start()
+      acceptor.awaitStartup()
+    }
+    info(s"Started $DataPlaneThreadPrefix acceptor and processor(s) for endpoint : ${endpoint.listenerName}")
+  }
+
+  /**
+   * Starts processors of all the data-plane acceptors and all the acceptors of this server.
+   *
+   * We start inter-broker listener before other listeners. This allows authorization metadata for
+   * other listeners to be stored in Kafka topics in this cluster.
+   */
+  private def startDataPlaneProcessorsAndAcceptors(authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     val interBrokerListener = dataPlaneAcceptors.asScala.keySet
       .find(_.listenerName == config.interBrokerListenerName)
       .getOrElse(throw new IllegalStateException(s"Inter-broker listener ${config.interBrokerListenerName} not found, endpoints=${dataPlaneAcceptors.keySet}"))
@@ -183,43 +226,34 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.filter { case (k, _) => k != interBrokerListener }.values
     orderedAcceptors.foreach { acceptor =>
       val endpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
-      waitForAuthorizerFuture(acceptor, authorizerFutures)
-      debug(s"Start processors on listener ${endpoint.listenerName}")
-      acceptor.startProcessors(DataPlaneThreadPrefix)
+      startAcceptorAndProcessors(DataPlaneThreadPrefix, endpoint, acceptor, authorizerFutures)
     }
-    info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
   }
 
   /**
-   * Start the processor of control-plane acceptor of this server if it has not already been started.
-   * This method is used for delayed starting of control-plane processor if [[kafka.network.SocketServer#startup]]
-   * was invoked with `startupProcessors=false`.
+   * Start the processor of control-plane acceptor and the acceptor of this server.
    */
-  def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
+  private def startControlPlaneProcessorAndAcceptor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      waitForAuthorizerFuture(controlPlaneAcceptor, authorizerFutures)
-      controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
-      info(s"Started control-plane processor for the control-plane acceptor")
+      val endpoint = config.controlPlaneListener.get
+      startAcceptorAndProcessors(ControlPlaneThreadPrefix, endpoint, controlPlaneAcceptor, authorizerFutures)
     }
   }
 
   private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
 
   private def createDataPlaneAcceptorsAndProcessors(dataProcessorsPerListener: Int,
-                                                    endpoints: Seq[EndPoint]): Unit = synchronized {
+                                                    endpoints: Seq[EndPoint]): Unit = {
     endpoints.foreach { endpoint =>
       connectionQuotas.addListener(config, endpoint.listenerName)
       val dataPlaneAcceptor = createAcceptor(endpoint, DataPlaneMetricPrefix)
       addDataPlaneProcessors(dataPlaneAcceptor, endpoint, dataProcessorsPerListener)
-      KafkaThread.nonDaemon(s"data-plane-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", dataPlaneAcceptor).start()
-      dataPlaneAcceptor.awaitStartup()
       dataPlaneAcceptors.put(endpoint, dataPlaneAcceptor)
-      info(s"Created data-plane acceptor and processors for endpoint : $endpoint")
+      info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
     }
   }
 
-  private def createControlPlaneAcceptorAndProcessor(endpointOpt: Option[EndPoint]): Unit = synchronized {
+  private def createControlPlaneAcceptorAndProcessor(endpointOpt: Option[EndPoint]): Unit = {
     endpointOpt.foreach { endpoint =>
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
@@ -231,20 +265,18 @@ class SocketServer(val config: KafkaConfig,
       controlPlaneRequestChannelOpt.foreach(_.addProcessor(controlPlaneProcessor))
       nextProcessorId += 1
       controlPlaneAcceptor.addProcessors(listenerProcessors, ControlPlaneThreadPrefix)
-      KafkaThread.nonDaemon(s"${ControlPlaneThreadPrefix}-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", controlPlaneAcceptor).start()
-      controlPlaneAcceptor.awaitStartup()
-      info(s"Created control-plane acceptor and processor for endpoint : $endpoint")
+      info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
     }
   }
 
-  private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = synchronized {
+  private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
     val brokerId = config.brokerId
     new Acceptor(endPoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas, metricPrefix)
   }
 
-  private def addDataPlaneProcessors(acceptor: Acceptor, endpoint: EndPoint, newProcessorsPerListener: Int): Unit = synchronized {
+  private def addDataPlaneProcessors(acceptor: Acceptor, endpoint: EndPoint, newProcessorsPerListener: Int): Unit = {
     val listenerName = endpoint.listenerName
     val securityProtocol = endpoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
@@ -261,13 +293,13 @@ class SocketServer(val config: KafkaConfig,
   /**
    * Stop processing requests and new connections.
    */
-  def stopProcessingRequests() = {
+  def stopProcessingRequests(): Unit = {
     info("Stopping socket server request processors")
     this.synchronized {
-      dataPlaneAcceptors.asScala.values.foreach(_.shutdown())
-      controlPlaneAcceptorOpt.foreach(_.shutdown())
       dataPlaneProcessors.asScala.values.foreach(_.shutdown())
       controlPlaneProcessorOpt.foreach(_.shutdown())
+      dataPlaneAcceptors.asScala.values.foreach(_.shutdown())
+      controlPlaneAcceptorOpt.foreach(_.shutdown())
       dataPlaneRequestChannel.clear()
       controlPlaneRequestChannelOpt.foreach(_.clear())
       stoppedProcessingRequests = true
@@ -289,7 +321,7 @@ class SocketServer(val config: KafkaConfig,
    * Shutdown the socket server. If still processing requests, shutdown
    * acceptors and processors first.
    */
-  def shutdown() = {
+  def shutdown(): Unit = {
     info("Shutting down socket server")
     this.synchronized {
       if (!stoppedProcessingRequests)
@@ -317,7 +349,10 @@ class SocketServer(val config: KafkaConfig,
   def addListeners(listenersAdded: Seq[EndPoint]): Unit = synchronized {
     info(s"Adding data-plane listeners for endpoints $listenersAdded")
     createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, listenersAdded)
-    startDataPlaneProcessors()
+    listenersAdded.foreach { endpoint =>
+      val acceptor = dataPlaneAcceptors.get(endpoint)
+      startAcceptorAndProcessors(DataPlaneThreadPrefix, endpoint, acceptor)
+    }
   }
 
   def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = synchronized {
@@ -431,6 +466,11 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   }
 
   /**
+   * Returns true if the thread is completely started
+   */
+  def isStarted(): Boolean = startupLatch.getCount == 0
+
+  /**
    * Wait for the thread to completely start up
    */
   def awaitStartup(): Unit = startupLatch.await
@@ -498,8 +538,10 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   private def startProcessors(processors: Seq[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors.foreach { processor =>
-      KafkaThread.nonDaemon(s"${processorThreadPrefix}-kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
-        processor).start()
+      KafkaThread.nonDaemon(
+        s"${processorThreadPrefix}-kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
+        processor
+      ).start()
     }
   }
 
@@ -514,10 +556,12 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   }
 
   override def shutdown(): Unit = {
-    super.shutdown()
+    // Shutdown processors first because the acceptor thread may be blocked trying to
+    // add a new connection to one of the processor.
     synchronized {
       processors.foreach(_.shutdown())
     }
+    super.shutdown()
   }
 
   /**
@@ -530,7 +574,6 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       var currentProcessorIndex = 0
       while (isRunning) {
         try {
-
           val ready = nioSelector.select(500)
           if (ready > 0) {
             val keys = nioSelector.selectedKeys()
@@ -542,7 +585,6 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
                 if (key.isAcceptable) {
                   accept(key).foreach { socketChannel =>
-
                     // Assign the channel to the next processor (using round-robin) to which the
                     // channel can be added without blocking. If newConnections queue is full on
                     // all processors, block until the last one is able to accept a connection.
@@ -1038,6 +1080,9 @@ private[kafka] class Processor(val id: Int,
    * Close the selector and all open connections
    */
   private def closeAll(): Unit = {
+    // Clear to unblock blocked acceptors
+    newConnections.asScala.foreach(_.close())
+    newConnections.clear()
     selector.channels.asScala.foreach { channel =>
       close(channel.id)
     }
