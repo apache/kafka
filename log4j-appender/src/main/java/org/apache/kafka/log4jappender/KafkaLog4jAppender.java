@@ -244,9 +244,13 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.maxBlockMs = maxBlockMs;
     }
 
-    public String getSslEngineFactoryClass() { return sslEngineFactoryClass; }
+    public String getSslEngineFactoryClass() {
+        return sslEngineFactoryClass;
+    }
 
-    public void setSslEngineFactoryClass(String sslEngineFactoryClass) { this.sslEngineFactoryClass = sslEngineFactoryClass; }
+    public void setSslEngineFactoryClass(String sslEngineFactoryClass) {
+        this.sslEngineFactoryClass = sslEngineFactoryClass;
+    }
 
     @Override
     public void activateOptions() {
