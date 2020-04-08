@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -455,7 +456,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -464,6 +466,74 @@ public class StreamThreadTest {
         thread.maybeCommit();
 
         EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldEnforceRebalanceAfterNextScheduledProbingRebalanceTime() throws InterruptedException {
+        final StreamsConfig config = new StreamsConfig(configProps(false));
+        internalTopologyBuilder.buildTopology();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
+        
+        final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
+        final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
+
+        mockClientSupplier.setCluster(createCluster());
+        final StreamThread thread = StreamThread.create(
+            internalTopologyBuilder,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            threadIdx
+        );
+
+        mockConsumer.enforceRebalance();
+        EasyMock.replay(mockConsumer);
+        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
+
+        thread.start();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.STARTING,
+            10 * 1000,
+            "Thread never started.");
+
+        thread.shutdown();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+
+        EasyMock.verify(mockConsumer);
+    }
+
+    private static class EasyMockConsumerClientSupplier extends MockClientSupplier {
+        final Consumer<byte[], byte[]> mockConsumer;
+        final Map<String, Object> consumerConfigs = new HashMap<>();
+
+        EasyMockConsumerClientSupplier(final Consumer<byte[], byte[]> mockConsumer) {
+            this.mockConsumer = mockConsumer;
+        }
+
+        @Override
+        public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+            consumerConfigs.putAll(config);
+            return mockConsumer;
+        }
+
+        AtomicLong nextRebalanceMs() {
+            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        }
     }
 
     @Test
@@ -609,7 +679,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -645,7 +716,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
 
         thread.setNow(mockTime.milliseconds());
@@ -835,7 +907,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.setStateListener(
             (t, newState, oldState) -> {
@@ -894,7 +967,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         final IllegalStateException thrown = assertThrows(
@@ -930,7 +1004,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         EasyMock.verify(taskManager);
@@ -959,7 +1034,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
@@ -1770,7 +1846,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -1812,7 +1889,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -1982,7 +2060,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
 
         assertThat(dummyProducerMetrics, is(thread.producerMetrics()));
@@ -2014,7 +2093,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(

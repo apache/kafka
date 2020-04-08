@@ -872,6 +872,8 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
         public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
         public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
+        public static final String NEXT_PROBING_REBALANCE_MS = "__next.probing.rebalance.ms__";
+        public static final String TIME = "__time__";
     }
 
     /**
