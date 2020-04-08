@@ -155,7 +155,12 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff we encounter a leader epoch that is newer than the last seen leader epoch
+     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called the client
+     * handles a response from the broker besides UpdateMetadata that includes leader epochs (e.g., ListOffsets)
+     *
+     * @param topicPartition
+     * @param leaderEpoch
+     * @return true if we updated the last seen epoch, false otherwise
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
@@ -163,21 +168,19 @@ public class Metadata implements Closeable {
             throw new IllegalArgumentException("Invalid leader epoch " + leaderEpoch + " (must be non-negative)");
 
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
-        log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, leaderEpoch);
+        log.trace("Determining if we should replace existing epoch {} with new epoch {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
 
         final boolean updated;
         if (oldEpoch == null) {
             log.debug("Not replacing null epoch with new epoch {} for partition {}", leaderEpoch, topicPartition);
             updated = false;
+        } else if (leaderEpoch > oldEpoch) {
+            log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
+            lastSeenLeaderEpochs.put(topicPartition, leaderEpoch);
+            updated = true;
         } else {
-            if (leaderEpoch > oldEpoch) {
-                log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
-                lastSeenLeaderEpochs.put(topicPartition, leaderEpoch);
-                updated = true;
-            } else {
-                log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
-                updated = false;
-            }
+            log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, leaderEpoch, topicPartition);
+            updated = false;
         }
 
         this.needFullUpdate = this.needFullUpdate || updated;
