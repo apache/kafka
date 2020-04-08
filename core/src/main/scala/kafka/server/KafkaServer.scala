@@ -339,8 +339,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         Mx4jLoader.maybeLoad()
 
-        socketServer.startProcessingRequests(authorizerFutures)
-
         /* Add all reconfigurables for config change notification before starting config handlers */
         config.dynamicConfig.addReconfigurables(this)
 
@@ -353,6 +351,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
+
+        socketServer.startProcessingRequests(authorizerFutures)
 
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)

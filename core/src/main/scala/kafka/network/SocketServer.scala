@@ -200,7 +200,7 @@ class SocketServer(val config: KafkaConfig,
     debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
     waitForAuthorizerFuture(acceptor, authorizerFutures)
     debug(s"Start processors on listener ${endpoint.listenerName}")
-    acceptor.startProcessors(DataPlaneThreadPrefix)
+    acceptor.startProcessors(threadPrefix)
     debug(s"Start acceptor thread on listener ${endpoint.listenerName}")
     if (!acceptor.isStarted()) {
       KafkaThread.nonDaemon(
@@ -209,7 +209,7 @@ class SocketServer(val config: KafkaConfig,
       ).start()
       acceptor.awaitStartup()
     }
-    info(s"Started $DataPlaneThreadPrefix acceptor and processor(s) for endpoint : ${endpoint.listenerName}")
+    info(s"Started $threadPrefix acceptor and processor(s) for endpoint : ${endpoint.listenerName}")
   }
 
   /**
