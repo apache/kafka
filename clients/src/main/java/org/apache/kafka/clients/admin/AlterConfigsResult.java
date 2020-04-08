@@ -48,7 +48,7 @@ public class AlterConfigsResult {
      * Return a future which succeeds only if all the alter configs operations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
 }

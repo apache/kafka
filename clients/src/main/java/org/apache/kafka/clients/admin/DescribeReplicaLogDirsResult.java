@@ -51,7 +51,7 @@ public class DescribeReplicaLogDirsResult {
      * Return a future which succeeds if log directory information of all replicas are available
      */
     public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(new KafkaFuture.BaseFunction<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
                 @Override
                 public Map<TopicPartitionReplica, ReplicaLogDirInfo> apply(Void v) {

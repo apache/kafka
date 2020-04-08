@@ -56,7 +56,7 @@ public class ListOffsetsResult {
      * retrieved.
      */
     public KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
                 .thenApply(new KafkaFuture.BaseFunction<Void, Map<TopicPartition, ListOffsetsResultInfo>>() {
                     @Override
                     public Map<TopicPartition, ListOffsetsResultInfo> apply(Void v) {
