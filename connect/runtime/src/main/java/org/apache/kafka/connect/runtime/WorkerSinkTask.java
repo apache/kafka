@@ -175,6 +175,11 @@ class WorkerSinkTask extends WorkerTask {
         } catch (Throwable t) {
             log.warn("Could not close transformation chain", t);
         }
+        try {
+            retryWithToleranceOperator.close();
+        } catch (Throwable t) {
+            log.warn("Could not close retry operator", t);
+        }
     }
 
     @Override

@@ -69,4 +69,7 @@ public class LogReporter implements ErrorReporter {
                 context.toString(connConfig.includeRecordDetailsInErrorLog()));
     }
 
+    @Override
+    public void close() {
+    }
 }
