@@ -1633,7 +1633,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(metadata.updateRequested());
-        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long)epoch, 2));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long) epoch, 2));
     }
 
     @Test
