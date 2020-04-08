@@ -68,13 +68,11 @@ public final class Heartbeat {
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
-
     void failHeartbeat() {
         update(time.milliseconds());
         heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
     }
-
 
     void receiveHeartbeat() {
         update(time.milliseconds());

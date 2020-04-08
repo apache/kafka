@@ -191,7 +191,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
     Thread.sleep(3000)
 
-    // we should fall out of the group and need to rebalance
     awaitRebalance(consumer, listener)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)

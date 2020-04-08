@@ -392,7 +392,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
         s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)} during $operation, will " +
         s"respond with instance fenced error")
-        true
+      true
     } else
       false
   }
