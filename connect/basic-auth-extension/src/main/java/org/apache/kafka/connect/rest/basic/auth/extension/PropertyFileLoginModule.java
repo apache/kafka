@@ -93,7 +93,7 @@ public class PropertyFileLoginModule implements LoginModule {
             log.trace("Authenticating user; invoking JAAS login callbacks");
             callbackHandler.handle(callbacks);
         } catch (Exception e) {
-            log.trace("Authentication failed while invoking JAAS login callbacks");
+            log.warn("Authentication failed while invoking JAAS login callbacks");
             throw new LoginException(e.getMessage());
         }
 
