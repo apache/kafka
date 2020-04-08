@@ -466,6 +466,108 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testJoinGroupUnknownMemberResponseWithOldGeneration() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        // change the generation after the join-group request
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId,
+            currGen.memberId + "-new",
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation + 1, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
+
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.UNKNOWN_MEMBER_ID.exception()));
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
+    }
+
+    @Test
+    public void testSyncGroupUnknownMemberResponseWithOldGeneration() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
+
+        // change the generation after the sync-group request
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId,
+            currGen.memberId + "-new",
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.prepareResponse(syncGroupResponse(Errors.UNKNOWN_MEMBER_ID));
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.UNKNOWN_MEMBER_ID.exception()));
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
+    }
+
+    @Test
+    public void testSyncGroupIllegalGenerationResponseWithOldGeneration() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
+
+        // change the generation after the sync-group request
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId + 1,
+            currGen.memberId,
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.prepareResponse(syncGroupResponse(Errors.ILLEGAL_GENERATION));
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.ILLEGAL_GENERATION.exception()));
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
+    }
+
+    @Test
     public void testHeartbeatIllegalGenerationResponseWithOldGeneration() throws InterruptedException {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -482,12 +584,8 @@ public class AbstractCoordinatorTest {
         // let the heartbeat request to send out a request
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
-        long startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
-        }
-
-        assertTrue(coordinator.heartbeat().hasInflight());
+        TestUtils.waitForCondition(() -> coordinator.heartbeat().hasInflight(), 2000,
+            "The heartbeat request was not sent in time after 2000ms elapsed");
 
         // change the generation
         final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
@@ -499,13 +597,11 @@ public class AbstractCoordinatorTest {
         mockClient.respond(heartbeatResponse(Errors.ILLEGAL_GENERATION));
 
         // the heartbeat error code should be ignored
-        startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
-            coordinator.pollHeartbeat(mockTime.milliseconds());
-        }
-
-        assertFalse(coordinator.heartbeat().hasInflight());
+        TestUtils.waitForCondition(() -> {
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+                return !coordinator.heartbeat().hasInflight();
+            }, 2000,
+            "The heartbeat response was not received in time after 2000ms elapsed");
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -528,12 +624,8 @@ public class AbstractCoordinatorTest {
         // let the heartbeat request to send out a request
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
-        long startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && !coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
-        }
-
-        assertTrue(coordinator.heartbeat().hasInflight());
+        TestUtils.waitForCondition(() -> coordinator.heartbeat().hasInflight(), 2000,
+            "The heartbeat request was not sent in time after 2000ms elapsed");
 
         // change the generation
         final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
@@ -545,13 +637,11 @@ public class AbstractCoordinatorTest {
         mockClient.respond(heartbeatResponse(Errors.UNKNOWN_MEMBER_ID));
 
         // the heartbeat error code should be ignored
-        startMs = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startMs < 1000 && coordinator.heartbeat().hasInflight()) {
-            Thread.sleep(10);
+        TestUtils.waitForCondition(() -> {
             coordinator.pollHeartbeat(mockTime.milliseconds());
-        }
-
-        assertFalse(coordinator.heartbeat().hasInflight());
+            return !coordinator.heartbeat().hasInflight();
+        }, 2000,
+            "The heartbeat response was not received in time after 2000ms elapsed");
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -589,9 +679,7 @@ public class AbstractCoordinatorTest {
             return !coordinator.heartbeat().hasInflight();
         },
             2000,
-            "The heartbeat response was not been received in time after 2000ms elapsed");
-
-        assertFalse(coordinator.heartbeat().hasInflight());
+            "The heartbeat response was not received in time after 2000ms elapsed");
 
         // the generation should be reset but the rebalance should still proceed
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
@@ -601,6 +689,46 @@ public class AbstractCoordinatorTest {
 
         coordinator.ensureActiveGroup();
         assertEquals(currGen, coordinator.generation());
+    }
+
+    @Test
+    public void testHeartbeatInstanceFencedResponseWithOldGeneration() throws InterruptedException {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        // let the heartbeat request to send out a request
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        TestUtils.waitForCondition(() -> coordinator.heartbeat().hasInflight(), 2000,
+            "The heartbeat request was not sent in time after 2000ms elapsed");
+
+        // change the generation
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            currGen.generationId,
+            currGen.memberId + "-new",
+            currGen.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.respond(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
+
+        // the heartbeat error code should be ignored
+        TestUtils.waitForCondition(() -> {
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+                return !coordinator.heartbeat().hasInflight();
+            }, 2000,
+            "The heartbeat response was not received in time after 2000ms elapsed");
+
+        // the generation should not be reset
+        assertEquals(newGen, coordinator.generation());
     }
 
     @Test

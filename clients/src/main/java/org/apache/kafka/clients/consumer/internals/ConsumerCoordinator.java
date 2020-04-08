@@ -1072,10 +1072,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * which returns a request future that can be polled in the case of a synchronous commit or ignored in the
      * asynchronous case.
      *
+     * NOTE: This is visible only for testing
+     *
      * @param offsets The list of offsets per partition that should be committed.
      * @return A request future whose value indicates whether the commit was successful or not
      */
-    private RequestFuture<Void> sendOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    RequestFuture<Void> sendOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (offsets.isEmpty())
             return RequestFuture.voidSuccess();
 

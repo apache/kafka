@@ -1504,4 +1504,8 @@ public abstract class AbstractCoordinator implements Closeable {
     final void setNewGeneration(final Generation generation) {
         this.generation = generation;
     }
+
+    final void setNewState(final MemberState state) {
+        this.state = state;
+    }
 }
