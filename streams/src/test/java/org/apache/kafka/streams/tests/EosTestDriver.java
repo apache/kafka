@@ -143,7 +143,7 @@ public class EosTestDriver extends SmokeTestUtil {
             System.out.flush();
 
             // verify offsets
-            for (Map.Entry<Integer, List<Long>> offsetsOfPartition : offsets.entrySet()) {
+            for (final Map.Entry<Integer, List<Long>> offsetsOfPartition : offsets.entrySet()) {
                 offsetsOfPartition.getValue().sort(Long::compareTo);
                 for (int i = 0; i < offsetsOfPartition.getValue().size() - 1; ++i) {
                     if (offsetsOfPartition.getValue().get(i) != i) {
@@ -610,12 +610,12 @@ public class EosTestDriver extends SmokeTestUtil {
             }
         }
 
-        long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
+        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         while (!endMarkerOffset.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
             consumer.seekToEnd(partitions);
 
             final Iterator<TopicPartition> iterator = partitions.iterator();
-            while(iterator.hasNext()) {
+            while (iterator.hasNext()) {
                 final TopicPartition topicPartition = iterator.next();
 
                 if (consumer.position(topicPartition) > endMarkerOffset.get(topicPartition)) {
