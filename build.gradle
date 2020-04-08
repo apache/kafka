@@ -1040,8 +1040,14 @@ project(':clients') {
   }
 
   compileJava.dependsOn 'processMessages'
+  compileJava {
+    options.compilerArgs << "-Xlint:rawtypes"
+  }
 
   compileTestJava.dependsOn 'processTestMessages'
+  compileTestJava {
+    options.compilerArgs << "-Xlint:rawtypes"
+  }
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
