@@ -3435,10 +3435,10 @@ public class KafkaAdminClientTest {
                         AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG, "" + retryBackoffMaxMs))) {
 
             KafkaAdminClient kafkaAdminClient = (KafkaAdminClient) env.adminClient();
-            KafkaAdminClient.RetryContext retryContext = kafkaAdminClient.new RetryContext();
+            KafkaAdminClient.CallRetryContext callRetryContext = kafkaAdminClient.new CallRetryContext();
 
             // TODO: Remove this line before merge
-            System.out.println(retryContext.getNextAllowedTryMs() + " " + retryContext.getTries());
+            System.out.println(callRetryContext.nextAllowedTryMs() + " " + callRetryContext.tries());
 
             long failures = 0;
             long lastAllowedTryMs = time.milliseconds();
@@ -3447,10 +3447,11 @@ public class KafkaAdminClientTest {
             while (actualRetryBackoffMs < retryBackoffMaxMs) {
                 time.sleep(actualRetryBackoffMs);
                 failures++;
-                retryContext.update(retryContext);
-                long nextAllowedTryMs = retryContext.getNextAllowedTryMs();
+                callRetryContext.update(callRetryContext);
+                long nextAllowedTryMs = callRetryContext.nextAllowedTryMs();
                 actualRetryBackoffMs = nextAllowedTryMs - lastAllowedTryMs;
                 lastAllowedTryMs = nextAllowedTryMs;
+                // TODO: Remove this line before merge
                 System.out.println(actualRetryBackoffMs);
                 if (actualRetryBackoffMs == retryBackoffMaxMs) return;
 
