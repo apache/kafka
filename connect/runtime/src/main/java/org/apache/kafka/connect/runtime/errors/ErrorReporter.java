@@ -28,4 +28,6 @@ public interface ErrorReporter extends AutoCloseable {
      */
     void report(ProcessingContext context);
 
+    @Override
+    default void close() { }
 }
