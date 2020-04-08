@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -212,6 +213,38 @@ public class ErrorHandlingTaskTest {
 
         reporter.close();
         EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCloseErrorReportersExceptionPropagation() {
+        ErrorReporter reporterA = EasyMock.mock(ErrorReporter.class);
+        ErrorReporter reporterB = EasyMock.mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        createSourceTask(initialState, retryWithToleranceOperator);
+
+        sourceTask.stop();
+        PowerMock.expectLastCall();
+
+        producer.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+        reporterA.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException());
+
+        reporterB.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException());
 
         PowerMock.replayAll();
 

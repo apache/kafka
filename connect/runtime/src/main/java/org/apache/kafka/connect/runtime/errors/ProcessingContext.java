@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import java.util.Collection;
@@ -218,8 +219,16 @@ class ProcessingContext implements AutoCloseable {
 
     @Override
     public void close() {
+        ConnectException e = new ConnectException("Failed to close all reporters");
         for (ErrorReporter reporter : reporters) {
-            reporter.close();
+            try {
+                reporter.close();
+            } catch (Throwable t) {
+                e.addSuppressed(t);
+            }
+        }
+        if (e.getSuppressed().length > 0) {
+            throw e;
         }
     }
 }
