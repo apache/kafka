@@ -598,9 +598,9 @@ public class AbstractCoordinatorTest {
 
         // the heartbeat error code should be ignored
         TestUtils.waitForCondition(() -> {
-                coordinator.pollHeartbeat(mockTime.milliseconds());
-                return !coordinator.heartbeat().hasInflight();
-            }, 2000,
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+            return !coordinator.heartbeat().hasInflight();
+        }, 2000,
             "The heartbeat response was not received in time after 2000ms elapsed");
 
         // the generation should not be reset
@@ -722,9 +722,9 @@ public class AbstractCoordinatorTest {
 
         // the heartbeat error code should be ignored
         TestUtils.waitForCondition(() -> {
-                coordinator.pollHeartbeat(mockTime.milliseconds());
-                return !coordinator.heartbeat().hasInflight();
-            }, 2000,
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+            return !coordinator.heartbeat().hasInflight();
+        }, 2000,
             "The heartbeat response was not received in time after 2000ms elapsed");
 
         // the generation should not be reset
