@@ -1331,6 +1331,11 @@ public final class MessageDataGenerator {
                                             presentAndTaggedVersions,
                                             Versions.NONE,
                                             field.zeroCopy());
+                                    } else if (field.type().isStruct()) {
+                                        buffer.printf("_writable.writeUnsignedVarint(this.%s.size(_cache, _version));%n",
+                                                field.camelCaseName());
+                                        buffer.printf("%s;%n",
+                                                primitiveWriteExpression(field.type(), field.camelCaseName()));
                                     } else {
                                         buffer.printf("_writable.writeUnsignedVarint(%d);%n",
                                             field.type().fixedLength().get());
@@ -1661,6 +1666,7 @@ public final class MessageDataGenerator {
             (field.type() instanceof FieldType.Int64FieldType) ||
             (field.type() instanceof FieldType.UUIDFieldType) ||
             (field.type() instanceof FieldType.Float64FieldType) ||
+            (field.type() instanceof FieldType.StructType) ||
             (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("_taggedFields.put(%d, %s);%n",
                 field.tag().get(), field.camelCaseName());
@@ -1968,7 +1974,11 @@ public final class MessageDataGenerator {
                         buffer.printf("_size += _bytesSize;%n");
                     }
                 } else if (field.type().isStruct()) {
-                    buffer.printf("_size += this.%s.size(_cache, _version);%n", field.camelCaseName());
+                    buffer.printf("int size = this.%s.size(_cache, _version);%n", field.camelCaseName());
+                    if (tagged) {
+                        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(size);%n");
+                    }
+                    buffer.printf("_size += size;%n");
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }

@@ -301,6 +301,26 @@ public class SimpleExampleMessageTest {
             __ -> { }, (short) 1);
     }
 
+    /**
+     * Check following cases:
+     * 1. Tagged struct can be serialized/deserialized for version it is supported
+     * 2. Tagged struct doesn't matter for versions it is not declared.
+     */
+    @Test
+    public void testMyTaggedStruct() {
+        // Verify that we can set and retrieve a nullable struct object.
+        SimpleExampleMessageData.MyTaggedStruct myStruct =
+            new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc");
+        testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
+            message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
+
+        // Not setting field works for both version 1 and version 2 protocol
+        testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
+            message -> assertEquals("abc", message.myString()), (short) 1);
+        testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
+            message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
     private void testRoundTrip(SimpleExampleMessageData message,
                                Consumer<SimpleExampleMessageData> validator) {
         testRoundTrip(message, validator, (short) 1);
