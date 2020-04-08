@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext extends ProcessorContext {
+public interface InternalProcessorContext<K, V> extends ProcessorContext<K, V> {
 
     @Override
     StreamsMetricsImpl metrics();

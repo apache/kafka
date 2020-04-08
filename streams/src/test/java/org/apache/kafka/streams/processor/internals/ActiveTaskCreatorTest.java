@@ -69,11 +69,12 @@ public class ActiveTaskCreatorTest {
     private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
-    final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
-    final Map<String, Object> properties = mkMap(
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
+    private final Map<String, Object> properties = mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     );
+    final UUID uuid = UUID.randomUUID();
 
     private ActiveTaskCreator activeTaskCreator;
 
@@ -82,13 +83,6 @@ public class ActiveTaskCreatorTest {
     // non-EOS test
 
     // functional test
-
-    @Test
-    public void shouldCreateThreadProducerIfEosDisabled() {
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(1));
-    }
 
     @Test
     public void shouldConstructProducerMetricsWithEosDisabled() {
@@ -101,7 +95,7 @@ public class ActiveTaskCreatorTest {
 
         final Set<String> clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is(Collections.singleton("threadId-producer")));
+        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
     }
 
     @Test
@@ -134,7 +128,7 @@ public class ActiveTaskCreatorTest {
             () -> activeTaskCreator.streamsProducerForTask(null)
         );
 
-        assertThat(thrown.getMessage(), is("Producer per thread is used"));
+        assertThat(thrown.getMessage(), is("Producer per thread is used."));
     }
 
     @Test
@@ -170,15 +164,6 @@ public class ActiveTaskCreatorTest {
     // functional test
 
     @Test
-    public void shouldCreateProducerPerTaskIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(2));
-    }
-
-    @Test
     public void shouldReturnStreamsProducerPerTaskIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
@@ -200,7 +185,7 @@ public class ActiveTaskCreatorTest {
 
         final Set<String> clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is(mkSet("threadId-0_0-producer", "threadId-0_1-producer")));
+        assertThat(clientIds, is(mkSet("clientId-StreamThread-0-0_0-producer", "clientId-StreamThread-0-0_1-producer")));
     }
 
     @Test
@@ -302,15 +287,6 @@ public class ActiveTaskCreatorTest {
     // functional test
 
     @Test
-    public void shouldCreateThreadProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        assertThat(mockClientSupplier.producers.size(), is(1));
-    }
-
-    @Test
     public void shouldReturnThreadProducerIfEosBetaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
         mockClientSupplier.setApplicationIdForProducer("appId");
@@ -339,7 +315,7 @@ public class ActiveTaskCreatorTest {
 
         final Set<String> clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is(Collections.singleton("threadId-producer")));
+        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
     }
 
     @Test
@@ -380,7 +356,7 @@ public class ActiveTaskCreatorTest {
             () -> activeTaskCreator.streamsProducerForTask(null)
         );
 
-        assertThat(thrown.getMessage(), is("Producer per thread is used"));
+        assertThat(thrown.getMessage(), is("Producer per thread is used."));
     }
 
     @Test
@@ -476,30 +452,17 @@ public class ActiveTaskCreatorTest {
         expect(topology.globalStateStores()).andReturn(Collections.emptyList()).anyTimes();
         replay(builder, stateDirectory, topology, sourceNode);
 
-        final StreamThread.ProcessingMode processingMode;
-        final String eosConfig = (String) properties.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
-        if (eosConfig == null || StreamsConfig.AT_LEAST_ONCE.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        } else if (StreamsConfig.EXACTLY_ONCE.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(eosConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            throw new IllegalArgumentException("argument `" + eosConfig + "` for config `processing.guarantees` invalid.");
-        }
-
         activeTaskCreator = new ActiveTaskCreator(
             builder,
             new StreamsConfig(properties),
-            processingMode,
             streamsMetrics,
             stateDirectory,
             changeLogReader,
             new ThreadCache(new LogContext(), 0L, streamsMetrics),
             new MockTime(),
             mockClientSupplier,
-            "threadId",
-            UUID.randomUUID(),
+            "clientId-StreamThread-0",
+            uuid,
             new LogContext().logger(ActiveTaskCreator.class)
         );
 

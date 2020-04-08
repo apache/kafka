@@ -35,7 +35,7 @@ import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Verifies that slow appends to log don't block request threads processing replica fetch requests.
@@ -237,7 +237,6 @@ class PartitionLockTest extends Logging {
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
     val isr = replicas

@@ -25,20 +25,30 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Future;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -52,32 +62,85 @@ public class StreamsProducer {
     private final Logger log;
     private final String logPrefix;
 
-    private final Producer<byte[], byte[]> producer;
-    private final boolean eosEnabled;
+    private final Map<String, Object> eosBetaProducerConfigs;
+    private final KafkaClientSupplier clientSupplier;
+    private final StreamThread.ProcessingMode processingMode;
 
+    private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
 
-    public StreamsProducer(final Producer<byte[], byte[]> producer,
-                           final boolean eosEnabled,
+    public StreamsProducer(final StreamsConfig config,
+                           final String threadId,
+                           final KafkaClientSupplier clientSupplier,
+                           final TaskId taskId,
+                           final UUID processId,
                            final LogContext logContext) {
-        this.producer = Objects.requireNonNull(producer, "producer cannot be null");
-        this.eosEnabled = eosEnabled;
-
+        Objects.requireNonNull(config, "config cannot be null");
+        Objects.requireNonNull(threadId, "threadId cannot be null");
+        this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
+
+        processingMode = StreamThread.processingMode(config);
+
+        final Map<String, Object> producerConfigs;
+        switch (processingMode) {
+            case AT_LEAST_ONCE: {
+                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+                eosBetaProducerConfigs = null;
+
+                break;
+            }
+            case EXACTLY_ONCE_ALPHA: {
+                producerConfigs = config.getProducerConfigs(
+                    getTaskProducerClientId(
+                        threadId,
+                        Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
+                    )
+                );
+
+                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
+
+                eosBetaProducerConfigs = null;
+
+                break;
+            }
+            case EXACTLY_ONCE_BETA: {
+                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+
+                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+                producerConfigs.put(
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+                    applicationId + "-" + Objects.requireNonNull(processId, "processId cannot be null for exactly-once beta"));
+
+                eosBetaProducerConfigs = producerConfigs;
+
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unknown processing mode: " + processingMode);
+        }
+
+        producer = clientSupplier.getProducer(producerConfigs);
     }
 
     private String formatException(final String message) {
         return message + " [" + logPrefix + "]";
     }
 
+    boolean eosEnabled() {
+        return processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA ||
+            processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+    }
+
     /**
      * @throws IllegalStateException if EOS is disabled
      */
     void initTransaction() {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         if (!transactionInitialized) {
             // initialize transactions if eos is turned on, which will block if the previous transaction has not
@@ -106,8 +169,19 @@ public class StreamsProducer {
         }
     }
 
-    void maybeBeginTransaction() throws ProducerFencedException {
-        if (eosEnabled && !transactionInFlight) {
+    public void resetProducer() {
+        if (processingMode != EXACTLY_ONCE_BETA) {
+            throw new IllegalStateException(formatException("Exactly-once beta is not enabled"));
+        }
+
+        producer.close();
+
+        producer = clientSupplier.getProducer(eosBetaProducerConfigs);
+        transactionInitialized = false;
+    }
+
+    private void maybeBeginTransaction() throws ProducerFencedException {
+        if (eosEnabled() && !transactionInFlight) {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
@@ -159,8 +233,8 @@ public class StreamsProducer {
      */
     void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                            final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         maybeBeginTransaction();
         try {
@@ -187,8 +261,8 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      */
     void abortTransaction() throws ProducerFencedException {
-        if (!eosEnabled) {
-            throw new IllegalStateException(formatException("EOS is disabled"));
+        if (!eosEnabled()) {
+            throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         if (transactionInFlight) {
             try {
@@ -217,14 +291,19 @@ public class StreamsProducer {
         return producer.partitionsFor(topic);
     }
 
+    Map<MetricName, ? extends Metric> metrics() {
+        return producer.metrics();
+    }
+
     void flush() {
         producer.flush();
     }
 
-    boolean eosEnabled() {
-        return eosEnabled;
+    void close() {
+        producer.close();
     }
 
+    // for testing only
     Producer<byte[], byte[]> kafkaProducer() {
         return producer;
     }

@@ -27,6 +27,8 @@ import java.util.Collections;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -39,9 +41,6 @@ public class ClientStateTest {
     private final ClientState client = new ClientState(1);
     private final ClientState zeroCapacityClient = new ClientState(0);
 
-    private final TaskId taskId01 = new TaskId(0, 1);
-    private final TaskId taskId02 = new TaskId(0, 2);
-
     @Test
     public void shouldHaveNotReachedCapacityWhenAssignedTasksLessThanCapacity() {
         assertFalse(client.reachedCapacity());
@@ -49,64 +48,64 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveReachedCapacityWhenAssignedTasksGreaterThanOrEqualToCapacity() {
-        client.assignActive(taskId01);
+        client.assignActive(TASK_0_1);
         assertTrue(client.reachedCapacity());
     }
 
     @Test
     public void shouldAddActiveTasksToBothAssignedAndActive() {
-        client.assignActive(taskId01);
-        assertThat(client.activeTasks(), equalTo(Collections.singleton(taskId01)));
-        assertThat(client.assignedTasks(), equalTo(Collections.singleton(taskId01)));
+        client.assignActive(TASK_0_1);
+        assertThat(client.activeTasks(), equalTo(Collections.singleton(TASK_0_1)));
+        assertThat(client.assignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertThat(client.assignedTaskCount(), equalTo(1));
         assertThat(client.standbyTasks().size(), equalTo(0));
     }
 
     @Test
     public void shouldAddStandbyTasksToBothStandbyAndAssigned() {
-        client.assignStandby(taskId01);
-        assertThat(client.assignedTasks(), equalTo(Collections.singleton(taskId01)));
-        assertThat(client.standbyTasks(), equalTo(Collections.singleton(taskId01)));
+        client.assignStandby(TASK_0_1);
+        assertThat(client.assignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
+        assertThat(client.standbyTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertThat(client.assignedTaskCount(), equalTo(1));
         assertThat(client.activeTasks().size(), equalTo(0));
     }
 
     @Test
     public void shouldAddPreviousActiveTasksToPreviousAssignedAndPreviousActive() {
-        client.addPreviousActiveTasks(Utils.mkSet(taskId01, taskId02));
-        assertThat(client.prevActiveTasks(), equalTo(Utils.mkSet(taskId01, taskId02)));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(taskId01, taskId02)));
+        client.addPreviousActiveTasks(Utils.mkSet(TASK_0_1, TASK_0_2));
+        assertThat(client.prevActiveTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
+        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
     }
 
     @Test
     public void shouldAddPreviousStandbyTasksToPreviousAssignedAndPreviousStandby() {
-        client.addPreviousStandbyTasks(Utils.mkSet(taskId01, taskId02));
+        client.addPreviousStandbyTasks(Utils.mkSet(TASK_0_1, TASK_0_2));
         assertThat(client.prevActiveTasks().size(), equalTo(0));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(taskId01, taskId02)));
+        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
     }
 
     @Test
     public void shouldHaveAssignedTaskIfActiveTaskAssigned() {
-        client.assignActive(taskId01);
-        assertTrue(client.hasAssignedTask(taskId01));
+        client.assignActive(TASK_0_1);
+        assertTrue(client.hasAssignedTask(TASK_0_1));
     }
 
     @Test
     public void shouldHaveAssignedTaskIfStandbyTaskAssigned() {
-        client.assignStandby(taskId01);
-        assertTrue(client.hasAssignedTask(taskId01));
+        client.assignStandby(TASK_0_1);
+        assertTrue(client.hasAssignedTask(TASK_0_1));
     }
 
     @Test
     public void shouldNotHaveAssignedTaskIfTaskNotAssigned() {
-        client.assignActive(taskId01);
-        assertFalse(client.hasAssignedTask(taskId02));
+        client.assignActive(TASK_0_1);
+        assertFalse(client.hasAssignedTask(TASK_0_2));
     }
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityTheSameButFewerAssignedTasks() {
         final ClientState otherClient = new ClientState(1);
-        client.assignActive(taskId01);
+        client.assignActive(TASK_0_1);
         assertTrue(otherClient.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(otherClient));
     }
@@ -169,93 +168,101 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddTasksWithLatestOffsetToPrevActiveTasks() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, Task.LATEST_OFFSET);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(taskId01)));
-        assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(taskId01)));
+        client.initializePrevTasks(Collections.emptyMap());
+        assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
+        assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertTrue(client.prevStandbyTasks().isEmpty());
     }
 
     @Test
     public void shouldAddTasksInOffsetSumsMapToPrevStandbyTasks() {
         final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(taskId01, 0L),
-            mkEntry(taskId02, 100L)
+            mkEntry(TASK_0_1, 0L),
+            mkEntry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
-        assertThat(client.prevStandbyTasks(), equalTo(mkSet(taskId01, taskId02)));
-        assertThat(client.previousAssignedTasks(), equalTo(mkSet(taskId01, taskId02)));
+        client.initializePrevTasks(Collections.emptyMap());
+        assertThat(client.prevStandbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
+        assertThat(client.previousAssignedTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertTrue(client.prevActiveTasks().isEmpty());
     }
 
     @Test
     public void shouldComputeTaskLags() {
         final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(taskId01, 0L),
-            mkEntry(taskId02, 100L)
+            mkEntry(TASK_0_1, 0L),
+            mkEntry(TASK_0_2, 100L)
         );
         final Map<TaskId, Long> allTaskEndOffsetSums = mkMap(
-            mkEntry(taskId01, 500L),
-            mkEntry(taskId02, 100L)
+            mkEntry(TASK_0_1, 500L),
+            mkEntry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
 
-        assertThat(client.lagFor(taskId01), equalTo(500L));
-        assertThat(client.lagFor(taskId02), equalTo(0L));
+        assertThat(client.lagFor(TASK_0_1), equalTo(500L));
+        assertThat(client.lagFor(TASK_0_2), equalTo(0L));
     }
 
     @Test
     public void shouldReturnEndOffsetSumForLagOfTaskWeDidNotPreviouslyOwn() {
         final Map<TaskId, Long> taskOffsetSums = Collections.emptyMap();
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(taskId01), equalTo(500L));
+        assertThat(client.lagFor(TASK_0_1), equalTo(500L));
     }
 
     @Test
     public void shouldReturnLatestOffsetForLagOfPreviousActiveRunningTask() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, Task.LATEST_OFFSET);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(taskId01), equalTo(Task.LATEST_OFFSET));
+        assertThat(client.lagFor(TASK_0_1), equalTo(Task.LATEST_OFFSET));
     }
 
     @Test
     public void shouldReturnUnknownOffsetSumForLagOfTaskWithUnknownOffset() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, UNKNOWN_OFFSET_SUM);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, UNKNOWN_OFFSET_SUM);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(taskId01), equalTo(UNKNOWN_OFFSET_SUM));
+        assertThat(client.lagFor(TASK_0_1), equalTo(UNKNOWN_OFFSET_SUM));
     }
 
     @Test
     public void shouldReturnEndOffsetSumIfOffsetSumIsGreaterThanEndOffsetSum() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 5L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 1L);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 5L);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 1L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(taskId01), equalTo(1L));
+        assertThat(client.lagFor(TASK_0_1), equalTo(1L));
     }
 
     @Test
     public void shouldThrowIllegalStateExceptionIfTaskLagsMapIsNotEmpty() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 5L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 1L);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 5L);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 1L);
         client.computeTaskLags(null, taskOffsetSums);
         assertThrows(IllegalStateException.class, () -> client.computeTaskLags(null, allTaskEndOffsetSums));
     }
 
     @Test
     public void shouldThrowIllegalStateExceptionOnLagForUnknownTask() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(taskId01, 0L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(taskId01, 500L);
+        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 0L);
+        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
         client.addPreviousTasksAndOffsetSums(taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThrows(IllegalStateException.class, () -> client.lagFor(taskId02));
+        assertThrows(IllegalStateException.class, () -> client.lagFor(TASK_0_2));
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionIfAttemptingToInitializeNonEmptyPrevTaskSets() {
+        client.addPreviousActiveTasks(Collections.singleton(TASK_0_1));
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
     }
 
 }

@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.TaskId;
-
+import java.util.UUID;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
+import org.apache.kafka.streams.processor.TaskId;
 
-public interface BalancedAssignor<ID extends Comparable<? super ID>> {
+public interface BalancedAssignor {
 
-    Map<ID, List<TaskId>> assign(final SortedSet<ID> clients,
-                                 final SortedSet<TaskId> tasks,
-                                 final Map<ID, Integer> clientsToNumberOfStreamThreads,
-                                 final int balanceFactor);
+    Map<UUID, List<TaskId>> assign(final SortedSet<UUID> clients,
+                                   final SortedSet<TaskId> tasks,
+                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads,
+                                   final int balanceFactor);
 }

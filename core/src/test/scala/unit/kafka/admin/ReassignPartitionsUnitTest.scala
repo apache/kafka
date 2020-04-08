@@ -32,8 +32,8 @@ import org.junit.function.ThrowingRunnable
 import org.junit.rules.Timeout
 import org.junit.{After, Assert, Before, Rule, Test}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class ReassignPartitionsUnitTest {
   @Rule
@@ -106,30 +106,29 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       // Create a reassignment and test findPartitionReassignmentStates.
-      assertEquals(Map(
-          new TopicPartition("quux", 0) -> classOf[UnknownTopicOrPartitionException]
-        ),
-        alterPartitionReassignments(adminClient, Map(
-          new TopicPartition("foo", 0) -> Seq(0,1,3),
-          new TopicPartition("quux", 0) -> Seq(1,2,3))).mapValues(_.getClass).toMap)
+      val reassignmentResult: Map[TopicPartition, Class[_ <: Throwable]] = alterPartitionReassignments(adminClient, Map(
+        new TopicPartition("foo", 0) -> Seq(0,1,3),
+        new TopicPartition("quux", 0) -> Seq(1,2,3))).map { case (k, v) => k -> v.getClass }.toMap
+      assertEquals(Map(new TopicPartition("quux", 0) -> classOf[UnknownTopicOrPartitionException]),
+        reassignmentResult)
       assertEquals((Map(
-          new TopicPartition("foo", 0) -> new PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), false),
-          new TopicPartition("foo", 1) -> new PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
+          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), false),
+          new TopicPartition("foo", 1) -> PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
         ), true),
         findPartitionReassignmentStates(adminClient, Seq(
           (new TopicPartition("foo", 0), Seq(0,1,3)),
           (new TopicPartition("foo", 1), Seq(1,2,3))
         )))
       // Cancel the reassignment and test findPartitionReassignmentStates again.
-      assertEquals(Map(
-          new TopicPartition("quux", 2) -> classOf[UnknownTopicOrPartitionException]
-        ),
-        cancelPartitionReassignments(adminClient, Set(
-          new TopicPartition("foo", 0),
-          new TopicPartition("quux", 2))).mapValues(_.getClass).toMap)
+      val cancelResult: Map[TopicPartition, Class[_ <: Throwable]] = cancelPartitionReassignments(adminClient,
+        Set(new TopicPartition("foo", 0), new TopicPartition("quux", 2))).map { case (k, v) =>
+          k -> v.getClass
+        }.toMap
+      assertEquals(Map(new TopicPartition("quux", 2) -> classOf[UnknownTopicOrPartitionException]),
+        cancelResult)
       assertEquals((Map(
-          new TopicPartition("foo", 0) -> new PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), true),
-          new TopicPartition("foo", 1) -> new PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
+          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), true),
+          new TopicPartition("foo", 1) -> PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
         ), false),
           findPartitionReassignmentStates(adminClient, Seq(
             (new TopicPartition("foo", 0), Seq(0,1,3)),
@@ -552,13 +551,15 @@ class ReassignPartitionsUnitTest {
     val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
     try {
       addTopics(adminClient)
-      assertEquals("""No partition reassignments found.""",
-        curReassignmentsToString(adminClient))
-      assertEquals(Map(),
-        alterPartitionReassignments(adminClient, Map(
+      assertEquals("No partition reassignments found.", curReassignmentsToString(adminClient))
+      val reassignmentResult: Map[TopicPartition, Class[_ <: Throwable]] = alterPartitionReassignments(adminClient,
+        Map(
           new TopicPartition("foo", 1) -> Seq(4,5,3),
           new TopicPartition("foo", 0) -> Seq(0,1,4,2),
-          new TopicPartition("bar", 0) -> Seq(2,3))).mapValues(_.getClass).toMap)
+          new TopicPartition("bar", 0) -> Seq(2,3)
+        )
+      ).map { case (k, v) => k -> v.getClass }.toMap
+      assertEquals(Map(), reassignmentResult)
       assertEquals(Seq("Current partition reassignments:",
                        "bar-0: replicas: 2,3,0. removing: 0.",
                        "foo-0: replicas: 0,1,2. adding: 4.",

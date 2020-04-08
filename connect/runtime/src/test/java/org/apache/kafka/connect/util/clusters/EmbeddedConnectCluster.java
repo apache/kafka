@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -276,6 +277,40 @@ public class EmbeddedConnectCluster {
      */
     public String configureConnector(String connName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connectors/%s/config", connName));
+        return putConnectorConfig(url, connConfig);
+    }
+
+    /**
+     * Validate a given connector configuration. If the configuration validates or
+     * has a configuration error, an instance of {@link ConfigInfos} is returned. If the validation fails
+     * an exception is thrown.
+     *
+     * @param connClassName the name of the connector class
+     * @param connConfig    the intended configuration
+     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectException if the configuration fails to serialize/deserialize or if the request failed to send
+     */
+    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig) {
+        String url = endpointForResource(String.format("connector-plugins/%s/config/validate", connClassName));
+        String response = putConnectorConfig(url, connConfig);
+        ConfigInfos configInfos;
+        try {
+            configInfos = new ObjectMapper().readValue(response, ConfigInfos.class);
+        } catch (IOException e) {
+            throw new ConnectException("Unable deserialize response into a ConfigInfos object");
+        }
+        return configInfos;
+    }
+
+    /**
+     * Execute a PUT request with the given connector configuration on the given URL endpoint.
+     *
+     * @param url        the full URL of the endpoint that corresponds to the given REST resource
+     * @param connConfig the intended configuration
+     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     */
+    protected String putConnectorConfig(String url, Map<String, String> connConfig) {
         ObjectMapper mapper = new ObjectMapper();
         String content;
         try {

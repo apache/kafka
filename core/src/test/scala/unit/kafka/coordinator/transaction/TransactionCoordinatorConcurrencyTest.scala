@@ -17,13 +17,13 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
-import kafka.utils.timer.MockTimer
+import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -37,7 +37,7 @@ import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
@@ -80,9 +80,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.expect(pidManager.generateProducerId())
       .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()
-    val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
-      new MockTimer,
-      reaperEnabled = false)
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
@@ -96,12 +93,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       metadataCache,
       networkClient,
       txnStateManager,
-      txnMarkerPurgatory,
-      time) {
-        override def shutdown(): Unit = {
-          txnMarkerPurgatory.shutdown()
-        }
-    }
+      time)
 
     transactionCoordinator = new TransactionCoordinator(brokerId = 0,
       txnConfig,
@@ -124,6 +116,28 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     } finally {
       super.tearDown()
     }
+  }
+
+  @Test
+  def testConcurrentGoodPathWithConcurrentPartitionLoading(): Unit = {
+    // This is a somewhat contrived test case which reproduces the bug in KAFKA-9777.
+    // When a new partition needs to be loaded, we acquire the write lock in order to
+    // add the partition to the set of loading partitions. We should still be able to
+    // make progress with transactions even while this is ongoing.
+
+    val keepRunning = new AtomicBoolean(true)
+    val t = new Thread() {
+      override def run(): Unit = {
+        while (keepRunning.get()) {
+          txnStateManager.addLoadingPartition(numPartitions + 1, coordinatorEpoch)
+        }
+      }
+    }
+    t.start()
+
+    verifyConcurrentOperations(createTransactions, allOperations)
+    keepRunning.set(false)
+    t.join()
   }
 
   @Test

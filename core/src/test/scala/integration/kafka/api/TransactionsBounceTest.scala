@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class TransactionsBounceTest extends KafkaServerTestHarness {

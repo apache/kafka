@@ -230,6 +230,7 @@ public class Sender implements Runnable {
     /**
      * The main run loop for the sender thread
      */
+    @Override
     public void run() {
         log.debug("Starting Kafka producer I/O thread.");
 

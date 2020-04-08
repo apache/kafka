@@ -27,7 +27,7 @@ import kafka.utils.json.JsonValue
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 object JsonTest {
@@ -140,15 +140,12 @@ class JsonTest {
 
     val result = Json.parseStringAs[TestObject](s"""{"foo": "$foo", "bar": $bar}""")
 
-    assertTrue(result.isRight)
-    assertEquals(TestObject(foo, bar), result.right.get)
+    assertEquals(Right(TestObject(foo, bar)), result)
   }
 
   @Test
   def testParseToWithInvalidJson() = {
     val result = Json.parseStringAs[TestObject]("{invalid json}")
-
-    assertTrue(result.isLeft)
-    assertEquals(classOf[JsonParseException], result.left.get.getClass)
+    assertEquals(Left(classOf[JsonParseException]), result.left.map(_.getClass))
   }
 }

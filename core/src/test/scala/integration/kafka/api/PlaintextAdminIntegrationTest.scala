@@ -45,7 +45,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -171,7 +171,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig())
     val topic = "topic"
     val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
-    val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.mapValues(_.keys.toSeq)
+    val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.map { case (k, v) =>
+      k -> v.keys.toSeq
+    }
     val brokers = (0 until brokerCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
@@ -179,7 +181,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
-      val replicaInfos = logDirInfos.asScala.flatMap { case (_, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
+      val replicaInfos = logDirInfos.asScala.flatMap { case (_, logDirInfo) =>
+        logDirInfo.replicaInfos.asScala
+      }.filter { case (k, _) => k.topic == topic }
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
       logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>

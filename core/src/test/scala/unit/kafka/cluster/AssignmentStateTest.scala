@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object AssignmentStateTest extends AbstractPartitionTest {
 
@@ -90,7 +90,6 @@ class AssignmentStateTest(isr: List[Integer], replicas: List[Integer],
 
   @Test
   def testPartitionAssignmentStatus(): Unit = {
-    val controllerId = 0
     val controllerEpoch = 3
 
     val leaderState = new LeaderAndIsrPartitionState()

@@ -36,7 +36,7 @@ import org.apache.kafka.server.authorizer._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.{Assert, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object SslAdminIntegrationTest {

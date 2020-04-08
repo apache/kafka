@@ -349,6 +349,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
+        // should at least encode the short version
+        if (assignmentBuffer.remaining() < 2)
+            throw new IllegalStateException("There is insufficient bytes available to read assignment from the sync-group response (" +
+                "actual byte size " + assignmentBuffer.remaining() + ") , this is not expected; " +
+                "it is possible that the leader's assign function is buggy and did not return any assignment for this member, " +
+                "or because static member is configured and the protocol is buggy hence did not get the assignment for this member");
+
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
         Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
@@ -747,11 +754,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // we need to rejoin if we performed the assignment and metadata has changed;
         // also for those owned-but-no-longer-existed partitions we should drop them as lost
-        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot))
+        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
+            requestRejoin();
             return true;
+        }
 
         // we need to join if our subscription has changed since the last join
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
+            requestRejoin();
             return true;
         }
 

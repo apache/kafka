@@ -301,6 +301,10 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
+
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
@@ -319,6 +323,10 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
 
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
@@ -342,6 +350,10 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
 
     if (it.project.name != 'generator') {
       useJUnit {
@@ -1279,12 +1291,6 @@ project(':streams') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
-
-  test {
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
-  }
 }
 
 project(':streams:streams-scala') {
@@ -1296,6 +1302,7 @@ project(':streams:streams-scala') {
     compile project(':streams')
 
     compile libs.scalaLibrary
+    compile libs.scalaCollectionCompat
 
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output

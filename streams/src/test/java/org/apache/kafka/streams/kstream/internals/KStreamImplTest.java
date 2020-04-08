@@ -1303,7 +1303,7 @@ public class KStreamImplTest {
         final KStream<String, String> stream1 = source1.filter((key, value) -> true)
             .filterNot((key, value) -> false);
 
-        final KStream<String, Integer> stream2 = stream1.mapValues(Integer::new);
+        final KStream<String, Integer> stream2 = stream1.mapValues(s -> Integer.valueOf(s));
 
         final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
             value -> Collections.singletonList(Integer.valueOf(value)));

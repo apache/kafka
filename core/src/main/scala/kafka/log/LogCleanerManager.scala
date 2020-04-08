@@ -410,7 +410,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         if (checkpoint != null) {
           val existing = checkpoint.read()
           if (existing.getOrElse(topicPartition, 0L) > offset)
-            checkpoint.write(existing + (topicPartition -> offset))
+            checkpoint.write(mutable.Map() ++= existing += topicPartition -> offset)
         }
       }
     }

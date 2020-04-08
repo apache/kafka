@@ -109,7 +109,6 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
@@ -137,7 +136,6 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
-    private int numberOfWordsPerIteration = 0;
     private Set<String> inputValuesKeys;
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
@@ -215,7 +213,6 @@ public class QueryableStateIntegrationTest {
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
             final String[] words = sentence.split("\\W+");
-            numberOfWordsPerIteration += words.length;
             Collections.addAll(inputValuesKeys, words);
         }
     }
@@ -626,7 +623,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void concurrentAccesses() throws Exception {
+    public void shouldAllowConcurrentAccesses() throws Exception {
         final int numIterations = 500000;
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
@@ -646,9 +643,8 @@ public class QueryableStateIntegrationTest {
         producerThread.start();
 
         try {
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, numberOfWordsPerIteration);
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrentWindowed, numberOfWordsPerIteration);
-
+            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
+            
             final ReadOnlyKeyValueStore<String, Long> keyValueStore =
                 kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore()));
 
@@ -659,7 +655,7 @@ public class QueryableStateIntegrationTest {
             final Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
                 verifyGreaterOrEqual(inputValuesKeys.toArray(new String[0]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, true);
+                    expectedCount, windowStore, keyValueStore);
             }
         } finally {
             producerRunnable.shutdown();
@@ -1140,30 +1136,21 @@ public class QueryableStateIntegrationTest {
      * @param expectedCount         Expected count
      * @param windowStore           Window Store
      * @param keyValueStore         Key-value store
-     * @param failIfKeyNotFound     if true, tests fails if an expected key is not found in store. If false,
-     *                              the method merely inserts the new found key into the list of
-     *                              expected keys.
      */
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
-                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore,
-                                      final boolean failIfKeyNotFound) {
+                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore) {
         final Map<String, Long> windowState = new HashMap<>();
         final Map<String, Long> countState = new HashMap<>();
 
         for (final String key : keys) {
             final Map<String, Long> map = fetchMap(windowStore, key);
-            if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
-                fail("Key in windowed-store not found " + key);
-            }
             windowState.putAll(map);
             final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
-            } else if (failIfKeyNotFound) {
-                fail("Key in key-value-store not found " + key);
             }
         }
 

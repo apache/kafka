@@ -17,9 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
-import java.util.Objects;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -42,8 +39,10 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -70,7 +69,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndO
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -146,53 +144,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
-    public static class RankedClient<ID extends Comparable<? super ID>> implements Comparable<RankedClient<ID>> {
-
-        private final ID clientId;
-        private final long rank;
-
-        public RankedClient(final ID clientId, final long rank) {
-            this.clientId = clientId;
-            this.rank = rank;
-        }
-
-        public ID clientId() {
-            return clientId;
-        }
-
-        public long rank() {
-            return rank;
-        }
-
-        @Override
-        public int compareTo(final RankedClient<ID> clientIdAndLag) {
-            if (rank < clientIdAndLag.rank) {
-                return -1;
-            } else if (rank > clientIdAndLag.rank) {
-                return 1;
-            } else {
-                return clientId.compareTo(clientIdAndLag.clientId);
-            }
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final RankedClient other = (RankedClient) o;
-            return clientId == other.clientId() && rank == other.rank();
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(clientId, rank);
-        }
-    }
-
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -215,6 +166,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
+
+    private boolean highAvailabilityEnabled;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -242,6 +195,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        highAvailabilityEnabled = assignorConfiguration.isHighAvailabilityEnabled();
     }
 
     @Override
@@ -748,24 +702,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogsByStatefulTask);
 
-        // assign tasks to clients
         final Set<TaskId> allTasks = partitionsForTask.keySet();
-        final Set<TaskId> standbyTasks = changelogsByStatefulTask.keySet();
-
-        if (lagComputationSuccessful) {
-            final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates =
-                buildClientRankingsByTask(standbyTasks, clientStates, acceptableRecoveryLag());
-            log.trace("Computed statefulTasksToRankedCandidates map as {}", statefulTasksToRankedCandidates);
-        }
+        final Set<TaskId> statefulTasks = changelogsByStatefulTask.keySet();
 
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(clientStates, allTasks, standbyTasks);
-        if (!lagComputationSuccessful) {
-            taskAssignor.preservePreviousTaskAssignment();
+        final TaskAssignor taskAssignor;
+        if (highAvailabilityEnabled) {
+            if (lagComputationSuccessful) {
+                taskAssignor = new HighAvailabilityTaskAssignor(
+                    clientStates,
+                    allTasks,
+                    statefulTasks,
+                    assignmentConfigs);
+            } else {
+                taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
+            }
+        } else {
+            taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
         }
-        taskAssignor.assign(numStandbyReplicas());
+        taskAssignor.assign();
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -805,24 +762,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             final UUID uuid = entry.getKey();
             final ClientState state = entry.getValue().state;
-
-            // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
-            // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
-            // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
-            // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
-            if (!state.ownedPartitions().isEmpty()) {
-                final Set<TaskId> previousActiveTasks = new HashSet<>();
-                for (final Map.Entry<TopicPartition, String> partitionEntry : state.ownedPartitions().entrySet()) {
-                    final TopicPartition tp = partitionEntry.getKey();
-                    final TaskId task = taskForPartition.get(tp);
-                    if (task != null) {
-                        previousActiveTasks.add(task);
-                    } else {
-                        log.error("No task found for topic partition {}", tp);
-                    }
-                }
-                state.addPreviousActiveTasks(previousActiveTasks);
-            }
+            state.initializePrevTasks(taskForPartition);
 
             if (fetchEndOffsetsSuccessful) {
                 state.computeTaskLags(uuid, allTaskEndOffsetSums);
@@ -856,42 +796,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
         return taskEndOffsetSums;
-    }
-
-    /**
-     * Rankings are computed as follows, with lower being more caught up:
-     *      Rank -1: active running task
-     *      Rank 0: standby or restoring task whose overall lag is within the acceptableRecoveryLag bounds
-     *      Rank 1: tasks whose lag is unknown, eg because it was not encoded in an older version subscription
-     *      Rank 1+: all other tasks are ranked according to their actual total lag
-     * @return Sorted set of all client candidates for each stateful task, ranked by their overall lag
-     */
-    static Map<TaskId, SortedSet<RankedClient<UUID>>> buildClientRankingsByTask(final Set<TaskId> statefulTasks,
-                                                                                final Map<UUID, ClientState> states,
-                                                                                final long acceptableRecoveryLag) {
-        final Map<TaskId, SortedSet<RankedClient<UUID>>> statefulTasksToRankedCandidates = new TreeMap<>();
-
-        for (final TaskId task : statefulTasks) {
-            final SortedSet<RankedClient<UUID>> rankedClientCandidates = new TreeSet<>();
-            statefulTasksToRankedCandidates.put(task, rankedClientCandidates);
-
-            for (final Map.Entry<UUID, ClientState> clientEntry : states.entrySet()) {
-                final UUID clientId = clientEntry.getKey();
-                final long taskLag = clientEntry.getValue().lagFor(task);
-                final long clientRank;
-                if (taskLag == Task.LATEST_OFFSET) {
-                    clientRank = Task.LATEST_OFFSET;
-                } else if (taskLag == UNKNOWN_OFFSET_SUM) {
-                    clientRank = 1L;
-                } else if (taskLag <= acceptableRecoveryLag) {
-                    clientRank = 0L;
-                } else {
-                    clientRank = taskLag;
-                }
-                rankedClientCandidates.add(new RankedClient<>(clientId, clientRank));
-            }
-        }
-        return statefulTasksToRankedCandidates;
     }
 
     /**

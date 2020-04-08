@@ -29,7 +29,7 @@ import org.junit.Test
 import org.junit.Assert._
 import org.scalatest.Assertions
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class MetadataCacheTest {
   val brokerEpoch = 0L

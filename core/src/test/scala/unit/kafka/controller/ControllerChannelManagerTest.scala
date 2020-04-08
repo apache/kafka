@@ -34,7 +34,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
@@ -699,7 +699,7 @@ class ControllerChannelManagerTest {
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
 
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0

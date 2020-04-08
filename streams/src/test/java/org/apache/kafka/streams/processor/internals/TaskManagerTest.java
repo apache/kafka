@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
@@ -39,6 +35,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -62,15 +59,19 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -146,13 +147,19 @@ public class TaskManagerTest {
     private Admin adminClient;
 
     private TaskManager taskManager;
+    private final Time time = new MockTime();
 
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder();
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
+        setUpTaskManager(StreamThread.ProcessingMode.AT_LEAST_ONCE);
+    }
+
+    private void setUpTaskManager(final StreamThread.ProcessingMode processingMode) {
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
         taskManager = new TaskManager(
             changeLogReader,
             UUID.randomUUID(),
@@ -163,7 +170,7 @@ public class TaskManagerTest {
             topologyBuilder,
             adminClient,
             stateDirectory,
-            StreamThread.ProcessingMode.AT_LEAST_ONCE
+            processingMode
         );
         taskManager.setMainConsumer(consumer);
     }
@@ -456,6 +463,32 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), is(singletonMap(taskId01, task01)));
+    }
+
+    @Test
+    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosBetaEnabled() {
+        activeTaskCreator.reInitializeThreadProducer();
+        expectLastCall();
+        replay(activeTaskCreator);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
+        taskManager = new TaskManager(
+            changeLogReader,
+            UUID.randomUUID(),
+            "taskManagerTest",
+            streamsMetrics,
+            activeTaskCreator,
+            standbyTaskCreator,
+            topologyBuilder,
+            adminClient,
+            stateDirectory,
+            StreamThread.ProcessingMode.EXACTLY_ONCE_BETA
+        );
+        taskManager.setMainConsumer(consumer);
+
+        taskManager.handleLostAll();
+
+        verify(activeTaskCreator);
     }
 
     @Test
@@ -1201,29 +1234,65 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseActiveTasksDirtyAndPropagatePrepareCommitException() {
+        setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
+
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
+            @Override
+            public void prepareCommit() {
+                throw new RuntimeException("task 0_1 prepare commit boom!");
+            }
+        };
+
+        task01.setCommittableOffsetsAndMetadata(singletonMap(t1p1, new OffsetAndMetadata(0L, null)));
+        task01.setCommitNeeded();
+
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
+
+        task02.setCommittableOffsetsAndMetadata(offsetsT02);
+        task02.setCommitNeeded();
+
+        taskManager.tasks().put(taskId00, task00);
+        taskManager.tasks().put(taskId01, task01);
+        taskManager.tasks().put(taskId02, task02);
+
+        checkOrder(activeTaskCreator, false);
+
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId01);
+        expectLastCall();
+
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId02);
+        expectLastCall();
+
+        replay(activeTaskCreator);
+
+        final RuntimeException thrown = assertThrows(RuntimeException.class,
+            () -> taskManager.handleAssignment(mkMap(mkEntry(taskId00, taskId00Partitions),
+                mkEntry(taskId01, taskId01Partitions)), Collections.emptyMap()));
+        assertThat(thrown.getCause().getMessage(), is("task 0_1 prepare commit boom!"));
+
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CLOSED));
+        assertThat(task02.state(), is(Task.State.CLOSED));
+
+        // All the tasks involving in the commit should already be removed.
+        assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
+
+        verify(activeTaskCreator);
+    }
+
+    @Test
     public void shouldCloseActiveTasksDirtyAndPropagateCommitException() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
-            new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
-        taskManager = new TaskManager(
-            changeLogReader,
-            UUID.randomUUID(),
-            "taskManagerTest",
-            streamsMetrics,
-            activeTaskCreator,
-            standbyTaskCreator,
-            topologyBuilder,
-            adminClient,
-            stateDirectory,
-            StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA
-        );
-        taskManager.setMainConsumer(consumer);
+        setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(singletonMap(t1p1, new OffsetAndMetadata(0L, null)));
         task01.setCommitNeeded();
-
 
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -1238,6 +1307,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.streamsProducerForTask(taskId01)).andThrow(new RuntimeException("task 0_1 producer boom!"));
 
         checkOrder(activeTaskCreator, false);
+
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId01);
         expectLastCall();
 
@@ -1253,6 +1323,9 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CLOSED));
         assertThat(task02.state(), is(Task.State.CLOSED));
+
+        // All the tasks involving in the commit should already be removed.
+        assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
 
         verify(activeTaskCreator);
     }
@@ -1547,20 +1620,7 @@ public class TaskManagerTest {
                                                      final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
-        taskManager = new TaskManager(
-            changeLogReader,
-            UUID.randomUUID(),
-            "taskManagerTest",
-            streamsMetrics,
-            activeTaskCreator,
-            standbyTaskCreator,
-            topologyBuilder,
-            adminClient,
-            stateDirectory,
-            processingMode
-        );
-        taskManager.setMainConsumer(consumer);
+        setUpTaskManager(processingMode);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
@@ -1846,11 +1906,11 @@ public class TaskManagerTest {
         );
 
         // check that we should be processing at most max num records
-        assertThat(taskManager.process(3, 0L), is(6));
+        assertThat(taskManager.process(3, time), is(6));
 
         // check that if there's no records proccssible, we would stop early
-        assertThat(taskManager.process(3, 0L), is(5));
-        assertThat(taskManager.process(3, 0L), is(0));
+        assertThat(taskManager.process(3, time), is(5));
+        assertThat(taskManager.process(3, time), is(0));
     }
 
     @Test
@@ -1876,7 +1936,7 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        assertThrows(TaskMigratedException.class, () -> taskManager.process(1, 0L));
+        assertThrows(TaskMigratedException.class, () -> taskManager.process(1, time));
     }
 
     @Test
@@ -1902,7 +1962,7 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, 0L));
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, time));
         assertThat(exception.getMessage(), is("oops"));
     }
 

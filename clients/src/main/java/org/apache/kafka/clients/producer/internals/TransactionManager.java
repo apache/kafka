@@ -95,6 +95,7 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
+    private final boolean autoDowngradeTxnCommit;
 
     private static class TopicPartitionBookkeeper {
 
@@ -283,11 +284,12 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(LogContext logContext,
-                              String transactionalId,
-                              int transactionTimeoutMs,
-                              long retryBackoffMs,
-                              ApiVersions apiVersions) {
+    public TransactionManager(final LogContext logContext,
+                              final String transactionalId,
+                              final int transactionTimeoutMs,
+                              final long retryBackoffMs,
+                              final ApiVersions apiVersions,
+                              final boolean autoDowngradeTxnCommit) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -304,6 +306,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
+        this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -1152,13 +1155,15 @@ public class TransactionManager {
 
         final TxnOffsetCommitRequest.Builder builder =
             new TxnOffsetCommitRequest.Builder(transactionalId,
-            groupMetadata.groupId(),
-            producerIdAndEpoch.producerId,
-            producerIdAndEpoch.epoch,
-            pendingTxnOffsetCommits,
-            groupMetadata.memberId(),
-            groupMetadata.generationId(),
-            groupMetadata.groupInstanceId());
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits,
+                groupMetadata.memberId(),
+                groupMetadata.generationId(),
+                groupMetadata.groupInstanceId(),
+                autoDowngradeTxnCommit
+            );
         return new TxnOffsetCommitHandler(result, builder);
     }
 

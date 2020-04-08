@@ -331,7 +331,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code balance.factor} */
     public static final String BALANCE_FACTOR_CONFIG = "balance.factor";
-    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
+    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of stateful (and total) active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
 
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
@@ -1007,6 +1007,9 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+            consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
+        }
         consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
@@ -1264,9 +1267,17 @@ public class StreamsConfig extends AbstractConfig {
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
+        // When using EOS alpha, stream should auto-downgrade the transactional commit protocol to be compatible with older brokers.
+        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+            props.put("internal.auto.downgrade.txn.commit", true);
+        }
+
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         return props;
     }

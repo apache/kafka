@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -258,7 +259,9 @@ public class StreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
     private final Sensor pollSensor;
+    private final Sensor pollRecordsSensor;
     private final Sensor punctuateSensor;
+    private final Sensor processRecordsSensor;
     private final Sensor processLatencySensor;
     private final Sensor processRateSensor;
     private final Sensor pollRatioSensor;
@@ -316,19 +319,9 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final ProcessingMode processingMode;
-        if (StreamThread.eosAlphaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             builder,
             config,
-            processingMode,
             streamsMetrics,
             stateDirectory,
             changelogReader,
@@ -358,7 +351,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            processingMode
+            StreamThread.processingMode(config)
         );
 
         log.info("Creating consumer client");
@@ -398,7 +391,7 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    enum ProcessingMode {
+    public enum ProcessingMode {
         AT_LEAST_ONCE("AT_LEAST_ONCE"),
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
@@ -412,16 +405,20 @@ public class StreamThread extends Thread {
         }
     }
 
-    private static boolean eosAlphaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-    }
-
-    private static boolean eosBetaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    public static ProcessingMode processingMode(final StreamsConfig config) {
+        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
     }
 
     public static boolean eosEnabled(final StreamsConfig config) {
-        return eosAlphaEnabled(config) || eosBetaEnabled(config);
+        final ProcessingMode processingMode = processingMode(config);
+        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
+            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
     }
 
     public StreamThread(final Time time,
@@ -444,12 +441,14 @@ public class StreamThread extends Thread {
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
-        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
-        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
-        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
-        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
-        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
+        this.pollRecordsSensor = ThreadMetrics.pollRecordsSensor(threadId, streamsMetrics);
         this.pollRatioSensor = ThreadMetrics.pollRatioSensor(threadId, streamsMetrics);
+        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
+        this.processRecordsSensor = ThreadMetrics.processRecordsSensor(threadId, streamsMetrics);
+        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
+        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
+        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
+        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
@@ -511,6 +510,21 @@ public class StreamThread extends Thread {
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
+
+            if (e instanceof UnsupportedVersionException) {
+                final String errorMessage = e.getMessage();
+                if (errorMessage != null &&
+                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+
+                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
+                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                        EXACTLY_ONCE_BETA);
+
+                    throw e;
+                }
+            }
+
             log.error("Encountered the following exception during processing " +
                 "and the thread is going to shut down: ", e);
             throw e;
@@ -614,6 +628,7 @@ public class StreamThread extends Thread {
 
         if (records != null && !records.isEmpty()) {
             pollSensor.record(pollLatency, now);
+            pollRecordsSensor.record(records.count());
             addRecordsToTasks(records);
         }
 
@@ -643,8 +658,11 @@ public class StreamThread extends Thread {
         // if there's no active restoring or standby updating it would not try to fetch any data
         changelogReader.restore();
 
+        // TODO: we should record the restore latency and its relative time spent ratio after
+        //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
 
+        int totalProcessed = 0;
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
@@ -659,7 +677,7 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
-                final int processed = taskManager.process(numIterations, now);
+                final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -668,9 +686,12 @@ public class StreamThread extends Thread {
                     processRateSensor.record(processed, now);
 
                     // This metric is scaled to represent the _average_ processing time of _each_
-                    // task. Note, it's hard to interpret this as defined, but we would need a KIP
-                    // to change it to simply report the overall time spent processing all tasks.
+                    // task. Note, it's hard to interpret this as defined; the per-task process-ratio
+                    // as well as total time ratio spent on processing compared with polling / committing etc
+                    // are reported on other metrics.
                     processLatencySensor.record(processLatency / (double) processed, now);
+
+                    totalProcessed += processed;
                 }
 
                 final int punctuated = taskManager.punctuate();
@@ -704,10 +725,15 @@ public class StreamThread extends Thread {
                     numIterations++;
                 }
             } while (true);
+
+            // we record the ratio out of the while loop so that the accumulated latency spans over
+            // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
+            taskManager.recordTaskProcessRatio(totalProcessLatency);
         }
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
+        processRecordsSensor.record(totalProcessed);
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
         pollRatioSensor.record((double) pollLatency / runOnceLatency);

@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Test
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.util.Properties
 
 import org.apache.kafka.common.internals.Topic

@@ -762,6 +762,9 @@ public class KafkaStreams implements AutoCloseable {
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i], internalTopologyBuilder));
         }
 
+        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
+            Math.toIntExact(Arrays.stream(threads).filter(thread -> thread.state().isAlive()).count()));
+
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
@@ -773,14 +776,18 @@ public class KafkaStreams implements AutoCloseable {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+        stateDirCleaner = setupStateDirCleaner();
+
+        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
+        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private ScheduledExecutorService setupStateDirCleaner() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
             thread.setDaemon(true);
             return thread;
         });
-
-        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
-        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
     private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,

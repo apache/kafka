@@ -648,7 +648,7 @@ public final class MessageTest {
         message.write(byteBufferAccessor, cache, version);
         assertEquals("The result of the size function does not match the number of bytes " +
             "written for version " + version, size, buf.position());
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
         assertEquals("The result of the size function does not match the number of bytes " +
@@ -661,7 +661,7 @@ public final class MessageTest {
 
     private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
         Struct struct = message.toStruct(version);
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         message2.fromStruct(struct, version);
         assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());

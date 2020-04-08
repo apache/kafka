@@ -31,7 +31,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * This is the main test which ensure Replication Quotas work correctly.
@@ -43,7 +43,7 @@ import scala.collection.JavaConverters._
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
+  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null

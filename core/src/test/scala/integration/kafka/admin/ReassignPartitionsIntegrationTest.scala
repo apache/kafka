@@ -36,7 +36,7 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Rule, Test}
 
 import scala.collection.Map
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {

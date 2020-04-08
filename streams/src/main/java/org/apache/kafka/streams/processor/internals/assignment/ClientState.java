@@ -149,15 +149,17 @@ public class ClientState {
         capacity++;
     }
 
-    @SuppressWarnings("WeakerAccess")
     public int activeTaskCount() {
         return activeTasks.size();
     }
 
-    public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
+    int standbyTaskCount() {
+        return standbyTasks.size();
+    }
+
+    void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
-        prevStandbyTasks.removeAll(prevTasks);
     }
 
     void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
@@ -172,17 +174,15 @@ public class ClientState {
     }
 
     public void addPreviousTasksAndOffsetSums(final Map<TaskId, Long> taskOffsetSums) {
-        for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
-            final TaskId id = taskEntry.getKey();
-            final long offsetSum = taskEntry.getValue();
-            if (offsetSum == Task.LATEST_OFFSET) {
-                prevActiveTasks.add(id);
-            } else {
-                prevStandbyTasks.add(id);
-            }
-            prevAssignedTasks.add(id);
-        }
         this.taskOffsetSums.putAll(taskOffsetSums);
+    }
+
+    public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap) {
+        if (!prevActiveTasks.isEmpty() || !prevStandbyTasks.isEmpty()) {
+            throw new IllegalStateException("Already added previous tasks to this client state.");
+        }
+        initializePrevActiveTasksFromOwnedPartitions(taskForPartitionMap);
+        initializeRemainingPrevTasksFromTaskOffsetSums();
     }
 
     /**
@@ -222,7 +222,7 @@ public class ClientState {
      * @return end offset sum - offset sum
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
-    public long lagFor(final TaskId task) {
+    long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
 
         if (totalLag == null) {
@@ -272,6 +272,50 @@ public class ClientState {
 
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
+    }
+
+    private void initializePrevActiveTasksFromOwnedPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap) {
+        // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
+        // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
+        // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
+        // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
+        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions().entrySet()) {
+            final TopicPartition tp = partitionEntry.getKey();
+            final TaskId task = taskForPartitionMap.get(tp);
+            if (task != null) {
+                addPreviousActiveTask(task);
+            } else {
+                LOG.error("No task found for topic partition {}", tp);
+            }
+        }
+    }
+
+    private void initializeRemainingPrevTasksFromTaskOffsetSums() {
+        if (prevActiveTasks.isEmpty() && !ownedPartitions.isEmpty()) {
+            LOG.error("Tried to process tasks in offset sum map before processing tasks from ownedPartitions = {}", ownedPartitions);
+            throw new IllegalStateException("Must initialize prevActiveTasks from ownedPartitions before initializing remaining tasks.");
+        }
+        for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            if (!prevActiveTasks.contains(task)) {
+                final long offsetSum = taskEntry.getValue();
+                if (offsetSum == Task.LATEST_OFFSET) {
+                    addPreviousActiveTask(task);
+                } else {
+                    addPreviousStandbyTask(task);
+                }
+            }
+        }
+    }
+
+    private void addPreviousActiveTask(final TaskId task) {
+        prevActiveTasks.add(task);
+        prevAssignedTasks.add(task);
+    }
+
+    private void addPreviousStandbyTask(final TaskId task) {
+        prevStandbyTasks.add(task);
+        prevAssignedTasks.add(task);
     }
 
     @Override
