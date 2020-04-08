@@ -296,10 +296,10 @@ class SocketServer(val config: KafkaConfig,
   def stopProcessingRequests(): Unit = {
     info("Stopping socket server request processors")
     this.synchronized {
-      dataPlaneProcessors.asScala.values.foreach(_.shutdown())
-      controlPlaneProcessorOpt.foreach(_.shutdown())
       dataPlaneAcceptors.asScala.values.foreach(_.shutdown())
+      dataPlaneAcceptors.asScala.values.foreach(_.awaitShutdown())
       controlPlaneAcceptorOpt.foreach(_.shutdown())
+      controlPlaneAcceptorOpt.foreach(_.awaitShutdown())
       dataPlaneRequestChannel.clear()
       controlPlaneRequestChannelOpt.foreach(_.clear())
       stoppedProcessingRequests = true
@@ -359,7 +359,10 @@ class SocketServer(val config: KafkaConfig,
     info(s"Removing data-plane listeners for endpoints $listenersRemoved")
     listenersRemoved.foreach { endpoint =>
       connectionQuotas.removeListener(config, endpoint.listenerName)
-      dataPlaneAcceptors.asScala.remove(endpoint).foreach(_.shutdown())
+      dataPlaneAcceptors.asScala.remove(endpoint).foreach { acceptor =>
+        acceptor.shutdown()
+        acceptor.awaitShutdown()
+      }
     }
   }
 
@@ -457,13 +460,17 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   def wakeup(): Unit
 
   /**
-   * Initiates a graceful shutdown by signaling to stop and waiting for the shutdown to complete
+   * Initiates a graceful shutdown by signaling to stop
    */
   def shutdown(): Unit = {
     if (alive.getAndSet(false))
       wakeup()
-    shutdownLatch.await()
   }
+
+  /**
+   * Wait for the thread to completely shutdown
+   */
+  def awaitShutdown(): Unit = shutdownLatch.await
 
   /**
    * Returns true if the thread is completely started
@@ -552,16 +559,22 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     val toRemove = processors.takeRight(removeCount)
     processors.remove(processors.size - removeCount, removeCount)
     toRemove.foreach(_.shutdown())
+    toRemove.foreach(_.awaitShutdown())
     toRemove.foreach(processor => requestChannel.removeProcessor(processor.id))
   }
 
   override def shutdown(): Unit = {
-    // Shutdown processors first because the acceptor thread may be blocked trying to
-    // add a new connection to one of the processor.
+    super.shutdown()
     synchronized {
       processors.foreach(_.shutdown())
     }
-    super.shutdown()
+  }
+
+  override def awaitShutdown(): Unit = {
+    synchronized {
+      processors.foreach(_.awaitShutdown())
+    }
+    super.awaitShutdown()
   }
 
   /**
@@ -1147,7 +1160,6 @@ private[kafka] class Processor(val id: Int,
     removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
     metrics.removeMetric(expiredConnectionsKilledCountMetricName)
   }
-
 }
 
 class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
