@@ -131,36 +131,18 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosAlphaEnabled() throws Exception {
-        try {
-            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.start();
-
-            produceKeyValues("a", "b", "c");
-
-            assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
-
-            streamsOne.close();
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            // the state restore listener will append one record to the log
-            streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
-            streamsOne.start();
-
-            produceKeyValues("f", "g", "h");
-
-            assertNumberValuesRead(
-                readKeyValues,
-                expectedResultsWithDataWrittenDuringRestoreMap,
-                "Table did not get all values after restart");
-        } finally {
-            streamsOne.close(Duration.ofSeconds(5));
-        }
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
     }
 
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosBetaEnabled() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
+    }
+
+    private void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
         try {
-            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streamsOne.start();
 
