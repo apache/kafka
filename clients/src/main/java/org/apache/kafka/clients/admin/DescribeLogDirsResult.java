@@ -50,7 +50,7 @@ public class DescribeLogDirsResult {
      * Return a future which succeeds only if all the brokers have responded without error
      */
     public KafkaFuture<Map<Integer, Map<String, LogDirInfo>>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(new KafkaFuture.BaseFunction<Void, Map<Integer, Map<String, LogDirInfo>>>() {
                 @Override
                 public Map<Integer, Map<String, LogDirInfo>> apply(Void v) {
