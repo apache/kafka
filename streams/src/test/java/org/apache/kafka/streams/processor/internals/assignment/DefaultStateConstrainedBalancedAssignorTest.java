@@ -155,11 +155,11 @@ public class DefaultStateConstrainedBalancedAssignorTest {
 
         final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
-            rankForTask01OnClient1,
-            rankForTask01OnClient2,
-            rankForTask12OnClient1,
-            rankForTask12OnClient2
-        );
+                rankForTask01OnClient1,
+                rankForTask01OnClient2,
+                rankForTask12OnClient1,
+                rankForTask12OnClient2
+            );
         final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
             statefulTasksToRankedCandidates,
             balanceFactor,

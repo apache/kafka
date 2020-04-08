@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;

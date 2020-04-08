@@ -75,7 +75,9 @@ public class TaskMovementTest {
         expectedMovements.add(new TaskMovement(TASK_1_0, UUID_2, UUID_1));
         expectedMovements.add(new TaskMovement(TASK_1_1, UUID_3, UUID_2));
 
-        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas), equalTo(expectedMovements));
+        assertThat(
+            getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas),
+            equalTo(expectedMovements));
     }
 
     @Test
@@ -100,7 +102,9 @@ public class TaskMovementTest {
         expectedMovements.add(new TaskMovement(TASK_1_2, UUID_1, UUID_3));
         expectedMovements.add(new TaskMovement(TASK_1_1, UUID_3, UUID_2));
 
-        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas), equalTo(expectedMovements));
+        assertThat(
+            getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas),
+            equalTo(expectedMovements));
         assertFalse(stateConstrainedAssignment.get(UUID_2).contains(TASK_1_0));
         assertTrue(stateConstrainedAssignment.get(UUID_1).contains(TASK_1_0));
     }
@@ -125,7 +129,9 @@ public class TaskMovementTest {
         final Queue<TaskMovement> expectedMovements = new LinkedList<>();
         expectedMovements.add(new TaskMovement(TASK_1_2, UUID_1, UUID_3));
 
-        assertThat(getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas), equalTo(expectedMovements));
+        assertThat(
+            getMovements(stateConstrainedAssignment, balancedAssignment, tasksToCaughtUpClients, maxWarmupReplicas),
+            equalTo(expectedMovements));
     }
 
     @Test
@@ -167,7 +173,26 @@ public class TaskMovementTest {
             mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
             mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1))
         );
-        assertThrows(IllegalStateException.class, () -> getMovements(stateConstrainedAssignment, balancedAssignment, emptyMap(), maxWarmupReplicas));
+        assertThrows(
+            IllegalStateException.class,
+            () -> getMovements(stateConstrainedAssignment, balancedAssignment, emptyMap(), maxWarmupReplicas));
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionWhenTaskHasNoDestinationClient() {
+        final int maxWarmupReplicas = 2;
+
+        final Map<UUID, List<TaskId>> stateConstrainedAssignment = mkMap(
+            mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_0_1)),
+            mkEntry(UUID_2, mkTaskList(TASK_1_0))
+        );
+        final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
+            mkEntry(UUID_1, mkTaskList(TASK_0_0)),
+            mkEntry(UUID_2, mkTaskList(TASK_0_1))
+        );
+        assertThrows(
+            IllegalStateException.class,
+            () -> getMovements(stateConstrainedAssignment, balancedAssignment, emptyMap(), maxWarmupReplicas));
     }
 
     private static List<TaskId> mkTaskList(final TaskId... tasks) {
