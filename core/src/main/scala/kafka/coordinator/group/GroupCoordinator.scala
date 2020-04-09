@@ -145,11 +145,10 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(JoinGroupResult(memberId, Errors.INVALID_SESSION_TIMEOUT))
     } else {
       val isUnknownMember = memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID
+      // group is created if it does not exist and the member id is UNKNOWN. if member
+      // is specified but group does not exist, request is rejected with UNKNOWN_MEMBER_ID
       groupManager.getGroup(groupId, isUnknownMember) match {
         case None =>
-          // only try to create the group if the group is UNKNOWN AND
-          // the member id is UNKNOWN, if member is specified but group does not
-          // exist we should reject the request.
           responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
         case Some(group) =>
           group.inLock {
