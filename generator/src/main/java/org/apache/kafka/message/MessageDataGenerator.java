@@ -1187,7 +1187,8 @@ public final class MessageDataGenerator {
                 return String.format("struct.getByteArray(\"%s\")", name);
             }
         } else if (type.isStruct()) {
-            return String.format("new %s(struct, _version)", type.toString());
+            return String.format("new %s((Struct) struct.get(\"%s\"), _version)",
+                    type.toString(), name);
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
