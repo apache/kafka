@@ -112,17 +112,16 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public void putRemoteLogSegmentData(RemoteLogSegmentId remoteLogSegmentId,
-                                        RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
+    public void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
         // insert remote log metadata into the topic.
-        publishMessageToPartition(remoteLogSegmentId, remoteLogSegmentMetadata);
+        publishMessageToPartition(remoteLogSegmentMetadata);
     }
 
-    private void publishMessageToPartition(RemoteLogSegmentId remoteLogSegmentId,
-                                           RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    private void publishMessageToPartition(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.info("Publishing messages to remote log metadata topic for remote log segment metadata [{}]",
                 remoteLogSegmentMetadata);
 
+        RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
         int partitionNo = metadataPartitionFor(remoteLogSegmentId.topicPartition());
         try {
             final ProducerCallback callback = new ProducerCallback();
@@ -215,7 +214,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException {
         RemoteLogSegmentMetadata metadata = idWithSegmentMetadata.get(remoteLogSegmentId);
         if (metadata != null) {
-            publishMessageToPartition(remoteLogSegmentId, RemoteLogSegmentMetadata.markForDeletion(metadata));
+            publishMessageToPartition(RemoteLogSegmentMetadata.markForDeletion(metadata));
         }
     }
 

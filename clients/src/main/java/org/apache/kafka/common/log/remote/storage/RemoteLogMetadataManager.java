@@ -50,15 +50,12 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     String CLUSTER_ID = "cluster.id";
 
     /**
-     * Stores RemoteLogSegmentMetadata for the given RemoteLogSegmentId.
-     * todo-tier we may not need to pass RemoteLogSegmentId here as RemoteLogSegmentMetadata already contains that.
-     * we can cleanup this interface later with the right abstractions.
+     * Stores RemoteLogSegmentMetadata with the given RemoteLogSegmentId.
      *
-     * @param remoteLogSegmentId
      * @param remoteLogSegmentMetadata
      * @throws IOException
      */
-    void putRemoteLogSegmentData(RemoteLogSegmentId remoteLogSegmentId, RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
+    void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
 
     /**
      * Fetches RemoteLogSegmentId for the given topic partition which contains the given offset.

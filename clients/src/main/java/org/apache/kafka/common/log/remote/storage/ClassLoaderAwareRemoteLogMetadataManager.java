@@ -34,12 +34,11 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public void putRemoteLogSegmentData(RemoteLogSegmentId remoteLogSegmentId,
-                                        RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
+    public void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            delegate.putRemoteLogSegmentData(remoteLogSegmentId, remoteLogSegmentMetadata);
+            delegate.putRemoteLogSegmentData(remoteLogSegmentMetadata);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }

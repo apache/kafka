@@ -342,16 +342,14 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
                 //todo-tier double check on this
                 val endOffset = segment.readNextOffset - 1
-                remoteLogMetadataManager.putRemoteLogSegmentData(id,
-                  new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar,
-                    leaderEpochVal, null))
+                remoteLogMetadataManager.putRemoteLogSegmentData(new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar,
+                                    leaderEpochVal, null))
 
                 val segmentData = new LogSegmentData(file, segment.lazyOffsetIndex.get.file,
                   segment.lazyTimeIndex.get.file)
                 val remoteLogContext = remoteLogStorageManager.copyLogSegment(id, segmentData)
 
-                remoteLogMetadataManager.putRemoteLogSegmentData(id,
-                  new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar, leaderEpochVal, System.currentTimeMillis(), false, remoteLogContext.asBytes()))
+                remoteLogMetadataManager.putRemoteLogSegmentData(new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar, leaderEpochVal, System.currentTimeMillis(), false, remoteLogContext.asBytes()))
 
                 readOffset = endOffset
                 log.updateRemoteIndexHighestOffset(readOffset)
@@ -506,8 +504,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
   def findOffsetByTimestamp(tp: TopicPartition, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
-    //todo rlmIndexer.lookupEntryForTimestamp(tp, timestamp, startingOffset).map(entry =>
-    //  remoteLogStorageManager.findOffsetByTimestamp(entry, timestamp, startingOffset))
     remoteLogMetadataManager.listRemoteLogSegments(tp, startingOffset).forEach(new Consumer[RemoteLogSegmentMetadata] {
 
       override def accept(rlsMetadata: RemoteLogSegmentMetadata): Unit = {

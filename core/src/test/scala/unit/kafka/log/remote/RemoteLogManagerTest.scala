@@ -228,8 +228,7 @@ class MockRemoteStorageManager extends RemoteStorageManager {
 }
 
 class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
-  override def putRemoteLogSegmentData(remoteLogSegmentId: RemoteLogSegmentId,
-                                       remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
+  override def putRemoteLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
 
   override def getRemoteLogSegmentId(topicPartition: TopicPartition,
                                      offset: Long): RemoteLogSegmentId = {

@@ -94,10 +94,10 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
       rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
 
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0_100, rlSegMetTp0_0_100)
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_101_200, rlSegMetTp0_101_200)
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp1_101_300, rlSegMetTp1_101_300)
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp2_401_700, rlSegMetTp2_401_700)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_0_100)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_101_200)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp1_101_300)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp2_401_700)
 
       val rlSegIdTp1_150 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp1, 150)
       Assert.assertEquals(rlSegIdTp1_101_300, rlSegIdTp1_150)
@@ -130,7 +130,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1)
       mayBeRlmmWithTopicStorage = Some(rlmmWithTopicStorage)
       rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_10, rlSegMetTp0_10)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_10)
 
       // get the non existing offset, below base offset
       val rlSegIdTp0_2 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 2L)
@@ -154,7 +154,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1)
       mayBeRlmmWithTopicStorage = Some(rlmmWithTopicStorage)
       rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
-      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegIdTp0_0_100, rlSegMetTp0_0_100)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_0_100)
 
       // get the non existing offset, below base offset
       val rlSegMetTp0_15 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 15L)
@@ -240,9 +240,9 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm2.onPartitionLeadershipChanges(Collections.emptySet(), partitions);
 
       // publishes events to rlmm1 for tp0 and tp2
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp0_0_100, rlSegMetTp0_0_100);
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp0_101_200, rlSegMetTp0_101_200);
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp2_501_1000, rlSegMetTp2_501_1000);
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp0_0_100);
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp0_101_200);
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp2_501_1000);
 
       // check whether the published events from rlmm1 are available.
       val rlSegMetTp0_0_1 = rlmm1.getRemoteLogSegmentId(tp0, 10);
@@ -290,9 +290,9 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm1.onPartitionLeadershipChanges(leaderSet1, Collections.emptySet())
 
       // publish segment metadata
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp0_0_100, rlSegMetTp0_0_100)
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp0_101_200, rlSegMetTp0_101_200)
-      rlmm1.putRemoteLogSegmentData(rlSegIdTp3_101_700, rlSegMetTp3_101)
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp0_0_100)
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp0_101_200)
+      rlmm1.putRemoteLogSegmentData(rlSegMetTp3_101)
 
       val rlSegMetTp0_10 = rlmm1.getRemoteLogSegmentId(tp0, 10);
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_10);
@@ -311,8 +311,8 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm2.onPartitionLeadershipChanges(leaderSet2, Collections.emptySet())
 
       // publish segment metadata
-      rlmm2.putRemoteLogSegmentData(rlSegIdTp1_101_300, rlSegMetTp1_101_300)
-      rlmm2.putRemoteLogSegmentData(rlSegIdTp2_150_400, rlSegMetTp2_150_400)
+      rlmm2.putRemoteLogSegmentData(rlSegMetTp1_101_300)
+      rlmm2.putRemoteLogSegmentData(rlSegMetTp2_150_400)
 
       // check for a few messages for tp1 and tp2 but not for tp0
       val rlSegIdTp1_180 = rlmm2.getRemoteLogSegmentId(tp1, 180)
@@ -335,7 +335,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 170), rlSegIdTp3_101_700));
 
       // add a new segment notification for tp3
-      rlmm2.putRemoteLogSegmentData(rlSegIdTp3_701_1900, rlSegMetTp3_701_1900)
+      rlmm2.putRemoteLogSegmentData(rlSegMetTp3_701_1900)
       Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900));
 
       // rlmm1 should not receive latest tp3 segment notifications as it is not assigned for.
