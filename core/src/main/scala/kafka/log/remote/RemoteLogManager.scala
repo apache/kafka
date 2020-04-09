@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.log.remote.storage.{ClassLoaderAwareRemoteLogMetadataManager, LogSegmentData, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 
@@ -431,41 +431,36 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     indexCache.position(remoteLogSegmentMetadata, offset).position
   }
 
-  def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
+  def read(fetchMaxBytes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
     val offset = fetchInfo.fetchOffset
-    val maxBytes = fetchInfo.maxBytes
+    val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)
+    val rlsMetadata = getRemoteLogSegmentMetadata(tp, offset)
 
-    // different cases to be considered to get the endPosition.
-    // endPosition can be with in this segment, else get the next segment till we runout of fetchMaxBytes.
-    def fetchRemoteLogSegmentInfo(maxBytes: Int, offset: Long): (RemoteLogSegmentMetadata, Long, Int, Long) = {
-      val rlsMetadata = getRemoteLogSegmentMetadata(tp, offset)
-      // todo-tier build offset index cache, get the index if it does not exist and get the position for the given
-      // offset.
-      val startPos = lookupPositionForOffset(rlsMetadata, offset)
-      val endSegOffset = rlsMetadata.endOffset()
-      val endSegPos = lookupPositionForOffset(rlsMetadata, endSegOffset)
-      val availableInSeg = (endSegPos - startPos).toInt
-      val len = math.min(maxBytes, availableInSeg)
-      (rlsMetadata, startPos, len, endSegOffset)
+    var startPos = lookupPositionForOffset(rlsMetadata, offset)
+    var is:InputStream = null
+    try {
+      // Search forward for the position of the last offset that is greater than or equal to the target offset
+      is = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
+      val logInputStream = new RemoteLogInputStream(is)
+
+      var batch:RecordBatch = null;
+      while ((batch = logInputStream.nextBatch()) != null && batch.lastOffset < offset) {
+        startPos += batch.sizeInBytes
+      }
+    } finally {
+      is.close()
     }
 
-    var totalLength: Int = 0
-    var streams: ListBuffer[InputStream] = new ListBuffer()
-    var availableBytes = fetchMaxByes
-    var nextOffset = offset
-    while (availableBytes > 0) {
-      val (rlsMetadata, startPos, len, endSegOffset) = fetchRemoteLogSegmentInfo(availableBytes, nextOffset)
-      val is = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, startPos + len)
-      streams += is
-      nextOffset = endSegOffset + 1
-      availableBytes -= len
-      totalLength += len
+    try {
+      is = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, startPos + maxBytes)
+      val buffer = ByteBuffer.allocate(fetchMaxBytes)
+      Utils.readFully(is, buffer)
+      buffer.flip()
+      val records = MemoryRecords.readableRecords(buffer)
+      FetchDataInfo(LogOffsetMetadata(offset), records)
+    } finally {
+      is.close()
     }
-
-    val buffer = ByteBuffer.allocate(totalLength)
-    streams.foreach(is => Utils.readFully(is, buffer))
-    val records = MemoryRecords.readableRecords(buffer)
-    FetchDataInfo(LogOffsetMetadata(offset), records)
   }
 
   private def getRemoteLogSegmentMetadata(tp: TopicPartition, offset: Long): RemoteLogSegmentMetadata = {

@@ -130,7 +130,7 @@ class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
     Files.createTempDirectory("kafka-test-").toString) {
   private val lock = new ReentrantReadWriteLock
 
-  override def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: FetchRequest.PartitionData): FetchDataInfo = {
+  override def read(fetchMaxBytes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: FetchRequest.PartitionData): FetchDataInfo = {
     lock.readLock.lock()
     try {
       val recordsArray = Array(new SimpleRecord("k1".getBytes, "v1".getBytes),
