@@ -193,7 +193,7 @@ public enum ApiKeys {
     ALTER_CONFIGS(33, "AlterConfigs", AlterConfigsRequestData.SCHEMAS,
             AlterConfigsResponseData.SCHEMAS),
     ALTER_REPLICA_LOG_DIRS(34, "AlterReplicaLogDirs", AlterReplicaLogDirsRequestData.SCHEMAS,
-                           AlterReplicaLogDirsResponseData.SCHEMAS),
+            AlterReplicaLogDirsResponseData.SCHEMAS),
     DESCRIBE_LOG_DIRS(35, "DescribeLogDirs", DescribeLogDirsRequestData.SCHEMAS,
             DescribeLogDirsResponseData.SCHEMAS),
     SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequestData.SCHEMAS,

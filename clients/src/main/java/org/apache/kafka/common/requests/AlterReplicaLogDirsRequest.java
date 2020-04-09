@@ -17,6 +17,11 @@
 
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
@@ -24,12 +29,6 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterRepl
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class AlterReplicaLogDirsRequest extends AbstractRequest {
 
@@ -72,32 +71,24 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     @Override
     public AlterReplicaLogDirsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData();
-
-        data.setResults(this.data.dirs().stream().flatMap(x -> {
-            Stream<AlterReplicaLogDirTopicResult> y = x.topics().stream().map(topic -> {
-                return new AlterReplicaLogDirTopicResult()
-                        .setTopicName(topic.name())
-                        .setPartitions(
-                                topic.partitions().stream().map(partitionId -> {
-                                    return new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
-                                            .setErrorCode(Errors.forException(e).code())
-                                            .setPartitionIndex(partitionId);
-                                }).collect(Collectors.toList()));
-            });
-            return y;
-        }).collect(Collectors.toList()));
+        data.setResults(this.data.dirs().stream().flatMap(alterDir ->
+            alterDir.topics().stream().map(topic ->
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName(topic.name())
+                    .setPartitions(topic.partitions().stream().map(partitionId ->
+                        new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
+                            .setErrorCode(Errors.forException(e).code())
+                            .setPartitionIndex(partitionId)).collect(Collectors.toList())))).collect(Collectors.toList()));
         return new AlterReplicaLogDirsResponse(data.setThrottleTimeMs(throttleTimeMs));
     }
 
     public Map<TopicPartition, String> partitionDirs() {
         Map<TopicPartition, String> result = new HashMap<>();
-        for (AlterReplicaLogDirsRequestData.AlterReplicaLogDir alter : data.dirs()) {
-            alter.topics().stream().flatMap(t -> {
-                Stream<TopicPartition> objectStream = t.partitions().stream().map(
-                    p -> new TopicPartition(t.name(), p.intValue()));
-                return objectStream;
-            }).forEach(tp -> result.put(tp, alter.path()));
-        }
+        data.dirs().forEach(alterDir ->
+            alterDir.topics().forEach(topic ->
+                topic.partitions().forEach(partition ->
+                    result.put(new TopicPartition(topic.name(), partition.intValue()), alterDir.path())))
+        );
         return result;
     }
 

@@ -40,9 +40,6 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
         this.data = new AlterReplicaLogDirsResponseData(struct, version);
     }
 
-    /**
-     * Constructor for version 0.
-     */
     public AlterReplicaLogDirsResponse(AlterReplicaLogDirsResponseData data) {
         this.data = data;
     }
@@ -64,11 +61,9 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (AlterReplicaLogDirTopicResult x : data.results()) {
-            for (AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult y : x.partitions()) {
-                updateErrorCounts(errorCounts, Errors.forCode(y.errorCode()));
-            }
-        }
+        data.results().forEach(topicResult ->
+            topicResult.partitions().forEach(partitionResult ->
+                updateErrorCounts(errorCounts, Errors.forCode(partitionResult.errorCode()))));
         return errorCounts;
     }
 

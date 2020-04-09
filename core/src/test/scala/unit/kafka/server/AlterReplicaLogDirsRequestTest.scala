@@ -118,7 +118,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   }
 
   private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String]): AlterReplicaLogDirsResponse = {
-    val x = partitionDirs.groupBy{case (tp, dir) => dir}.map{ case(dir, tps) =>
+    val logDirs = partitionDirs.groupBy{case (_, dir) => dir}.map{ case(dir, tps) =>
       new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
         .setPath(dir)
         .setTopics(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(
@@ -130,7 +130,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
         }.toList.asJava.iterator))
     }
     val data = new AlterReplicaLogDirsRequestData()
-        .setDirs(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirCollection(x.asJava.iterator))
+        .setDirs(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirCollection(logDirs.asJava.iterator))
     val request = new AlterReplicaLogDirsRequest.Builder(data).build()
     connectAndReceive[AlterReplicaLogDirsResponse](request, destination = controllerSocketServer)
   }
