@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -23,16 +22,20 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
+/**
+ * Repartition node that is not subject of optimization algorithm
+ */
+public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
-    private OptimizableRepartitionNode(final String nodeName,
-                                       final String sourceName,
-                                       final ProcessorParameters<K, V> processorParameters,
-                                       final Serde<K> keySerde,
-                                       final Serde<V> valueSerde,
-                                       final String sinkName,
-                                       final String repartitionTopic,
-                                       final StreamPartitioner<K, V> partitioner) {
+    private UnoptimizableRepartitionNode(final String nodeName,
+                                         final String sourceName,
+                                         final ProcessorParameters<K, V> processorParameters,
+                                         final Serde<K> keySerde,
+                                         final Serde<V> valueSerde,
+                                         final String sinkName,
+                                         final String repartitionTopic,
+                                         final StreamPartitioner<K, V> partitioner,
+                                         final InternalTopicProperties internalTopicProperties) {
         super(
             nodeName,
             sourceName,
@@ -42,25 +45,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             sinkName,
             repartitionTopic,
             partitioner,
-            InternalTopicProperties.empty()
+            internalTopicProperties
         );
-    }
-
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public String repartitionTopic() {
-        return repartitionTopic;
-    }
-
-    @Override
-    public String toString() {
-        return "OptimizableRepartitionNode{ " + super.toString() + " }";
     }
 
     @Override
@@ -90,30 +76,30 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             valueDeserializer(),
             repartitionTopic
         );
-
     }
 
-    public static <K, V> OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder() {
-        return new OptimizableRepartitionNodeBuilder<>();
+    @Override
+    public String toString() {
+        return "UnoptimizableRepartitionNode{" + super.toString() + " }";
     }
 
+    public static <K, V> UnoptimizableRepartitionNodeBuilder<K, V> unoptimizableRepartitionNodeBuilder() {
+        return new UnoptimizableRepartitionNodeBuilder<>();
+    }
 
-    public static final class OptimizableRepartitionNodeBuilder<K, V> extends BaseRepartitionNodeBuilder<K, V, OptimizableRepartitionNode<K, V>> {
+    public static final class UnoptimizableRepartitionNodeBuilder<K, V> extends BaseRepartitionNodeBuilder<K, V, UnoptimizableRepartitionNode<K, V>> {
 
         @Override
-        public OptimizableRepartitionNode<K, V> build() {
-
-            return new OptimizableRepartitionNode<>(
-                nodeName,
-                sourceName,
-                processorParameters,
-                keySerde,
-                valueSerde,
-                sinkName,
-                repartitionTopic,
-                partitioner
-            );
-
+        public UnoptimizableRepartitionNode<K, V> build() {
+            return new UnoptimizableRepartitionNode<>(nodeName,
+                                                      sourceName,
+                                                      processorParameters,
+                                                      keySerde,
+                                                      valueSerde,
+                                                      sinkName,
+                                                      repartitionTopic,
+                                                      partitioner,
+                                                      internalTopicProperties);
         }
     }
 }

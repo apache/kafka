@@ -592,7 +592,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }
@@ -606,7 +606,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }
