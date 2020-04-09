@@ -829,13 +829,7 @@ public class StreamsPartitionAssignorTest {
 
         final List<String> topics = asList("topic1", "topic2");
 
-        final TaskId task00 = new TaskId(0, 0);
-        final TaskId task01 = new TaskId(0, 1);
-        final TaskId task02 = new TaskId(0, 2);
-        final TaskId task10 = new TaskId(1, 0);
-        final TaskId task11 = new TaskId(1, 1);
-        final TaskId task12 = new TaskId(1, 2);
-        final List<TaskId> tasks = asList(task00, task01, task02, task10, task11, task12);
+        final List<TaskId> tasks = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
         createMockAdminClient(getTopicPartitionOffsetsMap(
             asList(APPLICATION_ID + "-store1-changelog",
@@ -876,9 +870,9 @@ public class StreamsPartitionAssignorTest {
         // check tasks for state topics
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        assertEquals(mkSet(task00, task01, task02), tasksForState("store1", tasks, topicGroups));
-        assertEquals(mkSet(task10, task11, task12), tasksForState("store2", tasks, topicGroups));
-        assertEquals(mkSet(task10, task11, task12), tasksForState("store3", tasks, topicGroups));
+        assertEquals(mkSet(TASK_0_0, TASK_0_1, TASK_0_2), tasksForState("store1", tasks, topicGroups));
+        assertEquals(mkSet(TASK_1_0, TASK_1_1, TASK_1_2), tasksForState("store2", tasks, topicGroups));
+        assertEquals(mkSet(TASK_1_0, TASK_1_1, TASK_1_2), tasksForState("store3", tasks, topicGroups));
     }
 
     private static Set<TaskId> tasksForState(final String storeName,

@@ -30,5 +30,6 @@ public interface StateConstrainedBalancedAssignor {
     Map<UUID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
                                    final int balanceFactor,
                                    final Set<UUID> clients,
-                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads);
+                                   final Map<UUID, Integer> clientsToNumberOfStreamThread,
+                                   final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients);
 }

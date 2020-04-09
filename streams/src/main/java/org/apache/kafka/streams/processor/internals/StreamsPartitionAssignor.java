@@ -800,7 +800,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     log.debug("Fetched end offsets did not contain the changelog {} of task {}", changelog, task);
                     throw new IllegalStateException("Could not get end offset for " + changelog);
                 }
-                taskEndOffsetSums.computeIfPresent(task, (id, curOffsetSum) -> curOffsetSum + offsetResult.offset());
+                final long newEndOffsetSum = taskEndOffsetSums.get(task) + offsetResult.offset();
+                if (newEndOffsetSum < 0) {
+                    taskEndOffsetSums.put(task, Long.MAX_VALUE);
+                    break;
+                } else {
+                    taskEndOffsetSums.put(task, newEndOffsetSum);
+                }
             }
         }
         return taskEndOffsetSums;
