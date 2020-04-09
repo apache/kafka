@@ -44,10 +44,6 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public AddOffsetsToTxnResponse(Struct struct) {
-        this.data = new AddOffsetsToTxnResponseData(struct, (short) (AddOffsetsToTxnResponseData.SCHEMAS.length - 1));
-    }
-
     public AddOffsetsToTxnResponse(Struct struct, short version) {
         this.data = new AddOffsetsToTxnResponseData(struct, version);
     }

@@ -3266,7 +3266,6 @@ public class TransactionManagerTest {
             return true;
         }, new AddOffsetsToTxnResponse(
             new AddOffsetsToTxnResponseData()
-                .setThrottleTimeMs(0)
                 .setErrorCode(error.code()))
         );
     }
