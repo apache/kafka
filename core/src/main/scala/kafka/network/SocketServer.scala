@@ -571,10 +571,10 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   }
 
   override def awaitShutdown(): Unit = {
+    super.awaitShutdown()
     synchronized {
       processors.foreach(_.awaitShutdown())
     }
-    super.awaitShutdown()
   }
 
   /**
