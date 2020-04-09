@@ -227,6 +227,11 @@ public final class FieldSpec {
         return ignorable;
     }
 
+    @JsonProperty("entityType")
+    public EntityType entityType() {
+        return entityType;
+    }
+
     @JsonProperty("about")
     public String about() {
         return about;
