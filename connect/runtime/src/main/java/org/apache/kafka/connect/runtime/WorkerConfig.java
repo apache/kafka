@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -379,6 +380,20 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
+        String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
+        String transformedPluginPath = originalsStrings().get(PLUGIN_PATH_CONFIG);
+        if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
+            log.error(
+                "Config providers do not work with the plugin.path property. The raw value '{}' " 
+                    + "will be used for plugin scanning, as opposed to the transformed value '{}'. " 
+                    + "See https://issues.apache.org/jira/browse/KAFKA-9845 for more information.",
+                rawPluginPath,
+                transformedPluginPath
+            );
+        }
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
     }
@@ -398,6 +413,7 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
+        logPluginPathConfigProviderWarning(props);
     }
 
     private static class AdminListenersValidator implements ConfigDef.Validator {
