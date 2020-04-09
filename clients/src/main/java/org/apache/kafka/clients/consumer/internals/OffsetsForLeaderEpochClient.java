@@ -96,7 +96,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                     partitionsToRetry.add(topicPartition);
                     break;
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    logger().warn("Received unknown topic or partition error in ListOffset request for partition {}",
+                    logger().warn("Received unknown topic or partition error in OffsetsForLeaderEpoch request for partition {}",
                             topicPartition);
                     partitionsToRetry.add(topicPartition);
                     break;
