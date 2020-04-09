@@ -160,6 +160,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
             );
+
         final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
             statefulTasksToRankedCandidates,
             balanceFactor,
