@@ -199,7 +199,6 @@ public class TaskMovementTest {
         expectedMovements.add(new TaskMovement(TASK_1_2, UUID_1, UUID_3));
         expectedMovements.add(new TaskMovement(TASK_1_0, UUID_2, UUID_1));
 
-
         assertThat(
             getMovements(
                 stateConstrainedAssignment,
@@ -271,6 +270,7 @@ public class TaskMovementTest {
             mkEntry(UUID_1, mkTaskList(TASK_0_0, TASK_1_0)),
             mkEntry(UUID_2, mkTaskList(TASK_0_1, TASK_1_1))
         );
+
         assertThrows(
             IllegalStateException.class,
             () -> getMovements(
@@ -296,6 +296,8 @@ public class TaskMovementTest {
             mkEntry(UUID_1, mkTaskList(TASK_0_0)),
             mkEntry(UUID_2, mkTaskList(TASK_0_1))
         );
+        expectNoPreviousStandbys(client1, client2);
+
         assertThrows(
             IllegalStateException.class,
             () -> getMovements(
