@@ -38,6 +38,8 @@ import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
@@ -464,6 +466,9 @@ public class RequestResponseTest {
         checkRequest(createOffsetDeleteRequest(), true);
         checkErrorResponse(createOffsetDeleteRequest(), new UnknownServerException(), true);
         checkResponse(createOffsetDeleteResponse(), 0, true);
+        checkRequest(createAlterReplicaLogDirsRequest(), true);
+        checkErrorResponse(createAlterReplicaLogDirsRequest(), new UnknownServerException(), true);
+        checkResponse(createAlterReplicaLogDirsResponse(), 0, true);
     }
 
     @Test
@@ -2196,6 +2201,33 @@ public class RequestResponseTest {
         data.setTopics(topics);
 
         return new OffsetDeleteResponse(data);
+    }
+
+    private AlterReplicaLogDirsRequest createAlterReplicaLogDirsRequest() {
+        AlterReplicaLogDirsRequestData data = new AlterReplicaLogDirsRequestData();
+        data.dirs().add(
+                new AlterReplicaLogDirsRequestData.AlterReplicaLogDir().setPath("/data0").setTopics(
+                        new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(Collections.singletonList(
+                                new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic().setPartitions(singletonList(0)).setName("topic")
+                        ).iterator())
+                )
+        );
+        return new AlterReplicaLogDirsRequest.Builder(data).build((short) 0);
+    }
+
+    private AlterReplicaLogDirsResponse createAlterReplicaLogDirsResponse() {
+        AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData();
+        data.results().add(
+                new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult()
+                        .setTopicName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
+                                        .setPartitionIndex(0)
+                                        .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                                )
+                        )
+        );
+        return new AlterReplicaLogDirsResponse(data);
     }
 
 }
