@@ -119,15 +119,15 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
     assertEquals(Set(acl2, acl2, transactionalIdAcl), results.values.keySet.asScala)
     results.all.get()
-    waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
-    waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
+    waitForDescribeAcls(acl2.toFilter, Set(acl2))
+    waitForDescribeAcls(transactionalIdAcl.toFilter, Set(transactionalIdAcl))
 
     val filterA = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, null, PatternType.LITERAL), AccessControlEntryFilter.ANY)
     val filterB = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, "mytopic2", PatternType.LITERAL), AccessControlEntryFilter.ANY)
     val filterC = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TRANSACTIONAL_ID, null, PatternType.LITERAL), AccessControlEntryFilter.ANY)
 
-    waitForDescribeAcls(client, filterA, Set(groupAcl))
-    waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
+    waitForDescribeAcls(filterA, Set(groupAcl))
+    waitForDescribeAcls(filterC, Set(transactionalIdAcl))
 
     val results2 = client.deleteAcls(List(filterA, filterB, filterC).asJava, new DeleteAclsOptions())
     assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
@@ -135,8 +135,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 
-    waitForDescribeAcls(client, filterB, Set())
-    waitForDescribeAcls(client, filterC, Set())
+    waitForDescribeAcls(filterB, Set())
+    waitForDescribeAcls(filterC, Set())
   }
 
   @Test
@@ -297,8 +297,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       }
     }, "timed out waiting for createAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, fooAcl.toFilter, Set(fooAcl))
-      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
+      waitForDescribeAcls(fooAcl.toFilter, Set(fooAcl))
+      waitForDescribeAcls(transactionalIdAcl.toFilter, Set(transactionalIdAcl))
     }
     TestUtils.waitUntilTrue(() => {
       val result = client.deleteAcls(List(fooAcl.toFilter, transactionalIdAcl.toFilter).asJava, new DeleteAclsOptions)
@@ -324,8 +324,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       }
     }, "timed out waiting for deleteAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, fooAcl.toFilter, Set.empty)
-      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set.empty)
+      waitForDescribeAcls(fooAcl.toFilter, Set.empty)
+      waitForDescribeAcls(transactionalIdAcl.toFilter, Set.empty)
     }
   }
 
@@ -393,6 +393,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     client = Admin.create(createConfig())
     client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
+    waitForDescribeAcls(denyAcl.toFilter, Set(denyAcl))
 
     val topics = Seq(topic1, topic2)
     val configsOverride = Map(LogConfig.SegmentBytesProp -> "100000").asJava
@@ -456,18 +457,20 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     configEntries
   }
 
-  private def waitForDescribeAcls(client: Admin, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
+  private def waitForDescribeAcls(filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
     var lastResults: util.Collection[AclBinding] = null
     TestUtils.waitUntilTrue(() => {
       lastResults = client.describeAcls(filter).values.get()
-      acls == lastResults.asScala.toSet
+      acls == lastResults.asScala.toSet &&
+      // make sure all brokers have received the ACLs update from zookeeper notification
+      servers.forall(_.authorizer.forall(_.acls(filter).asScala.toSet == acls))
     }, s"timed out waiting for ACLs $acls.\nActual $lastResults")
   }
 
   private def ensureAcls(bindings: Set[AclBinding]): Unit = {
     client.createAcls(bindings.asJava).all().get()
 
-    bindings.foreach(binding => waitForDescribeAcls(client, binding.toFilter, Set(binding)))
+    bindings.foreach(binding => waitForDescribeAcls(binding.toFilter, Set(binding)))
   }
 
   private def getAcls(allTopicAcls: AclBindingFilter) = {
