@@ -3393,8 +3393,8 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, node0, Errors.NONE);
-            createAlterLogDirsResponse(env, node1, Errors.NONE);
+            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
+            createAlterLogDirsResponse(env, node1, Errors.NONE, 0);
 
             TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
@@ -3409,12 +3409,12 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterReplicaLogDirsFailure() throws Exception {
+    public void testAlterReplicaLogDirsLogDirNotFound() throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, node0, Errors.NONE);
-            createAlterLogDirsResponse(env, node1, Errors.LOG_DIR_NOT_FOUND);
+            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
+            createAlterLogDirsResponse(env, node1, Errors.LOG_DIR_NOT_FOUND, 0);
 
             TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
@@ -3428,15 +3428,35 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error) {
+    @Test
+    public void testAlterReplicaLogDirsUnrequested() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
+            createAlterLogDirsResponse(env, node1, Errors.NONE, 1, 2);
+
+            TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr0, "/data0");
+            logDirs.put(tpr1, "/data1");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+            result.values().get(tpr0).get();
+            TestUtils.assertFutureError(result.values().get(tpr1), IllegalStateException.class);
+        }
+    }
+
+    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partition) {
         env.kafkaClient().prepareResponseFrom(new AlterReplicaLogDirsResponse(
                 new AlterReplicaLogDirsResponseData().setResults(singletonList(
                         new AlterReplicaLogDirTopicResult()
                                 .setTopicName("topic")
-                                .setPartitions(singletonList(
+                                .setPartitions(Arrays.stream(partition).boxed().map(partitionId ->
                                         new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(0)
-                                                .setErrorCode(error.code())))))), node);
+                                                .setPartitionIndex(partitionId)
+                                                .setErrorCode(error.code())).collect(Collectors.toList()))))), node);
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
