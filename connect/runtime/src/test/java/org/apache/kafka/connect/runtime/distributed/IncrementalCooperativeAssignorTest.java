@@ -1172,7 +1172,7 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(2, 8, 0, 0, "worker1");
 
         //delete connector1
-        configState = clusterConfigState(offset, 2,1, 4);
+        configState = clusterConfigState(offset, 2, 1, 4);
         when(coordinator.configSnapshot()).thenReturn(configState);
 
         // Second assignment with a second worker with duplicate assignment joining and the duplicated assignment is deleted at the same time

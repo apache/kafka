@@ -209,10 +209,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         ConnectorsAndTasks deleted = diff(previousAssignment, configured);
         log.debug("Deleted assignments: {}", deleted);
 
-        // It may cause some duplicated assignment, when a worker with old generation assignment re-join the group
-        ConnectorsAndTasks duplicated = duplicatedAssignments(memberConfigs);
-        log.debug("Duplicated assignments: {}", duplicated);
-
         // Derived set: The set of remaining active connectors-and-tasks is a derived set from the
         // set difference of active - deleted
         ConnectorsAndTasks remainingActive = diff(activeAssignments, deleted);
@@ -248,8 +244,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, ConnectorsAndTasks> toRevoke = computeDeleted(deleted, connectorAssignments, taskAssignments);
         log.debug("Connector and task to delete assignments: {}", toRevoke);
 
-        // Revoke duplicate connectors and tasks
-        toRevoke.putAll(computeDuplicatedAssignments(duplicated, connectorAssignments, taskAssignments));
+        // It may cause some duplicated assignment, when a worker with old generation assignment re-join the group
+        toRevoke.putAll(computeDuplicatedAssignments(memberConfigs, connectorAssignments, taskAssignments));
         log.debug("Connector and task to revoke assignments (include duplicated assignments): {}", toRevoke);
 
         // Recompute the complete assignment excluding the deleted connectors-and-tasks
@@ -376,8 +372,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .map(entry -> entry.getKey())
                 .collect(Collectors.toSet());
 
-        Set<ConnectorTaskId> tasks = memberConfigs.values()
-                .stream()
+        Set<ConnectorTaskId> tasks = memberConfigs.values().stream()
                 .flatMap(state -> state.assignment().tasks().stream())
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
                 .entrySet().stream()
@@ -387,9 +382,12 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
     }
 
-    private Map<String, ConnectorsAndTasks> computeDuplicatedAssignments(ConnectorsAndTasks duplicatedAssignments,
+    private Map<String, ConnectorsAndTasks> computeDuplicatedAssignments(Map<String, ExtendedWorkerState> memberConfigs,
                                              Map<String, Collection<String>> connectorAssignments,
                                              Map<String, Collection<ConnectorTaskId>> taskAssignment) {
+        ConnectorsAndTasks duplicatedAssignments = duplicatedAssignments(memberConfigs);
+        log.debug("Duplicated assignments: {}", duplicatedAssignments);
+
         Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
         if (!duplicatedAssignments.connectors().isEmpty()) {
             connectorAssignments.entrySet().stream()
@@ -398,8 +396,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                         duplicatedConnectors.retainAll(entry.getValue());
                         if (!duplicatedConnectors.isEmpty()) {
                             toRevoke.computeIfAbsent(
-                                    entry.getKey(),
-                                    v -> new ConnectorsAndTasks.Builder().build()
+                                entry.getKey(),
+                                v -> new ConnectorsAndTasks.Builder().build()
                             ).connectors().addAll(duplicatedConnectors);
                         }
                     });
@@ -411,8 +409,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                         duplicatedTasks.retainAll(entry.getValue());
                         if (!duplicatedTasks.isEmpty()) {
                             toRevoke.computeIfAbsent(
-                                    entry.getKey(),
-                                    v -> new ConnectorsAndTasks.Builder().build()
+                                entry.getKey(),
+                                v -> new ConnectorsAndTasks.Builder().build()
                             ).tasks().addAll(duplicatedTasks);
                         }
                     });
