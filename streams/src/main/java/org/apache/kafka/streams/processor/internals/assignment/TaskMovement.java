@@ -111,7 +111,9 @@ public class TaskMovement {
                         sourceClientTasksIterator.remove();
                         statefulActiveTaskAssignment.get(destination).add(task);
                     } else {
-                        if (clientStates.get(destination).prevStandbyTasks().contains(task)) {
+                        if (clientStates.get(destination).prevStandbyTasks().contains(task)
+                                && tasksToRemainingStandbys.get(task) > 0
+                        ) {
                             decrementRemainingStandbys(task, tasksToRemainingStandbys);
                         } else {
                             --remainingAllowedWarmupReplicas;
