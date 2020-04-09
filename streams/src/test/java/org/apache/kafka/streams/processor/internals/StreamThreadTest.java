@@ -508,13 +508,16 @@ public class StreamThreadTest {
             10 * 1000,
             "Thread never started.");
 
+        TestUtils.retryOnExceptionWithTimeout(
+            () -> EasyMock.verify(mockConsumer)
+        );
+
         thread.shutdown();
         TestUtils.waitForCondition(
             () -> thread.state() == StreamThread.State.DEAD,
             10 * 1000,
             "Thread never shut down.");
 
-        EasyMock.verify(mockConsumer);
     }
 
     private static class EasyMockConsumerClientSupplier extends MockClientSupplier {

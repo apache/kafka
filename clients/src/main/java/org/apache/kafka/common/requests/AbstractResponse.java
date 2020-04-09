@@ -147,7 +147,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DESCRIBE_CONFIGS:
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:

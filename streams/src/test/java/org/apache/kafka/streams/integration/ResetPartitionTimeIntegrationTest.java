@@ -40,8 +40,8 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -51,8 +51,6 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
@@ -77,20 +75,19 @@ public class ResetPartitionTimeIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final int DEFAULT_TIMEOUT = 100;
-    private final boolean eosEnabled;
     private static long lastRecordedTimestamp = -2L;
 
-    @Parameters(name = "{index}: eosEnabled={0}")
-    public static Collection<Object[]> parameters() {
-        return asList(
-            new Object[] {false},
-            new Object[] {true}
-        );
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.AT_LEAST_ONCE},
+            {StreamsConfig.EXACTLY_ONCE},
+            {StreamsConfig.EXACTLY_ONCE_BETA}
+        });
     }
 
-    public ResetPartitionTimeIntegrationTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
-    }
+    @Parameterized.Parameter
+    public String processingGuarantee;
 
     @Test
     public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
@@ -112,7 +109,7 @@ public class ResetPartitionTimeIntegrationTest {
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfig.put(StreamsConfig.POLL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT));
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT));
-        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE);
+        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         KafkaStreams kafkaStreams = getStartedStreams(streamsConfig, builder, true);
