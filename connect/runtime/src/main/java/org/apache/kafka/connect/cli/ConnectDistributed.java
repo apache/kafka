@@ -87,10 +87,11 @@ public class ConnectDistributed {
     }
 
     public Connect startConnect(Map<String, String> workerProps) {
-        log.info("Scanning for plugin classes. This might take a moment ...");
-        Plugins plugins = new Plugins(workerProps);
-        plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig config = new DistributedConfig(workerProps);
+
+        log.info("Scanning for plugin classes. This might take a moment ...");
+        Plugins plugins = new Plugins(config.originalsStrings());
+        plugins.compareAndSwapWithDelegatingLoader();
 
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
         log.debug("Kafka cluster ID: {}", kafkaClusterId);

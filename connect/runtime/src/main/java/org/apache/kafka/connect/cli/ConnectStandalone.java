@@ -74,11 +74,11 @@ public class ConnectStandalone {
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                     Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+            StandaloneConfig config = new StandaloneConfig(workerProps);
 
             log.info("Scanning for plugin classes. This might take a moment ...");
-            Plugins plugins = new Plugins(workerProps);
+            Plugins plugins = new Plugins(config.originalsStrings());
             plugins.compareAndSwapWithDelegatingLoader();
-            StandaloneConfig config = new StandaloneConfig(workerProps);
 
             String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
