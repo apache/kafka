@@ -578,6 +578,8 @@ public class EosTestDriver extends SmokeTestUtil {
         final Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-uncommitted");
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
         final Map<TopicPartition, Long> topicEndOffsets;
 
