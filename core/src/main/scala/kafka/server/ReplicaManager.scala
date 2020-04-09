@@ -1203,10 +1203,9 @@ class ReplicaManager(val config: KafkaConfig,
         val responseMap = new mutable.HashMap[TopicPartition, Errors]
         controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
-        // First check partition's leader epoch
         val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
-        val updatedPartitions = new mutable.HashSet[Partition]
 
+        // First create the partition if it doesn't exist already
         requestPartitionStates.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
           val partitionOpt = getPartition(topicPartition) match {
@@ -1219,16 +1218,15 @@ class ReplicaManager(val config: KafkaConfig,
               None
 
             case HostedPartition.Online(partition) =>
-              updatedPartitions.add(partition)
               Some(partition)
 
             case HostedPartition.None =>
               val partition = Partition(topicPartition, time, this)
               allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
-              updatedPartitions.add(partition)
               Some(partition)
           }
 
+          // Next check partition's leader epoch
           partitionOpt.foreach { partition =>
             val currentLeaderEpoch = partition.getLeaderEpoch
             val requestLeaderEpoch = partitionState.leaderEpoch
@@ -1306,27 +1304,7 @@ class ReplicaManager(val config: KafkaConfig,
         // have been completely populated before starting the checkpointing there by avoiding weird race conditions
         startHighWatermarkCheckPointThread()
 
-        val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
-        for (partition <- updatedPartitions) {
-          val topicPartition = partition.topicPartition
-          if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
-            partition.log.foreach { log =>
-              val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
-
-              // Add future replica to partition's map
-              partition.createLogIfNotExists(isNew = false, isFutureReplica = true,
-                highWatermarkCheckpoints)
-
-              // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
-              // replica from source dir to destination dir
-              logManager.abortAndPauseCleaning(topicPartition)
-
-              futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
-                partition.getLeaderEpoch, log.highWatermark))
-            }
-          }
-        }
-        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
+        maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -1342,6 +1320,35 @@ class ReplicaManager(val config: KafkaConfig,
           .setPartitionErrors(responsePartitions.asJava))
       }
     }
+  }
+
+  private def maybeAddLogDirFetchers(partitions: Set[Partition],
+                                     offsetCheckpoints: OffsetCheckpoints): Unit = {
+    val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
+    for (partition <- partitions) {
+      val topicPartition = partition.topicPartition
+      if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
+        partition.log.foreach { log =>
+          val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
+
+          // Add future replica log to partition's map
+          partition.createLogIfNotExists(
+            isNew = false,
+            isFutureReplica = true,
+            offsetCheckpoints)
+
+          // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
+          // replica from source dir to destination dir
+          logManager.abortAndPauseCleaning(topicPartition)
+
+          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
+            partition.getLeaderEpoch, log.highWatermark))
+        }
+      }
+    }
+
+    if (futureReplicasAndInitialOffset.nonEmpty)
+      replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
   }
 
   /*
