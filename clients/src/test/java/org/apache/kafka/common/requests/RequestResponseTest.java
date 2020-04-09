@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
@@ -1853,14 +1854,23 @@ public class RequestResponseTest {
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
                 new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
-        return new AlterConfigsRequest((short) 0, configs, false);
+        return new AlterConfigsRequest.Builder(configs, false).build((short) 0);
     }
 
     private AlterConfigsResponse createAlterConfigsResponse() {
-        Map<ConfigResource, ApiError> errors = new HashMap<>();
-        errors.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), ApiError.NONE);
-        errors.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
-        return new AlterConfigsResponse(20, errors);
+        AlterConfigsResponseData data = new AlterConfigsResponseData()
+                .setThrottleTimeMs(20);
+        data.responses().add(new AlterConfigsResponseData.AlterConfigsResourceResponse()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+                .setResourceName("0")
+                .setResourceType(ConfigResource.Type.BROKER.id()));
+        data.responses().add(new AlterConfigsResponseData.AlterConfigsResourceResponse()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("This request is invalid")
+                .setResourceName("topic")
+                .setResourceType(ConfigResource.Type.TOPIC.id()));
+        return new AlterConfigsResponse(data);
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest() {
