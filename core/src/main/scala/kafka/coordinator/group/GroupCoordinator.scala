@@ -145,17 +145,12 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(JoinGroupResult(memberId, Errors.INVALID_SESSION_TIMEOUT))
     } else {
       val isUnknownMember = memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID
-      groupManager.getGroup(groupId) match {
+      groupManager.getGroup(groupId, isUnknownMember) match {
         case None =>
           // only try to create the group if the group is UNKNOWN AND
           // the member id is UNKNOWN, if member is specified but group does not
           // exist we should reject the request.
-          if (isUnknownMember) {
-            val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-            doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-          } else {
-            responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
-          }
+          responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
         case Some(group) =>
           group.inLock {
             if ((groupIsOverCapacity(group)
@@ -175,9 +170,9 @@ class GroupCoordinator(val brokerId: Int,
               joinPurgatory.checkAndComplete(GroupKey(group.groupId))
             }
           }
-        }
       }
     }
+  }
 
   private def doUnknownJoinGroup(group: GroupMetadata,
                                  groupInstanceId: Option[String],
