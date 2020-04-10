@@ -966,11 +966,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
-        } catch (BufferExhaustedException e) {
-            this.errors.record();
-            this.metrics.sensor("buffer-exhausted-records").record();
-            this.interceptors.onSendError(record, tp, e);
-            throw e;
         } catch (KafkaException e) {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
