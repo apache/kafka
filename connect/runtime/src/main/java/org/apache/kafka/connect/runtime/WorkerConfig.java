@@ -384,7 +384,7 @@ public class WorkerConfig extends AbstractConfig {
         String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
         String transformedPluginPath = originalsStrings().get(PLUGIN_PATH_CONFIG);
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
-            log.error(
+            log.warn(
                 "Config providers do not work with the plugin.path property. The raw value '{}' " 
                     + "will be used for plugin scanning, as opposed to the transformed value '{}'. " 
                     + "See https://issues.apache.org/jira/browse/KAFKA-9845 for more information.",
