@@ -569,6 +569,7 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
 
+                taskManager.commitAll();
                 taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
