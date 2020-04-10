@@ -382,7 +382,9 @@ public class WorkerConfig extends AbstractConfig {
 
     private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
         String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
-        String transformedPluginPath = originalsStrings().get(PLUGIN_PATH_CONFIG);
+        // Can't use AbstractConfig::originalsStrings here since some values may be null, which
+        // causes that method to fail
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
                 "Config providers do not work with the plugin.path property. The raw value '{}' " 
