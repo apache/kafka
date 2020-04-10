@@ -329,12 +329,12 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
-        self.PROCESSING_GUARANTEES = processing_guarantee
+        self.PROCESSING_GUARANTEE = processing_guarantee
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEES: self.PROCESSING_GUARANTEES}
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE}
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
