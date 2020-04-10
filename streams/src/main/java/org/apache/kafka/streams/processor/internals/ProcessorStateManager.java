@@ -262,7 +262,7 @@ public class ProcessorStateManager implements StateManager {
         }
 
         if (stores.containsKey(storeName)) {
-            throw new IllegalStateException(format("%sStore %s has already been registered.", logPrefix, storeName));
+            throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
         final String topic = storeToChangelogTopic.get(storeName);
