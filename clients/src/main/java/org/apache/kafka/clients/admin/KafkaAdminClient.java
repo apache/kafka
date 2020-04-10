@@ -796,13 +796,13 @@ public class KafkaAdminClient extends AdminClient {
             // this RPC. That is why 'tries' is not incremented and retry backoff is not applicable.
             if ((throwable instanceof UnsupportedVersionException) &&
                     handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
-                log.debug("{} attempting protocol downgrade and then retry.", this);
+                log.debug("{} attempting protocol downgrade and retrying.", this);
                 runnable.call(this, now);
                 return;
             }
 
-            CallRetryContext failedCallCallRetryContext = failedCall.callRetryContext();
-            this.callRetryContext.update(failedCallCallRetryContext);
+            CallRetryContext failedCallRetryContext = failedCall.callRetryContext();
+            this.callRetryContext.update(failedCallRetryContext);
 
             if (this.callRetryContext.tries() <= maxRetries) {
                 log.debug("{} failed: {}. Beginning retry #{}", this, prettyPrintException(throwable), callRetryContext.tries());
