@@ -444,22 +444,36 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       val logInputStream = new RemoteLogInputStream(is)
 
       var batch:RecordBatch = null;
-      while ((batch = logInputStream.nextBatch()) != null && batch.lastOffset < offset) {
+      def fetchBatch() : RecordBatch = {
+        batch = logInputStream.nextBatch()
+        batch
+      }
+
+      // always look for the batch which has the desired offset and set the startPosition as that segments start
+      // location.
+      while (fetchBatch() != null && batch.lastOffset < offset) {
+        // sets the startPos as the starting of the next batch's start location.
         startPos += batch.sizeInBytes
       }
-    } finally {
-      is.close()
-    }
 
-    try {
-      is = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, startPos + maxBytes)
-      val buffer = ByteBuffer.allocate(fetchMaxBytes)
-      Utils.readFully(is, buffer)
+      val buffer = ByteBuffer.allocate(maxBytes)
+      var remainingBytes = maxBytes
+      if(batch != null) {
+        remainingBytes -= batch.sizeInBytes()
+        batch.writeTo(buffer)
+      }
+
+      if(remainingBytes > 0) {
+        // input stream is read till (startPos-1) while getting the batch of records earlier.
+        // read the input stream until min of (EOF stream or buffer's remaining size).
+        Utils.readFully(is, buffer)
+      }
       buffer.flip()
+
       val records = MemoryRecords.readableRecords(buffer)
       FetchDataInfo(LogOffsetMetadata(offset), records)
     } finally {
-      is.close()
+      Utils.closeQuietly(is, "RemoteLogSegmentInputStream")
     }
   }
 
