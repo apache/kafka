@@ -206,7 +206,9 @@ public class WorkerConfig extends AbstractConfig {
             + "plugins and their dependencies\n"
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors";
+            + "/opt/connectors\n" 
+            + "Warning: Config providers will not take effect if used for the value of this " 
+            + "property, and instead the raw, non-transformed value will be used.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
