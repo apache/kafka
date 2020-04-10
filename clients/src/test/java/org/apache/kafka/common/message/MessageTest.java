@@ -56,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
@@ -605,6 +606,22 @@ public final class MessageTest {
                 testEquivalentMessageRoundTrip(version, responseData);
             }
         }
+    }
+
+    @Test
+    public void testSimpleMessage() throws Exception {
+        final SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(
+            Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
+        ));
+        message.setMyTaggedStruct(new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc"));
+
+        message.setProcessId(UUID.randomUUID());
+        message.setMyNullableString("notNull");
+        message.setMyInt16((short) 3);
+        message.setMyString("test string");
+
+        testAllMessageRoundTripsFromVersion((short) 2, message);
     }
 
     private void testAllMessageRoundTrips(Message message) throws Exception {

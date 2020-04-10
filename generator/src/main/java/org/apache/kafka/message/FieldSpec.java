@@ -102,10 +102,11 @@ public final class FieldSpec {
 
         this.about = about == null ? "" : about;
         if (!this.fields().isEmpty()) {
-            if (!this.type.isArray()) {
-                throw new RuntimeException("Non-array field " + name + " cannot have fields");
+            if (!this.type.isArray() && !this.type.isStruct()) {
+                throw new RuntimeException("Non-array or Struct field " + name + " cannot have fields");
             }
         }
+
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {

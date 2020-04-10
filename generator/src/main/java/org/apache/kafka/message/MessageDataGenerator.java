@@ -168,6 +168,13 @@ public final class MessageDataGenerator {
                             structRegistry.findStruct(field),
                             parentVersions.intersect(struct.versions()));
                 }
+            } else if (field.type().isStruct()) {
+                if (!structRegistry.commonStructNames().contains(field.name())) {
+                    generateClass(Optional.empty(),
+                            field.type().toString(),
+                            structRegistry.findStruct(field),
+                            parentVersions.intersect(struct.versions()));
+                }
             }
         }
         if (isSetElement) {
@@ -477,7 +484,7 @@ public final class MessageDataGenerator {
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
                 ifMember(presentAndUntaggedVersions -> {
-                    if (field.type().isVariableLength()) {
+                    if (field.type().isVariableLength() && !field.type().isStruct()) {
                         ClauseGenerator callGenerateVariableLengthReader = versions -> {
                             generateVariableLengthReader(fieldFlexibleVersions(field),
                                 field.camelCaseName(),
@@ -531,7 +538,7 @@ public final class MessageDataGenerator {
                         buffer.incrementIndent();
                         VersionConditional.forVersions(validTaggedVersions, curFlexibleVersions).
                             ifMember(presentAndTaggedVersions -> {
-                                if (field.type().isVariableLength()) {
+                                if (field.type().isVariableLength() && !field.type().isStruct()) {
                                     // All tagged fields are serialized using the new-style
                                     // flexible versions serialization.
                                     generateVariableLengthReader(fieldFlexibleVersions(field),
@@ -1180,7 +1187,8 @@ public final class MessageDataGenerator {
                 return String.format("struct.getByteArray(\"%s\")", name);
             }
         } else if (type.isStruct()) {
-            return String.format("new %s(struct, _version)", type.toString());
+            return String.format("new %s((Struct) struct.get(\"%s\"), _version)",
+                    type.toString(), name);
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
@@ -1220,7 +1228,7 @@ public final class MessageDataGenerator {
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
                         ifNotMember(presentAndUntaggedVersions -> {
-                            if (field.type().isVariableLength()) {
+                            if (field.type().isVariableLength() && !field.type().isStruct()) {
                                 ClauseGenerator callGenerateVariableLengthWriter = versions -> {
                                     generateVariableLengthWriter(fieldFlexibleVersions(field),
                                         field.camelCaseName(),
@@ -1324,6 +1332,11 @@ public final class MessageDataGenerator {
                                             presentAndTaggedVersions,
                                             Versions.NONE,
                                             field.zeroCopy());
+                                    } else if (field.type().isStruct()) {
+                                        buffer.printf("_writable.writeUnsignedVarint(this.%s.size(_cache, _version));%n",
+                                                field.camelCaseName());
+                                        buffer.printf("%s;%n",
+                                                primitiveWriteExpression(field.type(), field.camelCaseName()));
                                     } else {
                                         buffer.printf("_writable.writeUnsignedVarint(%d);%n",
                                             field.type().fixedLength().get());
@@ -1522,7 +1535,7 @@ public final class MessageDataGenerator {
                         field.camelCaseName(), field.camelCaseName());
                 }
             }
-        } else if (field.type().isString()) {
+        } else if (field.type().isString() || field.type().isStruct()) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else if (nullableVersions.empty()) {
@@ -1633,6 +1646,9 @@ public final class MessageDataGenerator {
                     buffer.printf("struct.set(\"%s\", (Object[]) _nestedObjects);%n",
                         field.snakeCaseName());
                 }).generate(buffer);
+        } else if (field.type().isStruct()) {
+            buffer.printf("struct.set(\"%s\", this.%s.toStruct(_version));%n",
+                    field.snakeCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -1651,6 +1667,7 @@ public final class MessageDataGenerator {
             (field.type() instanceof FieldType.Int64FieldType) ||
             (field.type() instanceof FieldType.UUIDFieldType) ||
             (field.type() instanceof FieldType.Float64FieldType) ||
+            (field.type() instanceof FieldType.StructType) ||
             (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("_taggedFields.put(%d, %s);%n",
                 field.tag().get(), field.camelCaseName());
@@ -1957,6 +1974,12 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("_size += _bytesSize;%n");
                     }
+                } else if (field.type().isStruct()) {
+                    buffer.printf("int size = this.%s.size(_cache, _version);%n", field.camelCaseName());
+                    if (tagged) {
+                        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(size);%n");
+                    }
+                    buffer.printf("_size += size;%n");
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }
