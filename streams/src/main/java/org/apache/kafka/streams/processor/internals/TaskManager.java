@@ -258,6 +258,7 @@ public class TaskManager {
 
         for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
             final Task task = taskAndCheckpoint.getKey();
+
             try {
                 task.closeClean(checkpointPerTask.get(task));
             } catch (final RuntimeException e) {
@@ -274,6 +275,7 @@ public class TaskManager {
         }
 
         for (final Task task : dirtyTasks) {
+            cleanupTask(task);
             task.closeDirty();
             cleanUpTaskProducer(task, taskCloseExceptions);
             tasks.remove(task.id());
