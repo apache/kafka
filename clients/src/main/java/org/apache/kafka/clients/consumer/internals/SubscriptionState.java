@@ -786,7 +786,14 @@ public class SubscriptionState {
                 return false;
             }
 
-            if (!currentLeaderAndEpoch.leader.isPresent() && !currentLeaderAndEpoch.epoch.isPresent()) {
+            if (!currentLeaderAndEpoch.leader.isPresent()) {
+                return false;
+            }
+
+            // If the leader id is known but the epoch is unknown, we must either have an older API or the epoch has been
+            // discarded. If so, skip the validation and begin fetching.
+            if (!currentLeaderAndEpoch.epoch.isPresent()) {
+                completeValidation();
                 return false;
             }
 
@@ -818,9 +825,7 @@ public class SubscriptionState {
          */
         private void completeValidation() {
             if (hasPosition()) {
-                transitionState(FetchStates.FETCHING, () -> {
-                    this.nextRetryTimeMs = null;
-                });
+                transitionState(FetchStates.FETCHING, () -> this.nextRetryTimeMs = null);
             }
         }
 
@@ -1011,8 +1016,6 @@ public class SubscriptionState {
      *
      * This includes the offset and epoch from the last record in
      * the batch from a FetchResponse. It also includes the leader epoch at the time the batch was consumed.
-     *
-     * The last fetch epoch is used to
      */
     public static class FetchPosition {
         public final long offset;
