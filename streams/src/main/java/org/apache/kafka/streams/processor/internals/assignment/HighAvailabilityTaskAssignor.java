@@ -113,10 +113,15 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                 clientsToNumberOfThreads,
                 configs.balanceFactor);
 
+        final Map<TaskId, Integer> tasksToRemainingStandbys =
+            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
+
         final List<TaskMovement> movements = getMovements(
             statefulActiveTaskAssignment,
             balancedStatefulActiveTaskAssignment,
             tasksToCaughtUpClients,
+            clientStates,
+            tasksToRemainingStandbys,
             configs.maxWarmupReplicas);
 
         for (final TaskMovement movement : movements) {
@@ -125,7 +130,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         // ---------------- Standby Replica Tasks ---------------- //
 
-        final List<Map<UUID, List<TaskId>>> allTaskAssignments = asList(
+        final List<Map<UUID, List<TaskId>>> allTaskAssignmentMaps = asList(
             statefulActiveTaskAssignment,
             warmupTaskAssignment,
             standbyTaskAssignment,
@@ -134,13 +139,13 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final ValidClientsByTaskLoadQueue<UUID> clientsByStandbyTaskLoad =
             new ValidClientsByTaskLoadQueue<>(
-                configs.numStandbyReplicas,
-                getClientPriorityQueueByTaskLoad(allTaskAssignments),
-                allTaskAssignments
+                getClientPriorityQueueByTaskLoad(allTaskAssignmentMaps),
+                allTaskAssignmentMaps
             );
 
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
-            final List<UUID> clients = clientsByStandbyTaskLoad.poll(task);
+            final int numRemainingStandbys = tasksToRemainingStandbys.get(task);
+            final List<UUID> clients = clientsByStandbyTaskLoad.poll(task, numRemainingStandbys);
             for (final UUID client : clients) {
                 standbyTaskAssignment.get(client).add(task);
             }
@@ -157,7 +162,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         // ---------------- Stateless Active Tasks ---------------- //
 
-        final PriorityQueue<UUID> statelessActiveTaskClientsQueue = getClientPriorityQueueByTaskLoad(allTaskAssignments);
+        final PriorityQueue<UUID> statelessActiveTaskClientsQueue = getClientPriorityQueueByTaskLoad(allTaskAssignmentMaps);
 
         for (final TaskId task : statelessTasks) {
             final UUID client = statelessActiveTaskClientsQueue.poll();
@@ -337,14 +342,11 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
      * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
      */
     static class ValidClientsByTaskLoadQueue<UUID> {
-        private final int numClientsPerTask;
         private final PriorityQueue<UUID> clientsByTaskLoad;
         private final List<Map<UUID, List<TaskId>>> allStatefulTaskAssignments;
 
-        ValidClientsByTaskLoadQueue(final int numClientsPerTask,
-                                      final PriorityQueue<UUID> clientsByTaskLoad,
-                                      final List<Map<UUID, List<TaskId>>> allStatefulTaskAssignments) {
-            this.numClientsPerTask = numClientsPerTask;
+        ValidClientsByTaskLoadQueue(final PriorityQueue<UUID> clientsByTaskLoad,
+                                    final List<Map<UUID, List<TaskId>>> allStatefulTaskAssignments) {
             this.clientsByTaskLoad = clientsByTaskLoad;
             this.allStatefulTaskAssignments = allStatefulTaskAssignments;
         }
@@ -353,10 +355,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
          * @return the next N <= {@code numClientsPerTask} clients in the underlying priority queue that are valid
          * candidates for the given task (ie do not already have any version of this task assigned)
          */
-        List<UUID> poll(final TaskId task) {
+        List<UUID> poll(final TaskId task, final int numClients) {
             final List<UUID> nextLeastLoadedValidClients = new LinkedList<>();
             final Set<UUID> invalidPolledClients = new HashSet<>();
-            while (nextLeastLoadedValidClients.size() < numClientsPerTask) {
+            while (nextLeastLoadedValidClients.size() < numClients) {
                 UUID candidateClient;
                 while (true) {
                     candidateClient = clientsByTaskLoad.poll();
