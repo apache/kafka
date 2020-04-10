@@ -3943,9 +3943,13 @@ public class KafkaAdminClient extends AdminClient {
                     if (!retryTopicPartitionOffsets.isEmpty()) {
                         Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
                             TopicPartition::topic).collect(Collectors.toSet());
-                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
+                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> metadataOperationContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
+                        rescheduleMetadataTask(metadataOperationContext, () -> {
+                            List<Call> listOffsetsCalls = getListOffsetsCalls(metadataOperationContext, retryTopicPartitionOffsets, futures);
+                            listOffsetsCalls.forEach(call -> call.callRetryContext.update(this.callRetryContext()));
+                            return listOffsetsCalls;
+                        });
                     }
                 }
 
