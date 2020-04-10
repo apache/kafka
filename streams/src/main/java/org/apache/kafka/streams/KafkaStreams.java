@@ -1223,6 +1223,7 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
+            final Set<TaskId> runningActiveTaskIds = streamThread.runningActiveTaskIds();
             for (final StreamTask activeTask : streamThread.allStreamsTasks()) {
                 final Collection<TopicPartition> taskChangelogPartitions = activeTask.changelogPartitions();
                 allPartitions.addAll(taskChangelogPartitions);
@@ -1232,7 +1233,7 @@ public class KafkaStreams implements AutoCloseable {
                 for (final TopicPartition topicPartition : taskChangelogPartitions) {
                     if (isRestoring && restoredOffsets.containsKey(topicPartition)) {
                         allChangelogPositions.put(topicPartition, restoredOffsets.get(topicPartition));
-                    } else {
+                    } else if (runningActiveTaskIds.contains(activeTask.id())) {
                         allChangelogPositions.put(topicPartition, latestSentinel);
                     }
                 }

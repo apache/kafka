@@ -245,7 +245,7 @@ public class LagFetchIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         try {
-            // First start up the active.
+            // Check for empty lags before start up
             Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
             assertThat(offsetLagInfoMap.size(), equalTo(0));
 
@@ -295,9 +295,10 @@ public class LagFetchIntegrationTest {
                 }
             });
 
-            restartedStreams.start();
+            // Wait till the restarted instance reaches running, after restoring
+            startApplicationAndWaitUntilRunning(Collections.singletonList(restartedStreams), Duration.ofSeconds(60));
             TestUtils.waitForCondition(() -> restartedStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
-                "Standby should eventually catchup and have zero lag.");
+                "Restarted instance should eventually catchup and have zero lag.");
             final LagInfo fullLagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
             assertThat(fullLagInfo.currentOffsetPosition(), equalTo(0L));
             assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));

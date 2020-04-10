@@ -554,4 +554,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return new HashSet<>(restoring.keySet());
     }
 
+    Set<TaskId> runningTaskIds() {
+        return new HashSet<>(running.keySet());
+    }
 }

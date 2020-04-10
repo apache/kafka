@@ -385,6 +385,10 @@ public class TaskManager {
         return active.restoringTaskIds();
     }
 
+    Set<TaskId> runningActiveTaskIds() {
+        return active.runningTaskIds();
+    }
+
     List<StandbyTask> allStandbyTasks() {
         return standby.allTasks();
     }
