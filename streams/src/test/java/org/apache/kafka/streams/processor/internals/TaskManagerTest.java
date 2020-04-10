@@ -2293,10 +2293,12 @@ public class TaskManagerTest {
     @Test
     public void shouldThrowTaskMigratedExceptionOnCommitFailed() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new CommitFailedException());
         replay(consumer);
 
@@ -2313,10 +2315,12 @@ public class TaskManagerTest {
     @Test
     public void shouldThrowStreamsExceptionOnCommitTimeout() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new TimeoutException());
         replay(consumer);
 
@@ -2333,10 +2337,12 @@ public class TaskManagerTest {
     @Test
     public void shouldStreamsExceptionOnCommitError() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new KafkaException());
         replay(consumer);
 
@@ -2353,10 +2359,12 @@ public class TaskManagerTest {
     @Test
     public void shouldFailOnCommitFatal() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new RuntimeException("KABOOM"));
         replay(consumer);
 
