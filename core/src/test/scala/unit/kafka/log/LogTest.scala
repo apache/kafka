@@ -3655,31 +3655,35 @@ class LogTest {
 
     // Thread 1 writes single-record transactions and attempts to read them
     // before they have been aborted, and then aborts them
-    val txnWriteAndReadLoop: Callable[Int] = () => {
-      var nonEmptyReads = 0
-      while (log.logEndOffset < lastOffset) {
-        val currentLogEndOffset = log.logEndOffset
+    val txnWriteAndReadLoop: Callable[Int] = new Callable[Int]() {
+      override def call(): Int = {
+        var nonEmptyReads = 0
+        while (log.logEndOffset < lastOffset) {
+          val currentLogEndOffset = log.logEndOffset
 
-        appendProducer(1)
+          appendProducer(1)
 
-        val readInfo = log.read(
-          startOffset = currentLogEndOffset,
-          maxLength = Int.MaxValue,
-          isolation = FetchTxnCommitted,
-          minOneMessage = false)
+          val readInfo = log.read(
+            startOffset = currentLogEndOffset,
+            maxLength = Int.MaxValue,
+            isolation = FetchTxnCommitted,
+            minOneMessage = false)
 
-        if (readInfo.records.sizeInBytes() > 0)
-          nonEmptyReads += 1
+          if (readInfo.records.sizeInBytes() > 0)
+            nonEmptyReads += 1
 
-        appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
+          appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
+        }
+        nonEmptyReads
       }
-      nonEmptyReads
     }
 
     // Thread 2 watches the log and updates the high watermark
-    val hwUpdateLoop: Runnable = () => {
-      while (log.logEndOffset < lastOffset) {
-        log.updateHighWatermark(log.logEndOffset)
+    val hwUpdateLoop: Runnable = new Runnable() {
+      override def run(): Unit = {
+        while (log.logEndOffset < lastOffset) {
+          log.updateHighWatermark(log.logEndOffset)
+        }
       }
     }
 
