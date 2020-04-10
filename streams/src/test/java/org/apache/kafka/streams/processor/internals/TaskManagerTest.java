@@ -1288,11 +1288,14 @@ public class TaskManagerTest {
     public void shouldCloseActiveTasksDirtyAndPropagateCommitException() {
         setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
 
+        final TopicPartition changelogPartition = new TopicPartition("changelog", 1);
+
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(singletonMap(t1p1, new OffsetAndMetadata(0L, null)));
         task01.setCommitNeeded();
+        task01.setChangelogOffsets(singletonMap(changelogPartition, 0L));
 
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -1314,7 +1317,10 @@ public class TaskManagerTest {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId02);
         expectLastCall();
 
-        replay(activeTaskCreator);
+        changeLogReader.remove(singleton(changelogPartition));
+        expectLastCall();
+
+        replay(activeTaskCreator, changeLogReader);
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> taskManager.handleAssignment(mkMap(mkEntry(taskId00, taskId00Partitions)), Collections.emptyMap()));
@@ -1327,7 +1333,7 @@ public class TaskManagerTest {
         // All the tasks involving in the commit should already be removed.
         assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
 
-        verify(activeTaskCreator);
+        verify(activeTaskCreator, changeLogReader);
     }
 
     @Test
@@ -2425,7 +2431,7 @@ public class TaskManagerTest {
         private boolean commitPrepared = false;
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
-        private Map<TopicPartition, Long> changelogOffsets;
+        private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
         private Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
@@ -2534,7 +2540,7 @@ public class TaskManagerTest {
 
         @Override
         public Collection<TopicPartition> changelogPartitions() {
-            return emptyList();
+            return changelogOffsets.keySet();
         }
 
         public boolean isActive() {
