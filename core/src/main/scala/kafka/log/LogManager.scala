@@ -1003,9 +1003,14 @@ class LogManager(logDirs: Seq[File],
   /**
    * Map of log dir to logs by topic and partitions in that dir
    */
-  private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
-    (this.currentLogs.toList ++ this.futureLogs.toList).toMap
-      .groupBy { case (_, log) => log.parentDir }
+  def logsByDir: Map[String, Map[TopicPartition, Log]] = {
+    val byDir = new mutable.HashMap[String, mutable.HashMap[TopicPartition, Log]]()
+    def addToDir(tp: TopicPartition, log: Log): Unit = {
+      byDir.getOrElseUpdate(log.parentDir, new mutable.HashMap[TopicPartition, Log]()).put(tp, log)
+    }
+    currentLogs.foreach { case (tp, log) => addToDir(tp, log) }
+    futureLogs.foreach { case (tp, log) => addToDir(tp, log) }
+    byDir
   }
 
   // logDir should be an absolute path

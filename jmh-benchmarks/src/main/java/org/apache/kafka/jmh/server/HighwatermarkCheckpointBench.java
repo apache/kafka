@@ -69,7 +69,7 @@ import scala.Option;
 @State(Scope.Benchmark)
 public class HighwatermarkCheckpointBench {
 
-    @Param({"100", "1000", "2000"})
+    @Param({"2000"})
     public int numTopics;
 
     @Param({"3"})
@@ -171,5 +171,11 @@ public class HighwatermarkCheckpointBench {
     @Threads(1)
     public void measureCheckpointHighWatermarks() {
         this.replicaManager.checkpointHighWatermarks();
+    }
+
+    @Benchmark
+    @Threads(1)
+    public void measureCheckpointLogStartOffsets() {
+        this.logManager.checkpointLogStartOffsets();
     }
 }
