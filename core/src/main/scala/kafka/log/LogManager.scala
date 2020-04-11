@@ -518,7 +518,7 @@ class LogManager(logDirs: Seq[File],
         } finally {
           if (needToStopCleaner && !isFuture) {
             cleaner.resumeCleaning(Seq(topicPartition))
-            info(s"Compaction for partition $topicPartition is resumed")
+            info(s"Cleaning for partition $topicPartition is resumed")
           }
         }
       }
