@@ -128,7 +128,11 @@ class ReplicaScaleTest(Test):
             restart_times.append(broker_bounce_end_time - broker_bounce_start_time)
             self.logger.info("Time to restart %s: %d" % (node.name, broker_bounce_end_time - broker_bounce_start_time))
 
+<<<<<<< HEAD
         self.logger.info("Total time to restart: %s" % sum(restart_times))
+=======
+        self.logger.info("Restart times: %s" % restart_times)
+>>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
 
         delete_start_time = time.time()
         for i in range(topic_count):

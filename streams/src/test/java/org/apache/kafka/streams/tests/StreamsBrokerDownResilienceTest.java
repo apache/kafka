@@ -115,11 +115,20 @@ public class StreamsBrokerDownResilienceTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
+<<<<<<< HEAD
         Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close(Duration.ofSeconds(30));
             System.out.println("Complete shutdown of streams resilience test app now");
             System.out.flush();
         });
+=======
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            streams.close(Duration.ofSeconds(30));
+            System.out.println("Complete shutdown of streams resilience test app now");
+            System.out.flush();
+        }
+        ));
+>>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {

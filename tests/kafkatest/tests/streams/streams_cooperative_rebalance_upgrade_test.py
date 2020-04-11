@@ -20,7 +20,11 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
+<<<<<<< HEAD
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, DEV_BRANCH, DEV_VERSION, KafkaVersion
+=======
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, DEV_BRANCH, DEV_VERSION, KafkaVersion
+>>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
 from kafkatest.services.streams import CooperativeRebalanceUpgradeService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
@@ -43,7 +47,10 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     first_bounce_phase = "first_bounce_phase-"
     second_bounce_phase = "second_bounce_phase-"
 
+<<<<<<< HEAD
     # !!CAUTION!!: THIS LIST OF VERSIONS IS FIXED, NO VERSIONS MUST BE ADDED
+=======
+>>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
     streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
                                                 str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
                                                 str(LATEST_2_3)]

@@ -70,7 +70,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsMetricsImpl.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
@@ -83,7 +83,11 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             stateDir,
             null,
             null,
+<<<<<<< HEAD
             new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+=======
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsMetricsImpl.METRICS_LATEST),
+>>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
             config,
             null,
             null
@@ -124,7 +128,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             stateDir,
             keySerde,
             valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsMetricsImpl.METRICS_LATEST),
             config,
             null,
             null
@@ -143,7 +147,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(metrics, "mock", StreamsMetricsImpl.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null
@@ -158,7 +162,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(stateDir,
             keySerde,
             valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsMetricsImpl.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
