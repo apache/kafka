@@ -102,10 +102,13 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
-                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(Thread.currentThread().getName(),
-                                                                                context.taskId().toString(),
-                                                                                ((InternalProcessorContext) context).currentNode().name(),
-                                                                                metrics);
+                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(
+                    Thread.currentThread().getName(), 
+                    context.taskId().toString(), 
+                    ((InternalProcessorContext) context).currentNode().name(), 
+                    metrics
+                );
+
             }
         }
 
