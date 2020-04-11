@@ -235,11 +235,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-<<<<<<< HEAD
     private final static class MockProcessor implements Processor<Object, Object> {
-=======
-    private final static class MockProcessor implements Processor {
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
         private final Collection<Punctuation> punctuations;
         private ProcessorContext context;
 

@@ -381,11 +381,7 @@ public class StreamThreadStateStoreProviderTest {
             new MockStreamsMetrics(metrics));
         return new StreamTask(
             taskId,
-<<<<<<< HEAD
             partitions,
-=======
-            Collections.singleton(new TopicPartition(topicName, taskId.partition)),
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
             topology,
             clientSupplier.consumer,
             streamsConfig,

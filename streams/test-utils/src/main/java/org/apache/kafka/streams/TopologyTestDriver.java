@@ -340,11 +340,7 @@ public class TopologyTestDriver implements Closeable {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             "test-client",
-<<<<<<< HEAD
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
-=======
-            StreamsMetricsImpl.METRICS_LATEST
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
         );
         streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
@@ -454,11 +450,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics);
             task = new StreamTask(
                 TASK_ID,
-<<<<<<< HEAD
                 new HashSet<>(partitionsByInputTopic.values()),
-=======
-                new HashSet<>(partitionsByTopic.values()),
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
                 processorTopology,
                 consumer,
                 streamsConfig,
@@ -516,7 +508,6 @@ public class TopologyTestDriver implements Closeable {
         final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(topicName);
         final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(topicName);
 
-<<<<<<< HEAD
         if (inputTopicOrPatternPartition == null && globalInputTopicPartition == null) {
             throw new IllegalArgumentException("Unknown topic: " + topicName);
         }
@@ -524,16 +515,6 @@ public class TopologyTestDriver implements Closeable {
         if (inputTopicOrPatternPartition != null) {
             enqueueTaskRecord(topicName, inputTopicOrPatternPartition, timestamp, key, value, headers);
             completeAllProcessableWork();
-=======
-    private void pipeRecord(final String topicName,
-                            final Long timestamp,
-                            final byte[] key,
-                            final byte[] value,
-                            final Headers headers) {
-
-        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(topicName);
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
         }
 
         if (globalInputTopicPartition != null) {

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
@@ -62,8 +61,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class StreamsUpgradeTest {
-
-    private static final RebalanceProtocol REBALANCE_PROTOCOL = RebalanceProtocol.COOPERATIVE;
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
@@ -145,7 +142,6 @@ public class StreamsUpgradeTest {
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
-<<<<<<< HEAD
             final TaskManager taskManager = taskManager();
             handleRebalanceStart(topics);
 
@@ -166,23 +162,6 @@ public class StreamsUpgradeTest {
                     userEndPoint())
                     .encode();
             }
-=======
-            final TaskManager taskManager = taskManger();
-
-            final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
-            final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
-                                                                   topics,
-                                                                   standbyTasks,
-                                                                   REBALANCE_PROTOCOL);
-            return new FutureSubscriptionInfo(
-                usedSubscriptionMetadataVersion,
-                LATEST_SUPPORTED_VERSION + 1,
-                taskManager.processId(),
-                activeTasks,
-                standbyTasks,
-                userEndPoint())
-                .encode();
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
         }
 
         @Override
@@ -216,10 +195,7 @@ public class StreamsUpgradeTest {
 
             if (maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
                 setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
-<<<<<<< HEAD
                 usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
-=======
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
             }
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
@@ -227,22 +203,9 @@ public class StreamsUpgradeTest {
 
             final Map<TaskId, Set<TopicPartition>> activeTasks = getActiveTasks(partitions, info);
 
-<<<<<<< HEAD
             final TaskManager taskManager = taskManager();
             taskManager.handleAssignment(activeTasks, info.standbyTasks());
             usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
-=======
-            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
-            partitionsByHost = info.partitionsByHost();
-
-            final TaskManager taskManager = taskManger();
-            taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setPartitionsByHostState(partitionsByHost);
-            taskManager.setPartitionsToTaskId(partitionsToTaskId);
-            taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
-            taskManager.updateSubscriptionsFromAssignment(partitions);
-            taskManager.setRebalanceInProgress(false);
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
         }
 
         @Override
@@ -285,14 +248,8 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
-<<<<<<< HEAD
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums())
-=======
-                                info.prevTasks(),
-                                info.standbyTasks(),
-                                info.userEndPoint())
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
                                 .encode(),
                             subscription.ownedPartitions()
                         ));

@@ -18,10 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
-<<<<<<< HEAD
 import org.apache.kafka.common.utils.Exit;
-=======
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -112,19 +109,11 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         streams.start();
 
-<<<<<<< HEAD
         Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close();
             System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
             System.out.flush();
         });
-=======
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            streams.close();
-            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
-            System.out.flush();
-        }));
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
     }
 
     private static void addTasksToBuilder(final List<String> tasks, final StringBuilder builder) {

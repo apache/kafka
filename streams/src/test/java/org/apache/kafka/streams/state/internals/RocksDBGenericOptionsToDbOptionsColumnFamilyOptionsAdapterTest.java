@@ -107,38 +107,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         }
     }
 
-    @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOSetTtlWillBeRemoved() {
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, new ColumnFamilyOptions());
-
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        optionsFacadeDbOptions.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
-        LogCaptureAppender.unregister(appender);
-
-        assertThat(appender.getMessages(), hasItem(""
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
-    }
-
-    @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOTtlWillBeRemoved() {
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, new ColumnFamilyOptions());
-
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        optionsFacadeDbOptions.compactionOptionsFIFO();
-        LogCaptureAppender.unregister(appender);
-
-        assertThat(appender.getMessages(), hasItem(""
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
-    }
-
     private void verifyDBOptionsMethodCall(final Method method) throws Exception {
         final DBOptions mockedDbOptions = mock(DBOptions.class);
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions

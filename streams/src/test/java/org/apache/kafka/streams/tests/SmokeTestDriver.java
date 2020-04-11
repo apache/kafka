@@ -589,13 +589,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                 if (entry.getValue().getLast().value().longValue() != expectedCount) {
                     resultStream.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expectedCount);
-<<<<<<< HEAD
 
                     if (printResults)
                         resultStream.println("\t taggEvents: " + entry.getValue());
-=======
-                    resultStream.println("\t outputEvents: " + entry.getValue());
->>>>>>> d7fe494b2a983256092bcc50eac8eab8eb8a6163
                     return false;
                 }
             }

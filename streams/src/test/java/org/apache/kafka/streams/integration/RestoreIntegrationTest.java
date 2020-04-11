@@ -84,7 +84,7 @@ public class RestoreIntegrationTest {
             new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final String INPUT_STREAM = "input-stream";
     private static final String INPUT_STREAM_2 = "input-stream-2";
-    private final int numberOfKeys = 100;
+    private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
 
     @BeforeClass
@@ -187,7 +187,7 @@ public class RestoreIntegrationTest {
         final Properties props = props(APPID);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
-        final int offsetCheckpointed = 10;
+        final int offsetCheckpointed = 1000;
         createStateForRestoration(APPID + "-store-changelog");
         createStateForRestoration(INPUT_STREAM);
 
@@ -237,8 +237,6 @@ public class RestoreIntegrationTest {
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
         assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
-
-        System.out.println("In betweeen");
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
         assertThat(numReceived.get(), equalTo(numberOfKeys));
