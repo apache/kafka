@@ -108,6 +108,9 @@ public class KTableSourceTest {
             inputTopic.pipeInput("B", 2, 11L);
             inputTopic.pipeInput("A", 1, 12L);
             inputTopic.pipeInput("B", 3, 13L);
+            // this record should be kept since this is out of order, so the timestamp
+            // should be updated in this scenario
+            inputTopic.pipeInput("A", 1, 9L);
 
             assertEquals(
                 1.0,
@@ -117,7 +120,8 @@ public class KTableSourceTest {
             assertEquals(
                 asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
                            new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
-                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L))),
+                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)),
+                           new TestRecord<>("A", 1, Instant.ofEpochMilli(9L))),
                 outputTopic.readRecordsToList()
             );
         }

@@ -25,6 +25,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ValueAndTimestampSerializerTest {
     private static final String TOPIC = "some-topic";
@@ -48,6 +50,21 @@ public class ValueAndTimestampSerializerTest {
                 STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
 
         assertThat(deserialized, is(valueAndTimestamp));
+    }
+
+    @Test
+    public void shouldCompareSerializedValuesWithoutTimestamp() {
+        final String value = "food";
+
+        final ValueAndTimestamp<String> oldValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP);
+        final byte[] oldSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, oldValueAndTimestamp);
+        final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP + 1);
+        final byte[] newSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, newValueAndTimestamp);
+        assertTrue(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, newSerializedValue));
+
+        final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP - 1);
+        final byte[] outOfOrderSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, outOfOrderValueAndTimestamp);
+        assertFalse(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, outOfOrderSerializedValue));
     }
 
     @Test

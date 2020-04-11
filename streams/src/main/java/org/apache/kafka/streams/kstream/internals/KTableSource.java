@@ -137,8 +137,10 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 final boolean isDifferentValue = 
                     store.putIfDifferentValues(key, ValueAndTimestamp.make(value, context().timestamp()), tuple.serializedValue);
                 if (isDifferentValue) {
+                    System.out.println("LOGGING: Forwarding prior value for key " + key + " and value " + value);
                     tupleForwarder.maybeForward(key, value, oldValue);
                 }  else {
+                    System.out.println("LOGGING: Dropping value for key " + key + " and value " + value);
                     skippedIdempotentUpdatesSensor.record();
                 }
             } else {
