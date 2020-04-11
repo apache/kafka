@@ -20,11 +20,10 @@ package kafka.tools
 import java.io.PrintStream
 import java.nio.file.Files
 
-import kafka.common.MessageFormatter
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.test.MockDeserializer
 import org.mockito.Mockito._

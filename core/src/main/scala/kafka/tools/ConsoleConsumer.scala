@@ -26,11 +26,10 @@ import java.util.{Collections, Locale, Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
-import kafka.common.MessageFormatter
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
