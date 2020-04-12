@@ -785,7 +785,7 @@ class ReplicaManager(val config: KafkaConfig,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
-    val isTraceEnabled = logger.underlying.isTraceEnabled
+    val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = getPartition(topicPartition) match {
         case HostedPartition.Online(partition) => partition.logStartOffset
@@ -798,7 +798,7 @@ class ReplicaManager(val config: KafkaConfig,
       logStartOffset
     }
 
-    if (isTraceEnabled)
+    if (traceEnabled)
       trace(s"Append [$entriesPerPartition] to local log")
 
     entriesPerPartition.map { case (topicPartition, records) =>
@@ -822,7 +822,7 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
-          if (isTraceEnabled)
+          if (traceEnabled)
             trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
               s"${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
 
@@ -971,7 +971,7 @@ class ReplicaManager(val config: KafkaConfig,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
-    val isTraceEnabled = logger.underlying.isTraceEnabled
+    val traceEnabled = isTraceEnabled
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -983,7 +983,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
       try {
-        if (isTraceEnabled)
+        if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
             s"remaining response limit $limitBytes" +
             (if (minOneMessage) s", ignoring response/partition size limits" else ""))
