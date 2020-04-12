@@ -111,12 +111,12 @@ class DelayedFetch(delayMs: Long,
                 // or the partition has just rolled a new segment
                 debug(s"Satisfying fetch $fetchMetadata immediately since it is fetching older segments.")
                 // We will not force complete the fetch request if a replica should be throttled.
-                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                if (!replicaManager.shouldLeaderThrottle(quota, partition, fetchMetadata.replicaId))
                   return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
-                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                if (!replicaManager.shouldLeaderThrottle(quota, partition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
               }
             }
