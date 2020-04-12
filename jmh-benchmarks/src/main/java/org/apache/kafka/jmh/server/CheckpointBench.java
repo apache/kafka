@@ -67,9 +67,9 @@ import scala.Option;
 @Fork(3)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-public class HighwatermarkCheckpointBench {
+public class CheckpointBench {
 
-    @Param({"2000"})
+    @Param({"100", "1000", "2000"})
     public int numTopics;
 
     @Param({"3"})
