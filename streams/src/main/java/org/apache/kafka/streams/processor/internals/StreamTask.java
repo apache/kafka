@@ -317,7 +317,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 stateMgr.flush();
                 recordCollector.flush();
 
-                log.info("Prepared task for committing");
+                log.debug("Prepared task for committing");
 
                 break;
 
@@ -337,7 +337,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     stateMgr.checkpoint(checkpointableOffsets());
                 }
 
-                log.info("Committed");
+                log.debug("Committed");
 
                 break;
 
@@ -347,7 +347,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 stateMgr.checkpoint(checkpointableOffsets());
 
-                log.info("Committed");
+                log.debug("Committed");
 
                 break;
 
