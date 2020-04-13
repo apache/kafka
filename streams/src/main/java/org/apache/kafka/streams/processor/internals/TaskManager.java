@@ -741,7 +741,7 @@ public class TaskManager {
         return commitInternal(tasks.values());
     }
 
-    private int commitInternal(final Collection<Task> tasks) {
+    int commitInternal(final Collection<Task> tasks) {
 
         if (rebalanceInProgress) {
             return -1;
