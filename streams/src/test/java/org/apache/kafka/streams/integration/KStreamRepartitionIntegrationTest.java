@@ -100,7 +100,7 @@ public class KStreamRepartitionIntegrationTest {
     public String topologyOptimization;
 
     @Parameters(name = "Optimization = {0}")
-    public static Collection<Object[]> topologyOptimization() {
+    public static Collection<?> topologyOptimization() {
         return Arrays.asList(new String[][]{
             {StreamsConfig.OPTIMIZE},
             {StreamsConfig.NO_OPTIMIZATION}
