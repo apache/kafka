@@ -26,7 +26,7 @@ class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo, rlm: RemoteLogManager, 
   override def execute(): Unit = {
     val result = {
       try {
-        val r = rlm.read(fetchInfo.fetchMaxByes, fetchInfo.minOneMessage, fetchInfo.topicPartition, fetchInfo.fetchInfo)
+        val r = rlm.read()
         RemoteLogReadResult(Some(r), None)
       } catch {
         case e: Exception =>

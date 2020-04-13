@@ -1139,7 +1139,7 @@ class ReplicaManager(val config: KafkaConfig,
                 relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
               FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
                 delayedRemoteStorageFetch = Some(
-                  RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo)))
+                  RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, fetchIsolation)))
             }
 
             LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),

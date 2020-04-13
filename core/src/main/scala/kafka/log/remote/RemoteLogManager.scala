@@ -42,7 +42,6 @@ import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, 
 import scala.collection.JavaConverters._
 import scala.collection.Searching._
 import scala.collection.Set
-import scala.collection.mutable.ListBuffer
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
 
@@ -431,49 +430,63 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     indexCache.position(remoteLogSegmentMetadata, offset).position
   }
 
-  def read(fetchMaxBytes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
+  def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {
+    val fetchMaxBytes  = remoteStorageFetchInfo.fetchMaxByes
+    val tp = remoteStorageFetchInfo.topicPartition
+    val fetchInfo: PartitionData = remoteStorageFetchInfo.fetchInfo
+    val fetchIsolation = remoteStorageFetchInfo.fetchIsolation
+
     val offset = fetchInfo.fetchOffset
     val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)
     val rlsMetadata = getRemoteLogSegmentMetadata(tp, offset)
 
     var startPos = lookupPositionForOffset(rlsMetadata, offset)
-    var is:InputStream = null
+    var remoteSegInputStream: InputStream = null
     try {
       // Search forward for the position of the last offset that is greater than or equal to the target offset
-      is = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
-      val logInputStream = new RemoteLogInputStream(is)
+      remoteSegInputStream = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
+      val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
 
       var batch:RecordBatch = null;
       def fetchBatch() : RecordBatch = {
-        batch = logInputStream.nextBatch()
+        batch = remoteLogInputStream.nextBatch()
         batch
       }
 
       // always look for the batch which has the desired offset and set the startPosition as that segments start
       // location.
+      var lastBatchSize = 0
+
+      // we will always have a batch in that segment as it is a non-compacted topic. For compacted topics, we may need
+      //to read from the subsequent segments if there is no batch available for the desired offset in the current
+      //segment. Tha means, desired offset is more than last offset of the current segment and immediate available
+      //offset exists in the next segment which can be higher than the desired offset.
       while (fetchBatch() != null && batch.lastOffset < offset) {
         // sets the startPos as the starting of the next batch's start location.
-        startPos += batch.sizeInBytes
+        lastBatchSize = batch.sizeInBytes()
+        startPos += lastBatchSize
       }
 
-      val buffer = ByteBuffer.allocate(maxBytes)
-      var remainingBytes = maxBytes
-      if(batch != null) {
-        remainingBytes -= batch.sizeInBytes()
+      val updatedFetchSize = if (remoteStorageFetchInfo.minOneMessage && lastBatchSize > maxBytes) lastBatchSize else maxBytes
+
+      val buffer = ByteBuffer.allocate(updatedFetchSize)
+      var remainingBytes = updatedFetchSize
+      if (lastBatchSize > 0) {
+        remainingBytes -= lastBatchSize
         batch.writeTo(buffer)
       }
 
       if(remainingBytes > 0) {
-        // input stream is read till (startPos-1) while getting the batch of records earlier.
-        // read the input stream until min of (EOF stream or buffer's remaining size).
-        Utils.readFully(is, buffer)
+        // input stream is read till (startPos - 1) while getting the batch of records earlier.
+        // read the input stream until min of (EOF stream or buffer's remaining capacity).
+        Utils.readFully(remoteSegInputStream, buffer)
       }
       buffer.flip()
 
       val records = MemoryRecords.readableRecords(buffer)
       FetchDataInfo(LogOffsetMetadata(offset), records)
     } finally {
-      Utils.closeQuietly(is, "RemoteLogSegmentInputStream")
+      Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
     }
   }
 
