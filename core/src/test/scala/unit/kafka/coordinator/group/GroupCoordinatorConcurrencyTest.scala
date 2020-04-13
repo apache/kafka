@@ -69,6 +69,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     new LeaveGroupOperation
   )
 
+  var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
+  var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = _
   var groupCoordinator: GroupCoordinator = _
 
   @Before
@@ -86,8 +88,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     val config = KafkaConfig.fromProps(serverProps)
 
-    val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
+    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
@@ -122,6 +124,33 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   @Test
   def testConcurrentRandomSequence(): Unit = {
     verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
+  }
+
+  @Test
+  def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
+    val groupMaxSize = 1
+    serverProps.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
+    val config = KafkaConfig.fromProps(serverProps)
+
+    if (groupCoordinator != null)
+      groupCoordinator.shutdown()
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory,
+      joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(false)
+
+    val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
+      .members
+    val joinOp = new JoinGroupOperation()
+
+    verifyConcurrentActions(members.toSet.map(joinOp.actionNoVerify))
+
+    val errors = members.map { member =>
+      val joinGroupResult = joinOp.await(member, DefaultRebalanceTimeout)
+      joinGroupResult.error
+    }
+
+    assertEquals(groupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(members.size-groupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
   }
 
   abstract class GroupOperation[R, C] extends Operation {
