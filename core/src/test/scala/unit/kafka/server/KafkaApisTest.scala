@@ -466,7 +466,31 @@ class KafkaApisTest {
   }
 
   @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(): Unit = {
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.initialLeaderEpoch + 2, true)
+  }
+
+  @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.EpochDuringDelete, true)
+  }
+
+  @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.NoEpoch, true)
+  }
+
+  @Test
+  def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.initialLeaderEpoch + 2, false)
+  }
+
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
+                                                                  deletePartition: Boolean): Unit = {
     val controllerId = 0
     val controllerEpoch = 5
     val brokerEpoch = 230498320L
@@ -480,20 +504,20 @@ class KafkaApisTest {
         .setTopicName(groupMetadataPartition.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(groupMetadataPartition.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
-          .setDeletePartition(true)).asJava),
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
         .setTopicName(txnStatePartition.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(txnStatePartition.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
-          .setDeletePartition(true)).asJava),
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
         .setTopicName(fooPartition.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(fooPartition.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
-          .setDeletePartition(true)).asJava)
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava)
     ).asJava
 
     val stopReplicaRequest = new StopReplicaRequest.Builder(
@@ -521,11 +545,19 @@ class KafkaApisTest {
     )
     EasyMock.expect(controller.brokerEpoch).andStubReturn(brokerEpoch)
 
-    txnCoordinator.onResignation(txnStatePartition.partition, Some(LeaderAndIsr.initialLeaderEpoch + 2))
-    EasyMock.expectLastCall()
+    if (deletePartition) {
+      if (leaderEpoch >= 0) {
+        txnCoordinator.onResignation(txnStatePartition.partition, Some(leaderEpoch))
+      } else {
+        txnCoordinator.onResignation(txnStatePartition.partition, None)
+      }
+      EasyMock.expectLastCall()
+    }
 
-    groupCoordinator.onResignation(groupMetadataPartition.partition)
-    EasyMock.expectLastCall()
+    if (deletePartition) {
+      groupCoordinator.onResignation(groupMetadataPartition.partition)
+      EasyMock.expectLastCall()
+    }
 
     EasyMock.replay(controller, replicaManager, txnCoordinator, groupCoordinator)
 

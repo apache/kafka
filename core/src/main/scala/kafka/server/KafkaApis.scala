@@ -259,8 +259,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
                      && partitionStates(topicPartition).deletePartition) {
             val partitionState = partitionStates(topicPartition)
-            val leaderEpoch = if (partitionState.leaderEpoch != LeaderAndIsr.EpochDuringDelete ||
-                                  partitionState.leaderEpoch != LeaderAndIsr.NoEpoch)
+            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
                 Some(partitionState.leaderEpoch)
             else
               None
