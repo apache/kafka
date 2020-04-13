@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.concurrent.{CompletableFuture, RejectedExecutionException}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.server.{Defaults, FetchDataInfo, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, LogOffsetMetadata, RemoteStorageFetchInfo}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -52,7 +52,7 @@ class RemoteLogReaderTest {
       resultFuture.complete(result)
     }
 
-    rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo), callback)
+    rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted), callback)
 
     Thread.sleep(100)
 
@@ -83,21 +83,21 @@ class RemoteLogReaderTest {
 
     for (i <- 0 to 24) {
       val fetchInfo = new PartitionData(i, 0, 1000, Optional.of(1))
-      val future = rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo), callback)
+      val future = rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted), callback)
       tasks(i) = future
     }
     assertEquals(0, finishCount.get)
 
     assertThrows[RejectedExecutionException] {
       val fetchInfo = new PartitionData(25, 0, 1000, Optional.of(1))
-      rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo), callback)
+      rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted), callback)
     }
 
     tasks(7).cancel(false)
     tasks(10).cancel(true)
 
     val fetchInfo = new PartitionData(25, 0, 1000, Optional.of(1))
-    rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo), callback)
+    rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted), callback)
     rlm.resume()
 
     Thread.sleep(200)
@@ -118,7 +118,7 @@ class RemoteLogReaderTest {
       assert(result.error.get.isInstanceOf[OffsetOutOfRangeException])
     }
 
-    val task = rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo), callback)
+    val task = rlm.asyncRead(RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted), callback)
     Thread.sleep(100)
     assert(task.isDone)
   }
@@ -130,9 +130,10 @@ class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
     Files.createTempDirectory("kafka-test-").toString) {
   private val lock = new ReentrantReadWriteLock
 
-  override def read(fetchMaxBytes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: FetchRequest.PartitionData): FetchDataInfo = {
+  override def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {
     lock.readLock.lock()
     try {
+      val fetchInfo = remoteStorageFetchInfo.fetchInfo
       val recordsArray = Array(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes))
       val records = MemoryRecords.withRecords(fetchInfo.fetchOffset + 2, CompressionType.NONE, 1, recordsArray: _*)

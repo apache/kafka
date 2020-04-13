@@ -81,7 +81,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
   def RemoteFetch(timeout: Boolean, responseCallback: (Seq[(TopicPartition, FetchPartitionData)]) => Unit): Unit = {
     val rlm = new MockRemoteLogManager(5, 20)
     val fetchInfo = new PartitionData(100, 0, 1000, Optional.of(1))
-    val remoteFetchInfo = RemoteStorageFetchInfo(1000, true, tp, fetchInfo)
+    val remoteFetchInfo = RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted)
 
     val fetchPartitionStatus = FetchPartitionStatus(new LogOffsetMetadata(fetchInfo.fetchOffset), fetchInfo)
 
