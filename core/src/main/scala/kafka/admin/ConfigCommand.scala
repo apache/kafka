@@ -252,7 +252,7 @@ object ConfigCommand extends Config {
       val file = opts.options.valueOf(opts.addConfigFile)
       val inputStream = try new FileInputStream(file) catch {
         case _: FileNotFoundException =>
-          throw new IllegalArgumentException(s"No such file or directory: $file")
+          throw new IllegalArgumentException(s"No such file: $file")
       }
       try {
         props.load(inputStream)
