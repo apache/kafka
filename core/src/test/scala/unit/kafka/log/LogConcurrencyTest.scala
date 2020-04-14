@@ -124,7 +124,7 @@ class LogConcurrencyTest {
             } else {
               log.appendAsFollower(TestUtils.records(records,
                 baseOffset = logEndOffset,
-                partitionLeaderEpoch= leaderEpoch))
+                partitionLeaderEpoch = leaderEpoch))
               log.updateHighWatermark(logEndOffset)
             }
 
@@ -176,7 +176,7 @@ class LogConcurrencyTest {
 
   private case class FetchedBatch(baseOffset: Long, epoch: Int) {
     override def toString: String = {
-      s"FetchedBatch(baseOffset=$baseOffset, epoch=$epoch"
+      s"FetchedBatch(baseOffset=$baseOffset, epoch=$epoch)"
     }
   }
 
