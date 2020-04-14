@@ -50,15 +50,15 @@ class OffsetMapTest {
       map.put(new FakeRecord(key(i), i))
 
     for (i <- 0 until 10) {
-      assertEquals(i.toLong, map.get(key(i)))
+      assertEquals(i.toLong, map.getOffset(key(i)))
       assertEquals(-1L, map.getVersion(key(i)))
       assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i)))
       assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1)))
     }
 
-    map.init(Defaults.CompactionStrategy)
+    map.init(Defaults.CompactionStrategyOffset)
     for (i <- 0 until 10) {
-      assertEquals(map.get(key(i)), -1L)
+      assertEquals(map.getOffset(key(i)), -1L)
       assertEquals(map.getVersion(key(i)), -1L)
     }
   }
@@ -66,16 +66,16 @@ class OffsetMapTest {
   @Test
   def testGetWhenFull(): Unit = {
     val map = new SkimpyOffsetMap(4096)
-    map.init(Defaults.CompactionStrategy)
+    map.init(Defaults.CompactionStrategyOffset)
     var i = 37L  //any value would do
     while (map.size < map.slots) {
       map.put(new FakeRecord(key(i), i))
       i = i + 1L
     }
 
-    assertEquals(map.get(key(i)), -1L)
+    assertEquals(map.getOffset(key(i)), -1L)
     assertEquals(map.getVersion(key(i)), -1L)
-    assertEquals(map.get(key(i-1L)), i-1L)
+    assertEquals(map.getOffset(key(i-1L)), i-1L)
     assertEquals(map.getVersion(key(i-1L)), -1L)
     assertNotEquals(map.latestOffset, i)
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i-1L), i-1L)))
@@ -92,7 +92,7 @@ class OffsetMapTest {
       map.put(new FakeRecord(key(i), i, fakeTimestamp = time+i))
 
     // map should hold offset 0 for key 0
-    assertEquals(0, map.get(key(0)))
+    assertEquals(0, map.getOffset(key(0)))
     assertTrue(map.getVersion(key(0)) > 0)
     // latest offset in map should be 9
     assertEquals(9, map.latestOffset)
@@ -106,7 +106,7 @@ class OffsetMapTest {
     map.put(fr2)
 
     // map should hold offset 10 for key 0
-    assertEquals(10, map.get(key(0)))
+    assertEquals(10, map.getOffset(key(0)))
     assertEquals(fr1.timestamp, map.getVersion(key(0)))
     assertEquals(true, map.shouldRetainRecord(fr1))
     assertEquals(false, map.shouldRetainRecord(fr2))
@@ -138,7 +138,7 @@ class OffsetMapTest {
     map.put(new FakeRecord(key(0), 11, 110))
 
     // map should hold offset 10 for key 0
-    assertEquals(10, map.get(key(0)))
+    assertEquals(10, map.getOffset(key(0)))
     assertEquals(111, map.getVersion(key(0)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111)))
     // latest offset in map should be 11
@@ -155,7 +155,7 @@ class OffsetMapTest {
     map.put(new FakeRecord(key(1), 17, 119))
 
     // map should hold offset 16 for key 1
-    assertEquals(16, map.get(key(1)))
+    assertEquals(16, map.getOffset(key(1)))
     assertEquals(120, map.getVersion(key(1)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 16, 120)))
     assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 17, 119)))
@@ -170,7 +170,7 @@ class OffsetMapTest {
     map.put(new FakeRecord(key(1), 21, 117))
 
     // map should hold offset 19 for key 1
-    assertEquals(19, map.get(key(1)))
+    assertEquals(19, map.getOffset(key(1)))
     assertEquals(121, map.getVersion(key(1)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 19, 121)))
     assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 21, 117)))
@@ -200,7 +200,7 @@ class OffsetMapTest {
       map.put(new FakeRecord(key(i), i))
 
     // map should hold offset 0 for key 0
-    assertEquals(0, map.get(key(0)))
+    assertEquals(0, map.getOffset(key(0)))
     assertEquals(-1L, map.getVersion(key(0)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 0)))
     // latest offset in map should be 9
@@ -213,7 +213,7 @@ class OffsetMapTest {
     map.put(new FakeRecord(key(0), 11))
 
     // map should hold offset 11 for key 0
-    assertEquals(11, map.get(key(0)))
+    assertEquals(11, map.getOffset(key(0)))
     assertEquals(-1L, map.getVersion(key(0)))
     assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 10)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 11)))
@@ -233,7 +233,7 @@ class OffsetMapTest {
       map.put(new FakeRecord(key(i), i, fakeTimestamp = time+i))
 
     // map should hold offset 0 for key 0
-    assertEquals(0, map.get(key(0)))
+    assertEquals(0, map.getOffset(key(0)))
     assertTrue(map.getVersion(key(0)) > 0)
     // latest offset in map should be 9
     assertEquals(9, map.latestOffset)
@@ -247,7 +247,7 @@ class OffsetMapTest {
     map.put(fr2)
 
     // map should hold offset 10 for key 0
-    assertEquals(10, map.get(key(0)))
+    assertEquals(10, map.getOffset(key(0)))
     assertEquals(fr1.timestamp, map.getVersion(key(0)))
     assertEquals(true, map.shouldRetainRecord(fr1))
     assertEquals(false, map.shouldRetainRecord(fr2))
@@ -270,7 +270,7 @@ class OffsetMapTest {
     map.put(new FakeRecord(key(0), 11, 110))
 
     // map should hold offset 10 for key 0
-    assertEquals(10, map.get(key(0)))
+    assertEquals(10, map.getOffset(key(0)))
     assertEquals(111, map.getVersion(key(0)))
     assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111)))
     assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 11, 110)))
@@ -282,11 +282,11 @@ class OffsetMapTest {
 
   def key(key: Long) = ByteBuffer.wrap(key.toString.getBytes)
   
-  def validateMap(items: Int, loadFactor: Double = 0.5, strategy: String = Defaults.CompactionStrategy, headerKey: String = ""): SkimpyOffsetMap = {
+  def validateMap(items: Int, loadFactor: Double = 0.5, strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = ""): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
     map.init(strategy, headerKey)
 
-    val isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+    val isOffsetStrategy = Defaults.CompactionStrategyOffset.equalsIgnoreCase(strategy)
     val isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)
     val currentTimeMillis = System.currentTimeMillis()
     for (i <- 1 until items) {
@@ -299,7 +299,7 @@ class OffsetMapTest {
     }
 
     for (i <- 1 until items) {
-      assertEquals(i.toLong, map.get(key(i)))
+      assertEquals(i.toLong, map.getOffset(key(i)))
       if (isOffsetStrategy) {
         assertEquals(-1L, map.getVersion(key(i)))
         assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i)))

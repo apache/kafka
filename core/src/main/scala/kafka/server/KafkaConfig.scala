@@ -114,7 +114,7 @@ object Defaults {
   val LogCleanerDeleteRetentionMs = 24 * 60 * 60 * 1000L
   val LogCleanerMinCompactionLagMs = 0L
   val LogCleanerMaxCompactionLagMs = Long.MaxValue
-  val LogCleanerCompactionStrategy = "offset"
+  val LogCleanerCompactionStrategyOffset = "offset"
   val LogCleanerCompactionStrategyTimestamp = "timestamp"
   val LogCleanerCompactionStrategyHeader = "header"
   val LogIndexSizeMaxBytes = 10 * 1024 * 1024
@@ -733,9 +733,11 @@ object KafkaConfig {
   val LogCleanerDeleteRetentionMsDoc = "How long are delete records retained?"
   val LogCleanerMinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted."
   val LogCleanerMaxCompactionLagMsDoc = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted."
-  val LogCleanerCompactionStrategyDoc  = "The retention strategy to use when compacting the log. " + 
-    "Only applicable for logs that are being compacted. Setting the strategy to anything other than \"offset\" " + 
-    "will replace the offset when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
+  val LogCleanerCompactionStrategyDoc  = "The retention strategy to use when compacting the log. Only applicable for logs that are being compacted. " + 
+    "By default the compaction strategy is set to \"offset\" where the latest offset for the key is retained. " + 
+    "For \"header\" strategy, the value provided by the producer in the record header will be used to determine the latest record for the key. " + 
+    "For \"timestamp\" strategy, the record tiemstamp will be used to determine the latest record for the key. " + 
+    "So setting the strategy to anything other than \"offset\" will replace the offset when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
     "the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
   val LogCleanerCompactionStrategyHeaderKeyDoc = "The header key for the compaction. Only applicable for compaction strategy header."
   val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
@@ -1055,8 +1057,8 @@ object KafkaConfig {
       .define(LogCleanerDeleteRetentionMsProp, LONG, Defaults.LogCleanerDeleteRetentionMs, MEDIUM, LogCleanerDeleteRetentionMsDoc)
       .define(LogCleanerMinCompactionLagMsProp, LONG, Defaults.LogCleanerMinCompactionLagMs, MEDIUM, LogCleanerMinCompactionLagMsDoc)
       .define(LogCleanerMaxCompactionLagMsProp, LONG, Defaults.LogCleanerMaxCompactionLagMs, MEDIUM, LogCleanerMaxCompactionLagMsDoc)
-      .define(LogCleanerCompactionStrategyProp, STRING, Defaults.LogCleanerCompactionStrategy,
-        in(Defaults.LogCleanerCompactionStrategy, Defaults.LogCleanerCompactionStrategyTimestamp, Defaults.LogCleanerCompactionStrategyHeader), MEDIUM, LogCleanerCompactionStrategyDoc)
+      .define(LogCleanerCompactionStrategyProp, STRING, Defaults.LogCleanerCompactionStrategyOffset,
+        in(Defaults.LogCleanerCompactionStrategyOffset, Defaults.LogCleanerCompactionStrategyTimestamp, Defaults.LogCleanerCompactionStrategyHeader), MEDIUM, LogCleanerCompactionStrategyDoc)
       .define(LogCleanerCompactionStrategyHeaderKeyProp, STRING, "", MEDIUM, LogCleanerCompactionStrategyHeaderKeyDoc)
       .define(LogIndexSizeMaxBytesProp, INT, Defaults.LogIndexSizeMaxBytes, atLeast(4), MEDIUM, LogIndexSizeMaxBytesDoc)
       .define(LogIndexIntervalBytesProp, INT, Defaults.LogIndexIntervalBytes, atLeast(0), MEDIUM, LogIndexIntervalBytesDoc)

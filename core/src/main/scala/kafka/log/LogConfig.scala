@@ -47,7 +47,7 @@ object Defaults {
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
-  val CompactionStrategy = kafka.server.Defaults.LogCleanerCompactionStrategy
+  val CompactionStrategyOffset = kafka.server.Defaults.LogCleanerCompactionStrategyOffset
   val CompactionStrategyTimestamp = kafka.server.Defaults.LogCleanerCompactionStrategyTimestamp
   val CompactionStrategyHeader = kafka.server.Defaults.LogCleanerCompactionStrategyHeader
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
@@ -274,8 +274,8 @@ object LogConfig {
         KafkaConfig.LogCleanerMinCompactionLagMsProp)
       .define(MaxCompactionLagMsProp, LONG, Defaults.MaxCompactionLagMs, atLeast(1), MEDIUM, MaxCompactionLagMsDoc,
         KafkaConfig.LogCleanerMaxCompactionLagMsProp)
-      .define(CompactionStrategyProp, STRING, Defaults.CompactionStrategy,
-        in(Defaults.CompactionStrategy, Defaults.CompactionStrategyTimestamp, Defaults.CompactionStrategyHeader), MEDIUM, CompactionStrategyDoc, KafkaConfig.LogCleanerCompactionStrategyProp)
+      .define(CompactionStrategyProp, STRING, Defaults.CompactionStrategyOffset,
+        in(Defaults.CompactionStrategyOffset, Defaults.CompactionStrategyTimestamp, Defaults.CompactionStrategyHeader), MEDIUM, CompactionStrategyDoc, KafkaConfig.LogCleanerCompactionStrategyProp)
       .define(CompactionStrategyHeaderKeyProp, STRING, "", MEDIUM, CompactionStrategyHeaderKeyDoc,
         KafkaConfig.LogCleanerCompactionStrategyHeaderKeyProp)
      .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,

@@ -1722,9 +1722,9 @@ class LogCleanerTest {
       assertEquals("Last offset should be the end offset.", end, endOffset)
       assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
       for(i <- start until end)
-        assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
-      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
-      assertEquals("Should not find a value too large", -1L, map.get(key(end)))
+        assertEquals("Should find all the keys", i.toLong, map.getOffset(key(i)))
+      assertEquals("Should not find a value too small", -1L, map.getOffset(key(start - 1)))
+      assertEquals("Should not find a value too large", -1L, map.getOffset(key(end)))
       assertEquals(end - start, stats.mapMessagesRead)
     }
 
@@ -1900,8 +1900,8 @@ class LogCleanerTest {
     cleaner.buildOffsetMap(log, keyStart, offsetEnd + 1L, map, new CleanerStats())
     assertEquals("Last offset should be the end offset.", offsetEnd, map.latestOffset)
     assertEquals("Should have the expected number of messages in the map.", keyEnd - keyStart, map.size)
-    assertEquals("Map should contain first value", 0L, map.get(key(0)))
-    assertEquals("Map should contain second value", offsetEnd, map.get(key(1)))
+    assertEquals("Map should contain first value", 0L, map.getOffset(key(0)))
+    assertEquals("Map should contain second value", offsetEnd, map.getOffset(key(1)))
   }
 
   /**
@@ -1924,10 +1924,10 @@ class LogCleanerTest {
     val stats = new CleanerStats()
     cleaner.buildOffsetMap(log, 2, Int.MaxValue, map, stats)
     assertEquals(2, map.size)
-    assertEquals(-1, map.get(key(0)))
-    assertEquals(2, map.get(key(2)))
-    assertEquals(3, map.get(key(3)))
-    assertEquals(-1, map.get(key(4)))
+    assertEquals(-1, map.getOffset(key(0)))
+    assertEquals(2, map.getOffset(key(2)))
+    assertEquals(3, map.getOffset(key(3)))
+    assertEquals(-1, map.getOffset(key(4)))
     assertEquals(4, stats.mapMessagesRead)
   }
 
@@ -2371,10 +2371,10 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), StandardCharsets.UTF_8)
 
-  override def init(strategy: String = Defaults.CompactionStrategy, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
+  override def init(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
     this.map.clear()
 
-    this.isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+    this.isOffsetStrategy = Defaults.CompactionStrategyOffset.equalsIgnoreCase(strategy)
     this.isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)
     this.headerKey = headerKey
   }
@@ -2401,11 +2401,11 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
       if (foundVersion != currentVersion)
         return currentVersion >= foundVersion
     }
-    val foundOffset = get(record.key)
+    val foundOffset = getOffset(record.key)
     record.offset() >= foundOffset
   }
 
-  override def get(key: ByteBuffer): Long = {
+  override def getOffset(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if(map.containsKey(k))
       map.get(k).offset()

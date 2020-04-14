@@ -52,7 +52,7 @@ trait OffsetMap {
    * @param key The key
    * @return The offset associated with this key or -1 if the key is not found
    */
-  def get(key: ByteBuffer): Long
+  def getOffset(key: ByteBuffer): Long
 
   /**
    * Get the version associated with this key for non-offset based strategy.
@@ -79,7 +79,7 @@ trait OffsetMap {
 object CompactionStrategy extends Enumeration {
   type CompactionStrategy = Value
 
-  val OFFSET = Value(Defaults.CompactionStrategy)
+  val OFFSET = Value(Defaults.CompactionStrategyOffset)
   val TIMESTAMP = Value(Defaults.CompactionStrategyTimestamp)
   val HEADER = Value(Defaults.CompactionStrategyHeader)
 }
@@ -140,13 +140,12 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * Initialize the map with the topic compact strategy
    * @param strategy The compaction strategy
    * @param headerKey The header key if the compaction strategy is set to header
-   * @param cleanerThreadId The clenaer thread id
+   * @param cleanerThreadId The cleaner thread id
    * @param topicPartitionName The topic partition name
    */
-  override def init(strategy: String = Defaults.CompactionStrategy, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") {
+  override def init(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") {
     // set the log indent for the topic partition
     this.logIdent = s"[OffsetMap-$cleanerThreadId $topicPartitionName]: "
-    info(s"Initializing OffsetMap with compaction strategy '$strategy' and header key '$headerKey'")
 
     // Change the salt used for key hashing making all existing keys unfindable.
     this.entries = 0
@@ -158,9 +157,10 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     this.compactionStrategy = CompactionStrategy.withName(strategy)
     this.headerKey = headerKey.trim()
 
-    info(s"Compaction strategy set to '${this.compactionStrategy}'")
     this.bytesPerEntry = hashSize + longByteSize + (if (this.compactionStrategy == CompactionStrategy.OFFSET) 0 else longByteSize)
     this.slots = memory / bytesPerEntry
+
+    info(s"Initialized OffsetMap with compaction strategy '${this.compactionStrategy}' based on passed strategy '$strategy' and header key '$headerKey'")
   }
   
   /**
@@ -244,16 +244,16 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
       if (foundVersion != currentVersion)
         return currentVersion >= foundVersion
     }
-    val foundOffset = get(record.key)
+    val foundOffset = getOffset(record.key)
     record.offset() >= foundOffset
   }
 
   /**
-   * Get the offset/version associated with this key.
+   * Get the offset associated with this key.
    * @param key The key
-   * @return The offset/version associated with this key or -1 if the key is not found
+   * @return The offset associated with this key or -1 if the key is not found
    */
-  override def get(key: ByteBuffer): Long = {
+  override def getOffset(key: ByteBuffer): Long = {
     // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
     if (!search(key))
       -1L
@@ -361,15 +361,24 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
       -1L
     else if (this.compactionStrategy == CompactionStrategy.TIMESTAMP) // record timestamp strategy
       record.timestamp
-    else if (record == null || record.headers() == null || record.headers().isEmpty) // record header empty
+    else if (record.headers() == null || record.headers().isEmpty) // record header empty
       -1L
     else { // header strategy
-      record.headers()
-        .filter(it => it.value != null && it.value.nonEmpty)
-        .find(it => headerKey.equalsIgnoreCase(it.key.trim))
-        .map(it => ByteBuffer.wrap(it.value))
-        .map(it => ByteUtils.readVarlong(it))
-        .getOrElse(-1L)
+      try {
+        // get header value if exists and positive value; otherwise return -1L
+        return record.headers()
+          .filter(it => it.value != null && it.value.nonEmpty)
+          .find(it => headerKey.equalsIgnoreCase(it.key.trim))
+          .map(it => ByteBuffer.wrap(it.value))
+          .map(it => ByteUtils.readVarlong(it))
+          .map(it => if (it > 0) it else -1L)
+          .getOrElse(-1L)
+      } catch {
+        case e: IllegalArgumentException => {
+          error("Error occured while extracting the header version. Error Message: " + e.getMessage)
+        }
+      }
+      -1L
     }
   }
 }
