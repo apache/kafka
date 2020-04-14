@@ -30,11 +30,7 @@ public class QuotaViolationException extends KafkaException {
     private final double bound;
 
     public QuotaViolationException(MetricName metricName, double value, double bound) {
-        super(String.format(
-                "'%s' violated quota. Actual: %f, Threshold: %f",
-                metricName,
-                value,
-                bound));
+        super(metricName + " violated quota.");
         this.metricName = metricName;
         this.value = value;
         this.bound = bound;
@@ -50,5 +46,11 @@ public class QuotaViolationException extends KafkaException {
 
     public double bound() {
         return bound;
+    }
+
+    /* avoid the expensive and stack trace for quota violation exceptions */
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
     }
 }
