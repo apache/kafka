@@ -459,7 +459,6 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
@@ -470,10 +469,6 @@ public class TaskManager {
                 } catch (final RuntimeException e) {
                     log.warn("Error closing task producer for " + task.id() + " while handling lostAll", e);
                 }
-            }
-
-            for (final TopicPartition inputPartition : inputPartitions) {
-                partitionToTask.remove(inputPartition);
             }
         }
 
