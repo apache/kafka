@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -92,50 +93,44 @@ final class StateManagerUtil {
     static void closeStateManager(final Logger log,
                                   final String logPrefix,
                                   final boolean closeClean,
-                                  final boolean wipeStateStore,
+                                  final boolean eosEnabled,
                                   final ProcessorStateManager stateMgr,
                                   final StateDirectory stateDirectory,
                                   final TaskType taskType) {
-        if (closeClean && wipeStateStore) {
-            throw new IllegalArgumentException("State store could not be wiped out during clean close");
-        }
+        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
+        final boolean wipeStateStore = !closeClean && eosEnabled;
 
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);
 
-        ProcessorStateException exception = null;
+        final AtomicReference<ProcessorStateException> firstException = new AtomicReference<>(null);
         try {
             if (stateDirectory.lock(id)) {
                 try {
                     stateMgr.close();
 
                     if (wipeStateStore) {
+                        log.debug("Wiping state stores for {} task {}", taskType, id);
                         // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
                         // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
                         // need to re-bootstrap the restoration from the beginning
                         Utils.delete(stateMgr.baseDir());
                     }
                 } catch (final ProcessorStateException e) {
-                    exception = e;
-                } catch (final IOException e) {
-                    throw new ProcessorStateException("Failed to wiping state stores for task " + id, e);
+                    firstException.compareAndSet(null, e);
                 } finally {
-                    try {
-                        stateDirectory.unlock(id);
-                    } catch (final IOException e) {
-                        if (exception == null) {
-                            exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
-                        }
-                    }
+                    stateDirectory.unlock(id);
                 }
             }
         } catch (final IOException e) {
-            throw new StreamsException(
-                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
-                e
+            final ProcessorStateException exception = new ProcessorStateException(
+                String.format("%sFatal error while trying to close the state manager for task %s", logPrefix, id), e
             );
+            firstException.compareAndSet(null, exception);
+
         }
 
+        final ProcessorStateException exception = firstException.get();
         if (exception != null) {
             throw exception;
         }
