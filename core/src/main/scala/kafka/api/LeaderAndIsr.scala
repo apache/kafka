@@ -21,7 +21,9 @@ object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
   val NoLeader: Int = -1
+  val NoEpoch: Int = -1
   val LeaderDuringDelete: Int = -2
+  val EpochDuringDelete: Int = -2
 
   def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
 

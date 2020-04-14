@@ -18,6 +18,7 @@ import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, LinkedHashMap, Optional, Properties}
 
+import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
@@ -30,6 +31,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -241,7 +243,16 @@ class RequestQuotaTest extends BaseRequestTest {
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>
-          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
+          val topicStates = Seq(
+            new StopReplicaTopicState()
+              .setTopicName(tp.topic())
+              .setPartitionStates(Seq(new StopReplicaPartitionState()
+                .setPartitionIndex(tp.partition())
+                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setDeletePartition(true)).asJava)
+          ).asJava
+          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
+            Int.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
