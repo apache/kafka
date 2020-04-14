@@ -44,7 +44,7 @@ import java.util.Set;
  * in a KafkaStreams application
  */
 public class StreamsMetadataState {
-    public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
+    public static final HostInfo UNKNOWN_HOST = HostInfo.unavailable();
     private final InternalTopologyBuilder builder;
     private final Set<String> globalStores;
     private final HostInfo thisHost;
@@ -366,7 +366,7 @@ public class StreamsMetadataState {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
-        HostInfo activeHost = new HostInfo("unavailable", -1);
+        HostInfo activeHost = UNKNOWN_HOST;
         final Set<HostInfo> standbyHosts = new HashSet<>();
         for (final StreamsMetadata streamsMetadata : allMetadata) {
             final Set<String> activeStateStoreNames = streamsMetadata.stateStoreNames();

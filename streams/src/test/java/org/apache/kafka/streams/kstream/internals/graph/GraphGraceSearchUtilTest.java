@@ -24,7 +24,6 @@ import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
@@ -63,7 +62,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
@@ -91,7 +90,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -114,7 +113,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -129,7 +128,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
                 windows, "asdf", null, null, null
             ), "asdf"),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
@@ -147,7 +146,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
         graceGrandparent.addChild(statefulParent);
 
@@ -173,7 +172,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
@@ -200,7 +199,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final StatefulProcessorNode<String, Long> rightParent = new StatefulProcessorNode<>(
@@ -214,7 +213,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<? extends StateStore>) null
+            (StoreBuilder<?>) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);

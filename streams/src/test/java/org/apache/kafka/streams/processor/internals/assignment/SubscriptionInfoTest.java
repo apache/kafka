@@ -25,31 +25,37 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class SubscriptionInfoTest {
-    private final UUID processId = UUID.randomUUID();
     private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
-        new TaskId(0, 0),
-        new TaskId(0, 1),
-        new TaskId(1, 0)));
+        TASK_0_0,
+        TASK_0_1,
+        TASK_1_0));
     private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
-        new TaskId(1, 1),
-        new TaskId(2, 0)));
+        TASK_1_1,
+        TASK_2_0));
     private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
-        mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
-        mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
-        mkEntry(new TaskId(1, 0), Task.LATEST_OFFSET),
-        mkEntry(new TaskId(1, 1), 0L),
-        mkEntry(new TaskId(2, 0), 10L)
+        mkEntry(TASK_0_0, Task.LATEST_OFFSET),
+        mkEntry(TASK_0_1, Task.LATEST_OFFSET),
+        mkEntry(TASK_1_0, Task.LATEST_OFFSET),
+        mkEntry(TASK_1_1, 0L),
+        mkEntry(TASK_2_0, 10L)
     );
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
@@ -59,7 +65,7 @@ public class SubscriptionInfoTest {
         new SubscriptionInfo(
             0,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             "localhost:80",
             TASK_OFFSET_SUMS
         );
@@ -70,7 +76,7 @@ public class SubscriptionInfoTest {
         new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION + 1,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             "localhost:80",
             TASK_OFFSET_SUMS
         );
@@ -81,14 +87,14 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info = new SubscriptionInfo(
             1,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             IGNORED_USER_ENDPOINT,
             TASK_OFFSET_SUMS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
@@ -99,7 +105,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info = new SubscriptionInfo(
             1,
             1234,
-            processId,
+            UUID_1,
             "ignoreme",
             TASK_OFFSET_SUMS
         );
@@ -108,7 +114,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde decoded = LegacySubscriptionInfoSerde.decode(buffer);
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
@@ -119,7 +125,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
             1,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             ACTIVE_TASKS,
             STANDBY_TASKS,
             "localhost:80"
@@ -129,7 +135,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo decoded = SubscriptionInfo.decode(buffer);
         assertEquals(1, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertNull(decoded.userEndPoint());
@@ -140,14 +146,14 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info = new SubscriptionInfo(
             2,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             "localhost:80",
             TASK_OFFSET_SUMS
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
@@ -158,7 +164,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info = new SubscriptionInfo(
             2,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             "localhost:80",
             TASK_OFFSET_SUMS
         );
@@ -167,7 +173,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde decoded = LegacySubscriptionInfoSerde.decode(buffer);
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
@@ -178,7 +184,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
             2,
             LATEST_SUPPORTED_VERSION,
-            processId,
+            UUID_1,
             ACTIVE_TASKS,
             STANDBY_TASKS,
             "localhost:80"
@@ -188,7 +194,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo decoded = SubscriptionInfo.decode(buffer);
         assertEquals(2, decoded.version());
         assertEquals(SubscriptionInfo.UNKNOWN, decoded.latestSupportedVersion());
-        assertEquals(processId, decoded.processId());
+        assertEquals(UUID_1, decoded.processId());
         assertEquals(ACTIVE_TASKS, decoded.prevTasks());
         assertEquals(STANDBY_TASKS, decoded.standbyTasks());
         assertEquals("localhost:80", decoded.userEndPoint());
@@ -200,14 +206,14 @@ public class SubscriptionInfoTest {
             final SubscriptionInfo info = new SubscriptionInfo(
                 version,
                 LATEST_SUPPORTED_VERSION,
-                processId,
+                UUID_1,
                 "localhost:80",
                 TASK_OFFSET_SUMS
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
             assertEquals(LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
-            assertEquals(processId, decoded.processId());
+            assertEquals(UUID_1, decoded.processId());
             assertEquals(ACTIVE_TASKS, decoded.prevTasks());
             assertEquals(STANDBY_TASKS, decoded.standbyTasks());
             assertEquals("localhost:80", decoded.userEndPoint());
@@ -220,7 +226,7 @@ public class SubscriptionInfoTest {
             final SubscriptionInfo info = new SubscriptionInfo(
                 version,
                 LATEST_SUPPORTED_VERSION,
-                processId,
+                UUID_1,
                 "localhost:80",
                 TASK_OFFSET_SUMS
             );
@@ -229,7 +235,7 @@ public class SubscriptionInfoTest {
             final LegacySubscriptionInfoSerde decoded = LegacySubscriptionInfoSerde.decode(buffer);
             assertEquals(version, decoded.version());
             assertEquals(LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
-            assertEquals(processId, decoded.processId());
+            assertEquals(UUID_1, decoded.processId());
             assertEquals(ACTIVE_TASKS, decoded.prevTasks());
             assertEquals(STANDBY_TASKS, decoded.standbyTasks());
             assertEquals("localhost:80", decoded.userEndPoint());
@@ -242,7 +248,7 @@ public class SubscriptionInfoTest {
             final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
                 version,
                 LATEST_SUPPORTED_VERSION,
-                processId,
+                UUID_1,
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
                 "localhost:80"
@@ -253,7 +259,7 @@ public class SubscriptionInfoTest {
             final String message = "for version: " + version;
             assertEquals(message, version, decoded.version());
             assertEquals(message, LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
-            assertEquals(message, processId, decoded.processId());
+            assertEquals(message, UUID_1, decoded.processId());
             assertEquals(message, ACTIVE_TASKS, decoded.prevTasks());
             assertEquals(message, STANDBY_TASKS, decoded.standbyTasks());
             assertEquals(message, "localhost:80", decoded.userEndPoint());
@@ -263,7 +269,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion5() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
+            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS);
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -280,25 +286,59 @@ public class SubscriptionInfoTest {
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
         final SubscriptionInfo info =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_OFFSET_SUMS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS);
         final SubscriptionInfo expectedInfo =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, "localhost:80", TASK_OFFSET_SUMS);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion7() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
-    public void shouldConvertTaskOffsetSumMapToTaskSetsForOlderVersion() {
+    public void shouldConvertTaskOffsetSumMapToTaskSets() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, processId, "localhost:80", TASK_OFFSET_SUMS);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS);
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
+    }
+
+    @Test
+    public void shouldReturnTaskOffsetSumsMapForDecodedSubscription() {
+        final SubscriptionInfo info = SubscriptionInfo.decode(
+            new SubscriptionInfo(MIN_VERSION_OFFSET_SUM_SUBSCRIPTION,
+                                 LATEST_SUPPORTED_VERSION, UUID_1,
+                                 "localhost:80",
+                                 TASK_OFFSET_SUMS)
+                .encode());
+        assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
+    }
+
+    @Test
+    public void shouldConvertTaskSetsToTaskOffsetSumMapWithOlderSubscription() {
+        final Map<TaskId, Long> expectedOffsetSumsMap = mkMap(
+            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(1, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(1, 1), UNKNOWN_OFFSET_SUM),
+            mkEntry(new TaskId(2, 0), UNKNOWN_OFFSET_SUM)
+        );
+
+        final SubscriptionInfo info = SubscriptionInfo.decode(
+            new LegacySubscriptionInfoSerde(
+                SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION - 1,
+                LATEST_SUPPORTED_VERSION,
+                UUID_1,
+                ACTIVE_TASKS,
+                STANDBY_TASKS,
+                "localhost:80")
+            .encode());
+
+        assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
     }
 
     private static ByteBuffer encodeFutureVersion() {

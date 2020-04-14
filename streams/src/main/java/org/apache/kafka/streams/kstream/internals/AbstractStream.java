@@ -111,7 +111,7 @@ public abstract class AbstractStream<K, V> {
             final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
             return new ValueTransformerWithKey<K, V, VR>() {
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<Void, Void> context) {
                     valueTransformer.init(context);
                 }
 

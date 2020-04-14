@@ -37,7 +37,7 @@ import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -580,11 +580,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
             (result, server) => {
               val topicMetadatas = server.dataPlaneRequestProcessor.metadataCache
                 .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-              val testPartitionMetadata = topicMetadatas.find(_.topic().equals(testTopicName)).get.partitionMetadata().asScala.find(_.partition() == partitionOnBroker0)
+              val testPartitionMetadata = topicMetadatas.find(_.name.equals(testTopicName)).get.partitions.asScala.find(_.partitionIndex == partitionOnBroker0)
               testPartitionMetadata match {
                 case None => fail(s"Partition metadata is not found in metadata cache")
                 case Some(metadata) => {
-                  result && metadata.error == Errors.LEADER_NOT_AVAILABLE
+                  result && metadata.errorCode == Errors.LEADER_NOT_AVAILABLE.code
                 }
               }
             }
@@ -665,7 +665,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
 
     adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
-      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
+      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica))))).all().get()
 
     // let's wait until the LAIR is propagated
     TestUtils.waitUntilTrue(() => {

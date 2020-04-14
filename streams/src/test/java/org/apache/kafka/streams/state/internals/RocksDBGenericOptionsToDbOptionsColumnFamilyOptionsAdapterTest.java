@@ -175,7 +175,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     parameters[i] = new WriteBufferManager(1L, new LRUCache(1L));
                     break;
                 default:
-                    parameters[i] = parameterTypes[i].newInstance();
+                    parameters[i] = parameterTypes[i].getConstructor().newInstance();
             }
         }
 
@@ -279,7 +279,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     parameters[i] = new PlainTableConfig();
                     break;
                 default:
-                    parameters[i] = parameterTypes[i].newInstance();
+                    parameters[i] = parameterTypes[i].getConstructor().newInstance();
             }
         }
 

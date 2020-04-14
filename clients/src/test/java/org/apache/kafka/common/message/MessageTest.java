@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
@@ -606,6 +608,22 @@ public final class MessageTest {
         }
     }
 
+    @Test
+    public void testSimpleMessage() throws Exception {
+        final SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(
+            Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
+        ));
+        message.setMyTaggedStruct(new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc"));
+
+        message.setProcessId(UUID.randomUUID());
+        message.setMyNullableString("notNull");
+        message.setMyInt16((short) 3);
+        message.setMyString("test string");
+
+        testAllMessageRoundTripsFromVersion((short) 2, message);
+    }
+
     private void testAllMessageRoundTrips(Message message) throws Exception {
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
     }
@@ -638,6 +656,7 @@ public final class MessageTest {
     private void testEquivalentMessageRoundTrip(short version, Message message) throws Exception {
         testStructRoundTrip(version, message, message);
         testByteBufferRoundTrip(version, message, message);
+        testJsonRoundTrip(version, message, message);
     }
 
     private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
@@ -648,7 +667,7 @@ public final class MessageTest {
         message.write(byteBufferAccessor, cache, version);
         assertEquals("The result of the size function does not match the number of bytes " +
             "written for version " + version, size, buf.position());
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
         assertEquals("The result of the size function does not match the number of bytes " +
@@ -661,8 +680,17 @@ public final class MessageTest {
 
     private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
         Struct struct = message.toStruct(version);
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         message2.fromStruct(struct, version);
+        assertEquals(expected, message2);
+        assertEquals(expected.hashCode(), message2.hashCode());
+        assertEquals(expected.toString(), message2.toString());
+    }
+
+    private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
+        JsonNode jsonNode = message.toJson(version);
+        Message message2 = message.getClass().newInstance();
+        message2.fromJson(jsonNode, version);
         assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());

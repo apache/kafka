@@ -28,7 +28,7 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class KafkaTest {
 

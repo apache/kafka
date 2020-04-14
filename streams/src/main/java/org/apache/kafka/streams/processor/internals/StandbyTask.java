@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -41,6 +42,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Logger log;
     private final String logPrefix;
     private final Sensor closeTaskSensor;
+    private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
 
     private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit;
@@ -70,6 +72,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
     @Override
@@ -102,6 +105,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
+    public void prepareSuspend() {
+        log.trace("No-op prepareSuspend with state {}", state());
+    }
+
+    @Override
     public void suspend() {
         log.trace("No-op suspend with state {}", state());
     }
@@ -115,38 +123,72 @@ public class StandbyTask extends AbstractTask implements Task {
      * 1. flush store
      * 2. write checkpoint file
      *
-     * @throws TaskMigratedException all the task has been migrated
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void commit() {
-        switch (state()) {
-            case RUNNING:
-                stateMgr.flush();
-
-                // since there's no written offsets we can checkpoint with empty map,
-                // and the state current offset would be used to checkpoint
-                stateMgr.checkpoint(Collections.emptyMap());
-
-                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
-
-                log.info("Committed");
-                break;
-
-            case CLOSING:
-                // do nothing and also not throw
-                log.trace("Skip committing since task is closing");
-
-                break;
-
-            default:
-                throw new IllegalStateException("Illegal state " + state() + " while committing standby task " + id);
-
+    public void prepareCommit() {
+        if (state() == State.RUNNING) {
+            stateMgr.flush();
+            log.info("Task ready for committing");
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
     }
 
     @Override
-    public void closeClean() {
+    public void postCommit() {
+        if (state() == State.RUNNING) {
+            // since there's no written offsets we can checkpoint with empty map,
+            // and the state current offset would be used to checkpoint
+            stateMgr.checkpoint(Collections.emptyMap());
+            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+            log.info("Finalized commit");
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while post committing standby task " + id);
+        }
+    }
+
+    @Override
+    public Map<TopicPartition, Long> prepareCloseClean() {
+        prepareClose(true);
+
+        log.info("Prepared clean close");
+
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public void prepareCloseDirty() {
+        prepareClose(false);
+
+        log.info("Prepared dirty close");
+    }
+
+    /**
+     * 1. commit if we are running and clean close;
+     * 2. close the state manager.
+     *
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
+     */
+    private void prepareClose(final boolean clean) {
+        if (state() == State.CREATED) {
+            // the task is created and not initialized, do nothing
+            return;
+        }
+
+        if (state() == State.RUNNING) {
+            if (clean) {
+                stateMgr.flush();
+            }
+        } else {
+            throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+        }
+    }
+
+    @Override
+    public void closeClean(final Map<TopicPartition, Long> checkpoint) {
+        Objects.requireNonNull(checkpoint);
         close(true);
 
         log.info("Closed clean");
@@ -159,33 +201,31 @@ public class StandbyTask extends AbstractTask implements Task {
         log.info("Closed dirty");
     }
 
-    /**
-     * 1. commit if we are running and clean close;
-     * 2. close the state manager.
-     *
-     * @throws TaskMigratedException all the task has been migrated
-     * @throws StreamsException fatal error, should close the thread
-     */
     private void close(final boolean clean) {
-        if (state() == State.CREATED) {
-            // the task is created and not initialized, do nothing
-            transitionTo(State.CLOSING);
+        if (state() == State.CREATED || state() == State.RUNNING) {
+            if (clean) {
+                // since there's no written offsets we can checkpoint with empty map,
+                // and the state current offset would be used to checkpoint
+                stateMgr.checkpoint(Collections.emptyMap());
+                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+            }
+            final boolean wipeStateStore = !clean && eosEnabled;
+            log.info("standby task clean {}, eos enabled {}", clean, eosEnabled);
+
+            executeAndMaybeSwallow(clean, () ->
+                StateManagerUtil.closeStateManager(
+                    log,
+                    logPrefix,
+                    clean,
+                    wipeStateStore,
+                    stateMgr,
+                    stateDirectory,
+                    TaskType.STANDBY),
+                "state manager close",
+                log
+            );
         } else {
-            if (state() == State.RUNNING) {
-                if (clean)
-                    commit();
-
-                transitionTo(State.CLOSING);
-            }
-
-            if (state() == State.CLOSING) {
-                StateManagerUtil.closeStateManager(log, logPrefix, clean,
-                    false, stateMgr, stateDirectory, TaskType.STANDBY);
-
-                // TODO: if EOS is enabled, we should wipe out the state stores like we did for StreamTask too
-            } else {
-                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
-            }
+            throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
         }
 
         closeTaskSensor.record();

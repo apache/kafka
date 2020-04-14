@@ -30,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -628,6 +629,58 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
+    public void shouldNotUpdateLimitForNonSourceStandbyChangelog() {
+        EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(false).anyTimes();
+        EasyMock.replay(standbyStateManager, storeMetadata, store);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                throw new AssertionError("Should not try to fetch committed offsets");
+            }
+        };
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, consumer, callback);
+        changelogReader.setMainConsumer(consumer);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
+        changelogReader.register(tp, standbyStateManager);
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
+
+        // if there's no records fetchable, nothings gets restored
+        changelogReader.restore();
+        assertNull(callback.restoreTopicPartition);
+        assertNull(callback.storeNameCalledStates.get(RESTORE_START));
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
+
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 5L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
+        // null key should be ignored
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, null, "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
+
+        // we should be able to restore to the log end offsets since there's no limit
+        changelogReader.restore();
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(6L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
+        assertNull(callback.storeNameCalledStates.get(RESTORE_END));
+        assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+    }
+
+    @Test
     public void shouldRestoreToLimitInStandbyState() {
         EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
         EasyMock.replay(standbyStateManager, storeMetadata, store);
@@ -650,6 +703,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         changelogReader.register(tp, standbyStateManager);
+        assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
+
         changelogReader.restore();
 
         assertNull(callback.restoreTopicPartition);
@@ -709,7 +765,16 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
+        // once we are in update active mode, we should not try to update limit offset
         time.setCurrentTimeMs(now + 202L);
+        changelogReader.enforceRestoreActive();
+        changelogReader.restore();
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
+
+        changelogReader.transitToUpdateStandby();
         changelogReader.restore();
         assertEquals(15L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -815,7 +880,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         // transition to restore active is idempotent
-        changelogReader.transitToRestoreActive();
+        changelogReader.enforceRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         changelogReader.transitToUpdateStandby();
@@ -843,7 +908,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(Collections.emptySet(), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
 
-        changelogReader.transitToRestoreActive();
+        changelogReader.enforceRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
         assertEquals(mkSet(tp1, tp2), consumer.paused());
@@ -877,6 +942,25 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         thrown = assertThrows(StreamsException.class, changelogReader::restore);
         assertEquals(kaboom, thrown.getCause());
+    }
+
+    @Test
+    public void shouldNotThrowOnUnknownRevokedPartition() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        LogCaptureAppender.setClassLoggerToDebug(changelogReader.getClass());
+
+        try {
+            changelogReader.remove(
+                Collections.singletonList(new TopicPartition("unknown", 0)));
+
+            assertEquals(Collections.singletonList(
+                "test-reader Changelog partition unknown-0 could not be found, " +
+                    "it could be already cleaned up during the handling" +
+                    "of task corruption and never restore again"), appender.getMessages()
+            );
+        } finally {
+            LogCaptureAppender.unregister(appender);
+        }
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

@@ -93,7 +93,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic, config)
 
     // create the partition assignment
-    writeTopicPartitionAssignment(topic, partitionReplicaAssignment.mapValues(ReplicaAssignment(_)).toMap, isUpdate = false)
+    writeTopicPartitionAssignment(topic, partitionReplicaAssignment.map { case (k, v) => k -> ReplicaAssignment(v) },
+      isUpdate = false)
   }
 
   /**
@@ -140,7 +141,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.mapValues(_.replicas).toMap)
+        zkClient.createTopicAssignment(topic, assignment.map { case (k, v) => k -> v.replicas })
       } else {
         zkClient.setTopicAssignment(topic, assignment)
       }
@@ -218,7 +219,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
       writeTopicPartitionAssignment(topic, proposedAssignment, isUpdate = true)
     }
-    proposedAssignment.mapValues(_.replicas).toMap
+    proposedAssignment.map { case (k, v) => k -> v.replicas }
   }
 
   private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],

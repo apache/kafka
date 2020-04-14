@@ -478,6 +478,27 @@ public class MetadataResponse extends AbstractResponse {
         return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
     }
 
+    public static MetadataResponse prepareResponse(int throttleTimeMs, List<MetadataResponseTopic> topicMetadataList,
+                                                   Collection<Node> brokers, String clusterId, int controllerId,
+                                                   int clusterAuthorizedOperations) {
+        MetadataResponseData responseData = new MetadataResponseData();
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        brokers.forEach(broker ->
+            responseData.brokers().add(new MetadataResponseBroker()
+                .setNodeId(broker.id())
+                .setHost(broker.host())
+                .setPort(broker.port())
+                .setRack(broker.rack()))
+        );
+
+        responseData.setClusterId(clusterId);
+        responseData.setControllerId(controllerId);
+        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
+
+        topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
+        return new MetadataResponse(responseData);
+    }
+
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 6;

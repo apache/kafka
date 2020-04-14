@@ -181,6 +181,16 @@ public interface Herder {
     ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig);
 
     /**
+     * Validate the provided connector config values against the configuration definition.
+     * @param connectorConfig the provided connector config values
+     * @param doLog if true log all the connector configurations at INFO level; if false, no connector configurations are logged.
+     *              Note that logging of configuration is not necessary in every endpoint that uses this method.
+     */
+    default ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig, boolean doLog) {
+        return validateConnectorConfig(connectorConfig);
+    }
+
+    /**
      * Restart the task with the given id.
      * @param id id of the task
      * @param cb callback to invoke upon completion

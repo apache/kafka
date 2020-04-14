@@ -40,6 +40,7 @@ import kafka.network.RequestChannel.SendResponse
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
@@ -59,14 +60,19 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
+import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.server.authorizer.Action
+import org.apache.kafka.server.authorizer.AuthorizationResult
 import org.apache.kafka.server.authorizer.Authorizer
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
 
 class KafkaApisTest {
@@ -82,7 +88,6 @@ class KafkaApisTest {
   private val metrics = new Metrics()
   private val brokerId = 1
   private val metadataCache = new MetadataCache(brokerId)
-  private val authorizer: Option[Authorizer] = None
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
@@ -101,7 +106,8 @@ class KafkaApisTest {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): KafkaApis = {
+  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
+                      authorizer: Option[Authorizer] = None): KafkaApis = {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
@@ -124,6 +130,93 @@ class KafkaApisTest {
       time,
       null
     )
+  }
+
+  @Test
+  def testAuthorize(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.WRITE
+    val resourceType = ResourceType.TOPIC
+    val resourceName = "topic-1"
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
+      clientId, 0)
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    EasyMock.expect(authorizer.authorize(
+      requestContext, expectedActions.asJava
+    )).andReturn(
+      Seq(AuthorizationResult.ALLOWED).asJava
+    ).once()
+
+    EasyMock.replay(authorizer)
+
+    val result = createKafkaApis(authorizer = Some(authorizer)).authorize(
+      requestContext,
+      operation,
+      resourceType,
+      resourceName,
+    )
+
+    verify(authorizer)
+
+    assertEquals(true, result)
+  }
+
+  @Test
+  def testFilterAuthorized(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.WRITE
+    val resourceType = ResourceType.TOPIC
+    val resourceName1 = "topic-1"
+    val resourceName2 = "topic-2"
+    val resourceName3 = "topic-3"
+    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
+      clientId, 0)
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName1, PatternType.LITERAL),
+        2, true, true),
+      new Action(operation, new ResourcePattern(resourceType, resourceName2, PatternType.LITERAL),
+        1, true, true),
+      new Action(operation, new ResourcePattern(resourceType, resourceName3, PatternType.LITERAL),
+        1, true, true),
+    )
+
+    EasyMock.expect(authorizer.authorize(
+      requestContext, expectedActions.asJava
+    )).andReturn(
+      Seq(
+        AuthorizationResult.ALLOWED,
+        AuthorizationResult.DENIED,
+        AuthorizationResult.ALLOWED
+      ).asJava
+    ).once()
+
+    EasyMock.replay(authorizer)
+
+    val result = createKafkaApis(authorizer = Some(authorizer)).filterAuthorized(
+      requestContext,
+      operation,
+      resourceType,
+      // Duplicate resource names should not trigger multiple calls to authorize
+      Seq(resourceName1, resourceName2, resourceName1, resourceName3)
+    )
+
+    verify(authorizer)
+
+    assertEquals(Set(resourceName1, resourceName3), result)
   }
 
   @Test
@@ -179,7 +272,8 @@ class KafkaApisTest {
         "groupId",
         15L,
         0.toShort,
-        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava
+        Map(invalidTopicPartition -> partitionOffsetCommitData).asJava,
+        false
       ).build()
       val request = buildRequest(offsetCommitRequest)
 
@@ -194,6 +288,53 @@ class KafkaApisTest {
 
     checkInvalidPartition(-1)
     checkInvalidPartition(1) // topic has only one partition
+  }
+
+  @Test
+  def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+
+    val topicPartition = new TopicPartition(topic, 1)
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, Errors] => Unit]  = EasyMock.newCapture()
+
+    val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+    val groupId = "groupId"
+
+    val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
+      "txnId",
+      groupId,
+      15L,
+      0.toShort,
+      Map(topicPartition -> partitionOffsetCommitData).asJava,
+      false
+    ).build(1)
+    val request = buildRequest(offsetCommitRequest)
+
+    EasyMock.expect(groupCoordinator.handleTxnCommitOffsets(
+      EasyMock.eq(groupId),
+      EasyMock.eq(15L),
+      EasyMock.eq(0),
+      EasyMock.anyString(),
+      EasyMock.eq(Option.empty),
+      EasyMock.anyInt(),
+      EasyMock.anyObject(),
+      EasyMock.capture(responseCallback)
+    )).andAnswer(
+      () => responseCallback.getValue.apply(Map(topicPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS)))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+
+    createKafkaApis().handleTxnOffsetCommitRequest(request)
+
+    val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
+      .asInstanceOf[TxnOffsetCommitResponse]
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
   }
 
   @Test
@@ -366,7 +507,7 @@ class KafkaApisTest {
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
-    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
     EasyMock.expect(replicaManager.getMagic(tp1))
       .andReturn(None)
@@ -630,7 +771,8 @@ class KafkaApisTest {
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]
+        val callback = getCurrentArguments.apply(7)
+          .asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
         callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records,

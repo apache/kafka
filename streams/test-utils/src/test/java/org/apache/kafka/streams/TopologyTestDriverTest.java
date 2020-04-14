@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -237,7 +236,7 @@ public class TopologyTestDriverTest {
 
     private final static class MockProcessor implements Processor<Object, Object> {
         private final Collection<Punctuation> punctuations;
-        private ProcessorContext context;
+        private ProcessorContext<Object, Object> context;
 
         private boolean initialized = false;
         private boolean closed = false;
@@ -248,7 +247,7 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             initialized = true;
             this.context = context;
             for (final Punctuation punctuation : punctuations) {
@@ -371,7 +370,7 @@ public class TopologyTestDriverTest {
 
         for (final String sourceTopicName : sourceTopicNames) {
             topology.addGlobalStore(
-                Stores.<Bytes, byte[]>keyValueStoreBuilder(
+                Stores.keyValueStoreBuilder(
                     Stores.inMemoryKeyValueStore(
                         sourceTopicName + "-globalStore"),
                     null,
@@ -1285,12 +1284,12 @@ public class TopologyTestDriverTest {
     }
 
     private static class CustomMaxAggregator implements Processor<String, Long> {
-        ProcessorContext context;
+        ProcessorContext<Object, Object> context;
         private KeyValueStore<String, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             this.context = context;
             context.schedule(Duration.ofMinutes(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> flushStore());
             context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, timestamp -> flushStore());

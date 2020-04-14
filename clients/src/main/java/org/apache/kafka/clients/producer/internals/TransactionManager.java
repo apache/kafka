@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
@@ -95,6 +96,7 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
+    private final boolean autoDowngradeTxnCommit;
 
     private static class TopicPartitionBookkeeper {
 
@@ -283,11 +285,12 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(LogContext logContext,
-                              String transactionalId,
-                              int transactionTimeoutMs,
-                              long retryBackoffMs,
-                              ApiVersions apiVersions) {
+    public TransactionManager(final LogContext logContext,
+                              final String transactionalId,
+                              final int transactionTimeoutMs,
+                              final long retryBackoffMs,
+                              final ApiVersions apiVersions,
+                              final boolean autoDowngradeTxnCommit) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -304,6 +307,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
+        this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -392,9 +396,15 @@ public class TransactionManager {
                     "active transaction");
 
         log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, groupMetadata.groupId());
+        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+            new AddOffsetsToTxnRequestData()
+                .setTransactionalId(transactionalId)
+                .setProducerId(producerIdAndEpoch.producerId)
+                .setProducerEpoch(producerIdAndEpoch.epoch)
+                .setGroupId(groupMetadata.groupId())
+        );
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+
         enqueueRequest(handler);
         return handler.result;
     }
@@ -705,6 +715,13 @@ public class TransactionManager {
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
+
+        if (hasFatalError()) {
+            log.debug("Ignoring batch {} with producer id {}, epoch {}, and sequence number {} " +
+                            "since the producer is already in fatal error state", batch, batch.producerId(),
+                    batch.producerEpoch(), batch.baseSequence(), exception);
+            return;
+        }
 
         if (!matchesProducerIdAndEpoch(batch)) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
@@ -1145,13 +1162,15 @@ public class TransactionManager {
 
         final TxnOffsetCommitRequest.Builder builder =
             new TxnOffsetCommitRequest.Builder(transactionalId,
-            groupMetadata.groupId(),
-            producerIdAndEpoch.producerId,
-            producerIdAndEpoch.epoch,
-            pendingTxnOffsetCommits,
-            groupMetadata.memberId(),
-            groupMetadata.generationId(),
-            groupMetadata.groupInstanceId());
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits,
+                groupMetadata.memberId(),
+                groupMetadata.generationId(),
+                groupMetadata.groupInstanceId(),
+                autoDowngradeTxnCommit
+            );
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1598,13 +1617,14 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
-            Errors error = addOffsetsToTxnResponse.error();
+            Errors error = Errors.forCode(addOffsetsToTxnResponse.data.errorCode());
 
             if (error == Errors.NONE) {
-                log.debug("Successfully added partition for consumer group {} to transaction", builder.consumerGroupId());
+                log.debug("Successfully added partition for consumer group {} to transaction", builder.data.groupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
                 pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata));
+
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1618,7 +1638,7 @@ public class TransactionManager {
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(GroupAuthorizationException.forGroupId(builder.consumerGroupId()));
+                abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
             } else {
                 fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }

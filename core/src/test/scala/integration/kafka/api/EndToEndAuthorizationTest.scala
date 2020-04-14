@@ -43,7 +43,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * The test cases here verify that a producer authorized to publish to a topic
@@ -233,7 +233,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def getGauge(metricName: String) = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-           .filterKeys(k => k.getName == metricName)
+           .filter { case (k, _) => k.getName == metricName }
            .headOption
            .getOrElse { fail( "Unable to find metric " + metricName ) }
            ._2.asInstanceOf[Gauge[Double]]

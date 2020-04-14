@@ -65,7 +65,7 @@ class ReplicaStateMachineTest {
     val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
       SecurityProtocol.PLAINTEXT)
     val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
-    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.setLiveBrokers(liveBrokerEpochs)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     assertEquals(None, controllerContext.replicaStates.get(replica))
     replicaStateMachine.startup()
@@ -87,7 +87,7 @@ class ReplicaStateMachineTest {
     val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
       SecurityProtocol.PLAINTEXT)
     val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
-    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.setLiveBrokers(liveBrokerEpochs)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(shutdownBrokerId)))
     assertEquals(None, controllerContext.replicaStates.get(offlineReplica))
     replicaStateMachine.startup()
@@ -148,7 +148,7 @@ class ReplicaStateMachineTest {
     val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
       SecurityProtocol.PLAINTEXT)
     val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
-    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.setLiveBrokers(liveBrokerEpochs)
     controllerContext.putReplicaState(replica, NewReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)), EasyMock.eq(partition), EasyMock.eq(false)))

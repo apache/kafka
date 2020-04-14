@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -32,7 +33,9 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
-    // this must be negative to distinguish a running active task from other kinds tasks which may be caught up to the same offsets
+
+    // this must be negative to distinguish a running active task from other kinds of tasks
+    // which may be caught up to the same offsets
     long LATEST_OFFSET = -2L;
 
     /*
@@ -51,7 +54,7 @@ public interface Task {
      *          |            |                    |   |       |
      *          |            v                    v   |       |
      *          |      +-----+-------+       +----+---+----+  |
-     *          |      | Running (2) | ----> | Suspended(3)|  |    * //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |      | Running (2) | ----> | Suspended(3)|  |    //TODO Suspended(3) could be removed after we've stable on KIP-429
      *          |      +-----+-------+       +------+------+  |
      *          |            |                      |         |
      *          |            |                      |         |
@@ -71,8 +74,7 @@ public interface Task {
         RESTORING(2, 3, 4),    // 1
         RUNNING(3, 4),         // 2
         SUSPENDED(1, 4),       // 3
-        CLOSING(4, 5),         // 4, we allow CLOSING to transit to itself to make close idempotent
-        CLOSED(0);             // 5, we allow CLOSED to transit to CREATED to handle corrupted tasks
+        CLOSED(0);             // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -123,34 +125,48 @@ public interface Task {
     boolean commitNeeded();
 
     /**
-     * @throws TaskMigratedException all the task has been migrated
      * @throws StreamsException fatal error, should close the thread
      */
-    void commit();
+    void prepareCommit();
+
+    void postCommit();
 
     /**
      * @throws TaskMigratedException all the task has been migrated
      * @throws StreamsException fatal error, should close the thread
      */
+    void prepareSuspend();
+
     void suspend();
-
     /**
+     *
      * @throws StreamsException fatal error, should close the thread
      */
     void resume();
 
     /**
-     * Close a task that we still own. Commit all progress and close the task gracefully.
+     * Prepare to close a task that we still own and prepare it for committing
      * Throws an exception if this couldn't be done.
+     * Must be idempotent.
      *
-     * @throws TaskMigratedException all the task has been migrated
      * @throws StreamsException fatal error, should close the thread
      */
-    void closeClean();
+    Map<TopicPartition, Long> prepareCloseClean();
 
     /**
-     * Close a task that we may not own. Discard any uncommitted progress and close the task.
+     * Must be idempotent.
+     */
+    void closeClean(final Map<TopicPartition, Long> checkpoint);
+
+    /**
+     * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.
      * Never throws an exception, but just makes all attempts to release resources while closing.
+     * Must be idempotent.
+     */
+    void prepareCloseDirty();
+
+    /**
+     * Must be idempotent.
      */
     void closeDirty();
 
@@ -176,9 +192,17 @@ public interface Task {
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    default Map<TopicPartition, Long> purgableOffsets() {
+    default Map<TopicPartition, Long> purgeableOffsets() {
         return Collections.emptyMap();
     }
+
+    default Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+        return Collections.emptyMap();
+    }
+
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {}
 
     default boolean process(final long wallClockTime) {
         return false;
@@ -195,6 +219,5 @@ public interface Task {
     default boolean maybePunctuateSystemTime() {
         return false;
     }
-
 
 }
