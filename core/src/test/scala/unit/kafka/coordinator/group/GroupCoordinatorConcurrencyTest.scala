@@ -17,6 +17,7 @@
 
 package kafka.coordinator.group
 
+import java.util.Properties
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import kafka.common.OffsetAndMetadata
@@ -129,8 +130,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   @Test
   def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
     val groupMaxSize = 1
-    serverProps.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
-    val config = KafkaConfig.fromProps(serverProps)
+    val newProperties = new Properties
+    newProperties.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
+    val config = KafkaConfig.fromProps(serverProps, newProperties)
 
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
