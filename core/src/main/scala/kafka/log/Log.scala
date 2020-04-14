@@ -1615,16 +1615,8 @@ class Log(@volatile private var _dir: File,
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
       }
 
-      val targetSeg = {
-        // Get all the segments whose largest timestamp is smaller than target timestamp
-        val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
-        // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-        if (earlierSegs.length < segmentsCopy.length)
-          Some(segmentsCopy(earlierSegs.length))
-        else
-          None
-      }
-
+      // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
+      val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
       targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
     }
   }
