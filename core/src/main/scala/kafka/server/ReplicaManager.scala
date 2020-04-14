@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
+import kafka.zookeeper.ZooKeeperClientException
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
@@ -1493,6 +1494,11 @@ class ReplicaManager(val config: KafkaConfig,
             error(s"Error while making broker the follower for partition $partition with leader " +
               s"$newLeaderBrokerId in dir $dirOpt", e)
             responseMap.put(partition.topicPartition, Errors.KAFKA_STORAGE_ERROR)
+          case e: ZooKeeperClientException =>
+            stateChangeLogger.info(s"Because a ZooKeeper client exception has occurred, completed become follower " +
+              s"state change with correlation identifier $correlationId from epoch ${partition.getLeaderEpoch} only for " +
+              s"those leaderEpoch-updated partitions with leader $newLeaderBrokerId before ZooKeeper disconnect occurred.", e)
+            error(s"ZooKeeper client occurred while rendering a $partition's follower through $zkClient.'", e)
         }
       }
 
