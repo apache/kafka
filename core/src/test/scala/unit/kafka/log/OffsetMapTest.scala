@@ -181,8 +181,19 @@ class OffsetMapTest {
 
     map.put(new FakeRecord(key(10), 22, 22))
 
-    // latest offset in map should be 21
+    // latest offset in map should be 22
     assertEquals(22, map.latestOffset)
+    // size should 11
+    assertEquals(11, map.size)
+
+    // checking negative header value
+    map.put(new FakeRecord(key(1), 23, -117))
+
+    // latest offset in map should be 23
+    assertEquals(23, map.latestOffset)
+    // map should hold offset 19 for key 1
+    assertEquals(19, map.getOffset(key(1)))
+    assertEquals(121, map.getVersion(key(1)))
     // size should 11
     assertEquals(11, map.size)
   }

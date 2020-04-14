@@ -110,10 +110,14 @@ public class TopicConfig {
         "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
 
     public static final String COMPACTION_STRATEGY_CONFIG = "compaction.strategy";
-    public static final String COMPACTION_STRATEGY_DOC = "The retention strategy to use when compacting the log. " + 
-        "Only applicable for logs that are being compacted. Setting the strategy to anything other than \"offset\" " + 
-        "will replace the offset when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
-        "the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
+    public static final String COMPACTION_STRATEGY_DOC = "The retention strategy to use when compacting the log. " +
+    	"Only applicable for logs that are being compacted. " + 
+    	"By default the compaction strategy is set to \"offset\" where the latest offset for the key is retained. " + 
+    	"For \"header\" strategy, the value provided by the producer in the record header will be used to determine " +
+    	"the latest record for the key. For \"timestamp\" strategy, the record tiemstamp will be used to determine the " +
+    	"latest record for the key. So setting the strategy to anything other than \"offset\" will replace the offset " +
+    	"when calculating which records to retain for the value (i.e. provided by the producer) matching " + 
+    	"the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
 
     public static final String COMPACTION_STRATEGY_HEADER_KEY_CONFIG = "compaction.strategy.header";
     public static final String COMPACTION_STRATEGY_HEADER_KEY_DOC = "The header key for the compaction. Only applicable for compaction strategy header.";
