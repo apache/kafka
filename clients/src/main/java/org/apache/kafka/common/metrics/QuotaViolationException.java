@@ -30,7 +30,7 @@ public class QuotaViolationException extends KafkaException {
     private final double bound;
 
     public QuotaViolationException(MetricName metricName, double value, double bound) {
-        super(metricName + " violated quota.");
+        super("Quota violated");
         this.metricName = metricName;
         this.value = value;
         this.bound = bound;
