@@ -738,11 +738,10 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
-        return commitInternal(tasks.values());
+        return commit(tasks.values());
     }
 
-    int commitInternal(final Collection<Task> tasks) {
-
+    int commit(final Collection<Task> tasks) {
         if (rebalanceInProgress) {
             return -1;
         } else {
@@ -783,7 +782,7 @@ public class TaskManager {
         } else {
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    return commitInternal(activeTaskIterable());
+                    return commit(activeTaskIterable());
                 }
             }
             return 0;

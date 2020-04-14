@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -47,6 +46,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -93,16 +93,21 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -465,7 +470,7 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -509,7 +514,7 @@ public class StreamThreadTest {
             "Thread never started.");
 
         TestUtils.retryOnExceptionWithTimeout(
-            () -> EasyMock.verify(mockConsumer)
+            () -> verify(mockConsumer)
         );
 
         thread.shutdown();
@@ -691,7 +696,7 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -729,7 +734,7 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -920,7 +925,7 @@ public class StreamThreadTest {
                 }
             });
         thread.run();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -929,7 +934,7 @@ public class StreamThreadTest {
 
         internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
 
-        EasyMock.expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
+        expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
@@ -977,7 +982,7 @@ public class StreamThreadTest {
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class, thread::run);
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
 
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
         assertEquals("No current assignment for partition topic1-1", thrown.getMessage());
@@ -1011,7 +1016,7 @@ public class StreamThreadTest {
             new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -1043,7 +1048,7 @@ public class StreamThreadTest {
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -1906,6 +1911,60 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldCommitNonCorruptedTasksOnTaskCorruptedException() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final TaskId taskId1 = new TaskId(0, 0);
+        final TaskId taskId2 = new TaskId(0, 2);
+
+        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
+            mkEntry(taskId1, emptySet())
+        );
+
+        expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task2.id()).andReturn(taskId2).anyTimes();
+
+        expect(taskManager.tasks()).andReturn(mkMap(
+            mkEntry(taskId1, task1),
+            mkEntry(taskId2, task2)
+        )).anyTimes();
+        expect(taskManager.commit(singleton(task2))).andReturn(0);
+
+        EasyMock.replay(task1, task2, taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
+        ) {
+            @Override
+            void runOnce() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+            }
+        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.runLoop();
+
+        verify(taskManager);
+    }
+
+    @Test
     public void shouldLogAndRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
         shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_0100_TO_24);
     }
@@ -2045,7 +2104,7 @@ public class StreamThreadTest {
             new MockTime());
         final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
 
-        EasyMock.expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
+        expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
         EasyMock.replay(taskManager, consumer);
 
         final StreamsMetricsImpl streamsMetrics =
@@ -2118,7 +2177,7 @@ public class StreamThreadTest {
                                               final int numberOfCommits,
                                               final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
+        expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }
