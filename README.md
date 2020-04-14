@@ -73,6 +73,12 @@ The above command will fail if you haven't set up the signing key. To bypass sig
 
 The release file can be found inside `./core/build/distributions/`.
 
+### Building auto generated messages ###
+Sometimes it is only necessary to rebuild the RPC auto-generated message data when switching between branches, as they could
+fail due to code changes. You can just run:
+ 
+    ./gradlew processMessages processTestMessages
+
 ### Cleaning the build ###
     ./gradlew clean
 
