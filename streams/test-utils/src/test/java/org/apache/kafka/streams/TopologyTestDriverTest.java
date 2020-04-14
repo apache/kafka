@@ -74,6 +74,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -448,6 +450,24 @@ public class TopologyTestDriverTest {
         } catch (final IllegalArgumentException exception) {
             assertEquals("Unknown topic: " + unknownTopic, exception.getMessage());
         }
+    }
+
+    @Test
+    public void shouldGetSinkTopicNames() {
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+
+        assertThat(testDriver.getOutputTopicNames(), hasItem(SINK_TOPIC_1));
+    }
+
+    @Test
+    public void shouldGetInternalTopicNames() {
+        testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies(), config);
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+
+        assertThat(testDriver.getOutputTopicNames(), hasItems(SINK_TOPIC_1, SINK_TOPIC_2));
     }
 
     @Test
@@ -1643,6 +1663,8 @@ public class TopologyTestDriverTest {
                     new KeyValue<>("A", "recurse-alpha")
                 ))
             );
+
+            assertThat(topologyTestDriver.getOutputTopicNames(), hasItem("globule-topic"));
         }
     }
 

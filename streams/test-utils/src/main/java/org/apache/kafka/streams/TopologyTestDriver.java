@@ -102,6 +102,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -853,6 +854,20 @@ public class TopologyTestDriver implements Closeable {
                                                                 final Deserializer<K> keyDeserializer,
                                                                 final Deserializer<V> valueDeserializer) {
         return new TestOutputTopic<>(this, topicName, keyDeserializer, valueDeserializer);
+    }
+
+    /**
+     * Get all the names of all the topics to which records have been output.
+     * <p>
+     * Call this method after piping the input into the test driver to retrieve the full set of topics the topology
+     * produced records to.
+     * <p>
+     * The returned set of topic names includes changelog, repartition and sink topic names.
+     *
+     * @return the set of output topic names.
+     */
+    public final Set<String> getOutputTopicNames() {
+        return Collections.unmodifiableSet(outputRecordsByTopic.keySet());
     }
 
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {
