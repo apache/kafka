@@ -362,16 +362,16 @@ class ReplicaManager(val config: KafkaConfig,
                    brokerEpoch: Long,
                    partitionStates: Map[TopicPartition, StopReplicaPartitionState]
                   ): (mutable.Map[TopicPartition, Errors], Errors) = {
-    stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
-      s"$controllerId for ${partitionStates.size} partitions")
-    if (stateChangeLogger.isTraceEnabled)
-      partitionStates.foreach { case (topicPartition, partitionState) =>
-        stateChangeLogger.trace(s"Received StopReplica request $partitionState " +
-          s"correlation id $correlationId from controller $controllerId " +
-          s"epoch $controllerEpoch for partition $topicPartition")
-      }
-
     replicaStateChangeLock synchronized {
+      stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
+        s"$controllerId for ${partitionStates.size} partitions")
+      if (stateChangeLogger.isTraceEnabled)
+        partitionStates.foreach { case (topicPartition, partitionState) =>
+          stateChangeLogger.trace(s"Received StopReplica request $partitionState " +
+            s"correlation id $correlationId from controller $controllerId " +
+            s"epoch $controllerEpoch for partition $topicPartition")
+        }
+
       val responseMap = new collection.mutable.HashMap[TopicPartition, Errors]
       if (controllerEpoch < this.controllerEpoch) {
         stateChangeLogger.warn(s"Ignoring StopReplica request from " +
@@ -1239,18 +1239,18 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
-    val controllerId = leaderAndIsrRequest.controllerId
-    val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
-    stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
-      s"$controllerId for ${requestPartitionStates.size} partitions")
-    if (stateChangeLogger.isTraceEnabled)
-      requestPartitionStates.foreach { partitionState =>
-        stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
-          s"correlation id $correlationId from controller $controllerId " +
-          s"epoch ${leaderAndIsrRequest.controllerEpoch}")
-      }
-
     replicaStateChangeLock synchronized {
+      val controllerId = leaderAndIsrRequest.controllerId
+      val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
+      stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
+        s"$controllerId for ${requestPartitionStates.size} partitions")
+      if (stateChangeLogger.isTraceEnabled)
+        requestPartitionStates.foreach { partitionState =>
+          stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
+            s"correlation id $correlationId from controller $controllerId " +
+            s"epoch ${leaderAndIsrRequest.controllerEpoch}")
+        }
+
       if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
         stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
           s"correlation id $correlationId since its controller epoch ${leaderAndIsrRequest.controllerEpoch} is old. " +
