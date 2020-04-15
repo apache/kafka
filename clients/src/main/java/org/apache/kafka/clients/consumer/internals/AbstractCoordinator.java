@@ -1459,7 +1459,7 @@ public abstract class AbstractCoordinator implements Closeable {
         return heartbeat;
     }
 
-    final void setLastRebalanceTime(final long timestamp) {
+    final synchronized void setLastRebalanceTime(final long timestamp) {
         lastRebalanceEndMs = timestamp;
     }
 
@@ -1484,11 +1484,11 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation != Generation.NO_GENERATION && generation.hasMemberId();
     }
 
-    final void setNewGeneration(final Generation generation) {
+    final synchronized void setNewGeneration(final Generation generation) {
         this.generation = generation;
     }
 
-    final void setNewState(final MemberState state) {
+    final synchronized void setNewState(final MemberState state) {
         this.state = state;
     }
 }
