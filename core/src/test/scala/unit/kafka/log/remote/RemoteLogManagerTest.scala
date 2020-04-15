@@ -257,7 +257,7 @@ class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
 
   override def onStopPartitions(partitions: util.Set[TopicPartition]): Unit = {}
 
-  override def onServerStarted(): Unit = {}
+  override def onServerStarted(serverEndpoint: String): Unit = {}
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 

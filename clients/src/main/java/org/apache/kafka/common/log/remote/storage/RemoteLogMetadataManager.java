@@ -139,5 +139,5 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * Callback to receive once server is started so that this class can run tasks which should be run only when the
      * server is started.
      */
-    void onServerStarted();
+    void onServerStarted(final String serverEndpoint);
 }

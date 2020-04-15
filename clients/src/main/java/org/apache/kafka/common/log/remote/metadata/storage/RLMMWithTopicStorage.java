@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -91,7 +93,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     private AdminClient adminClient;
     private KafkaConsumer<String, RemoteLogSegmentMetadata> consumer;
     private String logDir;
-    private Map<String, ?> configs;
+    private volatile Map<String, ?> configs;
 
     private CommittedLogMetadataStore committedLogMetadataStore;
     private ConsumerTask consumerTask;
@@ -240,7 +242,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         log.info("Received leadership notifications with leader partitions {} and follower partitions {}",
                 leaderPartitions, followerPartitions);
 
-        initialize();
+        initialize(null);
 
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
         allPartitions.addAll(followerPartitions);
@@ -254,13 +256,31 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public void onServerStarted() {
-        initialize();
+    public void onServerStarted(final String endpoint) {
+        initialize(endpoint);
     }
 
-    private synchronized void initialize() {
+    private synchronized void initialize(final String endpoint) {
         if (!initialized) {
             log.info("Initializing all the clients and resources.");
+
+            if (endpoint != null) {
+                final String configuredEndpoint = String.valueOf(configs.get(BOOTSTRAP_SERVERS_CONFIG));
+
+                if (!endpoint.equals(configuredEndpoint)) {
+                    final Map<String, Object> newConfigs = new HashMap<>(configs);
+                    newConfigs.put(BOOTSTRAP_SERVERS_CONFIG, endpoint);
+                    configs = Collections.unmodifiableMap(newConfigs);
+
+                    log.info("Replaced endpoint {} with the override {}", configuredEndpoint, endpoint);
+                }
+            }
+
+            if (configs.get(BOOTSTRAP_SERVERS_CONFIG) == null) {
+                throw new InvalidConfigurationException("Broker endpoint must be configured for the remote log " +
+                        "metadata manager.");
+            }
+
             //create clients
             createAdminClient();
             createProducer();
@@ -289,7 +309,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public void configure(Map<String, ?> configs) {
-        this.configs = configs;
+        this.configs = Collections.unmodifiableMap(configs);
 
         Object propVal = configs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         noOfMetadataTopicPartitions =

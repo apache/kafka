@@ -19,7 +19,7 @@ package kafka.log.remote
 import java.io.File
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.{Collections, UUID}
+import java.util.{Collections, Optional, UUID}
 
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
@@ -187,7 +187,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     configs.put(RemoteLogMetadataManager.BROKER_ID, brokerId)
     configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     rlmmWithTopicStorage.configure(configs)
-    rlmmWithTopicStorage.onServerStarted()
+    rlmmWithTopicStorage.onServerStarted(null)
   }
 
   def waitTillReceiveExpected(fn: () => RemoteLogSegmentId, expected: RemoteLogSegmentId, waitTimeInMillis:Long = 30000): Boolean = {

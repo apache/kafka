@@ -16,24 +16,25 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-import static java.lang.String.format;
+import org.apache.kafka.common.*;
 
 /**
- * Exception thrown when a resource cannot be found on the remote storage.
- * A resource can be a log segment or an offset or time index.
+ * Used to walk through a local remote storage, providing a support to tests to explore the content of the storage.
+ * This interface is to be used with the {@link LocalTieredStorage} and is intended for tests only.
  */
-public class RemoteResourceNotFoundException extends RemoteStorageException {
+public interface LocalTieredStorageTraverser {
 
-    public RemoteResourceNotFoundException(final RemoteLogSegmentId id, final String resourceName) {
-        super(format("One of the resource associated to the remote log segment was not found. " +
-                "ID: %s Resource name: %s", id.id(), resourceName));
-    }
+    /**
+     * Called when a new topic-partition stored on the remote storage is discovered.
+     * @param topicPartition The new topic-partition discovered.
+     */
+    void visitTopicPartition(TopicPartition topicPartition);
 
-    public RemoteResourceNotFoundException(final String message) {
-        super(message);
-    }
+    /**
+     * Called when a new segment is discovered for a given topic-partition.
+     * This method can only be called after {@link LocalTieredStorageTraverser#visitTopicPartition(TopicPartition)}
+     * for the topic-partition the segment belongs to.
+     */
+    void visitSegment(RemoteLogSegmentFileset fileset);
 
-    public RemoteResourceNotFoundException(final Throwable cause) {
-        super("One of the requested remote resource was not found", cause);
-    }
 }

@@ -37,6 +37,10 @@ class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteStorageManager,
     }
   }
 
+  //FIXME: Remove
+  def delegate(): RemoteStorageManager = {
+    rsm
+  }
 
   override def close(): Unit = {
     withClassLoader {

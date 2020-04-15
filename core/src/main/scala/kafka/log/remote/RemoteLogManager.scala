@@ -117,7 +117,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
   @volatile private var closed = false
 
-  private def createRemoteStorageManager(): RemoteStorageManager = {
+  private def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = {
     val classPath = rlmConfig.remoteLogStorageManagerClassPath
     val rsmClassLoader = {
       if (classPath != null && !classPath.trim.isEmpty) {
@@ -162,7 +162,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     rlmm
   }
 
-  private val remoteLogStorageManager: RemoteStorageManager = createRemoteStorageManager()
+  private val remoteLogStorageManager: ClassLoaderAwareRemoteStorageManager = createRemoteStorageManager()
   private val remoteLogMetadataManager: RemoteLogMetadataManager = createRemoteLogMetadataManager()
 
   private val indexCache = new RemoteIndexCache(remoteStorageManager = remoteLogStorageManager, logDir = logDir)
@@ -187,10 +187,13 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
   }
 
-  def onServerStarted(): Unit = {
-    remoteLogMetadataManager.onServerStarted()
+  def onServerStarted(serverEndpoint: String): Unit = {
+    remoteLogMetadataManager.onServerStarted(serverEndpoint)
   }
 
+  def storageManager(): RemoteStorageManager = {
+    remoteLogStorageManager.delegate()
+  }
 
   /**
    * Callback to receive any leadership changes for the topic partitions assigned to this broker. If there are no
@@ -275,7 +278,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     // When looking for new remote segments, we will only look for the remote segments that contains larger offsets
     private var readOffset: Long = {
       val metadatas = remoteLogMetadataManager.listRemoteLogSegments(tp)
-      if(metadatas.isEmpty) 0
+      if(metadatas.isEmpty) -1 // Corner case when the first segment's base offset is 1 and contains only 1 record.
       else {
         metadatas.asScala.max(new Ordering[RemoteLogSegmentMetadata]() {
           override def compare(x: RemoteLogSegmentMetadata,
@@ -321,7 +324,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               case Found(x) => x
               case InsertionPoint(y) => y - 1
             }
-            if (index <= 0) {
+            if (index < 0) {
               debug(s"No segments found to be copied for partition $tp with read offset: $readOffset and active " +
                 s"baseoffset: $activeSegBaseOffset")
             } else {
