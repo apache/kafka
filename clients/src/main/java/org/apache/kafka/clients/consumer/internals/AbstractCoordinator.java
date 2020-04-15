@@ -1081,35 +1081,18 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.info("Attempt to heartbeat failed since group is rebalancing");
                 requestRejoin();
                 future.raise(error);
-            } else if (error == Errors.ILLEGAL_GENERATION) {
+            } else if (error == Errors.ILLEGAL_GENERATION ||
+                       error == Errors.UNKNOWN_MEMBER_ID ||
+                       error == Errors.FENCED_INSTANCE_ID) {
                 if (generationUnchanged()) {
-                    log.info("Attempt to heartbeat failed since current {} is not valid, resetting generation", sentGeneration);
+                    log.info("Attempt to heartbeat failed with generation {} and group instance id {} due to {}, resetting generation",
+                        sentGeneration, rebalanceConfig.groupInstanceId, error.message());
                     resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
                     future.raise(error);
                 } else {
                     // if the generation has changed, then ignore this error
-                    log.info("Attempt to heartbeat failed since old {} is not valid, ignoring the error", sentGeneration);
-                    future.complete(null);
-                }
-            } else if (error == Errors.FENCED_INSTANCE_ID) {
-                if (generationUnchanged()) {
-                    log.info("Attempt to heartbeat failed since current {} gets fenced with group instance id {}",
-                        sentGeneration, rebalanceConfig.groupInstanceId);
-                    future.raise(error);
-                } else {
-                    // if the generation has changed, then ignore this error
-                    log.info("Attempt to heartbeat failed since old {} gets fenced with group instance id {}, " +
-                        "ignoring the error", sentGeneration, rebalanceConfig.groupInstanceId);
-                    future.complete(null);
-                }
-            } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                if (generationUnchanged()) {
-                    log.info("Attempt to heartbeat failed since current {} member id is unknown, resetting generation", sentGeneration);
-                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
-                    future.raise(error);
-                } else {
-                    // if the generation has changed, then ignore this error
-                    log.info("Attempt to heartbeat failed since old {} member id is unknown, ignoring the error", sentGeneration);
+                    log.info("Attempt to heartbeat failed with stale generation {} and group instance id {} due to {}, ignoring the error",
+                        sentGeneration, rebalanceConfig.groupInstanceId, error.message());
                     future.complete(null);
                 }
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {

@@ -144,6 +144,17 @@ public class AbstractCoordinatorTest {
                                                 mockTime);
     }
 
+    private void joinGroup() {
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final int generation = 1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+    }
+
     @Test
     public void testMetrics() {
         setupCoordinator();
@@ -468,14 +479,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testJoinGroupUnknownMemberResponseWithOldGeneration() {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
@@ -488,7 +492,7 @@ public class AbstractCoordinatorTest {
             currGen.protocolName);
         coordinator.setNewGeneration(newGen);
 
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation + 1, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
+        mockClient.prepareResponse(joinGroupFollowerResponse(currGen.generationId + 1, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
 
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertTrue(future.exception().getClass().isInstance(Errors.UNKNOWN_MEMBER_ID.exception()));
@@ -500,20 +504,12 @@ public class AbstractCoordinatorTest {
     @Test
     public void testSyncGroupUnknownMemberResponseWithOldGeneration() {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(mockTime.timer(0));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
         coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(currGen.generationId, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
 
@@ -535,20 +531,12 @@ public class AbstractCoordinatorTest {
     @Test
     public void testSyncGroupIllegalGenerationResponseWithOldGeneration() {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(mockTime.timer(0));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
         coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(currGen.generationId, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
 
@@ -570,14 +558,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHeartbeatIllegalGenerationResponseWithOldGeneration() throws InterruptedException {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
@@ -610,14 +591,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHeartbeatUnknownMemberResponseWithOldGeneration() throws InterruptedException {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
@@ -650,14 +624,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHeartbeatUnknownMemberResponseDuringRebalancing() throws InterruptedException {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
@@ -684,7 +651,7 @@ public class AbstractCoordinatorTest {
         // the generation should be reset but the rebalance should still proceed
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
 
-        mockClient.respond(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.respond(joinGroupFollowerResponse(currGen.generationId, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
         coordinator.ensureActiveGroup();
@@ -694,14 +661,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHeartbeatInstanceFencedResponseWithOldGeneration() throws InterruptedException {
         setupCoordinator();
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-
-        final int generation = 1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-
-        coordinator.ensureActiveGroup();
+        joinGroup();
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
