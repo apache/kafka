@@ -2859,18 +2859,18 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicPartitionErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
+          topicPartitionErrors.groupBy(_._1.topic).foreach { case (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
-            topicPartitions.map { case (topicPartition, error) =>
+            topicPartitions.foreach { case (topicPartition, error) =>
               partitions.add(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                   .setPartitionIndex(topicPartition.partition)
                   .setErrorCode(error.code)
               )
-              topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
-                .setName(topic)
-                .setPartitions(partitions))
             }
+            topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+              .setName(topic)
+              .setPartitions(partitions))
           }
 
           new OffsetDeleteResponse(new OffsetDeleteResponseData()
