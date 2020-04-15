@@ -51,7 +51,7 @@ public class ProcessorNodeMetrics {
     private static final String IDEMPOTENT_UPDATE_SKIP_DESCRIPTION = "skipped idempotent updates";
     private static final String IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION;
     private static final String IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION =
-            RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP + RATE_DESCRIPTION_SUFFIX;
+            RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
     private static final String PROCESS = "process";
     private static final String PROCESS_DESCRIPTION = "calls to process";
