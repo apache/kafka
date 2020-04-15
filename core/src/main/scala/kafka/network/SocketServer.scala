@@ -105,13 +105,13 @@ class SocketServer(val config: KafkaConfig,
 
   /**
    * Starts the socket server and creates all the Acceptors and the Processors. The Acceptors
-   * start listening at this stage. Acceptors and Processors are started if `startProcessingRequests`
-   * is true. If not, acceptors and processors are only started when
-   * [[kafka.network.SocketServer#startProcessingRequests()]]  is invoked. Delayed starting of
-   * acceptors and processors is used to delay processing client connections until server is
-   * fully initialized, e.g. to ensure that all credentials have been loaded before authentications
-   * are performed. Incoming connections on this server are processed when processors start up
-   * and invoke [[org.apache.kafka.common.network.Selector#poll]].
+   * start listening at this stage so that the bound port is known when this method completes
+   * even when ephemeral ports are used. Acceptors and Processors are started if `startProcessingRequests`
+   * is true. If not, acceptors and processors are only started when [[kafka.network.SocketServer#startProcessingRequests()]]
+   * is invoked. Delayed starting of acceptors and processors is used to delay processing client
+   * connections until server is fully initialized, e.g. to ensure that all credentials have been
+   * loaded before authentications are performed. Incoming connections on this server are processed
+   * when processors start up and invoke [[org.apache.kafka.common.network.Selector#poll]].
    *
    * @param startProcessingRequests Flag indicating whether `Processor`s must be started.
    */
@@ -163,7 +163,7 @@ class SocketServer(val config: KafkaConfig,
 
   /**
    * Start processing requests and new connections. This method is used for delayed starting of
-   * data-plane processors if [[kafka.network.SocketServer#startup]] was invoked with
+   * all the acceptors and processors if [[kafka.network.SocketServer#startup]] was invoked with
    * `startProcessingRequests=false`.
    *
    * Before starting processors for each endpoint, we ensure that authorizer has all the metadata
@@ -171,7 +171,8 @@ class SocketServer(val config: KafkaConfig,
    * listener before other listeners. This allows authorization metadata for other listeners to be
    * stored in Kafka topics in this cluster.
    *
-   * @param authorizerFutures
+   * @param authorizerFutures Future per [[EndPoint]] used to wait before starting the processor
+   *                          corresponding to the [[EndPoint]]
    */
   def startProcessingRequests(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = {
     info("Starting socket server acceptors and processors")
@@ -1093,8 +1094,9 @@ private[kafka] class Processor(val id: Int,
    * Close the selector and all open connections
    */
   private def closeAll(): Unit = {
-    // Clear to unblock blocked acceptors
-    newConnections.asScala.foreach(_.close())
+    while (!newConnections.isEmpty) {
+      newConnections.poll().close()
+    }
     newConnections.clear()
     selector.channels.asScala.foreach { channel =>
       close(channel.id)

@@ -344,7 +344,6 @@ class SocketServerTest {
       externalReadyFuture.complete(null)
       TestUtils.waitUntilTrue(() => listenerStarted(externalListener), "External listener not started")
     } finally {
-      externalReadyFuture.complete(null)
       executor.shutdownNow()
       shutdownServerAndMetrics(testableServer)
     }
@@ -363,11 +362,10 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(config, connectionQueueSize)
     testableServer.startup(startProcessingRequests = false)
 
-    connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
-    connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
-
-    // Wait to let the acceptor accepts the connections
-    Thread.sleep(100)
+    val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket1, producerRequestBytes())
+    val socket2 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket2, producerRequestBytes())
 
     testableServer.shutdown()
   }
