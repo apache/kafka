@@ -328,13 +328,13 @@ public class StateManagerUtilTest {
     }
 
     @Test
-    public void shouldNotStateManagerIfUnableToLockTaskDirectory() throws IOException {
+    public void shouldNotCloseStateManagerIfUnableToLockTaskDirectory() throws IOException {
         expect(stateManager.taskId()).andReturn(taskId);
 
         expect(stateDirectory.lock(taskId)).andReturn(false);
 
         stateManager.close();
-        expectLastCall().andThrow(new StreamsException("Should not be trying to close state you don't own!"));
+        expectLastCall().andThrow(new AssertionError("Should not be trying to close state you don't own!"));
 
         ctrl.checkOrder(true);
         ctrl.replay();
@@ -342,7 +342,7 @@ public class StateManagerUtilTest {
         replayAll();
 
         StateManagerUtil.closeStateManager(
-            logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+            logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
     }
 
     @Test
@@ -355,7 +355,7 @@ public class StateManagerUtilTest {
         expect(stateManager.baseDir()).andReturn(unknownFile);
 
         Utils.delete(unknownFile);
-        expectLastCall().andThrow(new StreamsException("Should not be trying to wipe state you don't own!"));
+        expectLastCall().andThrow(new AssertionError("Should not be trying to wipe state you don't own!"));
 
         ctrl.checkOrder(true);
         ctrl.replay();
