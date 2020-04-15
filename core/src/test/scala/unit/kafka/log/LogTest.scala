@@ -469,6 +469,41 @@ class LogTest {
     assertEquals(101L, log.logEndOffset)
   }
 
+  /**
+   * Test the values returned by the logSegments call
+   */
+  @Test
+  def testLogSegmentsCallCorrect(): Unit = {
+    // Create 3 segments and make sure we get the right values from various logSegments calls.
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def getSegmentOffsets(log :Log, from: Long, to: Long) = log.logSegments(from, to).map { _.baseOffset }
+    val setSize = createRecords.sizeInBytes
+    val msgPerSeg = 10
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
+    // create a log
+    val logConfig = LogTest.createLogConfig(segmentBytes = segmentSize)
+    val log = createLog(logDir, logConfig)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
+    // segments expire in size
+    for (_ <- 1 to (2 * msgPerSeg + 2))
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
+
+    // from == to should always be null
+    assertEquals(List.empty[LogSegment], getSegmentOffsets(log, 10, 10))
+    assertEquals(List.empty[LogSegment], getSegmentOffsets(log, 15, 15))
+
+    assertEquals(List[Long](0, 10, 20), getSegmentOffsets(log, 0, 21))
+
+    assertEquals(List[Long](0), getSegmentOffsets(log, 1, 5))
+    assertEquals(List[Long](10, 20), getSegmentOffsets(log, 13, 21))
+    assertEquals(List[Long](10), getSegmentOffsets(log, 13, 17))
+
+    // from < to is bad
+    assertThrows[IllegalArgumentException]({ log.logSegments(10, 0) })
+  }
+
   @Test
   def testInitializationOfProducerSnapshotsUpgradePath(): Unit = {
     // simulate the upgrade path by creating a new log with several segments, deleting the
