@@ -25,7 +25,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -34,7 +36,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -159,5 +163,34 @@ public class RankedClientTest {
         );
 
         assertTrue(buildClientRankingsByTask(emptySet(), states, ACCEPTABLE_RECOVERY_LAG).isEmpty());
+    }
+
+    @Test
+    public void shouldReturnTasksToCaughtUpClients() {
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates = new TreeMap<>();
+        statefulTasksToRankedCandidates.put(
+            TASK_0_0,
+            mkSortedSet(
+                new RankedClient(UUID_1, Task.LATEST_OFFSET),
+                new RankedClient(UUID_2, 0L),
+                new RankedClient(UUID_3, 1L),
+                new RankedClient(UUID_4, 1000L)
+            ));
+        final SortedSet<UUID> expectedCaughtUpClients = mkSortedSet(UUID_1, UUID_2);
+
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
+
+        assertThat(tasksToCaughtUpClients.get(TASK_0_0), equalTo(expectedCaughtUpClients));
+    }
+
+    @Test
+    public void shouldOnlyReturnTasksWithCaughtUpClients() {
+        final RankedClient rankedClient = new RankedClient(UUID_1, 1L);
+
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates = new TreeMap<>();
+        statefulTasksToRankedCandidates.put(TASK_0_0, mkSortedSet(rankedClient));
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
+
+        assertTrue(tasksToCaughtUpClients.isEmpty());
     }
 }

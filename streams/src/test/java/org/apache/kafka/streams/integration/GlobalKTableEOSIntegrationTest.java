@@ -48,14 +48,18 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class GlobalKTableEOSIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -69,6 +73,17 @@ public class GlobalKTableEOSIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
             new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.EXACTLY_ONCE},
+            {StreamsConfig.EXACTLY_ONCE_BETA}
+        });
+    }
+
+    @Parameterized.Parameter
+    public String eosConfig;
 
     private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
@@ -97,7 +112,7 @@ public class GlobalKTableEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
                                           Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
                                                   .withKeySerde(Serdes.Long())
@@ -319,15 +334,9 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void produceInitialGlobalTableValues() throws Exception {
-        produceInitialGlobalTableValues(true);
-    }
-
-    private void produceInitialGlobalTableValues(final boolean enableTransactions) throws Exception {
         final Properties properties = new Properties();
-        if (enableTransactions) {
-            properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
-            properties.put(ProducerConfig.RETRIES_CONFIG, 1);
-        }
+        properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
+        properties.put(ProducerConfig.RETRIES_CONFIG, 1);
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalTableTopic,
                 Arrays.asList(
@@ -342,7 +351,7 @@ public class GlobalKTableEOSIntegrationTest {
                         StringSerializer.class,
                         properties),
                 mockTime,
-                enableTransactions);
+                true);
     }
 
     private void produceGlobalTableValues() throws Exception {

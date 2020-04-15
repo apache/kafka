@@ -886,6 +886,57 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCleanupAnyTasksClosedAsDirtyAfterCommitException() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task00.setCommittableOffsetsAndMetadata(offsets00);
+
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets01);
+        task01.setCommitNeeded();
+
+        task01.setChangelogOffsets(singletonMap(t1p1, 0L));
+
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets02 = singletonMap(t1p2, new OffsetAndMetadata(2L, null));
+        task02.setCommittableOffsetsAndMetadata(offsets02);
+
+        final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
+        expectedCommittedOffsets.putAll(offsets00);
+        expectedCommittedOffsets.putAll(offsets01);
+
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
+
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
+            .andReturn(asList(task00, task01, task02));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(EasyMock.anyObject(TaskId.class));
+        expectLastCall().anyTimes();
+
+        consumer.commitSync(expectedCommittedOffsets);
+        expectLastCall().andThrow(new RuntimeException("Something went wrong!"));
+
+        changeLogReader.remove(singleton(t1p1));
+        expectLastCall();
+
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(assignmentActive, emptyMap());
+
+        assignmentActive.remove(taskId00);
+        assertThrows(
+            RuntimeException.class,
+            () -> taskManager.handleAssignment(assignmentActive, emptyMap())
+        );
+
+        verify(changeLogReader);
+    }
+
+    @Test
     public void shouldCommitAllActiveTasksTheNeedCommittingOnRevocation() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -2425,7 +2476,7 @@ public class TaskManagerTest {
         private boolean commitPrepared = false;
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
-        private Map<TopicPartition, Long> changelogOffsets;
+        private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
         private Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
@@ -2534,7 +2585,7 @@ public class TaskManagerTest {
 
         @Override
         public Collection<TopicPartition> changelogPartitions() {
-            return emptyList();
+            return changelogOffsets.keySet();
         }
 
         public boolean isActive() {

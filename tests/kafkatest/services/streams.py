@@ -302,16 +302,18 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
-    def __init__(self, test_context, kafka, command, num_threads = 3):
+    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', num_threads = 3):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
                                                           "org.apache.kafka.streams.tests.StreamsSmokeTest",
                                                           command)
         self.NUM_THREADS = num_threads
+        self.PROCESSING_GUARANTEE = processing_guarantee
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
                       streams_property.NUM_THREADS: self.NUM_THREADS}
 
         cfg = KafkaConfig(**properties)
@@ -359,13 +361,8 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
         return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka, num_threads = 3):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", num_threads)
-
-class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
-
+    def __init__(self, test_context, kafka, processing_guarantee, num_threads = 3):
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, num_threads)
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):

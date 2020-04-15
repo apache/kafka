@@ -133,12 +133,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long): Unit = {
-    try {
-      sensor().record(value.toDouble)
-    } catch {
-      case qve: QuotaViolationException =>
-        trace(s"Record: Quota violated, but ignored, for sensor (${sensor.name}), metric: (${qve.metricName}), value : (${qve.value}), bound: (${qve.bound}), recordedValue ($value)")
-    }
+    sensor().record(value, time.milliseconds(), false)
   }
 
   /**

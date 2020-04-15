@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -3258,12 +3259,15 @@ public class TransactionManagerTest {
                                                 final short producerEpoch) {
         client.prepareResponse(body -> {
             AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
-            assertEquals(consumerGroupId, addOffsetsToTxnRequest.consumerGroupId());
-            assertEquals(transactionalId, addOffsetsToTxnRequest.transactionalId());
-            assertEquals(producerId, addOffsetsToTxnRequest.producerId());
-            assertEquals(producerEpoch, addOffsetsToTxnRequest.producerEpoch());
+            assertEquals(consumerGroupId, addOffsetsToTxnRequest.data.groupId());
+            assertEquals(transactionalId, addOffsetsToTxnRequest.data.transactionalId());
+            assertEquals(producerId, addOffsetsToTxnRequest.data.producerId());
+            assertEquals(producerEpoch, addOffsetsToTxnRequest.data.producerEpoch());
             return true;
-        }, new AddOffsetsToTxnResponse(0, error));
+        }, new AddOffsetsToTxnResponse(
+            new AddOffsetsToTxnResponseData()
+                .setErrorCode(error.code()))
+        );
     }
 
     private void prepareTxnOffsetCommitResponse(final String consumerGroupId,

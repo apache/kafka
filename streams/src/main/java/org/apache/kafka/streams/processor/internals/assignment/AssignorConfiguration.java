@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -23,7 +24,9 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProt
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -184,6 +187,44 @@ public final class AssignorConfiguration {
             throw fatalException;
         }
         return (AtomicInteger) ai;
+    }
+
+    public AtomicLong getNextProbingRebalanceMs(final Map<String, ?> configs) {
+        final Object al = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        if (al == null) {
+            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(al instanceof AtomicLong)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", al.getClass().getName(), AtomicLong.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        return (AtomicLong) al;
+    }
+
+    public Time getTime(final Map<String, ?> configs) {
+        final Object t = configs.get(InternalConfig.TIME);
+        if (t == null) {
+            final KafkaException fatalException = new KafkaException("time is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(t instanceof Time)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", t.getClass().getName(), Time.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        return (Time) t;
     }
 
     public TaskManager getTaskManager() {

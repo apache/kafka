@@ -41,6 +41,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -59,7 +60,8 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2))
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -77,7 +79,8 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2))
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.emptyList();
@@ -95,7 +98,8 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2))
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.emptyList();
@@ -113,7 +117,8 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2))
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -131,7 +136,8 @@ public class DefaultStateConstrainedBalancedAssignorTest {
             oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2),
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(oneStatefulTasksToTwoRankedClients(rankOfClient1, rankOfClient2))
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -147,16 +153,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -172,16 +182,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 2;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -202,7 +216,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask23OnClient3 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             threeStatefulTasksToThreeRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -213,10 +227,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask23OnClient1,
                 rankForTask23OnClient2,
                 rankForTask23OnClient3
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             THREE_CLIENTS,
-            threeClientsToNumberOfStreamThreads(1, 1, 1)
+            threeClientsToNumberOfStreamThreads(1, 1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -236,16 +254,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 100;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_1_2);
@@ -261,16 +283,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = Task.LATEST_OFFSET;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_1_2);
@@ -286,16 +312,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 2;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_1, TASK_1_2);
@@ -311,16 +341,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -336,16 +370,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_1_2);
@@ -361,16 +399,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 20;
         final int balanceFactor = 2;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_1, TASK_1_2);
@@ -386,16 +428,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 50;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_1_2);
@@ -416,7 +462,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask23OnClient3 = 100;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             threeStatefulTasksToThreeRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -427,10 +473,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask23OnClient1,
                 rankForTask23OnClient2,
                 rankForTask23OnClient3
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             THREE_CLIENTS,
-            threeClientsToNumberOfStreamThreads(1, 1, 1)
+            threeClientsToNumberOfStreamThreads(1, 1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -450,16 +500,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 10;
         final int balanceFactor = 2;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.emptyList();
@@ -475,16 +529,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 40;
         final int balanceFactor = 2;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 1)
+            twoClientsToNumberOfStreamThreads(1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -514,7 +572,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask34OnClient3 = 100;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             fourStatefulTasksToThreeRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -528,10 +586,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask34OnClient1,
                 rankForTask34OnClient2,
                 rankForTask34OnClient3
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             THREE_CLIENTS,
-            threeClientsToNumberOfStreamThreads(1, 1, 1)
+            threeClientsToNumberOfStreamThreads(1, 1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_1, TASK_1_2);
@@ -559,7 +621,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask34OnClient3 = 90;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             fourStatefulTasksToThreeRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -573,10 +635,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask34OnClient1,
                 rankForTask34OnClient2,
                 rankForTask34OnClient3
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             THREE_CLIENTS,
-            threeClientsToNumberOfStreamThreads(1, 1, 1)
+            threeClientsToNumberOfStreamThreads(1, 1, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_3_4);
@@ -598,7 +664,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask23OnClient2 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             threeStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -606,10 +672,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask12OnClient2,
                 rankForTask23OnClient1,
                 rankForTask23OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 2)
+            twoClientsToNumberOfStreamThreads(1, 2),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -629,7 +699,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask34OnClient2 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             fourStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -639,10 +709,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask23OnClient2,
                 rankForTask34OnClient1,
                 rankForTask34OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 2)
+            twoClientsToNumberOfStreamThreads(1, 2),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_1, TASK_2_3);
@@ -658,16 +732,20 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask12OnClient2 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             twoStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
                 rankForTask12OnClient1,
                 rankForTask12OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(2, 1)
+            twoClientsToNumberOfStreamThreads(2, 1),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);
@@ -687,7 +765,7 @@ public class DefaultStateConstrainedBalancedAssignorTest {
         final long rankForTask34OnClient2 = 0;
         final int balanceFactor = 1;
 
-        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
             fourStatefulTasksToTwoRankedClients(
                 rankForTask01OnClient1,
                 rankForTask01OnClient2,
@@ -697,10 +775,14 @@ public class DefaultStateConstrainedBalancedAssignorTest {
                 rankForTask23OnClient2,
                 rankForTask34OnClient1,
                 rankForTask34OnClient2
-            ),
+            );
+
+        final Map<UUID, List<TaskId>> assignment = new DefaultStateConstrainedBalancedAssignor().assign(
+            statefulTasksToRankedCandidates,
             balanceFactor,
             TWO_CLIENTS,
-            twoClientsToNumberOfStreamThreads(1, 4)
+            twoClientsToNumberOfStreamThreads(1, 4),
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_1);

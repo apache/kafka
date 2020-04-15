@@ -70,7 +70,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
@@ -361,7 +360,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            StreamThread.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(

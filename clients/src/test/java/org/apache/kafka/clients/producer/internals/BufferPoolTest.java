@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -152,8 +152,18 @@ public class BufferPoolTest {
     }
 
     /**
-     * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
-     * And verify that the allocation attempt finishes soon after the maxBlockTimeMs.
+     * Test if BufferExhausted exception is thrown when there is not enough memory to allocate and the elapsed
+     * time is greater than the max specified block time.
+     */
+    @Test(expected = BufferExhaustedException.class)
+    public void testBufferExhaustedExceptionIsThrown() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        pool.allocate(1, maxBlockTimeMs);
+        pool.allocate(2, maxBlockTimeMs);
+    }
+
+    /**
+     * Verify that a failed allocation attempt due to not enough memory finishes soon after the maxBlockTimeMs.
      */
     @Test
     public void testBlockTimeout() throws Exception {
@@ -171,14 +181,14 @@ public class BufferPoolTest {
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         // Thread scheduling sometimes means that deallocation varies by this point
         assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 8 && pool.availableMemory() <= 10);
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
-        assertTrue("TimeoutException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
-        assertTrue("TimeoutException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
+        assertTrue("BufferExhaustedException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
+        assertTrue("BufferExhaustedException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
     }
 
     /**
@@ -191,7 +201,7 @@ public class BufferPoolTest {
         try {
             pool.allocate(2, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 2");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         assertEquals(0, pool.queued());
@@ -266,7 +276,7 @@ public class BufferPoolTest {
             try {
                 pool.allocate(2, maxBlockTimeMs);
                 fail("The buffer allocated more memory than its maximum value 2");
-            } catch (TimeoutException e) {
+            } catch (BufferExhaustedException e) {
                 // this is good
             } catch (InterruptedException e) {
                 // this can be neglected

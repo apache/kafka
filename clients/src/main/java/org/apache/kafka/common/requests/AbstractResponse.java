@@ -131,7 +131,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct);
             case ADD_OFFSETS_TO_TXN:
-                return new AddOffsetsToTxnResponse(struct);
+                return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:
                 return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
@@ -147,7 +147,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DESCRIBE_CONFIGS:
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
