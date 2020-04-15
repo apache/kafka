@@ -946,8 +946,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         LogCaptureAppender.setClassLoggerToDebug(changelogReader.getClass());
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(changelogReader.getClass());
 
         try {
             changelogReader.remove(
