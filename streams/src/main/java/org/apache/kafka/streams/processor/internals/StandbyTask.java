@@ -72,7 +72,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
-        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(config);
     }
 
     @Override
