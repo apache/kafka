@@ -64,7 +64,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
+    private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
     private final LinkedHashSet<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<StreamsGraphNode> tableSourceNodes = new LinkedHashSet<>();
 
@@ -328,10 +328,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
-        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
         while (entryIterator.hasNext()) {
-            final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry = entryIterator.next();
+            final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> entry = entryIterator.next();
 
             final StreamsGraphNode keyChangingNode = entry.getKey();
 
@@ -396,11 +396,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final Set<StreamsGraphNode> mergeNodeKeyChangingParentsToRemove = new HashSet<>();
         for (final StreamsGraphNode mergeNode : mergeNodes) {
             mergeNodesToKeyChangers.put(mergeNode, new LinkedHashSet<>());
-            final Collection<StreamsGraphNode> keys = keyChangingOperationsToOptimizableRepartitionNodes.keySet();
-            for (final StreamsGraphNode key : keys) {
-                final StreamsGraphNode maybeParentKey = findParentNodeMatching(mergeNode, node -> node.parentNodes().contains(key));
-                if (maybeParentKey != null) {
-                    mergeNodesToKeyChangers.get(mergeNode).add(key);
+            final Set<Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entrySet = keyChangingOperationsToOptimizableRepartitionNodes.entrySet();
+            for (final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> entry : entrySet) {
+                if (mergeNodeHasRepartitionChildren(mergeNode, entry.getValue())) {
+                    final StreamsGraphNode maybeParentKey = findParentNodeMatching(mergeNode, node -> node.parentNodes().contains(entry.getKey()));
+                    if (maybeParentKey != null) {
+                        mergeNodesToKeyChangers.get(mergeNode).add(entry.getKey());
+                    }
                 }
             }
         }
@@ -408,7 +410,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         for (final Map.Entry<StreamsGraphNode, Set<StreamsGraphNode>> entry : mergeNodesToKeyChangers.entrySet()) {
             final StreamsGraphNode mergeKey = entry.getKey();
             final Collection<StreamsGraphNode> keyChangingParents = entry.getValue();
-            final LinkedHashSet<OptimizableRepartitionNode> repartitionNodes = new LinkedHashSet<>();
+            final LinkedHashSet<OptimizableRepartitionNode<?, ?>> repartitionNodes = new LinkedHashSet<>();
             for (final StreamsGraphNode keyChangingParent : keyChangingParents) {
                 repartitionNodes.addAll(keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingParent));
                 mergeNodeKeyChangingParentsToRemove.add(keyChangingParent);
@@ -421,12 +423,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
-                                                             final Serde keySerde,
-                                                             final Serde valueSerde) {
+    private boolean mergeNodeHasRepartitionChildren(final StreamsGraphNode mergeNode,
+                                                    final LinkedHashSet<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
+        return repartitionNodes.stream().allMatch(n -> findParentNodeMatching(n, gn -> gn.parentNodes().contains(mergeNode)) != null);
+    }
 
-        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+    private <K, V> OptimizableRepartitionNode<K, V> createRepartitionNode(final String repartitionTopicName,
+                                                                          final Serde<K> keySerde,
+                                                                          final Serde<V> valueSerde) {
+
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
@@ -452,16 +458,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return null;
     }
 
-    private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+    private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
         return repartitionNodes.iterator().next().repartitionTopic();
     }
 
     @SuppressWarnings("unchecked")
-    private GroupedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+    private GroupedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
         Serde keySerde = null;
         Serde valueSerde = null;
 
-        for (final OptimizableRepartitionNode repartitionNode : repartitionNodes) {
+        for (final OptimizableRepartitionNode<?, ?> repartitionNode : repartitionNodes) {
             if (keySerde == null && repartitionNode.keySerde() != null) {
                 keySerde = repartitionNode.keySerde();
             }
