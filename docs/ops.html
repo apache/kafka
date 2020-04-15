@@ -94,7 +94,7 @@
   </pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
   <pre class="brush: bash;">
-  &gt; bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
+  &gt; bin/kafka-preferred-replica-election.sh --bootstrap-server broker_host:port
   </pre>
 
   <h4><a id="basic_ops_racks" href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
