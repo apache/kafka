@@ -209,15 +209,12 @@ public class StandbyTask extends AbstractTask implements Task {
                 stateMgr.checkpoint(Collections.emptyMap());
                 offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
             }
-            final boolean wipeStateStore = !clean && eosEnabled;
-            log.info("standby task clean {}, eos enabled {}", clean, eosEnabled);
-
             executeAndMaybeSwallow(clean, () ->
                 StateManagerUtil.closeStateManager(
                     log,
                     logPrefix,
                     clean,
-                    wipeStateStore,
+                    eosEnabled,
                     stateMgr,
                     stateDirectory,
                     TaskType.STANDBY),
