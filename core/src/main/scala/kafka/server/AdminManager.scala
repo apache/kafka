@@ -114,9 +114,14 @@ class AdminManager(val config: KafkaConfig,
         val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
           defaultReplicationFactor else topic.replicationFactor
 
+        val maxBrokerPartitions = config.maxBrokerPartitions
+        val maxPartitions = config.maxPartitions
+        val partitionsByBroker = metadataCache.getPartitionCountByBroker()
+
         val assignments = if (topic.assignments().isEmpty) {
           AdminUtils.assignReplicasToBrokers(
-            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+            brokers, resolvedNumPartitions, resolvedReplicationFactor,
+            maxPartitions, maxBrokerPartitions, partitionsByBroker)
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -131,7 +136,9 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            adminZkClient.validateTopicCreate(topic.name(), assignments, configs)
+            adminZkClient.validateTopicCreate(
+              topic.name(), assignments, configs,
+              maxPartitions, maxBrokerPartitions, partitionsByBroker)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -151,13 +158,19 @@ class AdminManager(val config: KafkaConfig,
               javaAssignments, javaConfigs))
 
             if (!validateOnly)
-              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
+              adminZkClient.createTopicWithAssignment(
+                topic.name, configs, assignments,
+                maxPartitions, maxBrokerPartitions, partitionsByBroker)
 
           case None =>
             if (validateOnly)
-              adminZkClient.validateTopicCreate(topic.name, assignments, configs)
+              adminZkClient.validateTopicCreate(
+                topic.name, assignments, configs,
+                maxPartitions, maxBrokerPartitions, partitionsByBroker)
             else
-              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
+              adminZkClient.createTopicWithAssignment(
+                topic.name, configs, assignments,
+                maxPartitions, maxBrokerPartitions, partitionsByBroker)
         }
 
         // For responses with DescribeConfigs permission, populate metadata and configs
@@ -315,8 +328,14 @@ class AdminManager(val config: KafkaConfig,
             }.toMap
         }
 
-        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.count, newPartitionsAssignment, validateOnly = validateOnly)
+        val maxBrokerPartitions = config.maxBrokerPartitions
+        val maxPartitions = config.maxPartitions
+        val partitionsByBroker = metadataCache.getPartitionCountByBroker()
+
+        val updatedReplicaAssignment = adminZkClient.addPartitions(
+          topic, existingAssignment, allBrokers,
+          newPartition.count, newPartitionsAssignment, validateOnly = validateOnly,
+          maxPartitions, maxBrokerPartitions, partitionsByBroker)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>

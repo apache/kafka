@@ -20,7 +20,7 @@ package kafka.admin
 import java.util.Random
 
 import kafka.utils.Logging
-import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException, WillExceedPartitionLimitsException}
 
 import collection.{Map, mutable, _}
 
@@ -34,16 +34,18 @@ object AdminUtils extends Logging {
    * <ol>
    * <li> Spread the replicas evenly among brokers.</li>
    * <li> For partitions assigned to a particular broker, their other replicas are spread over the other brokers.</li>
-   * <li> If all brokers have rack information, assign the replicas for each partition to different racks if possible</li>
+   * <li> If all brokers have rack information, assign the replicas for each partition to different racks if possible.</li>
+   * <li> Ensure that the assignment does not violate partition limits at the broker level and cluster level.</li>
    * </ol>
    *
    * To achieve this goal for replica assignment without considering racks, we:
    * <ol>
    * <li> Assign the first replica of each partition by round-robin, starting from a random position in the broker list.</li>
    * <li> Assign the remaining replicas of each partition with an increasing shift.</li>
+   * <li> Incrementally, remove any brokers from consideration when they have hit the broker-level max partition limit.</li>
    * </ol>
    *
-   * Here is an example of assigning
+   * Here is an example of assigning without considering partition limits.
    * <table cellpadding="2" cellspacing="2">
    * <tr><th>broker-0</th><th>broker-1</th><th>broker-2</th><th>broker-3</th><th>broker-4</th><th>&nbsp;</th></tr>
    * <tr><td>p0      </td><td>p1      </td><td>p2      </td><td>p3      </td><td>p4      </td><td>(1st replica)</td></tr>
@@ -98,11 +100,14 @@ object AdminUtils extends Logging {
    * @return a Map from partition id to replica ids
    * @throws AdminOperationException If rack information is supplied but it is incomplete, or if it is not possible to
    *                                 assign each replica to a unique rack.
-   *
+   * @throws WillExceedPartitionLimitsException If the assignment will exceed broker-level or cluster-level partition limits.
    */
   def assignReplicasToBrokers(brokerMetadatas: Seq[BrokerMetadata],
                               nPartitions: Int,
                               replicationFactor: Int,
+                              maxPartitions: Int = Int.MaxValue,
+                              maxBrokerPartitions: Int = Int.MaxValue,
+                              partitionsByBroker: Map[Int, Int] = Map.empty[Int, Int],
                               fixedStartIndex: Int = -1,
                               startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
@@ -111,36 +116,111 @@ object AdminUtils extends Logging {
       throw new InvalidReplicationFactorException("Replication factor must be larger than 0.")
     if (replicationFactor > brokerMetadatas.size)
       throw new InvalidReplicationFactorException(s"Replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}.")
+
+    maybeThrowWillExceedMaxPartitionLimitsException(partitionsByBroker, nPartitions * replicationFactor, maxPartitions)
+
     if (brokerMetadatas.forall(_.rack.isEmpty))
       assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.map(_.id), fixedStartIndex,
-        startPartitionId)
+        startPartitionId, maxBrokerPartitions, partitionsByBroker)
     else {
       if (brokerMetadatas.exists(_.rack.isEmpty))
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.")
       assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
-        startPartitionId)
+        startPartitionId, maxBrokerPartitions, partitionsByBroker)
     }
+  }
+
+  def verifyReplicaAssignmentAgainstPartitionLimits(assignments: Map[Int, Seq[Int]],
+                                                    maxPartitions: Int = Int.MaxValue,
+                                                    maxBrokerPartitions: Int = Int.MaxValue,
+                                                    partitionsByBroker: Map[Int, Int] = Map.empty[Int, Int]): Map[Int, Seq[Int]] = {
+    maybeThrowWillExceedMaxPartitionLimitsException(partitionsByBroker, assignments.size, maxPartitions)
+
+    val additionalPartitionsByBroker =
+      assignments
+        .map { case (partition, replicas) =>
+          replicas.map(r => (r, partition))
+        }
+        .flatten
+        .groupBy(_._1)
+        .mapValues(_.size)
+
+    val finalPartitionsByBroker =
+      (partitionsByBroker.toSeq ++ additionalPartitionsByBroker.toSeq)
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).sum)
+
+    // We will only consider those brokers as exceeding the limit that are relevant to the requested
+    // assignment. This is necessary because some brokers which are not relevant to the requested
+    // assignment may already be exceeding the limit (for example if the limit was applied after the broker
+    // had more partitions than allowed by the limit), and we do not want this to cause the verification
+    // to fail.
+    val brokersThatExceedLimits =
+      finalPartitionsByBroker
+          .filter { case (broker, numPartitions) =>
+            additionalPartitionsByBroker.contains(broker) && numPartitions > maxBrokerPartitions }
+          .map { case (broker, _) => broker }
+
+    if (!brokersThatExceedLimits.isEmpty) {
+      throw new WillExceedPartitionLimitsException(
+        s"Provided assignment will cause brokers [${brokersThatExceedLimits.mkString(",")}] " +
+          s"to exceed the limit of $maxBrokerPartitions on the number of partition replicas per broker .")
+    }
+
+    assignments
   }
 
   private def assignReplicasToBrokersRackUnaware(nPartitions: Int,
                                                  replicationFactor: Int,
                                                  brokerList: Seq[Int],
                                                  fixedStartIndex: Int,
-                                                 startPartitionId: Int): Map[Int, Seq[Int]] = {
-    val ret = mutable.Map[Int, Seq[Int]]()
-    val brokerArray = brokerList.toArray
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
+                                                 startPartitionId: Int,
+                                                 maxBrokerPartitions: Int,
+                                                 partitionsByBroker: Map[Int, Int]): Map[Int, Seq[Int]] = {
     var currentPartitionId = math.max(0, startPartitionId)
-    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
-    for (_ <- 0 until nPartitions) {
+    val partitionCapacityByBroker = getPartitionCapacityByBroker(brokerList, partitionsByBroker, maxBrokerPartitions)
+    var brokerArray = partitionCapacityByBroker.keys.toSeq.sorted
+    if (brokerArray.isEmpty) {
+      throwAllBrokersHaveAlreadyReachedBrokerPartitionLimitsException(maxBrokerPartitions)
+    }
+
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex % brokerArray.length else rand.nextInt(brokerArray.length)
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex % brokerArray.length else rand.nextInt(brokerArray.length)
+    val ret = mutable.Map[Int, Seq[Int]]()
+    for (nP <- 0 until nPartitions) {
+      if (brokerArray.length < replicationFactor) {
+        throwUnableToAssignMorePartitionsDueToBrokerPartitionLimitsException(nP, maxBrokerPartitions)
+      }
+
       if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
         nextReplicaShift += 1
+
       val firstReplicaIndex = (currentPartitionId + startIndex) % brokerArray.length
-      val replicaBuffer = mutable.ArrayBuffer(brokerArray(firstReplicaIndex))
-      for (j <- 0 until replicationFactor - 1)
-        replicaBuffer += brokerArray(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerArray.length))
+      val replicaBuffer = mutable.ArrayBuffer[Int]()
+      var partitionCapacityZeroedForSomeBroker = false
+      for (j <- -1 until replicationFactor - 1) {
+        // j == -1 in case of first replica (i.e. the leader).
+        val replicaBrokerIndex = if (j == -1) firstReplicaIndex else replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerArray.length)
+        val replicaBroker = brokerArray(replicaBrokerIndex)
+
+        // Given how we compute the replica broker index, we are guaranteed that the same replica broker
+        // is not visited more than once within an iteration of this loop. Therefore, we can assume that
+        // since the broker had capacity before the starting of the loop, that it has capacity now.
+        replicaBuffer += replicaBroker
+        if (reduceBrokerPartitionCapacity(partitionCapacityByBroker, replicaBroker)) {
+          partitionCapacityZeroedForSomeBroker = true
+        }
+      }
       ret.put(currentPartitionId, replicaBuffer)
       currentPartitionId += 1
+
+      if (partitionCapacityZeroedForSomeBroker) {
+        // We recreate this array only when partition capacity dropped to zero for some broker
+        // as a result of replica assignment for this partition. This is strictly an optimization
+        // to avoid unnecessary copies. This optimization guarantees that the copy cannot happen more times
+        // than the total number of brokers.
+        brokerArray = partitionCapacityByBroker.keys.toSeq.sorted
+      }
     }
     ret
   }
@@ -149,49 +229,151 @@ object AdminUtils extends Logging {
                                                replicationFactor: Int,
                                                brokerMetadatas: Seq[BrokerMetadata],
                                                fixedStartIndex: Int,
-                                               startPartitionId: Int): Map[Int, Seq[Int]] = {
-    val brokerRackMap = brokerMetadatas.collect { case BrokerMetadata(id, Some(rack)) =>
-      id -> rack
-    }.toMap
-    val numRacks = brokerRackMap.values.toSet.size
-    val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
-    val numBrokers = arrangedBrokerList.size
-    val ret = mutable.Map[Int, Seq[Int]]()
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
+                                               startPartitionId: Int,
+                                               maxBrokerPartitions: Int,
+                                               partitionsByBroker: Map[Int, Int]): Map[Int, Seq[Int]] = {
     var currentPartitionId = math.max(0, startPartitionId)
-    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
-    for (_ <- 0 until nPartitions) {
-      if (currentPartitionId > 0 && (currentPartitionId % arrangedBrokerList.size == 0))
+    val partitionCapacityByBroker =
+      getPartitionCapacityByBroker(brokerMetadatas.map(bm => bm.id), partitionsByBroker, maxBrokerPartitions)
+    var brokerRackMap =
+      brokerMetadatas
+        .filter { case bm => partitionCapacityByBroker.contains(bm.id) }
+        .collect { case BrokerMetadata(id, Some(rack)) => id -> rack }
+      .toMap
+    if (brokerRackMap.isEmpty) {
+      throwAllBrokersHaveAlreadyReachedBrokerPartitionLimitsException(maxBrokerPartitions)
+    }
+
+    var arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
+    var numRacks = brokerRackMap.values.toSet.size
+    var numBrokers = arrangedBrokerList.size
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex % numBrokers else rand.nextInt(numBrokers)
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex % numBrokers else rand.nextInt(numBrokers)
+    val ret = mutable.Map[Int, Seq[Int]]()
+    for (nP <- 0 until nPartitions) {
+      if (numBrokers < replicationFactor) {
+        throwUnableToAssignMorePartitionsDueToBrokerPartitionLimitsException(nP, maxBrokerPartitions)
+      }
+
+      if (currentPartitionId > 0 && (currentPartitionId % numBrokers == 0))
         nextReplicaShift += 1
-      val firstReplicaIndex = (currentPartitionId + startIndex) % arrangedBrokerList.size
-      val leader = arrangedBrokerList(firstReplicaIndex)
-      val replicaBuffer = mutable.ArrayBuffer(leader)
-      val racksWithReplicas = mutable.Set(brokerRackMap(leader))
-      val brokersWithReplicas = mutable.Set(leader)
+      val firstReplicaIndex = (currentPartitionId + startIndex) % numBrokers
+      val replicaBuffer = mutable.ArrayBuffer[Int]()
+      val racksWithReplicas = mutable.Set[String]()
+      val brokersWithReplicas = mutable.Set[Int]()
+      var partitionCapacityZeroedForSomeBroker = false
       var k = 0
-      for (_ <- 0 until replicationFactor - 1) {
-        var done = false
-        while (!done) {
-          val broker = arrangedBrokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, arrangedBrokerList.size))
-          val rack = brokerRackMap(broker)
-          // Skip this broker if
-          // 1. there is already a broker in the same rack that has assigned a replica AND there is one or more racks
-          //    that do not have any replica, or
-          // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
-          if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks)
+      for (j <- -1 until replicationFactor - 1) {
+        var broker = -1 // dummy value.
+        var rack = "" // dummy value.
+        if (j == -1) {
+          // in case of first replica (i.e. the leader).
+          broker = arrangedBrokerList(firstReplicaIndex)
+          rack = brokerRackMap(broker)
+        } else {
+          var done = false
+          while (!done) {
+            broker = arrangedBrokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, numBrokers))
+            rack = brokerRackMap(broker)
+            // Skip this broker if
+            // 1. there is already a broker in the same rack that has assigned a replica AND there is one or more racks
+            //    that do not have any replica, or
+            // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
+            if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks)
               && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size == numBrokers)) {
-            replicaBuffer += broker
-            racksWithReplicas += rack
-            brokersWithReplicas += broker
-            done = true
+              done = true
+            }
+            k += 1
           }
-          k += 1
+        }
+        replicaBuffer += broker
+        racksWithReplicas += rack
+        brokersWithReplicas += broker
+        if (reduceBrokerPartitionCapacity(partitionCapacityByBroker, broker)) {
+          partitionCapacityZeroedForSomeBroker = true
         }
       }
       ret.put(currentPartitionId, replicaBuffer)
       currentPartitionId += 1
+
+      if (partitionCapacityZeroedForSomeBroker) {
+        // We recreate the following structures only when partition capacity dropped to zero for some broker
+        // as a result of replica assignment for this partition. This is strictly an optimization
+        // to avoid unnecessary copies. This optimization guarantees that the copy cannot happen more times
+        // than the total number of brokers.
+        brokerRackMap =
+          brokerMetadatas
+            .filter { case bm => partitionCapacityByBroker.contains(bm.id) }
+            .collect { case BrokerMetadata(id, Some(rack)) => id -> rack }
+            .toMap
+        arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
+        numRacks = brokerRackMap.values.toSet.size
+        numBrokers = arrangedBrokerList.size
+      }
     }
     ret
+  }
+
+  /**
+   * Returns a map with the partition capacities for the brokers in brokerList, which have
+   * greater than zero partition capacity.
+   */
+  private def getPartitionCapacityByBroker(brokerList: Seq[Int],
+                                           partitionsByBroker: Map[Int, Int],
+                                           maxBrokerPartitions: Int): collection.mutable.Map[Int, Int] = {
+    collection.mutable.Map(
+      brokerList
+        .map { case broker => broker -> Math.max(0, maxBrokerPartitions - partitionsByBroker.getOrElse(broker, 0)) }
+        .filter(_._2 > 0)
+      : _*)
+  }
+
+  /**
+   * Reduces partition capacity of broker by 1. This needs to be done when the broker is assigned a partition.
+   * @return true if the broker's partition capacity went to 0 as a result, and therefore the entry for the broker was removed.
+   */
+  private def reduceBrokerPartitionCapacity(partitionCapacityByBroker: collection.mutable.Map[Int, Int],
+                                            broker: Int): Boolean = {
+    val partitionCapacityForBroker = partitionCapacityByBroker.get(broker).get
+    if (partitionCapacityForBroker == 1) {
+      partitionCapacityByBroker.remove(broker) // because we just assigned this broker a replica.
+      true
+    } else {
+      // partition capacity greater than 1.
+      partitionCapacityByBroker.put(broker, partitionCapacityForBroker - 1)
+      false
+    }
+  }
+
+  private def throwAllBrokersHaveAlreadyReachedBrokerPartitionLimitsException(maxBrokerPartitions: Int): Unit = {
+    throw new WillExceedPartitionLimitsException(
+      s"All brokers have already reached / exceeded the limit of $maxBrokerPartitions " +
+        s"partition replicas per broker (specified via max.broker.partitions).")
+  }
+
+  private def throwUnableToAssignMorePartitionsDueToBrokerPartitionLimitsException(numPartitionsAble: Int,
+                                                                                   maxBrokerPartitions: Int) = {
+    throw new WillExceedPartitionLimitsException(
+      s"Could not assign replicas for more than $numPartitionsAble additional partitions " +
+        s"given the limit of $maxBrokerPartitions partition replicas per broker " +
+        s"(specified via max.broker.partitions).")
+  }
+
+  private def maybeThrowWillExceedMaxPartitionLimitsException(partitionsByBroker: Map[Int, Int],
+                                                              numNewPartitions: Int,
+                                                              maxPartitions: Int) = {
+    val numCurrentPartitions = partitionsByBroker.foldLeft(0)(_ + _._2)
+    if (numCurrentPartitions > maxPartitions) {
+      throw new WillExceedPartitionLimitsException(
+        s"All the brokers combined already host a total of $numCurrentPartitions partition replicas. " +
+          s"This exceeds the cluster-wide partition replica limit of $maxPartitions (specified via max.partitions).")
+    }
+    if (numCurrentPartitions + numNewPartitions > maxPartitions) {
+      throw new WillExceedPartitionLimitsException(
+        s"All the brokers combined already host a total of $numCurrentPartitions partition replicas. " +
+          s"This request requires adding $numNewPartitions more partition replicas, which will result " +
+          s"in exceeding the cluster-wide partition replica limit of $maxPartitions (specified via max.partitions).")
+    }
   }
 
   /**

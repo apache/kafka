@@ -82,7 +82,8 @@ object DynamicBrokerConfig {
     DynamicThreadPool.ReconfigurableConfigs ++
     Set(KafkaConfig.MetricReporterClassesProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
-    SocketServer.ReconfigurableConfigs
+    SocketServer.ReconfigurableConfigs ++
+    PartitionLimitsConfig.ReconfigurableConfigs
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp)
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
@@ -594,6 +595,10 @@ trait BrokerReconfigurable {
   def validateReconfiguration(newConfig: KafkaConfig): Unit
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit
+}
+
+object PartitionLimitsConfig {
+  val ReconfigurableConfigs = Set(KafkaConfig.MaxPartitionsProp, KafkaConfig.MaxBrokerPartitionsProp)
 }
 
 object DynamicLogConfig {

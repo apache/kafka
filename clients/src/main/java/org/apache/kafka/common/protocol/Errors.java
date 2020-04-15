@@ -107,6 +107,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.WillExceedPartitionLimitsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -319,7 +320,8 @@ public enum Errors {
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
         GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
-    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new);
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new),
+    WILL_EXCEED_PARTITION_LIMITS(89, "Cannot satisfy request without exceeding the partition limits", WillExceedPartitionLimitsException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
