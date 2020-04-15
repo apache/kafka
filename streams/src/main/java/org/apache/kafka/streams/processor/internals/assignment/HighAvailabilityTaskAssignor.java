@@ -202,20 +202,24 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     return false;
                 }
             }
+            if (!unassignedActiveTasks.containsAll(prevActiveTasks)) {
+                return false;
+            }
             unassignedActiveTasks.removeAll(prevActiveTasks);
 
-            if (!unassignedStandbyTasks.isEmpty()) {
-                for (final TaskId task : state.prevStandbyTasks()) {
-                    final Integer remainingStandbys = unassignedStandbyTasks.get(task);
-                    if (remainingStandbys != null) {
-                        if (remainingStandbys == 1) {
-                            unassignedStandbyTasks.remove(task);
-                        } else {
-                            unassignedStandbyTasks.put(task, remainingStandbys - 1);
-                        }
+            for (final TaskId task : state.prevStandbyTasks()) {
+                final Integer remainingStandbys = unassignedStandbyTasks.get(task);
+                if (remainingStandbys != null) {
+                    if (remainingStandbys == 1) {
+                        unassignedStandbyTasks.remove(task);
+                    } else {
+                        unassignedStandbyTasks.put(task, remainingStandbys - 1);
                     }
+                } else {
+                    return false;
                 }
             }
+
         }
         return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
     }
