@@ -185,18 +185,17 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetWithBinary() {
+        expect(inner.get(keyBytes)).andReturn(valueAndTimestampBytes);
+
         inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
         expectLastCall();
         init();
 
         metered.put(key, valueAndTimestamp);
-        @SuppressWarnings("resource")
-        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
-        final byte[] encodedValue = stringSerde.serializer().serialize("TOPIC", valueAndTimestamp);
 
-        final RawAndDeserializedValue valueWithBinary = metered.getWithBinary(key);
+        final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(key);
         assertEquals(valueWithBinary.value, valueAndTimestamp);
-        assertEquals(valueWithBinary.serializedValue, encodedValue);
+        assertEquals(valueWithBinary.serializedValue, valueAndTimestampBytes);
     }
 
     @SuppressWarnings("resource")

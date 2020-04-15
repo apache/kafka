@@ -92,7 +92,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    public class RawAndDeserializedValue<ValueType> {
+    public static class RawAndDeserializedValue<ValueType> {
         public final byte[] serializedValue;
         public final ValueAndTimestamp<ValueType> value;
         public RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<ValueType> value) {

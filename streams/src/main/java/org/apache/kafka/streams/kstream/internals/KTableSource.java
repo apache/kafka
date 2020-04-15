@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,7 +126,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final MeteredTimestampedKeyValueStore<K, V>.RawAndDeserializedValue<V> tuple = store.getWithBinary(key); 
+                final RawAndDeserializedValue<V> tuple = store.getWithBinary(key); 
                 final ValueAndTimestamp<V> oldValueAndTimestamp = tuple.value;
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
@@ -137,13 +138,12 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 } else {
                     oldValue = null;
                 }
+                final ValueAndTimestamp<V> newValueAndTimestamp = ValueAndTimestamp.make(value, context().timestamp());
                 final boolean isDifferentValue = 
-                    store.putIfDifferentValues(key, ValueAndTimestamp.make(value, context().timestamp()), tuple.serializedValue);
+                    store.putIfDifferentValues(key, newValueAndTimestamp, tuple.serializedValue);
                 if (isDifferentValue) {
-                    System.out.println("LOGGING: Forwarding prior value for key " + key + " and value " + value);
                     tupleForwarder.maybeForward(key, value, oldValue);
                 }  else {
-                    System.out.println("LOGGING: Dropping value for key " + key + " and value " + value);
                     skippedIdempotentUpdatesSensor.record();
                 }
             } else {
