@@ -1044,7 +1044,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         // If we are the leader, determine the preferred read-replica
         val preferredReadReplica = clientMetadata.flatMap(
-          metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset, fetchTimeMs))
+          metadata => findPreferredReadReplica(partition, metadata, replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
           replicaSelectorOpt.foreach{ selector =>
@@ -1077,7 +1077,7 @@ class ReplicaManager(val config: KafkaConfig,
           val followerNeedsHwUpdate: Boolean = partition.getReplica(replicaId)
             .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
 
-          val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
+          val fetchDataInfo = if (shouldLeaderThrottle(quota, partition, replicaId)) {
             // If the partition is being throttled, simply return an empty set.
             FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
           } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
@@ -1159,20 +1159,18 @@ class ReplicaManager(val config: KafkaConfig,
     * client metadata, the requested offset, and the current set of replicas. If the preferred read replica is the
     * leader, return None
     */
-  def findPreferredReadReplica(tp: TopicPartition,
+  def findPreferredReadReplica(partition: Partition,
                                clientMetadata: ClientMetadata,
                                replicaId: Int,
                                fetchOffset: Long,
                                currentTimeMs: Long): Option[Int] = {
-    val partition = getPartitionOrException(tp, expectLeader = false)
-
     if (partition.isLeader) {
       if (Request.isValidBrokerId(replicaId)) {
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
       } else {
         replicaSelectorOpt.flatMap { replicaSelector =>
-          val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp, new ListenerName(clientMetadata.listenerName))
+          val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(partition.topicPartition, new ListenerName(clientMetadata.listenerName))
           var replicaInfoSet: Set[ReplicaView] = partition.remoteReplicas
             // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
             .filter(replica => replica.logEndOffset >= fetchOffset)
@@ -1191,7 +1189,7 @@ class ReplicaManager(val config: KafkaConfig,
             replicaInfoSet ++= Set(leaderReplica)
 
             val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-            replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
+            replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).asScala
               .filter(!_.endpoint.isEmpty)
               // Even though the replica selector can return the leader, we don't want to send it out with the
               // FetchResponse, so we exclude it here
@@ -1211,9 +1209,9 @@ class ReplicaManager(val config: KafkaConfig,
    *  To avoid ISR thrashing, we only throttle a replica on the leader if it's in the throttled replica list,
    *  the quota is exceeded and the replica is not in sync.
    */
-  def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicPartition, replicaId: Int): Boolean = {
-    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.inSyncReplicaIds.contains(replicaId))
-    !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
+  def shouldLeaderThrottle(quota: ReplicaQuota, partition: Partition, replicaId: Int): Boolean = {
+    val isReplicaInSync = partition.inSyncReplicaIds.contains(replicaId)
+    !isReplicaInSync && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
   }
 
   def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = localLog(topicPartition).map(_.config)

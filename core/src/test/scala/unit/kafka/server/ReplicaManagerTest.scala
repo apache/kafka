@@ -841,14 +841,12 @@ class ReplicaManagerTest {
       offsetCheckpoints
     )
 
-    val tp0 = new TopicPartition(topic, 0)
-
     val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     // We expect to select the leader, which means we return None
     val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(
-      tp0, metadata, Request.OrdinaryConsumerId, 1L, System.currentTimeMillis)
+      partition, metadata, Request.OrdinaryConsumerId, 1L, System.currentTimeMillis)
     assertFalse(preferredReadReplica.isDefined)
   }
 
