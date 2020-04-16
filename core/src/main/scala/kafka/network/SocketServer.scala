@@ -297,9 +297,9 @@ class SocketServer(val config: KafkaConfig,
   def stopProcessingRequests(): Unit = {
     info("Stopping socket server request processors")
     this.synchronized {
-      dataPlaneAcceptors.asScala.values.foreach(_.shutdown())
+      dataPlaneAcceptors.asScala.values.foreach(_.initiateShutdown())
       dataPlaneAcceptors.asScala.values.foreach(_.awaitShutdown())
-      controlPlaneAcceptorOpt.foreach(_.shutdown())
+      controlPlaneAcceptorOpt.foreach(_.initiateShutdown())
       controlPlaneAcceptorOpt.foreach(_.awaitShutdown())
       dataPlaneRequestChannel.clear()
       controlPlaneRequestChannelOpt.foreach(_.clear())
@@ -361,7 +361,7 @@ class SocketServer(val config: KafkaConfig,
     listenersRemoved.foreach { endpoint =>
       connectionQuotas.removeListener(config, endpoint.listenerName)
       dataPlaneAcceptors.asScala.remove(endpoint).foreach { acceptor =>
-        acceptor.shutdown()
+        acceptor.initiateShutdown()
         acceptor.awaitShutdown()
       }
     }
@@ -463,7 +463,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   /**
    * Initiates a graceful shutdown by signaling to stop
    */
-  def shutdown(): Unit = {
+  def initiateShutdown(): Unit = {
     if (alive.getAndSet(false))
       wakeup()
   }
@@ -559,15 +559,15 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     // The processors are then removed from `requestChannel` and any pending responses to these processors are dropped.
     val toRemove = processors.takeRight(removeCount)
     processors.remove(processors.size - removeCount, removeCount)
-    toRemove.foreach(_.shutdown())
+    toRemove.foreach(_.initiateShutdown())
     toRemove.foreach(_.awaitShutdown())
     toRemove.foreach(processor => requestChannel.removeProcessor(processor.id))
   }
 
-  override def shutdown(): Unit = {
-    super.shutdown()
+  override def initiateShutdown(): Unit = {
+    super.initiateShutdown()
     synchronized {
-      processors.foreach(_.shutdown())
+      processors.foreach(_.initiateShutdown())
     }
   }
 
@@ -1097,7 +1097,6 @@ private[kafka] class Processor(val id: Int,
     while (!newConnections.isEmpty) {
       newConnections.poll().close()
     }
-    newConnections.clear()
     selector.channels.asScala.foreach { channel =>
       close(channel.id)
     }
@@ -1157,8 +1156,8 @@ private[kafka] class Processor(val id: Int,
    */
   override def wakeup() = selector.wakeup()
 
-  override def shutdown(): Unit = {
-    super.shutdown()
+  override def initiateShutdown(): Unit = {
+    super.initiateShutdown()
     removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
     metrics.removeMetric(expiredConnectionsKilledCountMetricName)
   }
