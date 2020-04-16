@@ -108,4 +108,30 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
+  @Test
+  def testListGroupCommand(): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
+    var out = ""
+
+    var cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected to find $simpleGroup, $group and no header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state", "stable")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(group) && out.contains("Stable")
+    }, s"Expected to find $group in state Stable and the header, but found $out")
+  }
+
 }

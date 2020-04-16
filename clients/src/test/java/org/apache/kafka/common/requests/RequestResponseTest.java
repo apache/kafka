@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -229,8 +230,10 @@ public class RequestResponseTest {
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
-        checkRequest(createListGroupsRequest(), true);
-        checkErrorResponse(createListGroupsRequest(), new UnknownServerException(), true);
+        for (short v = ApiKeys.LIST_GROUPS.oldestVersion(); v <= ApiKeys.LIST_GROUPS.latestVersion(); v++) {
+            checkRequest(createListGroupsRequest(v), false);
+            checkErrorResponse(createListGroupsRequest(v), new UnknownServerException(), true);
+        }
         checkResponse(createListGroupsResponse(), 0, true);
         checkRequest(createDescribeGroupRequest(), true);
         checkErrorResponse(createDescribeGroupRequest(), new UnknownServerException(), true);
@@ -810,6 +813,13 @@ public class RequestResponseTest {
         assertTrue(request.isValid());
     }
 
+    @Test(expected = UnsupportedVersionException.class)
+    public void testListGroupRequestV3FailsWithStates() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setStates(asList(ConsumerGroupState.STABLE.name()));
+        new ListGroupsRequest.Builder(data).build((short) 3);
+    }
+
     @Test
     public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
@@ -1066,8 +1076,11 @@ public class RequestResponseTest {
         return new SyncGroupResponse(data);
     }
 
-    private ListGroupsRequest createListGroupsRequest() {
-        return new ListGroupsRequest.Builder(new ListGroupsRequestData()).build();
+    private ListGroupsRequest createListGroupsRequest(short version) {
+        ListGroupsRequestData data = new ListGroupsRequestData();
+        if (version >= 4)
+            data.setStates(Arrays.asList("Stable"));
+        return new ListGroupsRequest.Builder(data).build(version);
     }
 
     private ListGroupsResponse createListGroupsResponse() {
@@ -1133,7 +1146,6 @@ public class RequestResponseTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     private ListOffsetRequest createListOffsetRequest(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
@@ -1164,7 +1176,6 @@ public class RequestResponseTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private ListOffsetResponse createListOffsetResponse(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();

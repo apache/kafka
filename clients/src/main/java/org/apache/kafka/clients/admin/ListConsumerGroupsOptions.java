@@ -46,7 +46,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
         this.states = Optional.of(states);
         return this;
     }
- 
+
     /**
      * All groups with their states will be returned by listConsumerGroups()
      */
@@ -54,7 +54,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
         this.states = Optional.of(EnumSet.allOf(ConsumerGroupState.class));
         return this;
     }
- 
+
     /**
      * Returns the list of States that are requested
      */
