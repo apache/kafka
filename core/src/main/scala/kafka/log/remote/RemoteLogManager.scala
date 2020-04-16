@@ -443,41 +443,36 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)
     val rlsMetadata = getRemoteLogSegmentMetadata(tp, offset)
 
-    var startPos = lookupPositionForOffset(rlsMetadata, offset)
+    val startPos = lookupPositionForOffset(rlsMetadata, offset)
     var remoteSegInputStream: InputStream = null
     try {
       // Search forward for the position of the last offset that is greater than or equal to the target offset
       remoteSegInputStream = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
       val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
 
-      var batch:RecordBatch = null;
-      def fetchBatch() : RecordBatch = {
-        batch = remoteLogInputStream.nextBatch()
-        batch
+      var firstBatch:RecordBatch = null
+      def nextBatch(): RecordBatch = {
+        firstBatch = remoteLogInputStream.nextBatch()
+        firstBatch
       }
-
-      // always look for the batch which has the desired offset and set the startPosition as that segments start
-      // location.
-      var lastBatchSize = 0
-
+      // Look for the batch which has the desired offset
       // we will always have a batch in that segment as it is a non-compacted topic. For compacted topics, we may need
       //to read from the subsequent segments if there is no batch available for the desired offset in the current
-      //segment. Tha means, desired offset is more than last offset of the current segment and immediate available
+      //segment. That means, desired offset is more than last offset of the current segment and immediate available
       //offset exists in the next segment which can be higher than the desired offset.
-      while (fetchBatch() != null && batch.lastOffset < offset) {
-        // sets the startPos as the starting of the next batch's start location.
-        lastBatchSize = batch.sizeInBytes()
-        startPos += lastBatchSize
+      while (nextBatch() != null && firstBatch.lastOffset < offset) {
       }
 
-      val updatedFetchSize = if (remoteStorageFetchInfo.minOneMessage && lastBatchSize > maxBytes) lastBatchSize else maxBytes
+      if (firstBatch == null)
+        return FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.EMPTY)
+
+      val updatedFetchSize = if (remoteStorageFetchInfo.minOneMessage && firstBatch.sizeInBytes() > maxBytes) firstBatch.sizeInBytes() else maxBytes
 
       val buffer = ByteBuffer.allocate(updatedFetchSize)
       var remainingBytes = updatedFetchSize
-      if (lastBatchSize > 0) {
-        remainingBytes -= lastBatchSize
-        batch.writeTo(buffer)
-      }
+
+      firstBatch.writeTo(buffer)
+      remainingBytes -= firstBatch.sizeInBytes()
 
       if(remainingBytes > 0) {
         // input stream is read till (startPos - 1) while getting the batch of records earlier.
