@@ -93,13 +93,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     public Send toSend(String destination, RequestHeader header) {
-        return new NetworkSend(destination, serialize(header));
+        return new NetworkSend(destination, serializeWithHeader(header));
     }
 
     /**
+     * Serialize the request with provided header to be sent out.
+     *
      * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
      */
-    public ByteBuffer serialize(RequestHeader header) {
+    public ByteBuffer serializeWithHeader(RequestHeader header) {
         return RequestUtils.serialize(header.toStruct(), toStruct());
     }
 

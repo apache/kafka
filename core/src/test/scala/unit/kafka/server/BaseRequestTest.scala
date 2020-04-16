@@ -134,7 +134,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   }
 
   def sendWithHeader(request: AbstractRequest, header: RequestHeader, socket: Socket): Unit = {
-    val serializedBytes = request.serialize(header).array
+    val serializedBytes = request.serializeWithHeader(header).array
     sendRequest(socket, serializedBytes)
   }
 

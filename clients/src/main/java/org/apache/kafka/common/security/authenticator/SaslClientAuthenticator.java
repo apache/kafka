@@ -394,7 +394,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
                             .setAuthBytes(tokenBuf.array());
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
-                    tokenBuf = request.serialize(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
+                    tokenBuf = request.serializeWithHeader(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
                 send(new NetworkSend(node, tokenBuf));
                 return true;
