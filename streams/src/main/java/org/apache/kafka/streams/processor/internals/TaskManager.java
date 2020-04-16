@@ -459,7 +459,6 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
@@ -470,10 +469,6 @@ public class TaskManager {
                 } catch (final RuntimeException e) {
                     log.warn("Error closing task producer for " + task.id() + " while handling lostAll", e);
                 }
-            }
-
-            for (final TopicPartition inputPartition : inputPartitions) {
-                partitionToTask.remove(inputPartition);
             }
         }
 
@@ -743,11 +738,10 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
-        return commitInternal(tasks.values());
+        return commit(tasks.values());
     }
 
-    private int commitInternal(final Collection<Task> tasks) {
-
+    int commit(final Collection<Task> tasks) {
         if (rebalanceInProgress) {
             return -1;
         } else {
@@ -763,7 +757,9 @@ public class TaskManager {
                 }
             }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            }
 
             for (final Task task : tasks) {
                 if (task.commitNeeded()) {
@@ -786,7 +782,7 @@ public class TaskManager {
         } else {
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    return commitInternal(activeTaskIterable());
+                    return commit(activeTaskIterable());
                 }
             }
             return 0;
@@ -837,7 +833,7 @@ public class TaskManager {
                 }
                 now = time.milliseconds();
                 totalProcessed += processed;
-                task.recordProcessBatchTime(then - now);
+                task.recordProcessBatchTime(now - then);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());

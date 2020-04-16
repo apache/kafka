@@ -691,6 +691,67 @@ class KafkaApisTest {
   }
 
   @Test
+  def testOffsetDelete(): Unit = {
+    val group = "groupId"
+    setupBasicMetadataCache("topic-1", numPartitions = 2)
+    setupBasicMetadataCache("topic-2", numPartitions = 2)
+
+    EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val topics = new OffsetDeleteRequestTopicCollection()
+    topics.add(new OffsetDeleteRequestTopic()
+      .setName("topic-1")
+      .setPartitions(Seq(
+        new OffsetDeleteRequestPartition().setPartitionIndex(0),
+        new OffsetDeleteRequestPartition().setPartitionIndex(1)).asJava))
+    topics.add(new OffsetDeleteRequestTopic()
+      .setName("topic-2")
+      .setPartitions(Seq(
+        new OffsetDeleteRequestPartition().setPartitionIndex(0),
+        new OffsetDeleteRequestPartition().setPartitionIndex(1)).asJava))
+
+    val offsetDeleteRequest = new OffsetDeleteRequest.Builder(
+      new OffsetDeleteRequestData()
+        .setGroupId(group)
+        .setTopics(topics)
+    ).build()
+    val request = buildRequest(offsetDeleteRequest)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(groupCoordinator.handleDeleteOffsets(
+      EasyMock.eq(group),
+      EasyMock.eq(Seq(
+        new TopicPartition("topic-1", 0),
+        new TopicPartition("topic-1", 1),
+        new TopicPartition("topic-2", 0),
+        new TopicPartition("topic-2", 1)
+      ))
+    )).andReturn((Errors.NONE, Map(
+      new TopicPartition("topic-1", 0) -> Errors.NONE,
+      new TopicPartition("topic-1", 1) -> Errors.NONE,
+      new TopicPartition("topic-2", 0) -> Errors.NONE,
+      new TopicPartition("topic-2", 1) -> Errors.NONE,
+    )))
+
+    EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleOffsetDeleteRequest(request)
+
+    val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+      .asInstanceOf[OffsetDeleteResponse]
+
+    def errorForPartition(topic: String, partition: Int): Errors = {
+      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode())
+    }
+
+    assertEquals(2, response.data.topics.size)
+    assertEquals(Errors.NONE, errorForPartition("topic-1", 0))
+    assertEquals(Errors.NONE, errorForPartition("topic-1", 1))
+    assertEquals(Errors.NONE, errorForPartition("topic-2", 0))
+    assertEquals(Errors.NONE, errorForPartition("topic-2", 1))
+  }
+
+  @Test
   def testOffsetDeleteWithInvalidPartition(): Unit = {
     val group = "groupId"
     val topic = "topic"

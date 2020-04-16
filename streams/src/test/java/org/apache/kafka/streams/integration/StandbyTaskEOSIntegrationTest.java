@@ -35,10 +35,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -52,8 +56,21 @@ import static org.junit.Assert.assertTrue;
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
+@RunWith(Parameterized.class)
 public class StandbyTaskEOSIntegrationTest {
 
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.EXACTLY_ONCE},
+            {StreamsConfig.EXACTLY_ONCE_BETA}
+        });
+    }
+
+    @Parameterized.Parameter
+    public String eosConfig;
+
+    private final String appId = "eos-test-app";
     private final String inputTopic = "input";
 
     @ClassRule
@@ -61,6 +78,7 @@ public class StandbyTaskEOSIntegrationTest {
 
     @Before
     public void createTopics() throws Exception {
+        CLUSTER.deleteTopicsAndWait(inputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
     }
 
@@ -77,14 +95,13 @@ public class StandbyTaskEOSIntegrationTest {
                 new Properties()),
             10L);
 
-        final String appId = "eos-test-app";
         final String stateDirPath = TestUtils.tempDirectory(appId).getPath();
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
         try (
-            final KafkaStreams streamInstanceOne = buildStreamWithDirtyStateDir(appId, stateDirPath + "/" + appId + "-1/", instanceLatch);
-            final KafkaStreams streamInstanceTwo = buildStreamWithDirtyStateDir(appId, stateDirPath + "/" + appId + "-2/", instanceLatch);
+            final KafkaStreams streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
+            final KafkaStreams streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
         ) {
 
 
@@ -102,17 +119,19 @@ public class StandbyTaskEOSIntegrationTest {
 
             streamInstanceOne.close(Duration.ZERO);
             streamInstanceTwo.close(Duration.ZERO);
+
+            streamInstanceOne.cleanUp();
+            streamInstanceTwo.cleanUp();
         }
     }
 
-    private KafkaStreams buildStreamWithDirtyStateDir(final String appId,
-                                                      final String stateDirPath,
+    private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
                                                       final CountDownLatch recordProcessLatch) throws IOException {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final TaskId taskId = new TaskId(0, 0);
 
-        final Properties props = props(appId, stateDirPath);
+        final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true);
@@ -133,14 +152,14 @@ public class StandbyTaskEOSIntegrationTest {
         return new KafkaStreams(builder.build(), props);
     }
 
-    private Properties props(final String appId, final String stateDirPath) {
+    private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
