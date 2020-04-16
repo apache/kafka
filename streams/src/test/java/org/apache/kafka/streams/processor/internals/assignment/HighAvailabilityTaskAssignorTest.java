@@ -161,7 +161,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         assertTrue(taskAssignor.previousAssignmentIsValid());
     }
-
+/*
     @Test
     public void shouldReturnTrueIfTaskHasNoCaughtUpClients() {
         client1 = EasyMock.createNiceMock(ClientState.class);
@@ -205,7 +205,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         assertFalse(taskAssignor.taskIsCaughtUpOnClient(TASK_0_0, UUID_1));
     }
-
+*/
     @Test
     public void shouldComputeBalanceFactorAsDifferenceBetweenMostAndLeastLoadedClients() {
         client1 = EasyMock.createNiceMock(ClientState.class);
@@ -342,6 +342,8 @@ public class HighAvailabilityTaskAssignorTest {
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
     }
+
+
 
     @Test
     public void shouldNotAssignMoreThanMaxWarmupReplicas() {
