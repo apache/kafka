@@ -177,11 +177,13 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         // look for floor entry as the given offset may exist in this entry.
         Map.Entry<Long, RemoteLogSegmentId> entry = remoteLogSegmentIdMap.floorEntry(offset);
         if (entry == null) {
+            // if the offset is lower than the minimum offset available in metadata then return null.
             return null;
         }
 
-        //todo-tier double-check given offset exists in the entry or look forward.
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = idWithSegmentMetadata.get(entry.getValue());
+        // look forward for the segment which has the target offset, if it does not exist then return the highest
+        // offset segment available.
         while (remoteLogSegmentMetadata != null && remoteLogSegmentMetadata.endOffset() < offset) {
             entry = remoteLogSegmentIdMap.higherEntry(entry.getKey());
             if (entry == null) {

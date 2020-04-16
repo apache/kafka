@@ -19,7 +19,7 @@ package kafka.log.remote
 import java.io.File
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.{Collections, Optional, UUID}
+import java.util.{Collections, UUID}
 
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
@@ -101,6 +101,22 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
       val rlSegIdTp1_150 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp1, 150)
       Assert.assertEquals(rlSegIdTp1_101_300, rlSegIdTp1_150)
+
+      // this should return the RemoteLogSegmentId with offset containing 0, including startoffset and the first entry
+      val rlSegIdTp0_0 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 0)
+      Assert.assertEquals(rlSegIdTp0_0_100, rlSegIdTp0_0)
+
+      // this should return the RemoteLogSegmentId with offset containing 100, as last offset of the first entry
+      val rlSegIdTp0_100 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 100)
+      Assert.assertEquals(rlSegIdTp0_0_100, rlSegIdTp0_100)
+
+      // this should return the RemoteLogSegmentId with offset containing 101, including startoffset
+      val rlSegIdTp0_101 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 101)
+      Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_101)
+
+      // this should return the RemoteLogSegmentId with offset containing 200, including endoffset and last entry.
+      val rlSegIdTp0_200 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 200)
+      Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_200)
 
       // this should return the RemoteLogSegmentId with highest offset as the target offset is beyond the highest.
       val rlSegIdTp0_300 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 300)
