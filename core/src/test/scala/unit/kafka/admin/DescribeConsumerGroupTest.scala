@@ -18,7 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
-import kafka.utils.TestUtils
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
@@ -49,6 +49,27 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       assertTrue(s"Expected error was not detected for describe option '${describeType.mkString(" ")}'",
           output.contains(s"Consumer group '$missingGroup' does not exist."))
     }
+  }
+
+  @Test
+  def testDescribeWithMultipleSubActions(): Unit = {
+    var exitStatus: Option[Int] = None
+    var exitMessage: Option[String] = None
+    Exit.setExitProcedure { (status, err) =>
+      exitStatus = Some(status)
+      exitMessage = err
+      throw new RuntimeException
+    }
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
+    try {
+      ConsumerGroupCommand.main(cgcArgs)
+    } catch {
+      case e: RuntimeException => //expected
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    assertEquals(Some(1), exitStatus)
+    assertTrue(exitMessage.get.contains("Option [describe] takes at most one of these options"))
   }
 
   @Test
