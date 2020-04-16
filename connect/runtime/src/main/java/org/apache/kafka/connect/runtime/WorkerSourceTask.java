@@ -188,7 +188,7 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
-    protected void releaseResources() {
+    protected void removeAdditionalMetrics() {
         sourceTaskMetricsGroup.close();
     }
 
