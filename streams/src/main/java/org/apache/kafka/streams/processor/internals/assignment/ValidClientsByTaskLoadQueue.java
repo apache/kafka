@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 class ValidClientsByTaskLoadQueue {
     private final PriorityQueue<UUID> clientsByTaskLoad;
     private final BiFunction<UUID, TaskId, Boolean> validClientCriteria;
+    private final Set<UUID> uniqueClients = new HashSet<>();
 
     ValidClientsByTaskLoadQueue(final Map<UUID, ClientState> clientStates,
                                 final BiFunction<UUID, TaskId, Boolean> validClientCriteria) {
@@ -60,7 +61,7 @@ class ValidClientsByTaskLoadQueue {
             while (true) {
                 candidateClient = clientsByTaskLoad.poll();
                 if (candidateClient == null) {
-                    returnPolledClientsToQueue(invalidPolledClients);
+                    offerAll(invalidPolledClients);
                     return nextLeastLoadedValidClients;
                 }
 
@@ -72,26 +73,26 @@ class ValidClientsByTaskLoadQueue {
                 }
             }
         }
-        returnPolledClientsToQueue(invalidPolledClients);
+        offerAll(invalidPolledClients);
         return nextLeastLoadedValidClients;
     }
 
     void offerAll(final Collection<UUID> clients) {
-        returnPolledClientsToQueue(clients);
-    }
-
-    void offer(final UUID client) {
-        clientsByTaskLoad.offer(client);
-    }
-
-    private void returnPolledClientsToQueue(final Collection<UUID> polledClients) {
-        for (final UUID client : polledClients) {
-            clientsByTaskLoad.offer(client);
+        for (final UUID client : clients) {
+            offer(client);
         }
     }
 
+    void offer(final UUID client) {
+        if (uniqueClients.contains(client)) {
+            clientsByTaskLoad.remove(client);
+        }
+        clientsByTaskLoad.offer(client);
+        uniqueClients.add(client);
+    }
+
     static PriorityQueue<UUID> getClientPriorityQueueByTaskLoad(final Map<UUID, ClientState> clientStates) {
-        final PriorityQueue<UUID> queue = new PriorityQueue<>(
+        return new PriorityQueue<>(
             (client, other) -> {
                 final double clientTaskLoad = clientStates.get(client).taskLoad();
                 final double otherTaskLoad = clientStates.get(other).taskLoad();
@@ -103,8 +104,5 @@ class ValidClientsByTaskLoadQueue {
                     return client.compareTo(other);
                 }
             });
-
-        queue.addAll(clientStates.keySet());
-        return queue;
     }
 }

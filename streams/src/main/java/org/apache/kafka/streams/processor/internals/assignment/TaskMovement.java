@@ -16,53 +16,22 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.taskIsCaughtUpOnClient;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClient;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 
 public class TaskMovement {
-    private static final UUID UNKNOWN = null;
-
     final TaskId task;
-    private UUID source;
     private final UUID destination;
 
     TaskMovement(final TaskId task, final UUID destination) {
         this.task = task;
         this.destination = destination;
-        source = UNKNOWN;
-    }
-
-    void assignSource(final UUID source) {
-        if (!Objects.equals(this.source, UNKNOWN)) {
-            throw new IllegalStateException("Tried to assign source client but source was already assigned!");
-        }
-        this.source = source;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        final TaskMovement movement = (TaskMovement) o;
-        return Objects.equals(task, movement.task) &&
-                   Objects.equals(source, movement.source) &&
-                   Objects.equals(destination, movement.destination);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(task, source, destination);
     }
 
     /**
@@ -113,9 +82,8 @@ public class TaskMovement {
             if (leastLoadedClient == null) {
                 throw new IllegalStateException("Tried to move task to caught-up client but none exist");
             }
-            movement.assignSource(leastLoadedClient);
 
-            final ClientState sourceClientState = clientStates.get(movement.source);
+            final ClientState sourceClientState = clientStates.get(leastLoadedClient);
             sourceClientState.assignActive(movement.task);
 
             final ClientState destinationClientState = clientStates.get(movement.destination);

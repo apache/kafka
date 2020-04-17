@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClient;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
@@ -122,6 +123,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                 clientStates,
                 (client, task) -> !clientStates.get(client).assignedTasks().contains(task)
             );
+        standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
             final int numRemainingStandbys = tasksToRemainingStandbys.get(task);
@@ -144,6 +146,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private void assignStatelessActiveTasks() {
         final PriorityQueue<UUID> statelessActiveTaskClientsQueue = getClientPriorityQueueByTaskLoad(clientStates);
+        statelessActiveTaskClientsQueue.addAll(clientStates.keySet());
 
         for (final TaskId task : statelessTasks) {
             final UUID client = statelessActiveTaskClientsQueue.poll();
@@ -195,16 +198,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         }
         return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
-    }
-
-    /**
-     * @return true if this client is caught-up for this task, or the task has no caught-up clients
-     */
-    static boolean taskIsCaughtUpOnClient(final TaskId task,
-                                          final UUID client,
-                                          final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
-        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
-        return caughtUpClients == null || caughtUpClients.contains(client);
     }
 
     /**
