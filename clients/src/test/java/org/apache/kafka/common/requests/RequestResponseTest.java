@@ -122,6 +122,8 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
@@ -271,13 +273,15 @@ public class RequestResponseTest {
         checkErrorResponse(createProduceRequest(3), new UnknownServerException(), true);
         checkResponse(createProduceResponse(), 2, true);
         checkResponse(createProduceResponseWithErrorMessage(), 8, true);
-        checkRequest(createStopReplicaRequest(0, true), true);
-        checkRequest(createStopReplicaRequest(0, false), true);
-        checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException(), true);
-        checkRequest(createStopReplicaRequest(1, true), true);
-        checkRequest(createStopReplicaRequest(1, false), true);
-        checkErrorResponse(createStopReplicaRequest(1, true), new UnknownServerException(), true);
-        checkResponse(createStopReplicaResponse(), 0, true);
+
+        for (int v = ApiKeys.STOP_REPLICA.oldestVersion(); v <= ApiKeys.STOP_REPLICA.latestVersion(); v++) {
+            checkRequest(createStopReplicaRequest(v, true), true);
+            checkRequest(createStopReplicaRequest(v, false), true);
+            checkErrorResponse(createStopReplicaRequest(v, true), new UnknownServerException(), true);
+            checkErrorResponse(createStopReplicaRequest(v, false), new UnknownServerException(), true);
+            checkResponse(createStopReplicaResponse(), v, true);
+        }
+
         checkRequest(createLeaderAndIsrRequest(0), true);
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
@@ -1286,8 +1290,24 @@ public class RequestResponseTest {
     }
 
     private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
-        Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
-        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
+        List<StopReplicaTopicState> topicStates = new ArrayList<>();
+        StopReplicaTopicState topic1 = new StopReplicaTopicState()
+            .setTopicName("topic1")
+            .setPartitionStates(Collections.singletonList(new StopReplicaPartitionState()
+                .setPartitionIndex(0)
+                .setLeaderEpoch(1)
+                .setDeletePartition(deletePartitions)));
+        topicStates.add(topic1);
+        StopReplicaTopicState topic2 = new StopReplicaTopicState()
+            .setTopicName("topic2")
+            .setPartitionStates(Collections.singletonList(new StopReplicaPartitionState()
+                .setPartitionIndex(1)
+                .setLeaderEpoch(2)
+                .setDeletePartition(deletePartitions)));
+        topicStates.add(topic2);
+
+        return new StopReplicaRequest.Builder((short) version, 0, 1, 0,
+            deletePartitions, topicStates).build((short) version);
     }
 
     private StopReplicaResponse createStopReplicaResponse() {

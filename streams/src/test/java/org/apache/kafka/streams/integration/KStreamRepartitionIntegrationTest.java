@@ -49,6 +49,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
@@ -95,24 +96,22 @@ public class KStreamRepartitionIntegrationTest {
     private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
 
+    @Parameter
+    public String topologyOptimization;
+
     @Parameters(name = "Optimization = {0}")
-    public static Collection<Object[]> data() {
-        final List<Object[]> values = new ArrayList<>();
-
-        Arrays.asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION)
-              .forEach(x -> values.add(new Object[]{x}));
-
-        return values;
-    }
-
-    public KStreamRepartitionIntegrationTest(final String topologyOptimization) {
-        streamsConfiguration = new Properties();
-        kafkaStreamsInstances = new ArrayList<>();
-        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, topologyOptimization);
+    public static Collection<?> topologyOptimization() {
+        return Arrays.asList(new String[][]{
+            {StreamsConfig.OPTIMIZE},
+            {StreamsConfig.NO_OPTIMIZATION}
+        });
     }
 
     @Before
     public void before() throws InterruptedException {
+        streamsConfiguration = new Properties();
+        kafkaStreamsInstances = new ArrayList<>();
+
         final int testNum = TEST_NUM.incrementAndGet();
 
         topicB = "topic-b-" + testNum;
@@ -130,6 +129,7 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, topologyOptimization);
     }
 
     @After

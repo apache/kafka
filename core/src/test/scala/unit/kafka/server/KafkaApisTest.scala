@@ -25,6 +25,7 @@ import java.util.Random
 import java.util.{Collections, Optional}
 import java.util.concurrent.TimeUnit
 
+import kafka.api.LeaderAndIsr
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.cluster.Partition
 import kafka.controller.KafkaController
@@ -48,6 +49,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
@@ -464,33 +466,98 @@ class KafkaApisTest {
   }
 
   @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(): Unit = {
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.initialLeaderEpoch + 2, true)
+  }
+
+  @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.EpochDuringDelete, true)
+  }
+
+  @Test
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.NoEpoch, true)
+  }
+
+  @Test
+  def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
+    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
+      LeaderAndIsr.initialLeaderEpoch + 2, false)
+  }
+
+  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
+                                                                  deletePartition: Boolean): Unit = {
     val controllerId = 0
     val controllerEpoch = 5
     val brokerEpoch = 230498320L
 
+    val fooPartition = new TopicPartition("foo", 0)
     val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val txnStatePartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
+
+    val topicStates = Seq(
+      new StopReplicaTopicState()
+        .setTopicName(groupMetadataPartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(groupMetadataPartition.partition())
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava),
+      new StopReplicaTopicState()
+        .setTopicName(txnStatePartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(txnStatePartition.partition())
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava),
+      new StopReplicaTopicState()
+        .setTopicName(fooPartition.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(fooPartition.partition())
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(deletePartition)).asJava)
+    ).asJava
 
     val stopReplicaRequest = new StopReplicaRequest.Builder(
       ApiKeys.STOP_REPLICA.latestVersion,
       controllerId,
       controllerEpoch,
       brokerEpoch,
-      true,
-      Set(groupMetadataPartition, txnStatePartition).asJava
+      false,
+      topicStates
     ).build()
     val request = buildRequest(stopReplicaRequest)
 
-    EasyMock.expect(replicaManager.stopReplicas(anyObject())).andReturn(
-      (mutable.Map(groupMetadataPartition -> Errors.NONE, txnStatePartition -> Errors.NONE), Errors.NONE))
+    EasyMock.expect(replicaManager.stopReplicas(
+      EasyMock.eq(request.context.correlationId),
+      EasyMock.eq(controllerId),
+      EasyMock.eq(controllerEpoch),
+      EasyMock.eq(brokerEpoch),
+      EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
+    )).andReturn(
+      (mutable.Map(
+        groupMetadataPartition -> Errors.NONE,
+        txnStatePartition -> Errors.NONE,
+        fooPartition -> Errors.NONE
+      ), Errors.NONE)
+    )
     EasyMock.expect(controller.brokerEpoch).andStubReturn(brokerEpoch)
 
-    txnCoordinator.onResignation(txnStatePartition.partition, None)
-    EasyMock.expectLastCall()
+    if (deletePartition) {
+      if (leaderEpoch >= 0) {
+        txnCoordinator.onResignation(txnStatePartition.partition, Some(leaderEpoch))
+      } else {
+        txnCoordinator.onResignation(txnStatePartition.partition, None)
+      }
+      EasyMock.expectLastCall()
+    }
 
-    groupCoordinator.onResignation(groupMetadataPartition.partition)
-    EasyMock.expectLastCall()
+    if (deletePartition) {
+      groupCoordinator.onResignation(groupMetadataPartition.partition)
+      EasyMock.expectLastCall()
+    }
 
     EasyMock.replay(controller, replicaManager, txnCoordinator, groupCoordinator)
 
@@ -621,6 +688,67 @@ class KafkaApisTest {
     assertEquals(memberSummary.clientHost, member.clientHost())
     assertArrayEquals(memberSummary.metadata, member.memberMetadata())
     assertArrayEquals(memberSummary.assignment, member.memberAssignment())
+  }
+
+  @Test
+  def testOffsetDelete(): Unit = {
+    val group = "groupId"
+    setupBasicMetadataCache("topic-1", numPartitions = 2)
+    setupBasicMetadataCache("topic-2", numPartitions = 2)
+
+    EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val topics = new OffsetDeleteRequestTopicCollection()
+    topics.add(new OffsetDeleteRequestTopic()
+      .setName("topic-1")
+      .setPartitions(Seq(
+        new OffsetDeleteRequestPartition().setPartitionIndex(0),
+        new OffsetDeleteRequestPartition().setPartitionIndex(1)).asJava))
+    topics.add(new OffsetDeleteRequestTopic()
+      .setName("topic-2")
+      .setPartitions(Seq(
+        new OffsetDeleteRequestPartition().setPartitionIndex(0),
+        new OffsetDeleteRequestPartition().setPartitionIndex(1)).asJava))
+
+    val offsetDeleteRequest = new OffsetDeleteRequest.Builder(
+      new OffsetDeleteRequestData()
+        .setGroupId(group)
+        .setTopics(topics)
+    ).build()
+    val request = buildRequest(offsetDeleteRequest)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(groupCoordinator.handleDeleteOffsets(
+      EasyMock.eq(group),
+      EasyMock.eq(Seq(
+        new TopicPartition("topic-1", 0),
+        new TopicPartition("topic-1", 1),
+        new TopicPartition("topic-2", 0),
+        new TopicPartition("topic-2", 1)
+      ))
+    )).andReturn((Errors.NONE, Map(
+      new TopicPartition("topic-1", 0) -> Errors.NONE,
+      new TopicPartition("topic-1", 1) -> Errors.NONE,
+      new TopicPartition("topic-2", 0) -> Errors.NONE,
+      new TopicPartition("topic-2", 1) -> Errors.NONE,
+    )))
+
+    EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleOffsetDeleteRequest(request)
+
+    val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+      .asInstanceOf[OffsetDeleteResponse]
+
+    def errorForPartition(topic: String, partition: Int): Errors = {
+      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode())
+    }
+
+    assertEquals(2, response.data.topics.size)
+    assertEquals(Errors.NONE, errorForPartition("topic-1", 0))
+    assertEquals(Errors.NONE, errorForPartition("topic-1", 1))
+    assertEquals(Errors.NONE, errorForPartition("topic-2", 0))
+    assertEquals(Errors.NONE, errorForPartition("topic-2", 1))
   }
 
   @Test

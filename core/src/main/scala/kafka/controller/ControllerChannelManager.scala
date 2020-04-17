@@ -27,6 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -38,7 +39,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{HashMap, ListBuffer}
+import scala.collection.mutable.HashMap
 import scala.collection.{Seq, Set, mutable}
 
 object ControllerChannelManager {
@@ -328,14 +329,12 @@ class ControllerBrokerRequestBatch(config: KafkaConfig,
 
 }
 
-case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean)
-
 abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     controllerContext: ControllerContext,
-                                                    stateChangeLogger: StateChangeLogger) extends  Logging {
+                                                    stateChangeLogger: StateChangeLogger) extends Logging {
   val controllerId: Int = config.brokerId
   val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
-  val stopReplicaRequestMap = mutable.Map.empty[Int, ListBuffer[StopReplicaRequestInfo]]
+  val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
 
@@ -396,9 +395,23 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int],
                                       topicPartition: TopicPartition,
                                       deletePartition: Boolean): Unit = {
+    // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
+    // any existing epoch.
+    val leaderEpoch = if (controllerContext.isTopicQueuedUpForDeletion(topicPartition.topic)) {
+      LeaderAndIsr.EpochDuringDelete
+    } else {
+      controllerContext.partitionLeadershipInfo.get(topicPartition)
+        .map(_.leaderAndIsr.leaderEpoch)
+        .getOrElse(LeaderAndIsr.NoEpoch)
+    }
+
     brokerIds.filter(_ >= 0).foreach { brokerId =>
-      val stopReplicaInfos = stopReplicaRequestMap.getOrElseUpdate(brokerId, ListBuffer.empty[StopReplicaRequestInfo])
-      stopReplicaInfos.append(StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId), deletePartition))
+      val result = stopReplicaRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
+      val alreadyDelete = result.get(topicPartition).exists(_.deletePartition)
+      result.put(topicPartition, new StopReplicaPartitionState()
+          .setPartitionIndex(topicPartition.partition())
+          .setLeaderEpoch(leaderEpoch)
+          .setDeletePartition(alreadyDelete || deletePartition))
     }
   }
 
@@ -530,8 +543,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   }
 
   private def sendStopReplicaRequests(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
+    val traceEnabled = stateChangeLog.isTraceEnabled
     val stopReplicaRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 2
+      if (config.interBrokerProtocolVersion >= KAFKA_2_6_IV0) 3
+      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 2
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
       else 0
 
@@ -545,36 +560,71 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error, partitionErrorsForDeletingTopics))
     }
 
-    def createStopReplicaRequest(brokerEpoch: Long, requests: Seq[StopReplicaRequestInfo], deletePartitions: Boolean): StopReplicaRequest.Builder = {
-      val partitions = requests.map(_.replica.topicPartition).asJava
-      new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch,
-        brokerEpoch, deletePartitions, partitions)
+    def sendStopReplicaRequest(brokerId: Int,
+                               brokerEpoch: Long,
+                               deletePartitions: Boolean,
+                               topicStates: mutable.Map[String, StopReplicaTopicState]): Unit = {
+      val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
+        stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
+        deletePartitions, topicStates.values.toBuffer.asJava)
+      val callback = stopReplicaPartitionDeleteResponseCallback(brokerId) _
+      sendRequest(brokerId, stopReplicaRequestBuilder, callback)
     }
 
-    val traceEnabled = stateChangeLog.isTraceEnabled
-    stopReplicaRequestMap.foreach { case (brokerId, replicaInfoList) =>
+    stopReplicaRequestMap.foreach { case (brokerId, partitionStates) =>
       if (controllerContext.liveOrShuttingDownBrokerIds.contains(brokerId)) {
-        val (stopReplicaWithDelete, stopReplicaWithoutDelete) = replicaInfoList.partition(r => r.deletePartition)
+        if (traceEnabled)
+          partitionStates.foreach { case (topicPartition, partitionState) =>
+            stateChangeLog.trace(s"Sending StopReplica request $partitionState to " +
+              s"broker $brokerId for partition $topicPartition")
+          }
+
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(brokerId)
+        if (stopReplicaRequestVersion >= 3) {
+          val stopReplicaTopicState = mutable.Map.empty[String, StopReplicaTopicState]
+          partitionStates.foreach { case (topicPartition, partitionState) =>
+            val topicState = stopReplicaTopicState.getOrElseUpdate(topicPartition.topic,
+              new StopReplicaTopicState().setTopicName(topicPartition.topic))
+            topicState.partitionStates().add(partitionState)
+          }
 
-        if (stopReplicaWithDelete.nonEmpty) {
-          stateChangeLog.info(s"Sending a stop replica request (delete = true) for ${stopReplicaWithDelete.size} replicas to broker $brokerId")
-          if (traceEnabled)
-            stateChangeLog.trace(s"The stop replica request (delete = true) sent to broker $brokerId contains ${stopReplicaWithDelete.map(_.replica).mkString(",")}")
-          val stopReplicaRequest = createStopReplicaRequest(brokerEpoch, stopReplicaWithDelete, deletePartitions = true)
-          val callback = stopReplicaPartitionDeleteResponseCallback(brokerId) _
-          sendRequest(brokerId, stopReplicaRequest, callback)
-        }
+          stateChangeLog.info(s"Sending StopReplica request for ${partitionStates.size} " +
+            s"replicas to broker $brokerId")
+          sendStopReplicaRequest(brokerId, brokerEpoch, false, stopReplicaTopicState)
+        } else {
+          var numPartitionStateWithDelete = 0
+          var numPartitionStateWithoutDelete = 0
+          val topicStatesWithDelete = mutable.Map.empty[String, StopReplicaTopicState]
+          val topicStatesWithoutDelete = mutable.Map.empty[String, StopReplicaTopicState]
 
-        if (stopReplicaWithoutDelete.nonEmpty) {
-          stateChangeLog.info(s"Sending a stop replica request (delete = false) for ${stopReplicaWithoutDelete.size} replicas to broker $brokerId")
-          if (traceEnabled)
-            stateChangeLog.trace(s"The stop replica request (delete = false) sent to broker $brokerId contains ${stopReplicaWithoutDelete.map(_.replica).mkString(",")}")
-          val stopReplicaRequest = createStopReplicaRequest(brokerEpoch, stopReplicaWithoutDelete, deletePartitions = false)
-          sendRequest(brokerId, stopReplicaRequest)
+          partitionStates.foreach { case (topicPartition, partitionState) =>
+            val topicStates = if (partitionState.deletePartition()) {
+              numPartitionStateWithDelete += 1
+              topicStatesWithDelete
+            } else {
+              numPartitionStateWithoutDelete += 1
+              topicStatesWithoutDelete
+            }
+            val topicState = topicStates.getOrElseUpdate(topicPartition.topic,
+              new StopReplicaTopicState().setTopicName(topicPartition.topic))
+            topicState.partitionStates().add(partitionState)
+          }
+
+          if (topicStatesWithDelete.nonEmpty) {
+            stateChangeLog.info(s"Sending StopReplica request (delete = true) for " +
+              s"$numPartitionStateWithDelete replicas to broker $brokerId")
+            sendStopReplicaRequest(brokerId, brokerEpoch, true, topicStatesWithDelete)
+          }
+
+          if (topicStatesWithoutDelete.nonEmpty) {
+            stateChangeLog.info(s"Sending StopReplica request (delete = false) for " +
+              s"$numPartitionStateWithoutDelete replicas to broker $brokerId")
+            sendStopReplicaRequest(brokerId, brokerEpoch, false, topicStatesWithoutDelete)
+          }
         }
       }
     }
+
     stopReplicaRequestMap.clear()
   }
 

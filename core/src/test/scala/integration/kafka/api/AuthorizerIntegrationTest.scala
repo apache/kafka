@@ -42,6 +42,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.network.ListenerName
@@ -443,8 +444,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def stopReplicaRequest: StopReplicaRequest = {
+    val topicStates = Seq(
+      new StopReplicaTopicState()
+        .setTopicName(tp.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(tp.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava)
+    ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,
-      Long.MaxValue, true, Set(tp).asJava).build()
+      Long.MaxValue, false, topicStates).build()
   }
 
   private def controlledShutdownRequest: ControlledShutdownRequest = {

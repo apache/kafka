@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -57,6 +56,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
@@ -547,7 +548,7 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    private void runLoop() {
+    void runLoop() {
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -569,6 +570,13 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
 
+                taskManager.commit(
+                    taskManager.tasks()
+                        .values()
+                        .stream()
+                        .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
+                        .collect(Collectors.toSet())
+                );
                 taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +

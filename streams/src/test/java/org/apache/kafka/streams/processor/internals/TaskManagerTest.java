@@ -127,6 +127,14 @@ public class TaskManagerTest {
     private final TopicPartition t1p3 = new TopicPartition(topic1, 3);
     private final Set<TopicPartition> taskId03Partitions = mkSet(t1p3);
 
+    private final TaskId taskId04 = new TaskId(0, 4);
+    private final TopicPartition t1p4 = new TopicPartition(topic1, 4);
+    private final Set<TopicPartition> taskId04Partitions = mkSet(t1p4);
+
+    private final TaskId taskId05 = new TaskId(0, 5);
+    private final TopicPartition t1p5 = new TopicPartition(topic1, 5);
+    private final Set<TopicPartition> taskId05Partitions = mkSet(t1p5);
+
     private final TaskId taskId10 = new TaskId(1, 0);
     private final TopicPartition t2p0 = new TopicPartition(topic2, 0);
     private final Set<TopicPartition> taskId10Partitions = mkSet(t2p0);
@@ -1580,6 +1588,77 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCommitProvidedTasksIfNeeded() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        final StateMachineTask task03 = new StateMachineTask(taskId03, taskId03Partitions, false);
+        final StateMachineTask task04 = new StateMachineTask(taskId04, taskId04Partitions, false);
+        final StateMachineTask task05 = new StateMachineTask(taskId05, taskId05Partitions, false);
+
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId03, taskId03Partitions),
+            mkEntry(taskId04, taskId04Partitions),
+            mkEntry(taskId05, taskId05Partitions)
+        );
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
+            .andReturn(Arrays.asList(task00, task01, task02)).anyTimes();
+        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+            .andReturn(Arrays.asList(task03, task04, task05)).anyTimes();
+        expectLastCall();
+
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(assignmentActive, assignmentStandby);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+
+        task00.setCommitNeeded();
+        task01.setCommitNeeded();
+        task03.setCommitNeeded();
+        task04.setCommitNeeded();
+
+        assertThat(taskManager.commit(Arrays.asList(task00, task02, task03, task05)), equalTo(2));
+        assertThat(task00.commitNeeded, is(false));
+        assertThat(task01.commitNeeded, is(true));
+        assertThat(task02.commitNeeded, is(false));
+        assertThat(task03.commitNeeded, is(false));
+        assertThat(task04.commitNeeded, is(true));
+        assertThat(task05.commitNeeded, is(false));
+    }
+
+    @Test
+    public void shouldNotCommitOffsetsIfOnlyStandbyTasksAssigned() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment)))
+            .andReturn(singletonList(task00)).anyTimes();
+        expectLastCall();
+
+        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        task00.setCommitNeeded();
+
+        assertThat(taskManager.commitAll(), equalTo(1));
+        assertThat(task00.commitNeeded, is(false));
+    }
+
+    @Test
     public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws IOException {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
@@ -2322,10 +2401,12 @@ public class TaskManagerTest {
     @Test
     public void shouldThrowTaskMigratedExceptionOnCommitFailed() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new CommitFailedException());
         replay(consumer);
 
@@ -2342,10 +2423,12 @@ public class TaskManagerTest {
     @Test
     public void shouldThrowStreamsExceptionOnCommitTimeout() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new TimeoutException());
         replay(consumer);
 
@@ -2362,10 +2445,12 @@ public class TaskManagerTest {
     @Test
     public void shouldStreamsExceptionOnCommitError() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new KafkaException());
         replay(consumer);
 
@@ -2382,10 +2467,12 @@ public class TaskManagerTest {
     @Test
     public void shouldFailOnCommitFatal() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
         taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(Collections.emptyMap());
+        consumer.commitSync(offsets);
         expectLastCall().andThrow(new RuntimeException("KABOOM"));
         replay(consumer);
 

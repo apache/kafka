@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
+import kafka.api.LeaderAndIsr
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
@@ -237,20 +238,33 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      info("Received stop replica request with broker epoch " +
+      info("Received StopReplica request with broker epoch " +
         s"${stopReplicaRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
-      sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
+      sendResponseExemptThrottle(request, new StopReplicaResponse(
+        new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
-      val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
+      val partitionStates = stopReplicaRequest.partitionStates().asScala
+      val (result, error) = replicaManager.stopReplicas(
+        request.context.correlationId,
+        stopReplicaRequest.controllerId,
+        stopReplicaRequest.controllerEpoch,
+        stopReplicaRequest.brokerEpoch,
+        partitionStates)
       // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
       // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
       result.foreach { case (topicPartition, error) =>
-        if (error == Errors.NONE && stopReplicaRequest.deletePartitions) {
-          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
+        if (error == Errors.NONE) {
+          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
+              && partitionStates(topicPartition).deletePartition) {
             groupCoordinator.onResignation(topicPartition.partition)
-          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME) {
-            // The StopReplica API does not pass through the leader epoch
-            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = None)
+          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
+                     && partitionStates(topicPartition).deletePartition) {
+            val partitionState = partitionStates(topicPartition)
+            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
+                Some(partitionState.leaderEpoch)
+            else
+              None
+            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = leaderEpoch)
           }
         }
       }
@@ -263,7 +277,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
         .setErrorCode(error.code)
-        .setPartitionErrors(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toBuffer.asJava)))
+        .setPartitionErrors(result.map {
+          case (tp, error) => toStopReplicaPartition(tp, error)
+        }.toBuffer.asJava)))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
@@ -2843,18 +2859,18 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicPartitionErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
+          topicPartitionErrors.groupBy(_._1.topic).foreach { case (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
-            topicPartitions.map { case (topicPartition, error) =>
+            topicPartitions.foreach { case (topicPartition, error) =>
               partitions.add(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                   .setPartitionIndex(topicPartition.partition)
                   .setErrorCode(error.code)
               )
-              topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
-                .setName(topic)
-                .setPartitions(partitions))
             }
+            topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+              .setName(topic)
+              .setPartitions(partitions))
           }
 
           new OffsetDeleteResponse(new OffsetDeleteResponseData()
