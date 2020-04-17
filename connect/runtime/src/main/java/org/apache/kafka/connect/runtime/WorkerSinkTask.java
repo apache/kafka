@@ -175,8 +175,12 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
-    protected void removeAdditionalMetrics() {
-        sinkTaskMetricsGroup.close();
+    public void removeMetrics() {
+        try {
+            sinkTaskMetricsGroup.close();
+        } finally {
+            super.removeMetrics();
+        }
     }
 
     @Override

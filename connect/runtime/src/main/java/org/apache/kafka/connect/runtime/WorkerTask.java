@@ -148,21 +148,12 @@ abstract class WorkerTask implements Runnable {
      * Remove all metrics published by this task.
      */
     public void removeMetrics() {
-        try {
-            removeAdditionalMetrics();
-        } finally {
-            taskMetricsGroup.close();
-        }
+        taskMetricsGroup.close();
     }
 
     protected abstract void execute();
 
     protected abstract void close();
-
-    /**
-     * Remove any metrics specific to the subclass. Invoked as part of {@link #removeMetrics}.
-     */
-    protected abstract void removeAdditionalMetrics();
 
     protected boolean isStopping() {
         return stopping;
