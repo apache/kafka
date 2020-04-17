@@ -181,40 +181,6 @@ public class RocksDBMetricsIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldVerifyThatMetricsGetMeasurementsFromRocksDBForNonSegmentedStateStore() throws Exception {
-        final Properties streamsConfiguration = streamsConfig();
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final StreamsBuilder builder = builderForNonSegmentedStateStore();
-        final String metricsScope = "rocksdb-state-id";
-
-        cleanUpStateRunVerifyAndClose(
-            builder,
-            streamsConfiguration,
-            IntegerDeserializer.class,
-            StringDeserializer.class,
-            this::verifyThatBytesWrittenTotalIncreases,
-            metricsScope
-        );
-    }
-
-    @Test
-    public void shouldVerifyThatMetricsGetMeasurementsFromRocksDBForSegmentedStateStore() throws Exception {
-        final Properties streamsConfiguration = streamsConfig();
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final StreamsBuilder builder = builderForSegmentedStateStore();
-        final String metricsScope = "rocksdb-window-state-id";
-
-        cleanUpStateRunVerifyAndClose(
-            builder,
-            streamsConfiguration,
-            LongDeserializer.class,
-            LongDeserializer.class,
-            this::verifyThatBytesWrittenTotalIncreases,
-            metricsScope
-        );
-    }
-
     private Properties streamsConfig() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
