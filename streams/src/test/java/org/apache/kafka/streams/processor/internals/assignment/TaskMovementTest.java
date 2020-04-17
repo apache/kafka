@@ -65,7 +65,7 @@ public class TaskMovementTest {
         mkEntry(UUID_3, client3)
     );
 
-    private static final Map<UUID, List<TaskId>> emptyWarmupAssignment = mkMap(
+    private final Map<UUID, List<TaskId>> emptyWarmupAssignment = mkMap(
         mkEntry(UUID_1, EMPTY_TASK_LIST),
         mkEntry(UUID_2, EMPTY_TASK_LIST),
         mkEntry(UUID_3, EMPTY_TASK_LIST)
@@ -194,7 +194,7 @@ public class TaskMovementTest {
                clientStates,
                getMapWithNumStandbys(allTasks, 1),
                maxWarmupReplicas)
-       );
+        );
 
         verifyClientStateAssignments(expectedActiveTaskAssignment, expectedWarmupTaskAssignment);
     }
