@@ -26,7 +26,7 @@ import java.util.function.{BiConsumer, Consumer, Function}
 
 import kafka.cluster.Partition
 import kafka.common.KafkaException
-import kafka.log.{Log, OffsetPosition}
+import kafka.log.Log
 import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
@@ -333,7 +333,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val leaderEpochVal = leaderEpoch
                 if (isCancelled() || !isLeader()) {
                   info(s"Skipping copying log segments as the current task state is changed, cancelled: " +
-                    s"$isCancelled() leader:$isLeader()")
+                    s"${isCancelled()} leader:${isLeader()}")
                   return
                 }
 
@@ -430,7 +430,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   def lookupPositionForOffset(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): Long = {
-    indexCache.position(remoteLogSegmentMetadata, offset).position
+    indexCache.lookupOffset(remoteLogSegmentMetadata, offset)
   }
 
   def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {
@@ -501,8 +501,38 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     remoteLogSegmentMetadata
   }
 
-  def lookupOffsetPositionForTimestamp(rlsMetadata: RemoteLogSegmentMetadata, timestamp: Long): OffsetPosition = {
-    OffsetPosition(0L, 0)
+  def lookupTimestamp(rlsMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
+    val startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset)
+
+    var remoteSegInputStream: InputStream = null
+    try {
+      // Search forward for the position of the last offset that is greater than or equal to the target offset
+      remoteSegInputStream = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
+      val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
+      var batch: RecordBatch = null
+      def nextBatch(): RecordBatch = {
+        batch = remoteLogInputStream.nextBatch()
+        batch
+      }
+      while (nextBatch() != null) {
+        if (batch.maxTimestamp >= timestamp && batch.lastOffset >= startingOffset) {
+          batch.iterator.asScala.foreach(record => {
+            if (record.timestamp >= timestamp && record.offset >= startingOffset)
+              return Some(new TimestampAndOffset(record.timestamp, record.offset, maybeLeaderEpoch(batch.partitionLeaderEpoch)))
+          })
+        }
+      }
+      None
+    } finally {
+      Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
+    }
+  }
+
+  private def maybeLeaderEpoch(leaderEpoch: Int): Optional[Integer] = {
+    if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+      Optional.empty()
+    else
+      Optional.of(leaderEpoch)
   }
 
   /**
@@ -524,18 +554,14 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
   def findOffsetByTimestamp(tp: TopicPartition, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
-    remoteLogMetadataManager.listRemoteLogSegments(tp, startingOffset).forEach(new Consumer[RemoteLogSegmentMetadata] {
-
-      override def accept(rlsMetadata: RemoteLogSegmentMetadata): Unit = {
-        // get the earliest index which has timestamp
-        if (rlsMetadata.maxTimestamp() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
-          val timestampOffset = lookupOffsetPositionForTimestamp(rlsMetadata, timestamp)
-          val offset = math.max(timestampOffset.offset, startingOffset)
-          return Some(new TimestampAndOffset(timestamp, offset, Optional.of(rlsMetadata.leaderEpoch())))
-        }
-        None
+    remoteLogMetadataManager.listRemoteLogSegments(tp).asScala.foreach(rlsMetadata =>
+      if (rlsMetadata.maxTimestamp() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
+        val timestampOffset = lookupTimestamp(rlsMetadata, timestamp, startingOffset)
+        if (timestampOffset.isDefined)
+          return timestampOffset
       }
-    })
+    )
+
     None
   }
 

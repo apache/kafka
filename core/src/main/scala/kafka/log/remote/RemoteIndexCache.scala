@@ -17,8 +17,7 @@
 package kafka.log.remote
 
 import java.io.{File, InputStream}
-import java.nio.channels.{Channels, FileChannel}
-import java.nio.file.{Files, Path, StandardOpenOption}
+import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,9 +39,16 @@ object RemoteIndexCache {
 class Entry(offsetIndex: OffsetIndex, timeIndex: TimeIndex) {
   private val closed = new AtomicBoolean(false)
 
-  def lookup(targetOffset: Long): OffsetPosition = {
+  def lookupOffset(targetOffset: Long): OffsetPosition = {
     if (closed.get()) throw new IllegalStateException("This entry is already closed")
     else offsetIndex.lookup(targetOffset)
+  }
+
+  def lookupTimestamp(timestamp: Long, startingOffset: Long): Long = {
+    if (closed.get()) throw new IllegalStateException("This entry is already closed")
+
+    val timestampOffset = timeIndex.lookup(timestamp)
+    offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset)).position
   }
 
   def close(): Unit = {
@@ -116,8 +122,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kaf
   })
   cleanerThread.start()
 
-  def position(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): OffsetPosition = {
-
+  def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
     def loadIndexFile[T <: AbstractIndex[_, _]](fileName: String, suffix: String,
                                                 fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
                                                 createIndex: File => T): T = {
@@ -152,34 +157,39 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kaf
       }
     }
 
-    val entry =
-      lock synchronized {
-        entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId(), new Function[RemoteLogSegmentId, Entry] {
-          override def apply(key: RemoteLogSegmentId): Entry = {
-            val fileSuffix = remoteLogSegmentMetadata.remoteLogSegmentId().id().toString
-            val startOffset = remoteLogSegmentMetadata.startOffset()
+    lock synchronized {
+      entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId(), new Function[RemoteLogSegmentId, Entry] {
+        override def apply(key: RemoteLogSegmentId): Entry = {
+          val fileSuffix = remoteLogSegmentMetadata.remoteLogSegmentId().id().toString
+          val startOffset = remoteLogSegmentMetadata.startOffset()
 
-            val offsetIndex: OffsetIndex = loadIndexFile(fileSuffix, RemoteIndexCache.OffsetIndexFileSuffix,
-              rlsMetadata => remoteStorageManager.fetchOffsetIndex(rlsMetadata), file => {
-                val index = new OffsetIndex(file, startOffset, Int.MaxValue, writable = false)
-                index.sanityCheck()
-                index
-              })
+          val offsetIndex: OffsetIndex = loadIndexFile(fileSuffix, RemoteIndexCache.OffsetIndexFileSuffix,
+            rlsMetadata => remoteStorageManager.fetchOffsetIndex(rlsMetadata), file => {
+              val index = new OffsetIndex(file, startOffset, Int.MaxValue, writable = false)
+              index.sanityCheck()
+              index
+            })
 
-            val timeIndex = loadIndexFile(fileSuffix, RemoteIndexCache.TimeIndexFileSuffix,
-              rlsMetadata => remoteStorageManager.fetchTimestampIndex(rlsMetadata),
-              file => {
-                val index = new TimeIndex(file, startOffset, Int.MaxValue, writable = false)
-                index.sanityCheck()
-                index
-              })
+          val timeIndex = loadIndexFile(fileSuffix, RemoteIndexCache.TimeIndexFileSuffix,
+            rlsMetadata => remoteStorageManager.fetchTimestampIndex(rlsMetadata),
+            file => {
+              val index = new TimeIndex(file, startOffset, Int.MaxValue, writable = false)
+              index.sanityCheck()
+              index
+            })
 
-            new Entry(offsetIndex, timeIndex)
-          }
-        })
-      }
+          new Entry(offsetIndex, timeIndex)
+        }
+      })
+    }
+  }
 
-    entry.lookup(offset)
+  def lookupOffset(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): Long = {
+    getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position
+  }
+
+  def lookupTimestamp(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Long = {
+    getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset)
   }
 
   def close(): Unit = {

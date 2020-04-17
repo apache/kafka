@@ -115,7 +115,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
       remoteSegmentIndexes.put(offset, remoteIndex)
       if (_startOffset.isEmpty) _startOffset = Some(offset)
       _lastBatchStartOffset = Some(offset)
-      _lastOffset = remoteIndex.lastOffset
+      _lastOffset = remoteIndex.lastOffset()
     }
   }
 
@@ -251,7 +251,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
    */
   def removeUnflushedIndexFiles(): Unit = {
     val checkpointFiles = listCheckpointFiles()
-    val checkpoint = if (checkpointFiles.isEmpty) 0L else checkpointFiles.map(Log.offsetFromFile(_)).max
+    val checkpoint = if (checkpointFiles.isEmpty) 0L else checkpointFiles.map(Log.offsetFromFile).max
 
     logger.info(s"The maximum remote index checkpoint of $topicPartition is $checkpoint")
 
@@ -286,7 +286,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
 
   def lookupEntryForOffset(offset: Long): Option[RemoteLogIndexEntry] = {
     var segEntry = remoteSegmentIndexes.floorEntry(offset)
-    while (segEntry != null && segEntry.getValue.lastOffset.get < offset) {
+    while (segEntry != null && segEntry.getValue.lastOffset().get < offset) {
       segEntry = remoteSegmentIndexes.higherEntry(segEntry.getKey)
     }
 
@@ -307,38 +307,6 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
       }
       None
     } else None
-  }
-
-  def lookupEntryForTimestamp(targetTimestamp: Long, startingOffset: Long): Option[RemoteLogIndexEntry] = {
-    CoreUtils.inLock(lock) {
-      val floorOffset = remoteSegmentIndexes.floorKey(startingOffset)
-      remoteSegmentIndexes.tailMap(floorOffset).values().forEach(new Consumer[RemoteSegmentIndex] {
-        override def accept(seg: RemoteSegmentIndex): Unit = {
-          // Find the earliest remote index segment that contains the required messages
-          if (seg.maxTimestampSoFar >= targetTimestamp && seg.lastOffset.get >= startingOffset) {
-            // Get the earliest index entry that its timestamp is less than or equal to the target timestamp
-            val timestampOffset = seg.timeIndex.lookup(targetTimestamp)
-            val offset = math.max(timestampOffset.offset, startingOffset)
-            val offsetPosition = seg.offsetIndex.lookup(offset)
-
-            var pos = offsetPosition.position
-
-            while (true) {
-              val entry = seg.remoteLogIndex.lookupEntry(pos)
-              if (entry.isEmpty)
-                return None
-
-              if (entry.get.lastTimeStamp >= targetTimestamp && entry.get.lastOffset >= startingOffset)
-                return entry
-              else
-                pos += entry.get.totalLength
-            }
-            None
-          }
-        }
-      })
-    }
-    None
   }
 
   override def close(): Unit = {
