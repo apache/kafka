@@ -293,6 +293,11 @@ public class SslTransportLayer implements TransportLayer {
                 updateBytesBuffered(true);
         } catch (SSLException e) {
             maybeProcessHandshakeFailure(e, true, null);
+        } catch (EOFException e) {
+            // it is impossible to complete handshake successfully due to end-of-stream. Hence, it should throw either
+            // EOFException or SslAuthenticationException directly.
+            maybeThrowSslAuthenticationException();
+            throw e;
         } catch (IOException e) {
             maybeThrowSslAuthenticationException();
 
