@@ -266,7 +266,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void droppingNodesShouldConverge() {
         final int numStatelessTasks = 15;
@@ -290,7 +289,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void randomClusterPerturbationsShouldConverge() {
         // do as many tests as we can in 10 seconds
