@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
@@ -59,8 +60,11 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
      *         false otherwise
      */
     public static boolean maskTimestampAndCompareValues(final byte[] left, final byte[] right) {
-        if (left == right)
+        System.out.println("Old serialized data " + Arrays.toString(left));
+        System.out.println("New serialized data " + Arrays.toString(right));
+        if (left == right) {
             return true;
+        }
         if (left == null || right == null) {
             return false;
         }

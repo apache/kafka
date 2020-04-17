@@ -126,7 +126,8 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final RawAndDeserializedValue<V> tuple = store.getWithBinary(key); 
+                final RawAndDeserializedValue<V> tuple = store.getWithBinary(key);
+                System.out.println("Old value found to be: " + tuple.value);
                 final ValueAndTimestamp<V> oldValueAndTimestamp = tuple.value;
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
@@ -139,11 +140,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     oldValue = null;
                 }
                 final ValueAndTimestamp<V> newValueAndTimestamp = ValueAndTimestamp.make(value, context().timestamp());
+                System.out.println("New value found to be: " + newValueAndTimestamp);
                 final boolean isDifferentValue = 
                     store.putIfDifferentValues(key, newValueAndTimestamp, tuple.serializedValue);
                 if (isDifferentValue) {
+                    System.out.println("Forwarding record as planned: " + newValueAndTimestamp);
                     tupleForwarder.maybeForward(key, value, oldValue);
                 }  else {
+                    System.out.println("Skipping record: " + newValueAndTimestamp);
                     skippedIdempotentUpdatesSensor.record();
                 }
             } else {
