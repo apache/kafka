@@ -55,9 +55,9 @@ public class TaskMovementTest {
 
     private final Set<UUID> allClients = mkSet(UUID_1, UUID_2, UUID_3);
 
-    private final ClientState client1 = getClientStateWithInitializedCapacity();
-    private final ClientState client2 = getClientStateWithInitializedCapacity();
-    private final ClientState client3 = getClientStateWithInitializedCapacity();
+    private final ClientState client1 = new ClientState(1);
+    private final ClientState client2 = new ClientState(1);
+    private final ClientState client3 = new ClientState(1);
 
     private final Map<UUID, ClientState> clientStates = mkMap(
         mkEntry(UUID_1, client1),
@@ -262,11 +262,5 @@ public class TaskMovementTest {
             tasksToCaughtUpClients.put(task, new TreeSet<>());
         }
         return tasksToCaughtUpClients;
-    }
-    
-    private static ClientState getClientStateWithInitializedCapacity() {
-        final ClientState state = new ClientState();
-        state.incrementCapacity();
-        return state;
     }
 }

@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -37,6 +39,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.computeBalanceFactor;
+import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.taskIsCaughtUpOnClient;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -48,6 +51,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
@@ -161,51 +165,28 @@ public class HighAvailabilityTaskAssignorTest {
 
         assertTrue(taskAssignor.previousAssignmentIsValid());
     }
-/*
+
     @Test
     public void shouldReturnTrueIfTaskHasNoCaughtUpClients() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.lagFor(TASK_0_0)).andReturn(500L);
-        replay(client1);
-        allTasks =  mkSet(TASK_0_0);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = singletonMap(UUID_1, client1);
-        createTaskAssignor();
-
-        assertTrue(taskAssignor.taskIsCaughtUpOnClient(TASK_0_0, UUID_1));
+        assertTrue(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, emptyMap()));
     }
 
     @Test
     public void shouldReturnTrueIfTaskIsCaughtUpOnClient() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.lagFor(TASK_0_0)).andReturn(0L);
-        allTasks =  mkSet(TASK_0_0);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = singletonMap(UUID_1, client1);
-        replay(client1);
-        createTaskAssignor();
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_1));
 
-        assertTrue(taskAssignor.taskIsCaughtUpOnClient(TASK_0_0, UUID_1));
+        assertTrue(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, tasksToCaughtUpClients));
     }
 
     @Test
     public void shouldReturnFalseIfTaskWasNotCaughtUpOnClientButCaughtUpClientsExist() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.lagFor(TASK_0_0)).andReturn(500L);
-        expect(client2.lagFor(TASK_0_0)).andReturn(0L);
-        replay(client1, client2);
-        allTasks =  mkSet(TASK_0_0);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = mkMap(
-            mkEntry(UUID_1, client1),
-            mkEntry(UUID_2, client2)
-        );
-        createTaskAssignor();
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_2));
 
-        assertFalse(taskAssignor.taskIsCaughtUpOnClient(TASK_0_0, UUID_1));
+        assertFalse(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, tasksToCaughtUpClients));
     }
-*/
+
     @Test
     public void shouldComputeBalanceFactorAsDifferenceBetweenMostAndLeastLoadedClients() {
         client1 = EasyMock.createNiceMock(ClientState.class);
