@@ -474,8 +474,8 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldReturnFalseIfPreviousAssignmentIsReused() {
         allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         statefulTasks = new HashSet<>(allTasks);
-        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks);
-        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks);
+        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_2));
+        client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1, TASK_0_3));
 
         clientStates = getClientStatesWithTwoClients();
         createTaskAssignor();
@@ -551,7 +551,7 @@ public class HighAvailabilityTaskAssignorTest {
         client.addPreviousActiveTasks(statefulActiveTasks);
         return client;
     }
-    
+
     static class MockClientState extends ClientState {
         private final Map<TaskId, Long> taskLagTotals;
 
@@ -560,7 +560,7 @@ public class HighAvailabilityTaskAssignorTest {
             super(capacity);
             this.taskLagTotals = taskLagTotals;
         }
-            
+
         @Override
         long lagFor(final TaskId task) {
             final Long totalLag = taskLagTotals.get(task);
