@@ -31,8 +31,8 @@ public class TaskMovement {
     private static final UUID UNKNOWN = null;
 
     final TaskId task;
-    UUID source;
-    final UUID destination;
+    private UUID source;
+    private final UUID destination;
 
     TaskMovement(final TaskId task, final UUID destination) {
         this.task = task;
