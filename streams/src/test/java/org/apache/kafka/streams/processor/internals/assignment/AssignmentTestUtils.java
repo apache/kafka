@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -52,6 +54,7 @@ public class AssignmentTestUtils {
     public static final TaskId TASK_3_4 = new TaskId(3, 4);
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
+    public static final List<TaskId> EMPTY_TASK_LIST = emptyList();
     public static final Map<TaskId, Long> EMPTY_TASK_OFFSET_SUMS = emptyMap();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
 

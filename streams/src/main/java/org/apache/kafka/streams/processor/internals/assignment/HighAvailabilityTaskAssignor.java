@@ -108,9 +108,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                 configs.balanceFactor);
 
         return assignTaskMovements(
-            clientStates,
             statefulActiveTaskAssignment,
             tasksToCaughtUpClients,
+            clientStates,
             tasksToRemainingStandbys,
             configs.maxWarmupReplicas
         );

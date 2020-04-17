@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.taskIsCaughtUpOnClient;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -69,11 +70,11 @@ public class TaskMovement {
     /**
      * @return whether any warmup replicas were assigned
      */
-    static boolean assignTaskMovements(final Map<UUID, ClientState> clientStates,
-                                    final Map<UUID, List<TaskId>> statefulActiveTaskAssignment,
-                                    final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
-                                    final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                    final int maxWarmupReplicas) {
+    static boolean assignTaskMovements(final Map<UUID, List<TaskId>> statefulActiveTaskAssignment,
+                                       final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
+                                       final Map<UUID, ClientState> clientStates,
+                                       final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                       final int maxWarmupReplicas) {
         boolean warmupReplicasAssigned = false;
 
         final ValidClientsByTaskLoadQueue clientsByTaskLoad =
@@ -82,9 +83,17 @@ public class TaskMovement {
                 (client, task) -> taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)
             );
 
-        final SortedSet<TaskMovement> taskMovements = new TreeSet<>(Comparator.comparingInt(
-            movement -> tasksToCaughtUpClients.get(movement.task).size()
-        ));
+        final SortedSet<TaskMovement> taskMovements = new TreeSet<>(
+            (movement, other) -> {
+                final int numCaughtUpClients = tasksToCaughtUpClients.get(movement.task).size();
+                final int otherNumCaughtUpClients = tasksToCaughtUpClients.get(other.task).size();
+                if (numCaughtUpClients != otherNumCaughtUpClients) {
+                    return numCaughtUpClients - otherNumCaughtUpClients;
+                } else {
+                    return movement.task.compareTo(other.task);
+                }
+            }
+        );
 
         for (final Map.Entry<UUID, List<TaskId>> assignmentEntry : statefulActiveTaskAssignment.entrySet()) {
             final UUID client = assignmentEntry.getKey();
@@ -103,6 +112,9 @@ public class TaskMovement {
         int remainingWarmupReplicas = maxWarmupReplicas;
         for (final TaskMovement movement : taskMovements) {
             final UUID leastLoadedClient = clientsByTaskLoad.poll(movement.task);
+            if (leastLoadedClient == null) {
+                throw new IllegalStateException("Tried to move task to caught-up client but none exist");
+            }
             movement.assignSource(leastLoadedClient);
 
             final ClientState sourceClientState = clientStates.get(movement.source);
