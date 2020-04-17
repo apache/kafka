@@ -626,7 +626,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 // for join-group request, even if the generation has changed we would not expect the instance id
                 // gets fenced, and hence we always treat this as a fatal error
-                log.error("Attempt to join group failed due to group instance id {} gets fenced with {}",
+                log.error("Attempt to join group with generation {} failed because the group instance id {} has been fenced by another instance",
                     rebalanceConfig.groupInstanceId, sentGeneration);
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
@@ -753,12 +753,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
                     // gets fenced, and hence we always treat this as a fatal error
-                    log.error("SyncGroup failed with {} due to group.instance.id {} gets fenced",
+                    log.error("SyncGroup with {} failed because the group instance id {} has been fenced by another instance",
                         sentGeneration, rebalanceConfig.groupInstanceId);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
-                    log.info("SyncGroup failed with {}: {}, would request re-join", sentGeneration, error.message());
+                    log.info("SyncGroup with {} failed: {}, would request re-join", sentGeneration, error.message());
                     if (generationUnchanged())
                         resetGenerationOnResponseError(ApiKeys.SYNC_GROUP, error);
 
@@ -1039,7 +1039,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("LeaveGroup response with {} returned successfully: {}", sentGeneration, response);
                 future.complete(null);
             } else {
-                log.error("LeaveGroup response with {} failed with error: {}", sentGeneration, error.message());
+                log.error("LeaveGroup request with {} failed with error: {}", sentGeneration, error.message());
                 future.raise(error);
             }
         }
@@ -1085,14 +1085,14 @@ public abstract class AbstractCoordinator implements Closeable {
                        error == Errors.UNKNOWN_MEMBER_ID ||
                        error == Errors.FENCED_INSTANCE_ID) {
                 if (generationUnchanged()) {
-                    log.info("Attempt to heartbeat failed with generation {} and group instance id {} due to {}, resetting generation",
-                        sentGeneration, rebalanceConfig.groupInstanceId, error.message());
+                    log.info("Attempt to heartbeat with {} and group instance id {} failed due to {}, resetting generation",
+                        sentGeneration, rebalanceConfig.groupInstanceId, error);
                     resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
                     future.raise(error);
                 } else {
                     // if the generation has changed, then ignore this error
-                    log.info("Attempt to heartbeat failed with stale generation {} and group instance id {} due to {}, ignoring the error",
-                        sentGeneration, rebalanceConfig.groupInstanceId, error.message());
+                    log.info("Attempt to heartbeat with stale {} and group instance id {} failed due to {}, ignoring the error",
+                        sentGeneration, rebalanceConfig.groupInstanceId, error);
                     future.complete(null);
                 }
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
