@@ -526,7 +526,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
-        final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
+        final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(RecordCollectorImpl.class);
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
