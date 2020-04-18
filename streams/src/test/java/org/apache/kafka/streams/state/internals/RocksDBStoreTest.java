@@ -40,7 +40,6 @@ import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -604,13 +603,13 @@ public class RocksDBStoreTest {
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST);
         streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
 
-        final ProcessorContext<Object, Object> context = EasyMock.niceMock(ProcessorContext.class);
+        context = EasyMock.niceMock(ProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
         EasyMock.expect(context.taskId()).andStubReturn(taskId);
         EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
-
         EasyMock.replay(context);
+        
         rocksDBStore.init(context, rocksDBStore);
         final byte[] key = "hello".getBytes();
         final byte[] value = "world".getBytes();
