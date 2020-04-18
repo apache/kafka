@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -63,7 +64,6 @@ import java.util.Properties;
 import java.util.Set;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
@@ -95,7 +95,7 @@ public class RocksDBStoreTest {
 
     @Before
     public void setUp() {
-        final Properties props = getStreamsConfig();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(dir,
@@ -130,14 +130,14 @@ public class RocksDBStoreTest {
         final RecordingLevel recordingLevel,
         final Class<? extends RocksDBConfigSetter> rocksDBConfigSetterClass) {
 
-        final Properties streamsProps = getStreamsConfig();
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         streamsProps.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, rocksDBConfigSetterClass);
         return getProcessorContext(streamsProps);
     }
 
     private InternalMockProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
-        final Properties streamsProps = getStreamsConfig();
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
     }
@@ -286,7 +286,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(getStreamsConfig()));
+        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -548,7 +548,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
 
-        final Properties props = getStreamsConfig();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(dir,
@@ -606,10 +606,11 @@ public class RocksDBStoreTest {
         context = EasyMock.niceMock(ProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
         EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(getStreamsConfig()).originals());
+        EasyMock.expect(context.appConfigs())
+            .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
         EasyMock.replay(context);
-        
+
         rocksDBStore.init(context, rocksDBStore);
         final byte[] key = "hello".getBytes();
         final byte[] value = "world".getBytes();
