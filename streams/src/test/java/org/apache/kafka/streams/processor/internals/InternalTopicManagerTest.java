@@ -49,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -56,6 +58,7 @@ import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
 
+    private final String threadName = "threadName";
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
     private final List<Node> cluster = new ArrayList<Node>(2) {
@@ -84,6 +87,10 @@ public class InternalTopicManagerTest {
 
     @Before
     public void init() {
+        // When executing on Jenkins, the thread name is set to an unknown value,
+        // hence, we need to set it explicitly to make our log-assertions pass
+        Thread.currentThread().setName(threadName);
+
         mockAdminClient = new MockAdminClient(cluster, broker1);
         internalTopicManager = new InternalTopicManager(
             mockAdminClient,
@@ -139,9 +146,18 @@ public class InternalTopicManagerTest {
         final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
         final ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
 
-        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource)).values().get(resource).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), mockAdminClient.describeConfigs(Collections.singleton(resource2)).values().get(resource2).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource3)).values().get(resource3).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(
+            new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
+            mockAdminClient.describeConfigs(Collections.singleton(resource)).values().get(resource).get().get(TopicConfig.CLEANUP_POLICY_CONFIG)
+        );
+        assertEquals(
+            new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+            mockAdminClient.describeConfigs(Collections.singleton(resource2)).values().get(resource2).get().get(TopicConfig.CLEANUP_POLICY_CONFIG)
+        );
+        assertEquals(
+            new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
+            mockAdminClient.describeConfigs(Collections.singleton(resource3)).values().get(resource3).get().get(TopicConfig.CLEANUP_POLICY_CONFIG)
+        );
     }
 
     @Test
@@ -153,7 +169,9 @@ public class InternalTopicManagerTest {
 
         final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
-        topicDescriptionSuccessFuture.complete(new TopicDescription(topic, false, Collections.singletonList(partitionInfo), Collections.emptySet()));
+        topicDescriptionSuccessFuture.complete(
+            new TopicDescription(topic, false, Collections.singletonList(partitionInfo), Collections.emptySet())
+        );
         topicDescriptionFailFuture.completeExceptionally(new UnknownTopicOrPartitionException("KABOOM!"));
 
         final KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> topicCreationFuture = new KafkaFutureImpl<>();
@@ -247,8 +265,6 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
-        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         mockAdminClient.addTopic(
             false,
             topic,
@@ -258,20 +274,24 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
 
-        final InternalTopicConfig internalTopicConfigII = new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfigII =
+            new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
         internalTopicConfigII.setNumberOfPartitions(1);
 
         final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
         topicConfigMap.put(topic, internalTopicConfig);
         topicConfigMap.put("internal-topic", internalTopicConfigII);
 
-        internalTopicManager.makeReady(topicConfigMap);
-        boolean foundExpectedMessage = false;
-        for (final String message : appender.getMessages()) {
-            foundExpectedMessage |= message.contains("Topic internal-topic is unknown or not found, hence not existed yet");
-        }
-        assertTrue(foundExpectedMessage);
+        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
+            internalTopicManager.makeReady(topicConfigMap);
 
+            assertThat(
+                appender.getMessages(),
+                hasItem("stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet:" +
+                    " org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found.")
+            );
+        }
     }
 
     @Test
@@ -294,14 +314,14 @@ public class InternalTopicManagerTest {
         }
     }
 
-    private class MockCreateTopicsResult extends CreateTopicsResult {
+    private static class MockCreateTopicsResult extends CreateTopicsResult {
 
         MockCreateTopicsResult(final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
             super(futures);
         }
     }
 
-    private class MockDescribeTopicsResult extends DescribeTopicsResult {
+    private static class MockDescribeTopicsResult extends DescribeTopicsResult {
 
         MockDescribeTopicsResult(final Map<String, KafkaFuture<TopicDescription>> futures) {
             super(futures);
