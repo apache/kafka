@@ -3084,12 +3084,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
     // if the controller hasn't been upgraded to use KIP-380
     if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
-    else {
-      val curBrokerEpoch = controller.brokerEpoch
-      if (brokerEpochInRequest < curBrokerEpoch) true
-      else if (brokerEpochInRequest == curBrokerEpoch) false
-      else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
-    }
+    else brokerEpochInRequest < controller.brokerEpoch
   }
 
 }
