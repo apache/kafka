@@ -205,6 +205,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    */
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]): Unit = {
 
+    debug(s"Received leadership changes for leaders:$partitionsBecomeLeader and followers: $partitionsBecomeFollower")
+
     // Partitions logs are available when this callback is invoked.
     // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
     def filterPartitions(partitions: Set[Partition]): Set[Partition] = {
@@ -213,7 +215,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     val followerTopicPartitions = filterPartitions(partitionsBecomeFollower).map(p => p.topicPartition)
     val leaderPartitions = filterPartitions(partitionsBecomeLeader)
-    remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions.map(p => p.topicPartition).asJava, followerTopicPartitions.asJava)
+    val leaderTopicPartitions = leaderPartitions.map(p => p.topicPartition)
+
+    debug(s"Effective topic partitions after filtering compact and internal topics, leaders: $leaderTopicPartitions " +
+      s"and followers: $followerTopicPartitions")
+
+    remoteLogMetadataManager.onPartitionLeadershipChanges(leaderTopicPartitions.asJava, followerTopicPartitions.asJava)
 
     followerTopicPartitions.foreach { tp => doHandleLeaderOrFollowerPartitions(tp, task => task.convertToFollower())}
 

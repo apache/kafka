@@ -342,10 +342,10 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
       // reassign tp3 from rlmm1 to rlmm2. rlmm1 should not receive any updates of tp3 as it should have been
       // unsubscribed fro remote log metadata partition 1. Because only tp3 notifications go to partition 1.
-      leaderSet1.remove(tp3)
-      rlmm1.onPartitionLeadershipChanges(leaderSet1, Collections.emptySet())
-      leaderSet2.add(tp3)
-      rlmm2.onPartitionLeadershipChanges(leaderSet2, Collections.emptySet())
+
+      val movedPartitions = Collections.singleton(tp3)
+      rlmm1.onStopPartitions(movedPartitions)
+      rlmm2.onPartitionLeadershipChanges(movedPartitions, Collections.emptySet())
 
       // rlmm2 should receive all notifications for tp3 as it is subscribed for.
       Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 170), rlSegIdTp3_101_700));
@@ -358,7 +358,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       Assert.assertFalse(waitTillReceiveExpected(() => rlmm1.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900, 2000L));
 
       // add rlmm1 as follower for tp3 and it should receive the latest tp3 segment notification.
-      rlmm1.onPartitionLeadershipChanges(leaderSet1, Collections.singleton(tp3))
+      rlmm1.onPartitionLeadershipChanges(Collections.emptySet(), movedPartitions)
       Assert.assertTrue(waitTillReceiveExpected(() => rlmm1.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900));
 
     } finally {

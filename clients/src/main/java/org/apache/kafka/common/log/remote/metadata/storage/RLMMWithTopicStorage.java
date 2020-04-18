@@ -120,6 +120,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     private void publishMessageToPartition(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        ensureInitialized();
+
         log.info("Publishing messages to remote log metadata topic for remote log segment metadata [{}]",
                 remoteLogSegmentMetadata);
 
@@ -169,6 +171,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public RemoteLogSegmentId getRemoteLogSegmentId(TopicPartition topicPartition, long offset) throws IOException {
+        ensureInitialized();
+
         NavigableMap<Long, RemoteLogSegmentId> remoteLogSegmentIdMap = partitionsWithSegmentIds.get(topicPartition);
         if (remoteLogSegmentIdMap == null) {
             return null;
@@ -198,17 +202,22 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     @Override
     public RemoteLogSegmentMetadata getRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId)
             throws IOException {
+        ensureInitialized();
         return idWithSegmentMetadata.get(remoteLogSegmentId);
     }
 
     @Override
     public Optional<Long> earliestLogOffset(TopicPartition tp) throws IOException {
+        ensureInitialized();
+
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
 
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.firstEntry().getKey());
     }
 
     public Optional<Long> highestLogOffset(TopicPartition tp) throws IOException {
+        ensureInitialized();
+
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
 
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.lastEntry().getKey());
@@ -216,6 +225,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException {
+        ensureInitialized();
+
         RemoteLogSegmentMetadata metadata = idWithSegmentMetadata.get(remoteLogSegmentId);
         if (metadata != null) {
             publishMessageToPartition(RemoteLogSegmentMetadata.markForDeletion(metadata));
@@ -224,6 +235,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset) {
+        ensureInitialized();
+
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(topicPartition);
         if (map == null) {
             return Collections.emptyList();
@@ -248,11 +261,15 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
         allPartitions.addAll(followerPartitions);
-        consumerTask.reassignForPartitions(allPartitions);
+        consumerTask.addAssignmentsForPartitions(allPartitions);
     }
 
     @Override
     public void onStopPartitions(Set<TopicPartition> partitions) {
+        ensureInitialized();
+
+        initialize(null);
+
         // remove these partitions from the currently assigned topic partitions.
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
@@ -296,6 +313,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
             initialized = true;
         }
+    }
+
+    private void ensureInitialized() {
+        if(!initialized) throw new KafkaException("Resources required are not yet initialized by invoking initialize()");
     }
 
     @Override
@@ -342,6 +363,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     public void syncLogMetadataDataFile() throws IOException {
+        ensureInitialized();
+
         // idWithSegmentMetadata and partitionsWithSegmentIds are not going to be modified while this is being done.
         committedLogMetadataStore.write(idWithSegmentMetadata.values());
     }
@@ -373,6 +396,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     public int metadataPartitionFor(TopicPartition tp) {
+        ensureInitialized();
         Objects.requireNonNull(tp, "TopicPartition can not be null");
 
         return Math.abs(tp.toString().hashCode()) % noOfMetadataTopicPartitions;
