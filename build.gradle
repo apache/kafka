@@ -648,7 +648,8 @@ def pkgs = [
     'streams:streams-scala',
     'streams:test-utils',
     'tools',
-    'remote-storage-managers:hdfs'
+    'remote-storage-managers:hdfs',
+    'remote-storage-managers:s3'
 ] + connectPkgs
 
 /** Create one task per default Scala version */
@@ -894,6 +895,8 @@ project(':core') {
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
     from(project(':remote-storage-managers:hdfs').jar) { into("external/hdfs/libs/") }
     from(new File(project(':remote-storage-managers:hdfs').buildDir.toString(), "dependant-libs/")) { into("external/hdfs/libs/") }
+    from(project(':remote-storage-managers:s3').jar) { into("external/s3/libs/") }
+    from(new File(project(':remote-storage-managers:s3').buildDir.toString(), "dependant-libs/")) { into("external/s3/libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1871,6 +1874,45 @@ project(':remote-storage-managers:hdfs') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from(configurations.localDeps - project(':core').configurations.runtime - project(':tools').configurations.runtime) {
       exclude('kafka-rsm-hdfs*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':remote-storage-managers:s3') {
+  archivesBaseName = "kafka-rsm-s3"
+
+  configurations {
+    localDeps
+  }
+
+  dependencies {
+    compile group: 'com.amazonaws', name: 'aws-java-sdk-s3', version: '1.11.726'
+    compile configurations.localDeps
+    compile project(':core')
+
+    testCompile libs.junit
+    testCompile group: 'org.testcontainers', name: 'localstack', version: '1.12.5'
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.easymock
+    testCompile libs.hamcrest
+    testRuntime libs.slf4jlog4j
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-remote-storage-managers.xml")
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from(configurations.localDeps - project(':core').configurations.runtime - project(':tools').configurations.runtime) {
+      exclude('kafka-rsm-s3*')
     }
     into "$buildDir/dependant-libs"
     duplicatesStrategy 'exclude'
