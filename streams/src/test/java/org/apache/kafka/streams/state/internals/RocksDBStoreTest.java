@@ -145,7 +145,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsDebug() {
         final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
+        context = getProcessorContext(RecordingLevel.DEBUG);
         reset(metricsRecorder);
         metricsRecorder.addStatistics(
             eq(DB_NAME),
@@ -153,46 +153,46 @@ public class RocksDBStoreTest {
         );
         replay(metricsRecorder);
 
-        store.openDB(mockContext);
+        store.openDB(context);
 
         verify(metricsRecorder);
     }
 
     @Test
     public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsInfo() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
+        rocksDBStore= getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.INFO);
         reset(metricsRecorder);
         replay(metricsRecorder);
 
-        store.openDB(mockContext);
+        rocksDBStore.openDB(context);
 
         verify(metricsRecorder);
     }
 
     @Test
     public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsDebug() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.DEBUG);
-        store.openDB(mockContext);
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+        rocksDBStore.openDB(context);
         reset(metricsRecorder);
         metricsRecorder.removeStatistics(DB_NAME);
         replay(metricsRecorder);
 
-        store.close();
+        rocksDBStore.close();
 
         verify(metricsRecorder);
     }
 
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext = getProcessorContext(RecordingLevel.INFO);
-        store.openDB(mockContext);
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.INFO);
+        rocksDBStore.openDB(context);
         reset(metricsRecorder);
         replay(metricsRecorder);
 
-        store.close();
+        rocksDBStore.close();
 
         verify(metricsRecorder);
     }
@@ -211,25 +211,21 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenUserProvidesStatistics() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext =
-            getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
         replay(metricsRecorder);
 
-        store.openDB(mockContext);
+        rocksDBStore.openDB(context);
         verify(metricsRecorder);
     }
 
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidesStatistics() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
-        final InternalMockProcessorContext mockContext =
-            getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
-        store.openDB(mockContext);
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+        rocksDBStore.openDB(context);
         reset(metricsRecorder);
         replay(metricsRecorder);
-
-        store.close();
 
         verify(metricsRecorder);
     }
@@ -547,7 +543,6 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
-
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
         dir = TestUtils.tempDirectory();
@@ -603,7 +598,7 @@ public class RocksDBStoreTest {
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST);
         streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
 
-        context = EasyMock.niceMock(ProcessorContext.class);
+        context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
         EasyMock.expect(context.taskId()).andStubReturn(taskId);
         EasyMock.expect(context.appConfigs())
