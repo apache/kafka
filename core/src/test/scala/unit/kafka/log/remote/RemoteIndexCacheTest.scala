@@ -102,14 +102,14 @@ class RemoteIndexCacheTest {
 
     val offsetPosition1 = offsetIndex.entry(1)
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
-    val resultOffsetPosition1 = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
-    assertEquals(offsetPosition1, resultOffsetPosition1)
+    val resultOffset = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
+    assertEquals(offsetPosition1.position, resultOffset)
 
     // this should not cause fetching index from RemoteLogStorageManager as it is already fetched earlier
     // this is checked by setting expectation times as 1 on the mock
     val offsetPosition2 = offsetIndex.entry(2)
-    val resultOffsetPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset)
-    assertEquals(offsetPosition2, resultOffsetPosition2)
+    val resultOffset2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset)
+    assertEquals(offsetPosition2.position, resultOffset2)
   }
 
   @Test
@@ -123,6 +123,6 @@ class RemoteIndexCacheTest {
     val nonExistentOffsetPosition = OffsetPosition(baseOffset, 0)
     val lowerOffsetThanBaseOffset = offsetIndex.baseOffset - 1
     val resultOffsetPosition2 = cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset)
-    assertEquals(nonExistentOffsetPosition, resultOffsetPosition2)
+    assertEquals(nonExistentOffsetPosition.position, resultOffsetPosition2)
   }
 }
