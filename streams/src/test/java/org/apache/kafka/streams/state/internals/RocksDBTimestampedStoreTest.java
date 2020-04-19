@@ -74,6 +74,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
         assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         LogCaptureAppender.unregister(appender);
+        rocksDBStore.close();
 
         // verify store
         final DBOptions dbOptions = new DBOptions();
