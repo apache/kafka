@@ -1004,9 +1004,12 @@ class LogManager(logDirs: Seq[File],
    * Map of log dir to logs by topic and partitions in that dir
    */
   def logsByDir: Map[String, Map[TopicPartition, Log]] = {
-    val byDir = new mutable.HashMap[String, mutable.HashMap[TopicPartition, Log]]()
+    // This code is called often by checkpoint processes and is written in a way that reduces
+    // allocations and CPU with many topic partitions.
+    // When changing this code please measure the changes with org.apache.kafka.jmh.server.CheckpointBench
+    val byDir = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Log]]()
     def addToDir(tp: TopicPartition, log: Log): Unit = {
-      byDir.getOrElseUpdate(log.parentDir, new mutable.HashMap[TopicPartition, Log]()).put(tp, log)
+      byDir.getOrElseUpdate(log.parentDir, new mutable.AnyRefMap[TopicPartition, Log]()).put(tp, log)
     }
     currentLogs.foreach { case (tp, log) => addToDir(tp, log) }
     futureLogs.foreach { case (tp, log) => addToDir(tp, log) }
