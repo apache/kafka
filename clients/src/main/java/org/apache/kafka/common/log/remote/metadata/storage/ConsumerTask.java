@@ -63,7 +63,7 @@ class ConsumerTask implements Runnable, Closeable {
 
     private final Object lock = new Object();
     private volatile Set<Integer> assignedMetaPartitions = Collections.emptySet();
-    private Set<TopicPartition> reassignedTopicPartitions = Collections.emptySet();;
+    private Set<TopicPartition> reassignedTopicPartitions = Collections.emptySet();
 
     private volatile boolean closed = false;
     private volatile boolean reassign = false;
@@ -131,38 +131,7 @@ class ConsumerTask implements Runnable, Closeable {
                         }
                     }
 
-                    if (reassign) {
-                        // whenever it is assigned, we should wait to process any get metadata requests until we
-                        //poll all the messages till the endoffsets captured now.
-                        Set<TopicPartition> assignedTopicPartitions = assignedMetaPartitions.stream()
-                                .map(x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
-                                .collect(Collectors.toSet());
-                        log.info("Reassigning partitions to consumer task [{}]", assignedTopicPartitions);
-                        consumer.assign(assignedTopicPartitions);
-                        log.info("Reassigned partitions to consumer task [{}]", assignedTopicPartitions);
-
-                        log.info("Fetching end offsets to consumer task [{}]", assignedTopicPartitions);
-                        Map<TopicPartition, Long> endOffsets;
-                        while (true) {
-                            try {
-                                endOffsets = consumer.endOffsets(assignedTopicPartitions, Duration.ofSeconds(30));
-                                break;
-                            } catch (Exception e) {
-                                // ignore exception
-                                log.debug("Error encountered in fetching end offsets");
-                            }
-                        }
-                        log.info("Fetched end offsets to consumer task [{}]", endOffsets);
-
-                        for (Map.Entry<TopicPartition, Long> entry
-                                : endOffsets.entrySet()) {
-                            if (entry.getValue() > 0) {
-                                targetEndOffsets.put(entry.getKey().partition(), entry.getValue());
-                            }
-                        }
-
-                        reassign = false;
-                    }
+                    executeReassignment();
                 }
 
                 log.info("Polling consumer to receive remote log metadata topic records");
@@ -211,6 +180,40 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
+    private void executeReassignment() {
+        if (reassign) {
+            // whenever it is assigned, we should wait to process any get metadata requests until we
+            //poll all the messages till the endoffsets captured now.
+            Set<TopicPartition> assignedTopicPartitions = assignedMetaPartitions.stream()
+                    .map(x -> new TopicPartition(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, x))
+                    .collect(Collectors.toSet());
+            log.info("Reassigning partitions to consumer task [{}]", assignedTopicPartitions);
+            consumer.assign(assignedTopicPartitions);
+            log.info("Reassigned partitions to consumer task [{}]", assignedTopicPartitions);
+
+            log.info("Fetching end offsets to consumer task [{}]", assignedTopicPartitions);
+            Map<TopicPartition, Long> endOffsets;
+            while (true) {
+                try {
+                    endOffsets = consumer.endOffsets(assignedTopicPartitions, Duration.ofSeconds(30));
+                    break;
+                } catch (Exception e) {
+                    // ignore exception
+                    log.debug("Error encountered in fetching end offsets");
+                }
+            }
+            log.info("Fetched end offsets to consumer task [{}]", endOffsets);
+
+            for (Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
+                if (entry.getValue() > 0) {
+                    targetEndOffsets.put(entry.getKey().partition(), entry.getValue());
+                }
+            }
+
+            reassign = false;
+        }
+    }
+
     public void syncCommittedDataAndOffsets(boolean forceSync) {
         if (!forceSync && System.currentTimeMillis() - lastSyncedTs < 60_000) {
             return;
@@ -238,10 +241,10 @@ class ConsumerTask implements Runnable, Closeable {
 
     private void updateAssignmentsForPartitions(Set<TopicPartition> addedPartitions,
                                                 Set<TopicPartition> removedPartitions) {
-        Objects.requireNonNull(addedPartitions,"addedPartitions must not be null");
-        Objects.requireNonNull(removedPartitions,"removedPartitions must not be null");
+        Objects.requireNonNull(addedPartitions, "addedPartitions must not be null");
+        Objects.requireNonNull(removedPartitions, "removedPartitions must not be null");
 
-        if(addedPartitions.isEmpty() && removedPartitions.isEmpty()) {
+        if (addedPartitions.isEmpty() && removedPartitions.isEmpty()) {
             return;
         }
 

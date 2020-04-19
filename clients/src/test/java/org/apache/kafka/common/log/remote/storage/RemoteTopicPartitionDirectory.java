@@ -1,19 +1,39 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.slf4j.*;
+import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
 
-import java.io.*;
-import java.util.*;
-import java.util.stream.*;
+import static java.lang.String.format;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.toSet;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.getUUID;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.deleteFilesOnly;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.deleteQuietly;
+import static org.slf4j.LoggerFactory.getLogger;
 
-import static java.lang.String.*;
-import static java.util.Arrays.*;
-import static java.util.Objects.*;
-import static java.util.stream.Collectors.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.*;
-import static org.slf4j.LoggerFactory.*;
+import java.io.File;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Represents a topic-partition directory in the local tiered storage under which filesets for

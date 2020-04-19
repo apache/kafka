@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * Used to walk through a local remote storage, providing a support to tests to explore the content of the storage.

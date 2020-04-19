@@ -17,23 +17,30 @@
 package org.apache.kafka.common.log.remote.storage;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.log.remote.storage.LocalTieredStorageListener.*;
-import org.apache.kafka.test.*;
+import org.apache.kafka.common.log.remote.storage.LocalTieredStorageListener.LocalTieredStorageListeners;
+import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static java.lang.String.format;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.*;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.openFileset;
+import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openExistingTopicPartitionDirectory;
 
-
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.Callable;
 
 /**
  * An implementation of {@link RemoteStorageManager} which relies on the local file system to store
@@ -174,8 +181,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         if (storageDir == null) {
             storageDirectory = TestUtils.tempDirectory(ROOT_STORAGES_DIR_NAME + "-");
 
-            LOGGER.debug(
-                    "No storage directory specified, created temporary directory: {}",
+            LOGGER.debug("No storage directory specified, created temporary directory: {}",
                     storageDirectory.getAbsolutePath());
 
         } else {
@@ -183,17 +189,17 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final boolean existed = storageDirectory.exists();
 
             if (!existed) {
-                LOGGER.info("Creating directory: " + storageDirectory.getAbsolutePath());
+                LOGGER.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
                 storageDirectory.mkdirs();
 
             } else {
-                LOGGER.warn(format("Remote storage with ID %s already exists on the file system. Any data already " +
+                LOGGER.warn("Remote storage with ID [{}] already exists on the file system. Any data already " +
                         "in the remote storage will not be deleted and may result in an inconsistent state and/or " +
-                        "provide stale data.", storageDir));
+                        "provide stale data.", storageDir);
             }
         }
 
-        LOGGER.info(format("Created local tiered storage: %s", storageDirectory.getName()));
+        LOGGER.info("Created local tiered storage: [{}]", storageDirectory.getName());
     }
 
     @Override
@@ -208,10 +214,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                     storageListeners.onTopicPartitionCreated(id.topicPartition());
                 }
 
-                LOGGER.info(format("Transferring log segment for topic=%s partition=%d from offset=%s",
+                LOGGER.info("Transferring log segment for topic={} partition={} from offset={}",
                         id.topicPartition().topic(),
                         id.topicPartition().partition(),
-                        data.logSegment().getName().split("\\.")[0]));
+                        data.logSegment().getName().split("\\.")[0]);
 
                 remoteSegmentFileset.copy(transferer, data);
 
@@ -291,7 +297,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 final Optional<File> notADirectory = Arrays.stream(files).filter(f -> !f.isDirectory()).findAny();
 
                 if (notADirectory.isPresent()) {
-                    LOGGER.warn("Found file %s which is not a remote topic-partition directory. " +
+                    LOGGER.warn("Found file [{}] which is not a remote topic-partition directory. " +
                             "Stopping the deletion process.", notADirectory.get());
                     //
                     // If an unexpected state is encountered, do not proceed with the delete of the local storage,

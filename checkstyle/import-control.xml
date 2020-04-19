@@ -67,8 +67,10 @@
       <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
 
-    <subpackage name="log.remote.storage">
+    <subpackage name="log.remote.metadata.storage">
       <allow pkg="org.apache.kafka.clients" />
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.log.remote.storage" />
     </subpackage>
 
     <subpackage name="message">

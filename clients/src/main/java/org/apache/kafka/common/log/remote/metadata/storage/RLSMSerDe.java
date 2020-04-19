@@ -107,7 +107,7 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
 
             final int size = SCHEMA_V0.sizeOf(rlsmStruct);
             ByteBuffer byteBuffer;
-            if(includeVersion) {
+            if (includeVersion) {
                 byteBuffer = ByteBuffer.allocate(size + 2);
                 byteBuffer.putShort((short) 0);
             } else {
@@ -140,7 +140,7 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
 
             final ByteBuffer contextByteBuffer = struct.getBytes(REMOTE_LOG_SEGMENT_CONTEXT_NAME);
             byte[] contextBytes = null;
-            if(contextByteBuffer != null) {
+            if (contextByteBuffer != null) {
                 contextBytes = new byte[contextByteBuffer.remaining()];
                 contextByteBuffer.get(contextBytes, 0, contextBytes.length);
             }

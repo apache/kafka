@@ -17,26 +17,50 @@
 package org.apache.kafka.common.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.*;
-import org.junit.*;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TestName;
 
 import static java.lang.String.format;
-import static java.nio.ByteBuffer.*;
-import static java.util.Arrays.*;
-import static java.util.Objects.*;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageSnapshot.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.*;
-import static org.junit.Assert.*;
+import static java.nio.ByteBuffer.wrap;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
-import java.io.*;
-import java.nio.*;
-import java.nio.channels.*;
-import java.nio.file.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public final class LocalTieredStorageTest {
     @Rule

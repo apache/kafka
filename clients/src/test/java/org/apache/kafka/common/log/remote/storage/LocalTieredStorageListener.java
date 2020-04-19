@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.slf4j.*;
+import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Used to notify users of change in the local storage, such as the addition of a directory,

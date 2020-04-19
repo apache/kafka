@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.*;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType;
 
-import java.io.*;
-import java.util.*;
-import java.util.stream.*;
+import static java.lang.String.format;
 
-import static java.lang.String.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * A capture of the content of the local tiered storage at a point in time.
@@ -80,8 +85,8 @@ public final class LocalTieredStorageSnapshot {
 
         @Override
         public void visitSegment(RemoteLogSegmentFileset fileset) {
-            if (records.containsKey(fileset)) {
-                throw new IllegalStateException(format("Segment with id %s was already visited", fileset));
+            if (records.containsKey(fileset.getRemoteLogSegmentId())) {
+                throw new IllegalStateException(format("Segment with id %s was already visited", fileset.getRemoteLogSegmentId()));
             }
 
             records.put(fileset.getRemoteLogSegmentId(), fileset);

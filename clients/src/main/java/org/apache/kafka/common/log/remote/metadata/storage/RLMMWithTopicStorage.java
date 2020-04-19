@@ -146,7 +146,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         } catch (KafkaException e) {
             throw e;
         } catch (Exception e) {
-            throw new KafkaException("Exception occurred while publishing messagefor remote-log-segment-id"
+            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id"
                     + remoteLogSegmentId, e);
         }
     }
@@ -156,14 +156,15 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
         // if the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.assignedPartition(partition)) {
+            log.warn("This consumer is not subscribed to the target partition [{}] on which message is produced.",
+                    partition);
             return;
         }
 
         final long offset = recordMetadata.offset();
         final long sleepTimeMs = 1000L;
         while (consumerTask.committedOffset(partition) < offset) {
-            log.debug(
-                    "Did not receive the messages till the expected offset [{}] for partition [{}], Sleeping for [{}]",
+            log.debug("Did not receive the messages till the expected offset [{}] for partition [{}], Sleeping for [{}]",
                     offset, partition, sleepTimeMs);
             Thread.sleep(sleepTimeMs);
         }
@@ -316,7 +317,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     private void ensureInitialized() {
-        if(!initialized) throw new KafkaException("Resources required are not yet initialized by invoking initialize()");
+        if (!initialized)
+            throw new KafkaException("Resources required are not yet initialized by invoking initialize()");
     }
 
     @Override
@@ -354,7 +356,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
             final Collection<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = committedLogMetadataStore.read();
             for (RemoteLogSegmentMetadata entry : remoteLogSegmentMetadatas) {
                 partitionsWithSegmentIds.computeIfAbsent(entry.remoteLogSegmentId().topicPartition(),
-                        k -> new ConcurrentSkipListMap<>()).put(entry.startOffset(), entry.remoteLogSegmentId());
+                    k -> new ConcurrentSkipListMap<>()).put(entry.startOffset(), entry.remoteLogSegmentId());
                 idWithSegmentMetadata.put(entry.remoteLogSegmentId(), entry);
             }
         } catch (IOException e) {

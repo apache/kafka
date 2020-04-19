@@ -16,15 +16,20 @@
  */
 package org.apache.kafka.common.log.remote.storage;
 
-import org.apache.kafka.common.*;
-import org.slf4j.*;
+import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import static java.lang.String.format;
+import static java.util.stream.Collectors.summingInt;
 
-import static java.lang.String.*;
-import static java.util.stream.Collectors.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides support to wait on internal modifications from the local tiered storage.
