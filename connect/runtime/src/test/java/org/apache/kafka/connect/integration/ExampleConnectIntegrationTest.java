@@ -22,8 +22,10 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +74,9 @@ public class ExampleConnectIntegrationTest {
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
+
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
 
     @Before
     public void setup() {

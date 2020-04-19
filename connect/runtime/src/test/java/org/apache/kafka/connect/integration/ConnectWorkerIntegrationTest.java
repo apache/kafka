@@ -23,8 +23,10 @@ import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +72,9 @@ public class ConnectWorkerIntegrationTest {
     private EmbeddedConnectCluster connect;
     Map<String, String> workerProps = new HashMap<>();
     Properties brokerProps = new Properties();
+
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
 
     @Before
     public void setup() {

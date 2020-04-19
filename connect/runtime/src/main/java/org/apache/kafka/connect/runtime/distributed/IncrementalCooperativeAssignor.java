@@ -66,6 +66,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
     protected int delay;
+    private int previousGenerationId;
+    private Set<String> previousMembers;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);
@@ -77,6 +79,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.scheduledRebalance = 0;
         this.candidateWorkersForReassignment = new LinkedHashSet<>();
         this.delay = 0;
+        this.previousGenerationId = -1;
+        this.previousMembers = Collections.emptySet();
     }
 
     @Override
@@ -159,6 +163,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
+        if (previousGenerationId != coordinator.lastCompletedGenerationId()) {
+            log.debug("Emptying previous assignments due to generation mismatch since the last assignment: {}", previousAssignment);
+            this.previousAssignment = ConnectorsAndTasks.EMPTY;
+        }
 
         ClusterConfigState snapshot = coordinator.configSnapshot();
         Set<String> configuredConnectors = new TreeSet<>(snapshot.connectors());
@@ -236,7 +244,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         taskAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
 
-        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
+        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment, memberConfigs);
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
@@ -267,19 +275,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
         assignTasks(completeWorkerAssignment, newSubmissions.tasks());
-
         log.debug("Current complete assignments: {}", currentWorkerAssignment);
         log.debug("New complete assignments: {}", completeWorkerAssignment);
 
         Map<String, Collection<String>> currentConnectorAssignments =
                 currentWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::connectors));
-
         Map<String, Collection<ConnectorTaskId>> currentTaskAssignments =
                 currentWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
-
         Map<String, Collection<String>> incrementalConnectorAssignments =
                 diff(connectorAssignments, currentConnectorAssignments);
-
         Map<String, Collection<ConnectorTaskId>> incrementalTaskAssignments =
                 diff(taskAssignments, currentTaskAssignments);
 
@@ -292,9 +296,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
                                 incrementalTaskAssignments, toRevoke, delay, protocolVersion);
-
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
-
+        previousGenerationId = coordinator.generationId();
+        previousMembers = memberConfigs.keySet();
         log.debug("Actual assignments: {}", assignments);
         return serializeAssignments(assignments);
     }
@@ -352,6 +356,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment) {
+        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment, Collections.emptyMap());
+    }
+
+    // visible for testing
+    protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
+                                         ConnectorsAndTasks newSubmissions,
+                                         List<WorkerLoad> completeWorkerAssignment,
+                                         Map<String, ExtendedWorkerState> memberConfigs) {
         if (lostAssignments.isEmpty()) {
             resetDelay();
             return;
@@ -360,6 +372,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         final long now = time.milliseconds();
         log.debug("Found the following connectors and tasks missing from previous assignments: "
                 + lostAssignments);
+
+        if (previousMembers.size() == memberConfigs.size()) {
+            log.debug("Group size is same between rebalances. Lost assignments are probably due to lost SyncGroup "
+                    + "responses. Treating lost tasks as new tasks");
+            newSubmissions.connectors().addAll(lostAssignments.connectors());
+            newSubmissions.tasks().addAll(lostAssignments.tasks());
+            return;
+        }
 
         if (scheduledRebalance > 0 && now >= scheduledRebalance) {
             // delayed rebalance expired and it's time to assign resources
