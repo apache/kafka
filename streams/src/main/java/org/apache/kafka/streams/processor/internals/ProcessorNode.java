@@ -87,7 +87,7 @@ public class ProcessorNode<K, V> {
         childByName.put(child.name, child);
     }
 
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Object, Object> context) {
         try {
             internalProcessorContext = context;
             initSensors();

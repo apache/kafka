@@ -84,7 +84,7 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private KTableImpl<String, String, String> parent;
     @Mock(MockType.NICE)
-    private InternalProcessorContext context;
+    private InternalProcessorContext<Object, Object> context;
     @Mock(MockType.NICE)
     private KTableValueGetterSupplier<String, String> parentGetterSupplier;
     @Mock(MockType.NICE)
@@ -207,7 +207,7 @@ public class KTableTransformValuesTest {
         replay(parent, parentGetterSupplier, parentGetter);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
-        getter.init(context);
+        getter.init(new ForwardingDisabledProcessorContext(context));
 
         final String result = getter.get("Key").value();
 
@@ -224,7 +224,7 @@ public class KTableTransformValuesTest {
         replay(context, stateStore);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
-        getter.init(context);
+        getter.init(new ForwardingDisabledProcessorContext(context));
 
         final String result = getter.get("Key").value();
 

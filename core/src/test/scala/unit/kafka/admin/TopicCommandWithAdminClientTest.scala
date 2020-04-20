@@ -26,7 +26,6 @@ import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
@@ -38,7 +37,7 @@ import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -92,14 +91,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
-    val finishTime = System.currentTimeMillis() + timeout
-    var result = false
-    while (System.currentTimeMillis() < finishTime && !result) {
-      val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
-      result = topics.contains(topicName)
-      Thread.sleep(100)
-    }
-    assertTrue(s"Topic $topicName has not been created within the given $timeout time", result)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topicName, partition = 0, timeout)
   }
 
   @Before
@@ -107,7 +99,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    adminClient = AdminClient.create(props)
+    adminClient = Admin.create(props)
     topicService = AdminClientTopicService(adminClient)
     testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }
@@ -588,11 +580,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
             (result, server) => {
               val topicMetadatas = server.dataPlaneRequestProcessor.metadataCache
                 .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-              val testPartitionMetadata = topicMetadatas.find(_.topic().equals(testTopicName)).get.partitionMetadata().asScala.find(_.partition() == partitionOnBroker0)
+              val testPartitionMetadata = topicMetadatas.find(_.name.equals(testTopicName)).get.partitions.asScala.find(_.partitionIndex == partitionOnBroker0)
               testPartitionMetadata match {
                 case None => fail(s"Partition metadata is not found in metadata cache")
                 case Some(metadata) => {
-                  result && metadata.error() == Errors.LEADER_NOT_AVAILABLE
+                  result && metadata.errorCode == Errors.LEADER_NOT_AVAILABLE.code
                 }
               }
             }
@@ -673,7 +665,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
 
     adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
-      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
+      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica))))).all().get()
 
     // let's wait until the LAIR is propagated
     TestUtils.waitUntilTrue(() => {

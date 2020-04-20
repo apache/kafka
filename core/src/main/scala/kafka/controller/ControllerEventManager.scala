@@ -21,14 +21,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import java.util.concurrent.locks.ReentrantLock
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
@@ -82,14 +81,7 @@ class ControllerEventManager(controllerId: Int,
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
-  newGauge(
-    EventQueueSizeMetricName,
-    new Gauge[Int] {
-      def value: Int = {
-        queue.size()
-      }
-    }
-  )
+  newGauge(EventQueueSizeMetricName, () => queue.size)
 
   def state: ControllerState = _state
 

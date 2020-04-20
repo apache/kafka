@@ -24,8 +24,8 @@ import java.util.Properties
 import java.util.concurrent._
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -36,7 +36,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
 
@@ -138,7 +138,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     // Verify that connection blocked on the limit connects successfully when an existing connection is closed
     val plaintextConnections = (connectionCount until maxConnectionsPlaintext).map(_ => connect("PLAINTEXT"))
     executor = Executors.newSingleThreadExecutor
-    val future = executor.submit(CoreUtils.runnable { createAndVerifyConnection() })
+    val future = executor.submit((() => createAndVerifyConnection()): Runnable)
     Thread.sleep(100)
     assertFalse(future.isDone)
     plaintextConnections.head.close()
@@ -166,7 +166,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
     val initialConnectionCount = connectionCount
     val adminClient = createAdminClient()
-    TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
+    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
     waitForConfigOnServer(aPropToVerify._1, aPropToVerify._2)
     adminClient.close()
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Admin client connection not closed")
@@ -187,7 +187,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val config = new Properties()
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = AdminClient.create(config)
+    val adminClient = Admin.create(config)
     adminClient
   }
 

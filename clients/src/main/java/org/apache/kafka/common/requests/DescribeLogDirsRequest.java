@@ -17,137 +17,62 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.DescribeLogDirsRequestData;
+import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
 
 public class DescribeLogDirsRequest extends AbstractRequest {
 
-    // request level key names
-    private static final String TOPICS_KEY_NAME = "topics";
-
-    // topic level key names
-    private static final String PARTITIONS_KEY_NAME = "partitions";
-
-    private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32), "List of partition ids of the topic.")))));
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V1 = DESCRIBE_LOG_DIRS_REQUEST_V0;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0, DESCRIBE_LOG_DIRS_REQUEST_V1};
-    }
-
-    private final Set<TopicPartition> topicPartitions;
+    private final DescribeLogDirsRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<DescribeLogDirsRequest> {
-        private final Set<TopicPartition> topicPartitions;
+        private final DescribeLogDirsRequestData data;
 
-        // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
-        public Builder(Set<TopicPartition> partitions) {
+        public Builder(DescribeLogDirsRequestData data) {
             super(ApiKeys.DESCRIBE_LOG_DIRS);
-            this.topicPartitions = partitions;
+            this.data = data;
         }
 
         @Override
         public DescribeLogDirsRequest build(short version) {
-            return new DescribeLogDirsRequest(topicPartitions, version);
+            return new DescribeLogDirsRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("(type=DescribeLogDirsRequest")
-                .append(", topicPartitions=")
-                .append(topicPartitions)
-                .append(")");
-            return builder.toString();
+            return data.toString();
         }
     }
 
     public DescribeLogDirsRequest(Struct struct, short version) {
         super(ApiKeys.DESCRIBE_LOG_DIRS, version);
-
-        if (struct.getArray(TOPICS_KEY_NAME) == null) {
-            topicPartitions = null;
-        } else {
-            topicPartitions = new HashSet<>();
-            for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
-                Struct topicStruct = (Struct) topicStructObj;
-                String topic = topicStruct.get(TOPIC_NAME);
-                for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
-                    int partition = (Integer) partitionObj;
-                    topicPartitions.add(new TopicPartition(topic, partition));
-                }
-            }
-        }
+        this.data = new DescribeLogDirsRequestData(struct, version);
     }
 
-    // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
-    public DescribeLogDirsRequest(Set<TopicPartition> topicPartitions, short version) {
+    public DescribeLogDirsRequest(DescribeLogDirsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_LOG_DIRS, version);
-        this.topicPartitions = topicPartitions;
+        this.data = data;
+    }
+
+    public DescribeLogDirsRequestData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_LOG_DIRS.requestSchema(version()));
-        if (topicPartitions == null) {
-            struct.set(TOPICS_KEY_NAME, null);
-            return struct;
-        }
-
-        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
-        for (TopicPartition tp : topicPartitions) {
-            if (!partitionsByTopic.containsKey(tp.topic())) {
-                partitionsByTopic.put(tp.topic(), new ArrayList<Integer>());
-            }
-            partitionsByTopic.get(tp.topic()).add(tp.partition());
-        }
-
-        List<Struct> topicStructArray = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> partitionsByTopicEntry : partitionsByTopic.entrySet()) {
-            Struct topicStruct = struct.instance(TOPICS_KEY_NAME);
-            topicStruct.set(TOPIC_NAME, partitionsByTopicEntry.getKey());
-            topicStruct.set(PARTITIONS_KEY_NAME, partitionsByTopicEntry.getValue().toArray());
-            topicStructArray.add(topicStruct);
-        }
-        struct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
-
-        return struct;
+        return data.toStruct(version());
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData().setThrottleTimeMs(throttleTimeMs));
     }
 
     public boolean isAllTopicPartitions() {
-        return topicPartitions == null;
-    }
-
-    public Set<TopicPartition> topicPartitions() {
-        return topicPartitions;
+        return data.topics() == null;
     }
 
     public static DescribeLogDirsRequest parse(ByteBuffer buffer, short version) {

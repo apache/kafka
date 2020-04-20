@@ -39,14 +39,14 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
         private final ValueTransformerWithKey<K, V, R> valueTransformer;
-        private ProcessorContext context;
+        private ProcessorContext<Object, Object> context;
 
         KStreamTransformValuesProcessor(final ValueTransformerWithKey<K, V, R> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
             this.context = context;
         }

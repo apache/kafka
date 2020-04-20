@@ -34,6 +34,7 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
+import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -67,15 +68,18 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.powermock.reflect.Whitebox;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -116,21 +120,24 @@ public class DistributedHerderTest {
     private static final ConnectorTaskId TASK2 = new ConnectorTaskId(CONN1, 2);
     private static final Integer MAX_TASKS = 3;
     private static final Map<String, String> CONN1_CONFIG = new HashMap<>();
+    private static final String FOO_TOPIC = "foo";
+    private static final String BAR_TOPIC = "bar";
+    private static final String BAZ_TOPIC = "baz";
     static {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
-        CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC));
         CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
     private static final Map<String, String> CONN1_CONFIG_UPDATED = new HashMap<>(CONN1_CONFIG);
     static {
-        CONN1_CONFIG_UPDATED.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar,baz");
+        CONN1_CONFIG_UPDATED.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC, BAZ_TOPIC));
     }
     private static final Map<String, String> CONN2_CONFIG = new HashMap<>();
     static {
         CONN2_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN2);
         CONN2_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
-        CONN2_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN2_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC));
         CONN2_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
@@ -161,6 +168,8 @@ public class DistributedHerderTest {
 
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+    private static final Runnable EMPTY_RUNNABLE = () -> {
+    };
 
     @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
@@ -186,6 +195,7 @@ public class DistributedHerderTest {
     private short connectProtocolVersion;
     private final ConnectorClientConfigOverridePolicy
         noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
+
 
     @Before
     public void setUp() throws Exception {
@@ -356,7 +366,6 @@ public class DistributedHerderTest {
         member.requestRejoin();
         PowerMock.expectLastCall();
 
-        expectPostRebalanceCatchup(SNAPSHOT);
 
         // In the second rebalance the new member gets its assignment and this member has no
         // assignments or revocations
@@ -367,6 +376,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
+        herder.configState = SNAPSHOT;
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
@@ -766,15 +776,37 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
-        // No immediate action besides this -- change will be picked up via the config log
 
+        // The change eventually is reflected to the config topic and the deleted connector and
+        // tasks are revoked
+        member.wakeup();
+        PowerMock.expectLastCall();
+        TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
+        TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
+        EasyMock.expect(statusBackingStore.getAllTopics(EasyMock.eq(CONN1))).andReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus))).times(2);
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(FOO_TOPIC));
+        PowerMock.expectLastCall().times(2);
+        statusBackingStore.deleteTopic(EasyMock.eq(CONN1), EasyMock.eq(BAR_TOPIC));
+        PowerMock.expectLastCall().times(2);
+        expectRebalance(Arrays.asList(CONN1), Arrays.asList(TASK1),
+                ConnectProtocol.Assignment.NO_ERROR, 2,
+                Collections.emptyList(), Collections.emptyList(), 0);
+        expectPostRebalanceCatchup(ClusterConfigState.EMPTY);
+        member.requestRejoin();
+        PowerMock.expectLastCall();
         PowerMock.replayAll();
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
         herder.tick();
 
         time.sleep(1000L);
-        assertStatistics(3, 1, 100, 1000L);
+        assertStatistics("leaderUrl", false, 3, 1, 100, 1000L);
+
+        configUpdateListener.onConnectorConfigRemove(CONN1); // read updated config that removes the connector
+        herder.configState = ClusterConfigState.EMPTY;
+        herder.tick();
+        time.sleep(1000L);
+        assertStatistics("leaderUrl", true, 3, 1, 100, 2100L);
 
         PowerMock.verifyAll();
     }
@@ -1763,6 +1795,18 @@ public class DistributedHerderTest {
         // This requires inter-worker communication, so needs the REST API
     }
 
+
+    @Test
+    public void testThreadNames() {
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith(DistributedHerder.class.getSimpleName()));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "forwardRequestExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("ForwardRequestExecutor"));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("StartAndStopExecutor"));
+    }
 
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,

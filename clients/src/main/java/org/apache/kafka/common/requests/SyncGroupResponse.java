@@ -62,7 +62,7 @@ public class SyncGroupResponse extends AbstractResponse {
     }
 
     public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
-        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
+        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer), version);
     }
 
     @Override

@@ -66,8 +66,6 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    */
   def reduce(adder: (V, V) => V,
              subtractor: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
-    // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
-    // works perfectly with Scala 2.12 though
     new KTable(inner.reduce(adder.asReducer, subtractor.asReducer, materialized))
 
   /**

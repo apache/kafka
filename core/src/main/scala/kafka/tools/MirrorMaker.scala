@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
-import com.yammer.metrics.core.Gauge
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -37,7 +36,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
@@ -76,10 +75,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
   // message was not really acked, but was skipped. This metric records the number of skipped offsets.
-  newGauge("MirrorMaker-numDroppedMessages",
-    new Gauge[Int] {
-      def value = numDroppedMessages.get()
-    })
+  newGauge("MirrorMaker-numDroppedMessages", () => numDroppedMessages.get())
 
   def main(args: Array[String]): Unit = {
 
@@ -138,7 +134,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           case _: TimeoutException =>
             Try(consumerWrapper.consumer.listTopics) match {
               case Success(visibleTopics) =>
-                consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
+                consumerWrapper.offsets --= consumerWrapper.offsets.keySet.filter(tp => !visibleTopics.containsKey(tp.topic))
               case Failure(e) =>
                 warn("Failed to list all authorized topics after committing offsets timed out: ", e)
             }
@@ -519,11 +515,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
-      Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
-        override def run(): Unit = {
-          cleanShutdown()
-        }
-      })
+      Exit.addShutdownHook("MirrorMakerShutdownHook", cleanShutdown())
 
       // create producer
       val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))

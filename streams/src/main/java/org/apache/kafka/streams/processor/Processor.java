@@ -37,7 +37,7 @@ public interface Processor<K, V> {
      * 
      * @param context the context; may not be null
      */
-    void init(ProcessorContext context);
+    void init(ProcessorContext<Object, Object> context);
 
     /**
      * Process the record with the given key and value.

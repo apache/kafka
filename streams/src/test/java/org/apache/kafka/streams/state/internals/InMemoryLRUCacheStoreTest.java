@@ -19,12 +19,10 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
-
 
 import java.util.Arrays;
 import java.util.List;
@@ -39,16 +37,15 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
-
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.lruMap("my-store", 10),
                 (Serde<K>) context.keySerde(),
                 (Serde<V>) context.valueSerde());
 
-        final StateStore store = storeBuilder.build();
+        final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
 
-        return (KeyValueStore<K, V>) store;
+        return store;
     }
 
     @Test

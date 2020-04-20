@@ -21,10 +21,12 @@ import java.util.Properties
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 
 import kafka.log.LogConfig
+import kafka.server.Defaults
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.errors.{InvalidTimestampException, SerializationException, TimeoutException}
-import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
+import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
+import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
@@ -148,14 +150,19 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       assertTrue(s"Invalid offset $recordMetadata", recordMetadata.offset >= 0)
     }
 
-    def verifySendFailure(future: Future[RecordMetadata]): Unit = {
+    def verifyMetadataNotAvailable(future: Future[RecordMetadata]): Unit = {
       assertTrue(future.isDone)  // verify future was completed immediately
       assertEquals(classOf[TimeoutException], intercept[ExecutionException](future.get).getCause.getClass)
     }
 
+    def verifyBufferExhausted(future: Future[RecordMetadata]): Unit = {
+      assertTrue(future.isDone)  // verify future was completed immediately
+      assertEquals(classOf[BufferExhaustedException], intercept[ExecutionException](future.get).getCause.getClass)
+    }
+
     // Topic metadata not available, send should fail without blocking
     val producer = createProducer(brokerList = brokerList, maxBlockMs = 0)
-    verifySendFailure(send(producer))
+    verifyMetadataNotAvailable(send(producer))
 
     // Test that send starts succeeding once metadata is available
     val future = sendUntilQueued(producer)
@@ -165,7 +172,28 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val producer2 = createProducer(brokerList = brokerList, maxBlockMs = 0,
                                    lingerMs = 15000, batchSize = 1100, bufferSize = 1500)
     val future2 = sendUntilQueued(producer2) // wait until metadata is available and one record is queued
-    verifySendFailure(send(producer2))       // should fail send since buffer is full
+    verifyBufferExhausted(send(producer2))       // should fail send since buffer is full
     verifySendSuccess(future2)               // previous batch should be completed and sent now
   }
+
+  @Test
+  def testSendRecordBatchWithMaxRequestSizeAndHigher(): Unit = {
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val producer = registerProducer(new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer))
+
+    val keyLengthSize = 1
+    val headerLengthSize = 1
+    val valueLengthSize = 3
+    val overhead = Records.LOG_OVERHEAD + DefaultRecordBatch.RECORD_BATCH_OVERHEAD + DefaultRecord.MAX_RECORD_OVERHEAD +
+      keyLengthSize + headerLengthSize + valueLengthSize
+    val valueSize = Defaults.MessageMaxBytes - overhead
+
+    val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
+    assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)
+
+    val record1 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize + 1))
+    assertEquals(classOf[RecordTooLargeException], intercept[ExecutionException](producer.send(record1).get).getCause.getClass)
+  }
+
 }

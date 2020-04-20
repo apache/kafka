@@ -19,6 +19,7 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class ValueToKeyTest {
     private final ValueToKey<SinkRecord> xform = new ValueToKey<>();
@@ -88,4 +90,20 @@ public class ValueToKeyTest {
         assertEquals(expectedKey, transformedRecord.key());
     }
 
+    @Test
+    public void nonExistingField() {
+        xform.configure(Collections.singletonMap("fields", "not_exist"));
+
+        final Schema valueSchema = SchemaBuilder.struct()
+            .field("a", Schema.INT32_SCHEMA)
+            .build();
+
+        final Struct value = new Struct(valueSchema);
+        value.put("a", 1);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, valueSchema, value, 0);
+
+        DataException actual = assertThrows(DataException.class, () -> xform.apply(record));
+        assertEquals("Field does not exist: not_exist", actual.getMessage());
+    }
 }

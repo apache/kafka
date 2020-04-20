@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
@@ -131,9 +131,9 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
           if (replication == -1) {
             assertEquals("The topic should have the default replication factor",
-              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size)
           } else {
-            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size)
           }
         }
       }

@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -43,7 +44,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
     private String applicationId;
 
-    public final List<MockProducer> producers = new LinkedList<>();
+    public final List<MockProducer<byte[], byte[]>> producers = new LinkedList<>();
 
     public final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     public final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
@@ -52,7 +53,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
         this.applicationId = applicationId;
     }
 
-    public void setClusterForAdminClient(final Cluster cluster) {
+    public void setCluster(final Cluster cluster) {
         this.cluster = cluster;
     }
 
@@ -68,7 +69,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
         } else {
             assertFalse(config.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
         }
-        final MockProducer<byte[], byte[]> producer = new MockProducer<>(true, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
         producers.add(producer);
         return producer;
     }

@@ -63,7 +63,7 @@ object Json {
     catch { case _: JsonProcessingException => None }
 
   def tryParseBytes(input: Array[Byte]): Either[JsonProcessingException, JsonValue] =
-    try Right(mapper.readTree(input)).right.map(JsonValue(_))
+    try Right(mapper.readTree(input)).map(JsonValue(_))
     catch { case e: JsonProcessingException => Left(e) }
 
   /**
