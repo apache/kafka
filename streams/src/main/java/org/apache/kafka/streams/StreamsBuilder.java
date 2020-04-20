@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
@@ -289,8 +288,9 @@ public class StreamsBuilder {
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(
-                    Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
-                    internalStreamsBuilder, topic + "-");
+                Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                internalStreamsBuilder,
+                topic + "-");
 
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
@@ -474,7 +474,7 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if state store supplier is already added
      */
-    public synchronized StreamsBuilder addStateStore(final StoreBuilder builder) {
+    public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
         internalStreamsBuilder.addStateStore(builder);
         return this;
@@ -483,22 +483,23 @@ public class StreamsBuilder {
     /**
      * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead
      */
-    @SuppressWarnings("unchecked")
     @Deprecated
-    public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
-                                                      final String topic,
-                                                      final String sourceName,
-                                                      final Consumed consumed,
-                                                      final String processorName,
-                                                      final ProcessorSupplier stateUpdateSupplier) {
+    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                              final String topic,
+                                                              final String sourceName,
+                                                              final Consumed<K, V> consumed,
+                                                              final String processorName,
+                                                              final ProcessorSupplier<K, V> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(storeBuilder,
-                                              sourceName,
-                                              topic,
-                                              new ConsumedInternal<>(consumed),
-                                              processorName,
-                                              stateUpdateSupplier);
+        internalStreamsBuilder.addGlobalStore(
+            storeBuilder,
+            sourceName,
+            topic,
+            new ConsumedInternal<>(consumed),
+            processorName,
+            stateUpdateSupplier
+        );
         return this;
     }
 
@@ -527,17 +528,18 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    @SuppressWarnings("unchecked")
-    public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
-                                                      final String topic,
-                                                      final Consumed consumed,
-                                                      final ProcessorSupplier stateUpdateSupplier) {
+    public synchronized <K, V> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                             final String topic,
+                                                             final Consumed<K, V> consumed,
+                                                             final ProcessorSupplier<K, V> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(storeBuilder,
-                topic,
-                new ConsumedInternal<>(consumed),
-                stateUpdateSupplier);
+        internalStreamsBuilder.addGlobalStore(
+            storeBuilder,
+            topic,
+            new ConsumedInternal<>(consumed),
+            stateUpdateSupplier
+        );
         return this;
     }
 

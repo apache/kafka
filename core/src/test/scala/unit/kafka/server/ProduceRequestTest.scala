@@ -20,9 +20,9 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.Properties
 
-import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -32,7 +32,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Subclasses of `BaseProduceSendRequestTest` exercise the producer and produce request/response. This class
@@ -40,7 +40,7 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
-  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+  val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Test
   def testSimpleProduceRequest(): Unit = {

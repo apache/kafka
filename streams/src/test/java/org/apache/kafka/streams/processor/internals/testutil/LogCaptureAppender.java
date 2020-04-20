@@ -60,6 +60,12 @@ public class LogCaptureAppender extends AppenderSkeleton {
         return logCaptureAppender;
     }
 
+    public static LogCaptureAppender createAndRegister(final Class<?> clazz) {
+        final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
+        Logger.getLogger(clazz).addAppender(logCaptureAppender);
+        return logCaptureAppender;
+    }
+
     public static void setClassLoggerToDebug(final Class<?> clazz) {
         Logger.getLogger(clazz).setLevel(Level.DEBUG);
     }

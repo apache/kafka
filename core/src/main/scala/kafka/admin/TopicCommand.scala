@@ -38,7 +38,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
@@ -146,6 +146,10 @@ object TopicCommand extends Logging {
       print("\tLeader: " + (if (hasLeader) info.leader.id else "none"))
       print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
       print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
+      if (reassignment.nonEmpty) {
+        print("\tAdding Replicas: " + reassignment.get.addingReplicas().asScala.mkString(","))
+        print("\tRemoving Replicas: " + reassignment.get.removingReplicas().asScala.mkString(","))
+      }
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
     }
@@ -338,7 +342,7 @@ object TopicCommand extends Logging {
 
   object ZookeeperTopicService {
     def apply(zkConnect: Option[String]): ZookeeperTopicService =
-      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSaslEnabled, 30000, 30000,
         Int.MaxValue, Time.SYSTEM))
   }
 
@@ -481,7 +485,7 @@ object TopicCommand extends Logging {
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
-      val allTopics = zkClient.getAllTopicsInCluster.toSeq.sorted
+      val allTopics = zkClient.getAllTopicsInCluster().toSeq.sorted
       doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
     }
 
@@ -649,7 +653,7 @@ object TopicCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    private val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
+    private val allTopicLevelOpts = immutable.Set[OptionSpec[_]](alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
     private val allReplicationReportOpts: Set[OptionSpec[_]] = Set(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt)
 

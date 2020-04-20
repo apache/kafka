@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -206,17 +207,30 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     private KafkaStreams prepareTopology(final String queryableName, final String queryableNameTwo) {
+        final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<Integer, Float> table1 = builder.table(TABLE_1, Consumed.with(Serdes.Integer(), Serdes.Float()));
-        final KTable<String, Long> table2 = builder.table(TABLE_2, Consumed.with(Serdes.String(), Serdes.Long()));
-        final KTable<Integer, String> table3 = builder.table(TABLE_3, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KTable<Integer, Float> table1 = builder.table(
+            TABLE_1,
+            Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.Float(), streamsConfig, false))
+        );
+        final KTable<String, Long> table2 = builder.table(
+            TABLE_2,
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.Long(), streamsConfig, false))
+        );
+        final KTable<Integer, String> table3 = builder.table(
+            TABLE_3,
+            Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+        );
 
         final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
         if (queryableName != null) {
             materialized = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
-                    .withKeySerde(Serdes.Integer())
-                    .withValueSerde(Serdes.String())
+                    .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
+                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
                     .withCachingDisabled();
         } else {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
@@ -225,8 +239,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materializedTwo;
         if (queryableNameTwo != null) {
             materializedTwo = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableNameTwo)
-                    .withKeySerde(Serdes.Integer())
-                    .withValueSerde(Serdes.String())
+                    .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
+                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
                     .withCachingDisabled();
         } else {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
@@ -247,7 +261,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         table1.join(table2, tableOneKeyExtractor, joiner, materialized)
               .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)
             .toStream()
-            .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
+            .to(OUTPUT,
+                Produced.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
+                              serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }

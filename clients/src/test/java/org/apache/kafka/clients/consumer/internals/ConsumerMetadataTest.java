@@ -77,7 +77,7 @@ public class ConsumerMetadataTest {
 
         MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
             "clusterId", node.id(), topics);
-        metadata.update(response, time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
 
         if (includeInternalTopics)
             assertEquals(Utils.mkSet("__matching_topic", "__consumer_offsets"), metadata.fetch().topics());
@@ -113,7 +113,7 @@ public class ConsumerMetadataTest {
     public void testTransientTopics() {
         subscription.subscribe(singleton("foo"), new NoOpConsumerRebalanceListener());
         ConsumerMetadata metadata = newConsumerMetadata(false);
-        metadata.update(TestUtils.metadataUpdateWith(1, singletonMap("foo", 1)), time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith(1, singletonMap("foo", 1)), false, time.milliseconds());
         assertFalse(metadata.updateRequested());
 
         metadata.addTransientTopics(singleton("foo"));
@@ -125,13 +125,13 @@ public class ConsumerMetadataTest {
         Map<String, Integer> topicPartitionCounts = new HashMap<>();
         topicPartitionCounts.put("foo", 1);
         topicPartitionCounts.put("bar", 1);
-        metadata.update(TestUtils.metadataUpdateWith(1, topicPartitionCounts), time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith(1, topicPartitionCounts), false, time.milliseconds());
         assertFalse(metadata.updateRequested());
 
         assertEquals(Utils.mkSet("foo", "bar"), new HashSet<>(metadata.fetch().topics()));
 
         metadata.clearTransientTopics();
-        metadata.update(TestUtils.metadataUpdateWith(1, topicPartitionCounts), time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith(1, topicPartitionCounts), false, time.milliseconds());
         assertEquals(singleton("foo"), new HashSet<>(metadata.fetch().topics()));
     }
 
@@ -153,14 +153,15 @@ public class ConsumerMetadataTest {
 
         MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
             "clusterId", node.id(), topics);
-        metadata.update(response, time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
 
         assertEquals(allTopics, metadata.fetch().topics());
     }
 
     private MetadataResponse.TopicMetadata topicMetadata(String topic, boolean isInternal) {
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE,
-                0, node, Optional.of(5), singletonList(node), singletonList(node), singletonList(node));
+                new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
+                singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
         return new MetadataResponse.TopicMetadata(Errors.NONE, topic, isInternal, singletonList(partitionMetadata));
     }
 

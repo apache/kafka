@@ -31,7 +31,6 @@ import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
 
-
 public class DescribeAclsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<DescribeAclsRequest> {
@@ -47,8 +46,8 @@ public class DescribeAclsRequest extends AbstractRequest {
                 .setPermissionType(entryFilter.permissionType().code())
                 .setPrincipalFilter(entryFilter.principal())
                 .setResourceNameFilter(patternFilter.name())
-                .setResourcePatternType(patternFilter.patternType().code())
-                .setResourceType(patternFilter.resourceType().code());
+                .setPatternTypeFilter(patternFilter.patternType().code())
+                .setResourceTypeFilter(patternFilter.resourceType().code());
         }
 
         @Override
@@ -64,10 +63,30 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     private final DescribeAclsRequestData data;
 
-    public DescribeAclsRequest(DescribeAclsRequestData data, short version) {
+    private DescribeAclsRequest(DescribeAclsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_ACLS, version);
         this.data = data;
-        validate(version);
+        normalizeAndValidate(version);
+    }
+
+    private void normalizeAndValidate(short version) {
+        if (version == 0) {
+            PatternType patternType = PatternType.fromCode(data.patternTypeFilter());
+            // On older brokers, no pattern types existed except LITERAL (effectively). So even though ANY is not
+            // directly supported on those brokers, we can get the same effect as ANY by setting the pattern type
+            // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
+            if (patternType == PatternType.ANY)
+                data.setPatternTypeFilter(PatternType.LITERAL.code());
+            else if (patternType != PatternType.LITERAL)
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+        }
+
+        if (data.patternTypeFilter() == PatternType.UNKNOWN.code()
+                || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
+                || data.permissionType() == AclPermissionType.UNKNOWN.code()
+                || data.operation() == AclOperation.UNKNOWN.code()) {
+            throw new IllegalArgumentException("DescribeAclsRequest contains UNKNOWN elements: " + data);
+        }
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
@@ -100,33 +119,15 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     public AclBindingFilter filter() {
         ResourcePatternFilter rpf = new ResourcePatternFilter(
-                ResourceType.fromCode(data.resourceType()),
+                ResourceType.fromCode(data.resourceTypeFilter()),
                 data.resourceNameFilter(),
-                PatternType.fromCode(data.resourcePatternType()));
+                PatternType.fromCode(data.patternTypeFilter()));
         AccessControlEntryFilter acef =  new AccessControlEntryFilter(
                 data.principalFilter(),
                 data.hostFilter(),
                 AclOperation.fromCode(data.operation()),
                 AclPermissionType.fromCode(data.permissionType()));
         return new AclBindingFilter(rpf, acef);
-    }
-
-    private void validate(short version) {
-        if (version == 0) {
-            if (data.resourcePatternType() == PatternType.ANY.code()) {
-                data.setResourcePatternType(PatternType.LITERAL.code());
-            }
-            if (data.resourcePatternType() != PatternType.LITERAL.code()) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-            }
-        }
-
-        if (data.resourcePatternType() == PatternType.UNKNOWN.code()
-            || data.resourceType() == ResourceType.UNKNOWN.code()
-            || data.permissionType() == AclPermissionType.UNKNOWN.code()
-            || data.operation() == AclOperation.UNKNOWN.code()) {
-            throw new IllegalArgumentException("Filter contain UNKNOWN elements");
-        }
     }
 
 }

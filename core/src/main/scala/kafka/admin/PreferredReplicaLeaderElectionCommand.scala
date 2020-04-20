@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -65,7 +65,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       println(s"Warning: --zookeeper is deprecated and will be removed in a future version of Kafka.")
       println(s"Use --bootstrap-server instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
-              JaasUtils.isZkSecurityEnabled,
+              JaasUtils.isZkSaslEnabled,
               timeout)
     } else {
         val adminProps = if (commandOpts.options.has(commandOpts.adminClientConfigOpt))

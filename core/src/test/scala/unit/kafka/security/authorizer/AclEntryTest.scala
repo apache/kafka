@@ -25,7 +25,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Assert, Test}
 import org.scalatestplus.junit.JUnitSuite
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AclEntryTest extends JUnitSuite {
 

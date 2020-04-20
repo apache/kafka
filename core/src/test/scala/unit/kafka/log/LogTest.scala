@@ -20,13 +20,14 @@ package kafka.log
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.{Callable, Executors}
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
 
-import com.yammer.metrics.Metrics
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
@@ -46,7 +47,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions
 
 import scala.collection.{Iterable, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
@@ -56,7 +57,7 @@ class LogTest {
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
-  def metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+  def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Before
   def setUp(): Unit = {
@@ -117,12 +118,13 @@ class LogTest {
   def testHighWatermarkMaintenance(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)
+    val leaderEpoch = 0
 
-    val records = TestUtils.records(List(
+    def records(offset: Long): MemoryRecords = TestUtils.records(List(
       new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
       new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
       new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
-    ))
+    ), baseOffset = offset, partitionLeaderEpoch= leaderEpoch)
 
     def assertHighWatermark(offset: Long): Unit = {
       assertEquals(offset, log.highWatermark)
@@ -133,7 +135,7 @@ class LogTest {
     assertHighWatermark(0L)
 
     // High watermark not changed by append
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(records(0), leaderEpoch)
     assertHighWatermark(0L)
 
     // Update high watermark as leader
@@ -145,13 +147,24 @@ class LogTest {
     assertHighWatermark(3L)
 
     // Update high watermark as follower
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsFollower(records(3L))
     log.updateHighWatermark(6L)
     assertHighWatermark(6L)
 
     // High watermark should be adjusted by truncation
     log.truncateTo(3L)
     assertHighWatermark(3L)
+
+    log.appendAsLeader(records(0L), leaderEpoch = 0)
+    assertHighWatermark(3L)
+    assertEquals(6L, log.logEndOffset)
+    assertEquals(0L, log.logStartOffset)
+
+    // Full truncation should also reset high watermark
+    log.truncateFullyAndStartAt(4L)
+    assertEquals(4L, log.logEndOffset)
+    assertEquals(4L, log.logStartOffset)
+    assertHighWatermark(4L)
   }
 
   private def assertNonEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
@@ -454,6 +467,41 @@ class LogTest {
       baseOffset = 100L))
     assertEquals(1, log.logSegments.size)
     assertEquals(101L, log.logEndOffset)
+  }
+
+  /**
+   * Test the values returned by the logSegments call
+   */
+  @Test
+  def testLogSegmentsCallCorrect(): Unit = {
+    // Create 3 segments and make sure we get the right values from various logSegments calls.
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def getSegmentOffsets(log :Log, from: Long, to: Long) = log.logSegments(from, to).map { _.baseOffset }
+    val setSize = createRecords.sizeInBytes
+    val msgPerSeg = 10
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
+    // create a log
+    val logConfig = LogTest.createLogConfig(segmentBytes = segmentSize)
+    val log = createLog(logDir, logConfig)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
+    // segments expire in size
+    for (_ <- 1 to (2 * msgPerSeg + 2))
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
+
+    // from == to should always be null
+    assertEquals(List.empty[LogSegment], getSegmentOffsets(log, 10, 10))
+    assertEquals(List.empty[LogSegment], getSegmentOffsets(log, 15, 15))
+
+    assertEquals(List[Long](0, 10, 20), getSegmentOffsets(log, 0, 21))
+
+    assertEquals(List[Long](0), getSegmentOffsets(log, 1, 5))
+    assertEquals(List[Long](10, 20), getSegmentOffsets(log, 13, 21))
+    assertEquals(List[Long](10), getSegmentOffsets(log, 13, 17))
+
+    // from < to is bad
+    assertThrows[IllegalArgumentException]({ log.logSegments(10, 0) })
   }
 
   @Test
@@ -1361,9 +1409,9 @@ class LogTest {
                             producerId: Long,
                             epoch: Short,
                             offset: Long = 0L,
-                            coordinatorEpoch: Int = 0,
+                            coordinatorEpoch: Int,
                             partitionLeaderEpoch: Int = 0,
-                            timestamp: Long = mockTime.milliseconds()): MemoryRecords = {
+                            timestamp: Long): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
     MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker)
   }
@@ -3107,7 +3155,7 @@ class LogTest {
   def testParseTopicPartitionNameForMissingPartition(): Unit = {
     val topic = "test_topic"
     val partition = ""
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir.getPath + topicPartitionName(topic, partition))
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
@@ -3147,14 +3195,14 @@ class LogTest {
 
   @Test
   def testParseTopicPartitionNameForExistingInvalidDir(): Unit = {
-    val dir1 = new File(logDir + "/non_kafka_dir")
+    val dir1 = new File(logDir.getPath + "/non_kafka_dir")
     try {
       Log.parseTopicPartitionName(dir1)
       fail("KafkaException should have been thrown for dir: " + dir1.getCanonicalPath)
     } catch {
       case _: KafkaException => // should only throw KafkaException
     }
-    val dir2 = new File(logDir + "/non_kafka_dir-delete")
+    val dir2 = new File(logDir.getPath + "/non_kafka_dir-delete")
     try {
       Log.parseTopicPartitionName(dir2)
       fail("KafkaException should have been thrown for dir: " + dir2.getCanonicalPath)
@@ -3635,6 +3683,59 @@ class LogTest {
 
     // now there should be no first unstable offset
     assertEquals(None, log.firstUnstableOffset)
+  }
+
+  @Test
+  def testReadCommittedWithConcurrentHighWatermarkUpdates(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    val lastOffset = 50L
+
+    val producerEpoch = 0.toShort
+    val producerId = 15L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    // Thread 1 writes single-record transactions and attempts to read them
+    // before they have been aborted, and then aborts them
+    val txnWriteAndReadLoop: Callable[Int] = () => {
+      var nonEmptyReads = 0
+      while (log.logEndOffset < lastOffset) {
+        val currentLogEndOffset = log.logEndOffset
+
+        appendProducer(1)
+
+        val readInfo = log.read(
+          startOffset = currentLogEndOffset,
+          maxLength = Int.MaxValue,
+          isolation = FetchTxnCommitted,
+          minOneMessage = false)
+
+        if (readInfo.records.sizeInBytes() > 0)
+          nonEmptyReads += 1
+
+        appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT)
+      }
+      nonEmptyReads
+    }
+
+    // Thread 2 watches the log and updates the high watermark
+    val hwUpdateLoop: Runnable = () => {
+      while (log.logEndOffset < lastOffset) {
+        log.updateHighWatermark(log.logEndOffset)
+      }
+    }
+
+    val executor = Executors.newFixedThreadPool(2)
+    try {
+      executor.submit(hwUpdateLoop)
+
+      val future = executor.submit(txnWriteAndReadLoop)
+      val nonEmptyReads = future.get()
+
+      assertEquals(0, nonEmptyReads)
+    } finally {
+      executor.shutdownNow()
+    }
   }
 
   @Test

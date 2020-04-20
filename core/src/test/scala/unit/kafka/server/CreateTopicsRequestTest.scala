@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 

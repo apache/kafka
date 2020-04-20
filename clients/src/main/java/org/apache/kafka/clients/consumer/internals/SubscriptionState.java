@@ -16,20 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.ArrayList;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -187,15 +186,17 @@ public class SubscriptionState {
     }
 
     /**
-     * Add topics to the current group subscription. This is used by the group leader to ensure
+     * Set the current group subscription. This is used by the group leader to ensure
      * that it receives metadata updates for all topics that the group is interested in.
-     * @param topics The topics to add to the group subscription
+     *
+     * @param topics All topics from the group subscription
+     * @return true if the group subscription contains topics which are not part of the local subscription
      */
     synchronized boolean groupSubscribe(Collection<String> topics) {
         if (!hasAutoAssignedPartitions())
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
-        groupSubscription = new HashSet<>(groupSubscription);
-        return groupSubscription.addAll(topics);
+        groupSubscription = new HashSet<>(topics);
+        return !subscription.containsAll(groupSubscription);
     }
 
     /**
@@ -329,7 +330,7 @@ public class SubscriptionState {
     }
 
     /**
-     * Get the subcription topics for which metadata is required . For the leader, this will include
+     * Get the subscription topics for which metadata is required. For the leader, this will include
      * the union of the subscriptions of all group members. For followers, it is just that member's
      * subscription. This is used when querying topic metadata to detect the metadata changes which would
      * require rebalancing. The leader fetches metadata for all topics in the group so that it
@@ -750,8 +751,7 @@ public class SubscriptionState {
                 return false;
             }
 
-            if (currentLeaderAndEpoch.equals(Metadata.LeaderAndEpoch.noLeaderOrEpoch())) {
-                // Ignore empty LeaderAndEpochs
+            if (!currentLeaderAndEpoch.leader.isPresent() && !currentLeaderAndEpoch.epoch.isPresent()) {
                 return false;
             }
 
@@ -985,7 +985,7 @@ public class SubscriptionState {
         final Metadata.LeaderAndEpoch currentLeader;
 
         FetchPosition(long offset) {
-            this(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty()));
+            this(offset, Optional.empty(), Metadata.LeaderAndEpoch.noLeaderOrEpoch());
         }
 
         public FetchPosition(long offset, Optional<Integer> offsetEpoch, Metadata.LeaderAndEpoch currentLeader) {

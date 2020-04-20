@@ -49,7 +49,7 @@ import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchRespons
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 
@@ -521,20 +521,23 @@ class GroupMetadataManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     if (addLoadingPartition(offsetsPartition)) {
       info(s"Scheduling loading of offsets and group metadata from $topicPartition")
-      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded))
+      val startTimeMs = time.milliseconds()
+      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded, startTimeMs))
     } else {
       info(s"Already loading offsets and group metadata from $topicPartition")
     }
   }
 
-  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
+  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
     try {
-      val startMs = time.milliseconds()
+      val schedulerTimeMs = time.milliseconds() - startTimeMs
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      val endMs = time.milliseconds()
-      val timeLapse = endMs - startMs
-      partitionLoadSensor.record(timeLapse, endMs, false)
-      info(s"Finished loading offsets and group metadata from $topicPartition in $timeLapse milliseconds.")
+      val endTimeMs = time.milliseconds()
+      val totalLoadingTimeMs = endTimeMs - startTimeMs
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition "
+        + s"in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds"
+        + s" was spent in the scheduler.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {
@@ -663,19 +666,21 @@ class GroupMetadataManager(brokerId: Int,
 
         val (groupOffsets, emptyGroupOffsets) = loadedOffsets
           .groupBy(_._1.group)
-          .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) })
-          .partition { case (group, _) => loadedGroups.contains(group) }
+          .map { case (k, v) =>
+            k -> v.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) }
+          }.partition { case (group, _) => loadedGroups.contains(group) }
 
         val pendingOffsetsByGroup = mutable.Map[String, mutable.Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]]()
         pendingOffsets.foreach { case (producerId, producerOffsets) =>
           producerOffsets.keySet.map(_.group).foreach(addProducerGroup(producerId, _))
           producerOffsets
             .groupBy(_._1.group)
-            .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset)})
             .foreach { case (group, offsets) =>
               val groupPendingOffsets = pendingOffsetsByGroup.getOrElseUpdate(group, mutable.Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
               val groupProducerOffsets = groupPendingOffsets.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
-              groupProducerOffsets ++= offsets
+              groupProducerOffsets ++= offsets.map { case (groupTopicPartition, offset) =>
+                (groupTopicPartition.topicPartition, offset)
+              }
             }
         }
 

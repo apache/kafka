@@ -222,7 +222,8 @@ public class ProduceResponse extends AbstractResponse {
                 int partition = partRespStruct.get(PARTITION_ID);
                 Errors error = Errors.forCode(partRespStruct.get(ERROR_CODE));
                 long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
-                long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
+                long logAppendTime = partRespStruct.hasField(LOG_APPEND_TIME_KEY_NAME) ?
+                        partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME) : RecordBatch.NO_TIMESTAMP;
                 long logStartOffset = partRespStruct.getOrElse(LOG_START_OFFSET_FIELD, INVALID_OFFSET);
 
                 List<RecordError> recordErrors = Collections.emptyList();
@@ -274,18 +275,19 @@ public class ProduceResponse extends AbstractResponse {
                 partStruct.setIfExists(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
 
-                List<Struct> recordErrors = Collections.emptyList();
-                if (!part.recordErrors.isEmpty()) {
-                    recordErrors = new ArrayList<>();
-                    for (RecordError indexAndMessage : part.recordErrors) {
-                        Struct indexAndMessageStruct = partStruct.instance(RECORD_ERRORS_KEY_NAME)
-                                .set(BATCH_INDEX_KEY_NAME, indexAndMessage.batchIndex)
-                                .set(BATCH_INDEX_ERROR_MESSAGE_FIELD, indexAndMessage.message);
-                        recordErrors.add(indexAndMessageStruct);
+                if (partStruct.hasField(RECORD_ERRORS_KEY_NAME)) {
+                    List<Struct> recordErrors = Collections.emptyList();
+                    if (!part.recordErrors.isEmpty()) {
+                        recordErrors = new ArrayList<>();
+                        for (RecordError indexAndMessage : part.recordErrors) {
+                            Struct indexAndMessageStruct = partStruct.instance(RECORD_ERRORS_KEY_NAME)
+                                    .set(BATCH_INDEX_KEY_NAME, indexAndMessage.batchIndex)
+                                    .set(BATCH_INDEX_ERROR_MESSAGE_FIELD, indexAndMessage.message);
+                            recordErrors.add(indexAndMessageStruct);
+                        }
                     }
+                    partStruct.set(RECORD_ERRORS_KEY_NAME, recordErrors.toArray());
                 }
-
-                partStruct.setIfExists(RECORD_ERRORS_KEY_NAME, recordErrors.toArray());
 
                 partStruct.setIfExists(ERROR_MESSAGE_FIELD, part.errorMessage);
                 partitionArray.add(partStruct);

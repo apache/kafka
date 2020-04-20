@@ -19,7 +19,11 @@
   "name": "StopReplicaRequest",
   // Version 1 adds the broker epoch and reorganizes the partitions to be stored
   // per topic.
-  "validVersions": "0-2",
+  //
+  // Version 2 is the first flexible version.
+  //
+  // Version 3 adds the leader epoch per partition (KIP-570).
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -28,7 +32,7 @@
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,
       "about": "The broker epoch." },
-    { "name": "DeletePartitions", "type": "bool", "versions": "0+",
+    { "name": "DeletePartitions", "type": "bool", "versions": "0-2",
       "about": "Whether these partitions should be deleted." },
     { "name": "UngroupedPartitions", "type": "[]StopReplicaPartitionV0", "versions": "0",
       "about": "The partitions to stop.", "fields": [
@@ -37,12 +41,26 @@
       { "name": "PartitionIndex", "type": "int32", "versions": "0",
         "about": "The partition index." }
     ]},
-    { "name": "Topics", "type": "[]StopReplicaTopic", "versions": "1+",
+    { "name": "Topics", "type": "[]StopReplicaTopicV1", "versions": "1-2",
       "about": "The topics to stop.", "fields": [
-      { "name": "Name", "type": "string", "versions": "1+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "1-2", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "PartitionIndexes", "type": "[]int32", "versions": "1+",
+      { "name": "PartitionIndexes", "type": "[]int32", "versions": "1-2",
         "about": "The partition indexes." }
+    ]},
+    { "name": "TopicStates", "type": "[]StopReplicaTopicState", "versions": "3+",
+      "about": "Each topic.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "3+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionStates", "type": "[]StopReplicaPartitionState", "versions": "3+",
+        "about": "The state of each partition", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "3+",
+          "about": "The partition index." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "3+", "default": "-1",
+          "about": "The leader epoch." },
+        { "name": "DeletePartition", "type": "bool", "versions": "3+",
+          "about": "Whether this partition should be deleted." }
+      ]}
     ]}
   ]
 }

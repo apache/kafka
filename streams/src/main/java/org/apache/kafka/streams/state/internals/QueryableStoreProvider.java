@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -42,29 +42,29 @@ public class QueryableStoreProvider {
      * Get a composite object wrapping the instances of the {@link StateStore} with the provided
      * storeName and {@link QueryableStoreType}
      *
-     * @param storeQueryParams       if stateStoresEnabled is used i.e. staleStoresEnabled is true, include standbys and recovering stores;
+     * @param storeQueryParameters       if stateStoresEnabled is used i.e. staleStoresEnabled is true, include standbys and recovering stores;
      *                                        if stateStoresDisabled i.e. staleStoresEnabled is false, only include running actives;
      *                                        if partition is null then it fetches all local partitions on the instance;
      *                                        if partition is set then it fetches a specific partition.
      * @param <T>                The expected type of the returned store
      * @return A composite object that wraps the store instances.
      */
-    public <T> T getStore(final StoreQueryParams<T> storeQueryParams) {
-        final String storeName = storeQueryParams.storeName();
-        final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
+    public <T> T getStore(final StoreQueryParameters<T> storeQueryParameters) {
+        final String storeName = storeQueryParameters.storeName();
+        final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
             return queryableStoreType.create(globalStoreProvider, storeName);
         }
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
-            allStores.addAll(storeProvider.stores(storeQueryParams));
+            allStores.addAll(storeProvider.stores(storeQueryParameters));
         }
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return queryableStoreType.create(
-            new WrappingStoreProvider(storeProviders, storeQueryParams),
+            new WrappingStoreProvider(storeProviders, storeQueryParameters),
             storeName
         );
     }

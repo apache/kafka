@@ -71,11 +71,9 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         // re-open store
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore = getRocksDBStore();
         rocksDBStore.init(context, rocksDBStore);
         assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         LogCaptureAppender.unregister(appender);
-
         rocksDBStore.close();
 
         // verify store
@@ -200,7 +198,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // two delete operation, however, only one is counted because old CF count was zero before already
         // approx: 0 entries on old CF, 3 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(3L));
-
 
         iteratorsShouldNotMigrateData();
         assertThat(rocksDBStore.approximateNumEntries(), is(3L));
