@@ -36,7 +36,7 @@ buildscript {
     classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
-    classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
   }
 }
@@ -62,7 +62,7 @@ allprojects {
 
   dependencyUpdates {
     revision="release"
-    resolutionStrategy = {
+    resolutionStrategy {
       componentSelection { rules ->
         rules.all { ComponentSelection selection ->
           boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
@@ -524,7 +524,7 @@ subprojects {
   }
   test.dependsOn('spotbugsMain')
 
-  tasks.withType(com.github.spotbugs.SpotBugsTask) {
+  tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
     reports {
       // Continue supporting `xmlFindBugsReport` for compatibility
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
