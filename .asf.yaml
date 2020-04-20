@@ -20,3 +20,7 @@ notifications:
   issues:       jira@kafka.apache.org
   pullrequests: jira@kafka.apache.org
   jira_options: link label
+
+jenkins:
+  github_whitelist:
+    - ConcurrencyPractitioner
