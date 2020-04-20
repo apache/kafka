@@ -92,7 +92,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "$versions.gradle"
+  gradleVersion = versions.gradle
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -423,6 +423,11 @@ subprojects {
   }
 
   plugins.withType(ScalaPlugin) {
+
+    scala {
+      zincVersion = versions.zinc
+    }
+
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
       from "$rootDir/LICENSE"
@@ -497,7 +502,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = "$versions.checkstyle"
+    toolVersion = versions.checkstyle
   }
 
   configure(checkstyleMain) {
@@ -513,7 +518,7 @@ subprojects {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   spotbugs {
-    toolVersion = "$versions.spotbugs"
+    toolVersion = versions.spotbugs
     excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
     ignoreFailures = false
   }
@@ -533,7 +538,7 @@ subprojects {
     apply plugin: "jacoco"
 
     jacoco {
-      toolVersion = "$versions.jacoco"
+      toolVersion = versions.jacoco
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
@@ -643,52 +648,6 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
 
 task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
-for ( sv in availableScalaVersions ) {
-  String taskSuffix = sv.replaceAll("\\.", "_")
-
-  tasks.create(name: "jarScala_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:jar', 'streams:streams-scala:jar']
-  }
-
-  tasks.create(name: "testScala_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:test', 'streams:streams-scala:test']
-  }
-
-  tasks.create(name: "srcJar_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:srcJar', 'streams:streams-scala:srcJar']
-  }
-
-  tasks.create(name: "docsJar_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:docsJar', 'streams:streams-scala:docsJar']
-  }
-
-  tasks.create(name: "install_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['install']
-  }
-
-  tasks.create(name: "releaseTarGz_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['releaseTarGz']
-  }
-
-  tasks.create(name: "uploadScalaArchives_${taskSuffix}", type: GradleBuild) {
-    startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:uploadArchives', 'streams:streams-scala:uploadArchives']
-  }
-}
-
 def connectPkgs = [
     'connect:api',
     'connect:basic-auth-extension',
@@ -700,37 +659,9 @@ def connectPkgs = [
     'connect:mirror-client'
 ]
 
-def pkgs = [
-    'clients',
-    'examples',
-    'log4j-appender',
-    'streams',
-    'streams:examples',
-    'streams:streams-scala',
-    'streams:test-utils',
-    'tools'
-] + connectPkgs
-
-/** Create one task per default Scala version */
-def withDefScalaVersions(taskName) {
-  defaultScalaVersions.collect { taskName + '_' + it.replaceAll('\\.', '_') }
-}
-
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jarScala') + pkgs.collect { it + ":jar" }) { }
-
-tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
-
-tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: withDefScalaVersions('testScala') + pkgs.collect { it + ":test" }) { }
-
-tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
-
-tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
-
-tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadScalaArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
@@ -789,7 +720,7 @@ project(':core') {
   }
 
   scoverage {
-    scoverageVersion = "$versions.scoverage"
+    scoverageVersion = versions.scoverage
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
     minimumRate = 0.0
@@ -1629,7 +1560,7 @@ project(':connect:api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
+    include "**/org/apache/kafka/connect/**" // needed for the `aggregatedJavadoc` task
     // The URL structure was changed to include the locale after Java 8
     if (JavaVersion.current().isJava11Compatible())
       options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
