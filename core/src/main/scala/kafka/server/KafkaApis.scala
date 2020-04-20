@@ -2588,30 +2588,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeConfigsResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
+
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {
     val alterReplicaDirsRequest = request.body[AlterReplicaLogDirsRequest]
-    val response = if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME))
-      new AlterReplicaLogDirsResponse(
-        new AlterReplicaLogDirsResponseData().setResults(
-          replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala)
-            .groupBy {case (tp, _) => tp.topic}
-            .map { case (topic, errors) =>
-              new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult()
-                .setTopicName(topic)
-                .setPartitions(errors.map {
-                  case (tp, error) => new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
-                    .setPartitionIndex(tp.partition)
-                    .setErrorCode(error.code)
-                }.toList.asJava)
+    if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      val result = replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala)
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterReplicaLogDirsResponse(new AlterReplicaLogDirsResponseData()
+          .setResults(result.groupBy(_._1.topic).map {
+            case (topic, errors) => new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult()
+              .setTopicName(topic)
+              .setPartitions(errors.map {
+                case (tp, error) => new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
+                  .setPartitionIndex(tp.partition)
+                  .setErrorCode(error.code)
+              }.toList.asJava)
           }.toList.asJava)
-      )
-    else
-      alterReplicaDirsRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
-
-    sendResponseMaybeThrottle(request, requestThrottleMs => {
-      response.data().setThrottleTimeMs(requestThrottleMs)
-      response
-    })
+          .setThrottleTimeMs(requestThrottleMs)))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterReplicaDirsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
   }
 
   def handleDescribeLogDirsRequest(request: RequestChannel.Request): Unit = {
