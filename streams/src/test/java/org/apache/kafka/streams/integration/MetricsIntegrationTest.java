@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -264,63 +263,43 @@ public class MetricsIntegrationTest {
 
     private void produceRecordsForTwoSegments(final Duration segmentInterval) throws Exception {
         final MockTime mockTime = new MockTime(Math.max(segmentInterval.toMillis(), 60_000L));
+        final Properties props = TestUtils.producerConfig(
+            CLUSTER.bootstrapServers(),
+            IntegerSerializer.class,
+            StringSerializer.class,
+            new Properties());
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             STREAM_INPUT,
             Collections.singletonList(new KeyValue<>(1, "A")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            props,
             mockTime.milliseconds()
         );
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             STREAM_INPUT,
             Collections.singletonList(new KeyValue<>(1, "B")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            props,
             mockTime.milliseconds()
         );
     }
 
     private void produceRecordsForClosingWindow(final Duration windowSize) throws Exception {
         final MockTime mockTime = new MockTime(windowSize.toMillis() + 1);
+        final Properties props = TestUtils.producerConfig(
+            CLUSTER.bootstrapServers(),
+            IntegerSerializer.class,
+            StringSerializer.class,
+            new Properties());
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             STREAM_INPUT,
             Collections.singletonList(new KeyValue<>(1, "A")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            props,
             mockTime.milliseconds()
         );
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             STREAM_INPUT,
             Collections.singletonList(new KeyValue<>(1, "B")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            props,
             mockTime.milliseconds()
-        );
-    }
-
-    private void waitUntilAllRecordsAreConsumed(final int numberOfExpectedRecords) throws Exception {
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                "consumerApp",
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties()
-            ),
-            STREAM_OUTPUT_1,
-            numberOfExpectedRecords
         );
     }
 
@@ -423,8 +402,6 @@ public class MetricsIntegrationTest {
 
         verifyStateMetric(State.RUNNING);
 
-        waitUntilAllRecordsAreConsumed(1);
-
         checkWindowStoreAndSuppressionBufferMetrics(builtInMetricsVersion);
 
         closeApplication();
@@ -464,8 +441,6 @@ public class MetricsIntegrationTest {
         startApplication();
 
         verifyStateMetric(State.RUNNING);
-
-        waitUntilAllRecordsAreConsumed(2);
 
         checkSessionStoreMetrics(builtInMetricsVersion);
 
