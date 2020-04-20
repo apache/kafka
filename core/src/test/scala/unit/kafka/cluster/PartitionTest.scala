@@ -30,7 +30,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{ApiException, InconsistentReplicaConfigurationException, InconsistentReplicationFactorException, OffsetNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -794,6 +794,44 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows[ReplicaNotAvailableException] {
       partition.appendRecordsToFollowerOrFutureReplica(
            createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
+    }
+  }
+
+  @Test
+  def testAppendRecordsToLeaderThrowsExceptionWhenReplicationFactorLowerThanMinIsr(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val properties = new Properties()
+    properties.put("min.insync.replicas", "3")
+
+    val topicPartition = new TopicPartition("test-topic", 1)
+    val log = logManager.getOrCreateLog(topicPartition, LogConfig(properties))
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      logManager)
+    partition.setLog(log, isFutureLog = false)
+
+    val leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(brokerId)
+      .setLeaderEpoch(leaderEpoch)
+      .setReplicas(replicas)
+      .setZkVersion(1)
+      .setIsNew(true)
+    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+
+    assertThrows[InconsistentReplicationFactorException] {
+      partition.appendRecordsToLeader(
+        createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L),
+        origin = AppendOrigin.Client, requiredAcks = -1)
     }
   }
 

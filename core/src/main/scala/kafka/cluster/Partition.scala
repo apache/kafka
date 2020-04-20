@@ -972,6 +972,13 @@ class Partition(val topicPartition: TopicPartition,
         case Some(leaderLog) =>
           val minIsr = leaderLog.config.minInSyncReplicas
           val inSyncSize = inSyncReplicaIds.size
+          val replicationFactor = assignmentState.replicationFactor
+
+          // Avoid writing to leader if replication factor < min insync replicas
+          if (replicationFactor < minIsr && requiredAcks == -1) {
+            throw new InconsistentReplicationFactorException(s"Replication factor [$replicationFactor] is < min.isr [$minIsr]" +
+              s"for topic ${topicPartition.topic()}. Acks requirements cannot be satisfied when requiredAcks=$requiredAcks")
+          }
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {

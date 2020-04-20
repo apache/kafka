@@ -140,8 +140,8 @@ public class TopicConfig {
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
         "this configuration specifies the minimum number of replicas that must acknowledge " +
         "a write for the write to be considered successful. If this minimum cannot be met, " +
-        "then the producer will raise an exception (either NotEnoughReplicas or " +
-        "NotEnoughReplicasAfterAppend).<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
+        "then the producer will raise an exception (InconsistentReplicationFactorException)." +
+        "<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
         "allow you to enforce greater durability guarantees. A typical scenario would be to " +
         "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
         "produce with <code>acks</code> of \"all\". This will ensure that the producer raises an exception " +
