@@ -1169,9 +1169,9 @@ public class ConfigDef {
                     else {
                         String suffix = "";
                         if (key.name.endsWith(".bytes")) {
-                            suffix = niceMemoryUnits(key);
+                            suffix = niceMemoryUnits(((Number) key.defaultValue).longValue());
                         } else if (key.name.endsWith(".ms")) {
-                            suffix = niceTimeUnits(key);
+                            suffix = niceTimeUnits(((Number) key.defaultValue).longValue());
                         }
                         return defaultValueStr + suffix;
                     }
@@ -1186,46 +1186,45 @@ public class ConfigDef {
         }
     }
 
-    private static String niceMemoryUnits(ConfigKey key) {
-        final long defaultValueBytes = ((Number) key.defaultValue).longValue();
-        long defaultValue = defaultValueBytes;
+    private static String niceMemoryUnits(long bytes) {
+        long value = bytes;
         int i = 0;
         while (i < 5) {
-            if (defaultValue % 1024 != 0) {
+            if (value % 1024 != 0) {
                 break;
             }
-            defaultValue /= 1024;
+            value /= 1024;
             i++;
         }
         switch (i) {
             case 1:
-                return " (=" + defaultValue + "KiB)";
+                return " (=" + value + "KiB)";
             case 2:
-                return " (=" + defaultValue + "MiB)";
+                return " (=" + value + "MiB)";
             case 3:
-                return " (=" + defaultValue + "GiB)";
+                return " (=" + value + "GiB)";
             case 4:
-                return " (=" + defaultValue + "TiB)";
+                return " (=" + value + "TiB)";
             default:
                 return "";
         }
     }
 
-    private static String niceTimeUnits(ConfigKey key) {
-        final long defaultValueBytes = ((Number) key.defaultValue).longValue();
-        long defaultValue = defaultValueBytes;
-        if (defaultValueBytes % 1000L * 60 * 60 * 24 == 0) {
-            defaultValue /= 1000L * 60 * 60 * 24;
-            return " (=" + defaultValue + " day" + (defaultValue > 1 ? "s)" : ")");
-        } else if (defaultValueBytes % 1000L * 60 * 60 == 0) {
-            defaultValue /= 1000L * 60 * 60;
-            return " (=" + defaultValue + " hour" + (defaultValue > 1 ? "s)" : ")");
-        } else if (defaultValueBytes % 1000L * 60 == 0) {
-            defaultValue /= 1000L * 60;
-            return " (=" + defaultValue + " minute" + (defaultValue > 1 ? "s)" : ")");
-        } else if (defaultValueBytes % 1000L  == 0) {
-            defaultValue /= 1000L;
-            return " (=" + defaultValue + " second" + (defaultValue > 1 ? "s)" : ")");
+    private static String niceTimeUnits(long millis) {
+        long value = millis;
+        long[] divisors = {1000, 60, 60, 24};
+        String[] units = {"second", "minute", "hour", "day"};
+        int i = 0;
+        while (i < 4) {
+            if (value % divisors[i] == 0) {
+                value /= divisors[i];
+                i++;
+            } else {
+                break;
+            }
+        }
+        if (i > 0) {
+            return " (=" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
         }
         return "";
     }
