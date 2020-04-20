@@ -58,7 +58,6 @@ import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
 
-    private final String threadName = "threadName";
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
     private final List<Node> cluster = new ArrayList<Node>(2) {
@@ -71,6 +70,8 @@ public class InternalTopicManagerTest {
     private final String topic2 = "test_topic_2";
     private final String topic3 = "test_topic_3";
     private final List<Node> singleReplica = Collections.singletonList(broker1);
+
+    private String threadName;
 
     private MockAdminClient mockAdminClient;
     private InternalTopicManager internalTopicManager;
@@ -87,9 +88,7 @@ public class InternalTopicManagerTest {
 
     @Before
     public void init() {
-        // When executing on Jenkins, the thread name is set to an unknown value,
-        // hence, we need to set it explicitly to make our log-assertions pass
-        Thread.currentThread().setName(threadName);
+        threadName = Thread.currentThread().getName();
 
         mockAdminClient = new MockAdminClient(cluster, broker1);
         internalTopicManager = new InternalTopicManager(
