@@ -161,6 +161,16 @@ class MetadataCache(brokerId: Int) extends Logging {
     snapshot.aliveNodes.get(brokerId).flatMap(_.get(listenerName))
   }
 
+  def getPartitionCountByBroker(): Map[Int, Int] = {
+    val snapshot = metadataSnapshot
+
+    snapshot.partitionStates.flatMap { case (_, partitionsAndStates) =>
+      partitionsAndStates.flatMap { case (_, partitionInfo) =>
+        partitionInfo.replicas().asScala.map(_.toInt)
+      }
+    }.groupBy(identity).mapValues(_.size)
+  }
+
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
   def getTopicMetadata(topics: Set[String],
                        listenerName: ListenerName,
