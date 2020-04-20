@@ -17,6 +17,6 @@
 
 notifications:
   commits:      commits@kafka.apache.org
-  issues:       github@kafka.apache.org
-  pullrequests: github@kafka.apache.org
+  issues:       jira@kafka.apache.org
+  pullrequests: jira@kafka.apache.org
   jira_options: link label
