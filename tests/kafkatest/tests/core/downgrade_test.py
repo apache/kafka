@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -52,7 +52,7 @@ class TestDowngrade(EndToEndTest):
             del node.config[config_property.MESSAGE_FORMAT_VERSION]
             self.kafka.start_node(node)
 
-    def setup_services(self, kafka_version, compression_types, security_protocol):
+    def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
         self.create_zookeeper()
         self.zk.start()
 
@@ -67,7 +67,6 @@ class TestDowngrade(EndToEndTest):
                              version=kafka_version)
         self.producer.start()
 
-        static_membership = kafka_version == DEV_BRANCH or kafka_version >= LATEST_2_3
         self.create_consumer(log_level="DEBUG",
                              version=kafka_version,
                              static_membership=static_membership)
@@ -75,10 +74,12 @@ class TestDowngrade(EndToEndTest):
         self.consumer.start()
 
     @cluster(num_nodes=7)
-    @parametrize(version=str(LATEST_2_5), compression_types=["none"])
+    @matrix(version=[str(LATEST_2_5)], compression_types=[["none"]], static_membership=[False, True])
     @parametrize(version=str(LATEST_2_5), compression_types=["zstd"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_2_4), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_4), compression_types=["zstd"], security_protocol="SASL_SSL")
+    # static membership was introduced with a buggy verifiable console consumer which
+    # required static membership to be enabled
+    @parametrize(version=str(LATEST_2_4), compression_types=["none"], static_membership=True)
+    @parametrize(version=str(LATEST_2_4), compression_types=["zstd"], security_protocol="SASL_SSL", static_membership=True)
     @parametrize(version=str(LATEST_2_3), compression_types=["none"])
     @parametrize(version=str(LATEST_2_3), compression_types=["zstd"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_2_2), compression_types=["none"])
@@ -89,7 +90,8 @@ class TestDowngrade(EndToEndTest):
     @parametrize(version=str(LATEST_2_0), compression_types=["snappy"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_1_1), compression_types=["none"])
     @parametrize(version=str(LATEST_1_1), compression_types=["lz4"], security_protocol="SASL_SSL")
-    def test_upgrade_and_downgrade(self, version, compression_types, security_protocol="PLAINTEXT"):
+    def test_upgrade_and_downgrade(self, version, compression_types, security_protocol="PLAINTEXT",
+            static_membership=False):
         """Test upgrade and downgrade of Kafka cluster from old versions to the current version
 
         `version` is the Kafka version to upgrade from and downgrade back to
@@ -110,7 +112,7 @@ class TestDowngrade(EndToEndTest):
         """
         kafka_version = KafkaVersion(version)
 
-        self.setup_services(kafka_version, compression_types, security_protocol)
+        self.setup_services(kafka_version, compression_types, security_protocol, static_membership)
         self.await_startup()
 
         self.logger.info("First pass bounce - rolling upgrade")
