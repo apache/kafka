@@ -84,7 +84,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * Creates and starts a Kafka cluster.
      */
-    public void start() throws IOException, InterruptedException {
+    public void start() throws IOException {
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
         zookeeper = new EmbeddedZookeeper();
@@ -98,6 +98,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicReplicationFactorProp(), (short) 1);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicPartitionsProp(), 5);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.TransactionsTopicPartitionsProp(), 5);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
 
         for (int i = 0; i < brokers.length; i++) {
@@ -242,16 +243,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     /**
-     * Deletes a topic and blocks until the topic got deleted.
-     *
-     * @param timeoutMs the max time to wait for the topic to be deleted (does not block if {@code <= 0})
-     * @param topic the name of the topic
-     */
-    public void deleteTopicAndWait(final long timeoutMs, final String topic) throws InterruptedException {
-        deleteTopicsAndWait(timeoutMs, topic);
-    }
-
-    /**
      * Deletes multiple topics returns immediately.
      *
      * @param topics the name of the topics
@@ -279,7 +270,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
-            } catch (final UnknownTopicOrPartitionException e) { }
+            } catch (final UnknownTopicOrPartitionException ignored) { }
         }
 
         if (timeoutMs > 0) {
@@ -298,22 +289,12 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
-            } catch (final UnknownTopicOrPartitionException e) { }
+            } catch (final UnknownTopicOrPartitionException ignored) { }
         }
 
         if (timeoutMs > 0) {
             TestUtils.waitForCondition(new TopicsDeletedCondition(topics), timeoutMs, "Topics not deleted after " + timeoutMs + " milli seconds.");
         }
-    }
-
-    public void deleteAndRecreateTopics(final String... topics) throws InterruptedException {
-        deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
-        createTopics(topics);
-    }
-
-    public void deleteAndRecreateTopics(final long timeoutMs, final String... topics) throws InterruptedException {
-        deleteTopicsAndWait(timeoutMs, topics);
-        createTopics(topics);
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
