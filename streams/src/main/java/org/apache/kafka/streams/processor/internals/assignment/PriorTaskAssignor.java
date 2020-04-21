@@ -17,17 +17,24 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public interface TaskAssignor {
-    /**
-     * @return whether the generated assignment requires a followup rebalance to satisfy all conditions
-     */
-    boolean assign(Map<UUID, ClientState> clients,
-                   Set<TaskId> allTaskIds,
-                   Set<TaskId> standbyTaskIds,
-                   AssignorConfiguration.AssignmentConfigs configs);
+public class PriorTaskAssignor implements TaskAssignor {
+    private final StickyTaskAssignor delegate;
+
+    public PriorTaskAssignor() {
+        delegate = new StickyTaskAssignor(true);
+    }
+
+    @Override
+    public boolean assign(final Map<UUID, ClientState> clients,
+                          final Set<TaskId> allTaskIds,
+                          final Set<TaskId> standbyTaskIds,
+                          final AssignmentConfigs configs) {
+        return delegate.assign(clients, allTaskIds, standbyTaskIds, configs);
+    }
 }

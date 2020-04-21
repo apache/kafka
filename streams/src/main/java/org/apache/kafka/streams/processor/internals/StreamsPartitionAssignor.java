@@ -39,8 +39,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.PriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
@@ -64,6 +63,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.UUID.randomUUID;
@@ -171,7 +171,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
 
-    private boolean highAvailabilityEnabled;
+    private Supplier<TaskAssignor> taskAssignor;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -201,7 +201,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
-        highAvailabilityEnabled = assignorConfiguration.isHighAvailabilityEnabled();
+        taskAssignor = assignorConfiguration::getTaskAssignor;
     }
 
     @Override
@@ -713,23 +713,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allTasks, clientStates, numStandbyReplicas());
 
         final TaskAssignor taskAssignor;
-        if (highAvailabilityEnabled) {
-            if (lagComputationSuccessful) {
-                taskAssignor = new HighAvailabilityTaskAssignor(
-                    clientStates,
-                    allTasks,
-                    statefulTasks,
-                    assignmentConfigs);
-            } else {
-                log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
-                             + "trigger another rebalance to retry.");
-                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
-                taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
-            }
+        if (!lagComputationSuccessful) {
+            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
+                         + "trigger another rebalance to retry.");
+            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
+            taskAssignor = new PriorTaskAssignor();
         } else {
-            taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
+            taskAssignor = this.taskAssignor.get();
         }
-        final boolean followupRebalanceNeeded = taskAssignor.assign();
+        final boolean followupRebalanceNeeded = taskAssignor.assign(clientStates,
+                                                                    allTasks,
+                                                                    statefulTasks,
+                                                                    assignmentConfigs);
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));

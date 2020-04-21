@@ -40,7 +40,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -52,7 +51,11 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.PriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
@@ -83,7 +86,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -192,11 +194,10 @@ public class StreamsPartitionAssignorTest {
 
     private TaskManager taskManager;
     private Admin adminClient;
-    private StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
-    private final boolean highAvailabilityEnabled;
+    private final Class<? extends TaskAssignor> taskAssignor;
 
     private final AtomicInteger assignmentError = new AtomicInteger();
     private final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
@@ -212,7 +213,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
         configurationMap.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
         configurationMap.put(InternalConfig.TIME, time);
-        configurationMap.put(AssignorConfiguration.HIGH_AVAILABILITY_ENABLED_CONFIG, highAvailabilityEnabled);
+        configurationMap.put(AssignorConfiguration.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
     }
 
@@ -231,7 +232,6 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> configMap = configProps();
         configMap.putAll(props);
 
-        streamsConfig = new StreamsConfig(configMap);
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
@@ -282,21 +282,23 @@ public class StreamsPartitionAssignorTest {
     }
 
     private MockInternalTopicManager overwriteInternalTopicManagerWithMock() {
-        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
+        final MockInternalTopicManager mockInternalTopicManager =
+            new MockInternalTopicManager(new StreamsConfig(configProps()), mockClientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
         return mockInternalTopicManager;
     }
 
-    @Parameterized.Parameters(name = "high availability enabled = {0}")
+    @Parameterized.Parameters(name = "task assignor = {0}")
     public static Collection<Object[]> parameters() {
         return asList(
-            new Object[]{true},
-            new Object[]{false}
+            new Object[]{HighAvailabilityTaskAssignor.class},
+            new Object[]{StickyTaskAssignor.class},
+            new Object[]{PriorTaskAssignor.class}
             );
     }
 
-    public StreamsPartitionAssignorTest(final boolean highAvailabilityEnabled) {
-        this.highAvailabilityEnabled = highAvailabilityEnabled;
+    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> taskAssignor) {
+        this.taskAssignor = taskAssignor;
         createMockAdminClient(EMPTY_CHANGELOG_END_OFFSETS);
     }
 
@@ -1830,102 +1832,6 @@ public class StreamsPartitionAssignorTest {
                 defaultSubscriptionInfo.encode()
             ));
         assertThrows(IllegalStateException.class, () -> partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)));
-    }
-
-    @Test
-    public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceAndTriggerRebalanceIfEndOffsetFetchFailsAndHighAvailabilityEnabled() {
-        if (highAvailabilityEnabled) {
-            builder.addSource(null, "source1", null, null, null, "topic1");
-            builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
-            builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-            final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-            createMockTaskManager(allTasks, EMPTY_TASKS);
-            adminClient = EasyMock.createMock(AdminClient.class);
-            expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
-            configureDefaultPartitionAssignor();
-
-            final String firstConsumer = "consumer1";
-            final String newConsumer = "consumer2";
-
-            subscriptions.put(firstConsumer,
-                new Subscription(
-                    singletonList("source1"),
-                    getInfo(UUID_1, allTasks, EMPTY_TASKS).encode()
-                ));
-            subscriptions.put(newConsumer,
-                new Subscription(
-                    singletonList("source1"),
-                    getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode()
-                ));
-
-            final Map<String, Assignment> assignments = partitionAssignor
-                                                            .assign(metadata, new GroupSubscription(subscriptions))
-                                                            .groupAssignment();
-
-            final List<TaskId> firstConsumerActiveTasks =
-                AssignmentInfo.decode(assignments.get(firstConsumer).userData()).activeTasks();
-            final List<TaskId> newConsumerActiveTasks =
-                AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
-
-            assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
-            assertTrue(newConsumerActiveTasks.isEmpty());
-            assertThat(assignmentError.get(), equalTo(AssignorError.REBALANCE_NEEDED.code()));
-        }
-    }
-
-    @Test
-    public void shouldScheduleProbingRebalanceOnThisClientIfWarmupTasksRequired() {
-        if (highAvailabilityEnabled) {
-            final long rebalanceInterval =  5 * 60 * 1000L;
-
-            builder.addSource(null, "source1", null, null, null, "topic1");
-            builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
-            builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-            final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-            createMockTaskManager(allTasks, EMPTY_TASKS);
-            createMockAdminClient(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)));
-            configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
-
-            final String firstConsumer = "consumer1";
-            final String newConsumer = "consumer2";
-
-            subscriptions.put(firstConsumer,
-                new Subscription(
-                    singletonList("source1"),
-                    getInfo(UUID_1, allTasks, EMPTY_TASKS).encode()
-                ));
-            subscriptions.put(newConsumer,
-                new Subscription(
-                    singletonList("source1"),
-                    getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode()
-                ));
-
-            final Map<String, Assignment> assignments = partitionAssignor
-                                                            .assign(metadata, new GroupSubscription(subscriptions))
-                                                            .groupAssignment();
-
-            final List<TaskId> firstConsumerActiveTasks =
-                AssignmentInfo.decode(assignments.get(firstConsumer).userData()).activeTasks();
-            final List<TaskId> newConsumerActiveTasks =
-                AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
-
-            assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
-            assertTrue(newConsumerActiveTasks.isEmpty());
-
-            assertThat(assignmentError.get(), equalTo(AssignorError.NONE.code()));
-
-            final long nextScheduledRebalanceOnThisClient =
-                AssignmentInfo.decode(assignments.get(firstConsumer).userData()).nextRebalanceMs();
-            final long nextScheduledRebalanceOnOtherClient =
-                AssignmentInfo.decode(assignments.get(newConsumer).userData()).nextRebalanceMs();
-
-            assertThat(nextScheduledRebalanceOnThisClient, equalTo(time.milliseconds() + rebalanceInterval));
-            assertThat(nextScheduledRebalanceOnOtherClient, equalTo(Long.MAX_VALUE));
-        }
     }
 
     private static ByteBuffer encodeFutureSubscription() {
