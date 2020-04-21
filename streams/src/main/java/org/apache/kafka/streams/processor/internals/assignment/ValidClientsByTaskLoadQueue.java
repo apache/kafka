@@ -98,9 +98,10 @@ class ValidClientsByTaskLoadQueue {
     void offer(final UUID client) {
         if (uniqueClients.contains(client)) {
             clientsByTaskLoad.remove(client);
+        } else {
+            uniqueClients.add(client);
         }
         clientsByTaskLoad.offer(client);
-        uniqueClients.add(client);
     }
 
 }
