@@ -3443,7 +3443,8 @@ public class KafkaAdminClientTest {
             logDirs.put(tpr0, "/data0");
             logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
-            result.values().get(tpr0).get();
+            // alterReplicaLogDirs() error handling fails all futures, but some of them may already be completed
+            // so we can't make a reliable assertion about result.values().get(tpr0)
             TestUtils.assertFutureError(result.values().get(tpr1), IllegalStateException.class);
         }
     }
