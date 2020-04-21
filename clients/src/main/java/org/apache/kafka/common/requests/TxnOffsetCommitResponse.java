@@ -27,7 +27,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -95,24 +94,6 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return errorCounts(data.topics().stream()
                 .flatMap(topic -> topic.partitions().stream())
                 .map(partition -> Errors.forCode(partition.errorCode())));
-
-//        return errorCounts(errors().values());
-
-//        Map<Errors, Integer> errorMap = new HashMap<>();
-//        data.topics().forEach(topic ->
-//            topic.partitions().forEach(partition ->
-//                updateErrorCounts(errorMap, Errors.forCode(partition.errorCode()))
-//            )
-//        );
-//        return errorMap;
-
-//        Map<Errors, Integer> errorMap = new HashMap<>();
-//        for (TxnOffsetCommitResponseTopic topic : data.topics()) {
-//            for (TxnOffsetCommitResponsePartition partition : topic.partitions()) {
-//                updateErrorCounts(errorMap, Errors.forCode(partition.errorCode()));
-//            }
-//        }
-//        return errorMap;
     }
 
     public Map<TopicPartition, Errors> errors() {
@@ -138,41 +119,5 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 1;
-    }
-
-    public static void main(String[] args) {
-        int numTopics = 100;
-        int numPartitions = 100;
-        List<TxnOffsetCommitResponseTopic> topics = new ArrayList<>(numTopics);
-        for (int i = 0; i < numTopics; i++) {
-            List<TxnOffsetCommitResponsePartition> partitions = new ArrayList<>(numPartitions);
-            for (int j = 0; j < numPartitions; j++) {
-                partitions.add(new TxnOffsetCommitResponsePartition().setErrorCode(Errors.NONE.code()).setPartitionIndex(j));
-            }
-            topics.add(new TxnOffsetCommitResponseTopic().setName("topic-" + i).setPartitions(partitions));
-        }
-        TxnOffsetCommitResponse resp = new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData().setTopics(topics));
-
-        int times = 20_000;
-        for (int i = 0; i < 20; i++) {
-            // timed run
-            long t0 = System.nanoTime();
-            Map<Errors, Integer> map = c(resp, times);
-            long t1 = System.nanoTime();
-            System.out.println(map);
-            long nanos = t1 - t0;
-            System.out.println("run " + i + ", times=" + times + " took " + nanos + "ns, " + ((times * 1.0E9) / nanos) + "ops/s");
-        }
-    }
-
-    private static Map<Errors, Integer> c(TxnOffsetCommitResponse resp, int times) {
-        Map<Errors, Integer> map = new HashMap<>();
-        for (int i = 0; i < times; i++) {
-            Map<Errors, Integer> errorsIntegerMap = resp.errorCounts();
-            for (Map.Entry<Errors, Integer> entry : errorsIntegerMap.entrySet()) {
-                map.compute(entry.getKey(), (key, value) -> value != null ? value + entry.getValue() : entry.getValue());
-            }
-        }
-        return map;
     }
 }
