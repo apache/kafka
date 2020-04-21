@@ -67,10 +67,9 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         updateErrorCounts(counts, topLevelErr);
 
         data.responses().forEach(topicResponse ->
-                topicResponse.partitions().forEach(partitionResponse ->
-                updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
-            )
-        );
+            topicResponse.partitions().forEach(partitionResponse ->
+            updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
+        ));
         return counts;
     }
 
