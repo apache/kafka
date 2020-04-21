@@ -63,24 +63,6 @@ public class AssignmentTestUtils {
      * @return the UUID created by repeating the digit n in the UUID format
      */
     static UUID uuidForInt(final Integer n) {
-        if (n < 1 || n > 7) {
-            throw new IllegalArgumentException("Must pass in a single digit number to the uuid builder, got n = " + n);
-        }
-        final StringBuilder builder = new StringBuilder(36);
-        for (int i = 0; i < 8; ++i) {
-            builder.append(n);
-        }
-        builder.append('-');
-
-        for (int i = 0; i < 3; ++i) {
-            for (int j = 0; j < 4; ++j) {
-                builder.append(n);
-            }
-            builder.append('-');
-        }
-        for (int i = 0; i < 12; ++i) {
-            builder.append(n);
-        }
-        return UUID.fromString(builder.toString());
+        return new UUID(0, n);
     }
 }

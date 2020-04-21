@@ -93,11 +93,11 @@ You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
 ### Running a task with all the scala versions enabled by default ###
 
-Append `All` to the task name:
+Invoke the `gradlewAll` script followed by the task(s):
 
-    ./gradlew testAll
-    ./gradlew jarAll
-    ./gradlew releaseTarGzAll
+    ./gradlewAll test
+    ./gradlewAll jar
+    ./gradlewAll releaseTarGz
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -119,7 +119,7 @@ build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory an
 to avoid known issues with this configuration.
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
-    ./gradlew uploadArchivesAll
+    ./gradlewAll uploadArchives
 
 Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
 
@@ -161,7 +161,7 @@ Please note for this to work you should create/update user maven settings (typic
 
 
 ### Installing the jars to the local Maven repository ###
-    ./gradlew installAll
+    ./gradlewAll install
 
 ### Building the test jar ###
     ./gradlew testJar

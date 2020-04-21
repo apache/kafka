@@ -20,9 +20,7 @@
 ext {
   versions = [:]
   libs = [:]
-  
-  // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.12' ]
+
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
   // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
   availableScalaVersions = [ '2.12', '2.13' ]
@@ -63,14 +61,13 @@ versions += [
   bcpkix: "1.64",
   checkstyle: "8.20",
   commonsCli: "1.4",
-  gradle: "5.6.2",
-  gradleVersionsPlugin: "0.27.0",
+  gradle: "6.3",
+  gradleVersionsPlugin: "0.28.0",
   grgit: "4.0.1",
   httpclient: "4.5.11",
-  easymock: "4.1",
+  easymock: "4.2",
   jackson: "2.10.2",
-  jacksonDatabind: "2.10.2",
-  jacoco: "0.8.3",
+  jacoco: "0.8.5",
   // 9.4.25 renamed closeOutput to completeOutput (https://github.com/eclipse/jetty.project/commit/c5acf965067478784b54e2d241ec58fdb0b2c9fe)
   // which is a method used by recent Jersey versions when this comment was written (2.30.1 was the latest). Please
   // verify that this is fixed in some way before bumping the Jetty version.
@@ -100,9 +97,9 @@ versions += [
   lz4: "1.7.1",
   mavenArtifact: "3.6.3",
   metrics: "2.2.0",
-  mockito: "3.2.4",
-  owaspDepCheckPlugin: "5.2.4",
-  powermock: "2.0.5",
+  mockito: "3.3.3",
+  owaspDepCheckPlugin: "5.3.2.1",
+  powermock: "2.0.7",
   reflections: "0.9.12",
   rocksDB: "5.18.4",
   scalaCollectionCompat: "2.1.4",
@@ -114,10 +111,11 @@ versions += [
   shadowPlugin: "5.2.0",
   slf4j: "1.7.30",
   snappy: "1.1.7.3",
-  spotbugs: "3.1.12",
-  spotbugsPlugin: "3.0.0",
-  spotlessPlugin: "3.27.1",
-  testRetryPlugin: "1.1.0",
+  spotbugs: "4.0.2",
+  spotbugsPlugin: "4.0.5",
+  spotlessPlugin: "3.28.1",
+  testRetryPlugin: "1.1.5",
+  zinc: "1.3.5",
   zookeeper: "3.5.7",
   zstd: "1.4.4-7"
 ]
@@ -136,7 +134,7 @@ libs += [
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
