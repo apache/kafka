@@ -33,10 +33,6 @@ class DelayedItem(val delayMs: Long, val time: Time) extends Logging {
     time.nanoseconds < dueNs
   }
 
-  def compareTo(d: DelayedItem): Int = {
-    java.lang.Long.compare(dueNs, d.dueNs)
-  }
-
   override def toString: String = {
     s"DelayedItem(delayMs=${TimeUnit.NANOSECONDS.toMillis(dueNs-time.nanoseconds())})"
   }
