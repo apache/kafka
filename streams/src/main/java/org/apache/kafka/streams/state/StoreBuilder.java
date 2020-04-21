@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStore;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -84,4 +87,11 @@ public interface StoreBuilder<T extends StateStore> {
      */
     String name();
 
+    /**
+     * Serdes that's going to used for the built {@link StateStore}; if no serdes are used at all, then it should return
+     * an empty list.
+     */
+    default List<Serde> serdes() {
+        return Collections.emptyList();
+    }
 }

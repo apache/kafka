@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -46,6 +47,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -667,9 +669,9 @@ public class TopologyTest {
     public void topologyWithDynamicRoutingShouldDescribeExtractorClass() {
         final StreamsBuilder builder  = new StreamsBuilder();
 
-        final TopicNameExtractor<Object, Object> topicNameExtractor = new TopicNameExtractor<Object, Object>() {
+        final TopicNameExtractor<String, String> topicNameExtractor = new TopicNameExtractor<String, String>() {
             @Override
-            public String extract(final Object key, final Object value, final RecordContext recordContext) {
+            public String extract(final String key, final String value, final RecordContext recordContext) {
                 return recordContext.topic() + "-" + key;
             }
 
@@ -678,15 +680,15 @@ public class TopologyTest {
                 return "anonymous topic name extractor. topic is [recordContext.topic()]-[key]";
             }
         };
-        builder.stream("input-topic").to(topicNameExtractor);
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String())).to(topicNameExtractor);
         final TopologyDescription describe = builder.build().describe();
 
         assertEquals(
                 "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-SINK-0000000001\n" +
-                "    Sink: KSTREAM-SINK-0000000001 (extractor class: anonymous topic name extractor. topic is [recordContext.topic()]-[key])\n" +
+                "    Sink: KSTREAM-SINK-0000000001 (extractor class: anonymous topic name extractor. topic is [recordContext.topic()]-[key], keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
                 describe.toString());
     }
@@ -694,16 +696,17 @@ public class TopologyTest {
     @Test
     public void kGroupedStreamZeroArgCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .count();
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000001, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -713,16 +716,17 @@ public class TopologyTest {
     @Test
     public void kGroupedStreamNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [(count-store, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -732,16 +736,17 @@ public class TopologyTest {
     @Test
     public void kGroupedStreamAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .count(Materialized.with(null, Serdes.Long()));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000002, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -751,17 +756,18 @@ public class TopologyTest {
     @Test
     public void timeWindowZeroArgCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
             .count();
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000001, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -771,17 +777,18 @@ public class TopologyTest {
     @Test
     public void timeWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [(count-store, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -791,17 +798,18 @@ public class TopologyTest {
     @Test
     public void timeWindowAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
             .count(Materialized.with(null, Serdes.Long()));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000002, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -811,17 +819,18 @@ public class TopologyTest {
     @Test
     public void sessionWindowZeroArgCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
             .count();
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000001, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -831,17 +840,18 @@ public class TopologyTest {
     @Test
     public void sessionWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [(count-store, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -851,17 +861,18 @@ public class TopologyTest {
     @Test
     public void sessionWindowAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic")
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))
             .count(Materialized.with(null, Serdes.Long()));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000002, serdes: [StringSerde, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -871,7 +882,7 @@ public class TopologyTest {
     @Test
     public void tableZeroArgCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.table("input-topic")
+        builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupBy((key, value) -> null)
             .count();
         final TopologyDescription describe = builder.build().describe();
@@ -879,21 +890,21 @@ public class TopologyTest {
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [(input-topic-STATE-STORE-0000000000, serdes: [StringSerde, StringSerde])])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
-                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition, keySerde: null, valueSerde: ChangedSerializer)\n" +
                 "      <-- KTABLE-SELECT-0000000003\n" +
                 "\n" +
                 "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition], keySerde: null, valueSerde: ChangedDeserializer)\n" +
                 "      --> KTABLE-AGGREGATE-0000000007\n" +
-                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [(KTABLE-AGGREGATE-STATE-STORE-0000000004, serdes: [null, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000006\n" +
                 "\n",
@@ -904,28 +915,29 @@ public class TopologyTest {
     @Test
     public void tableNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.table("input-topic")
+        builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupBy((key, value) -> null)
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [(input-topic-STATE-STORE-0000000000, serdes: [StringSerde, StringSerde])])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000004\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
-                "    Sink: KSTREAM-SINK-0000000004 (topic: count-store-repartition)\n" +
+                "    Sink: KSTREAM-SINK-0000000004 (topic: count-store-repartition, keySerde: null, valueSerde: ChangedSerializer)\n" +
                 "      <-- KTABLE-SELECT-0000000003\n" +
                 "\n" +
                 "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000005 (topics: [count-store-repartition])\n" +
+                "    Source: KSTREAM-SOURCE-0000000005 (topics: [count-store-repartition], keySerde: null, valueSerde: ChangedDeserializer)\n" +
                 "      --> KTABLE-AGGREGATE-0000000006\n" +
-                "    Processor: KTABLE-AGGREGATE-0000000006 (stores: [count-store])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000006 (stores: [(count-store, serdes: [null, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000005\n" +
                 "\n",
@@ -936,28 +948,29 @@ public class TopologyTest {
     @Test
     public void tableAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.table("input-topic")
+        builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .groupBy((key, value) -> null)
-            .count(Materialized.with(null, Serdes.Long()));
+            .count(Materialized.with(null, null));
         final TopologyDescription describe = builder.build().describe();
+
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [(input-topic-STATE-STORE-0000000000, serdes: [StringSerde, StringSerde])])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
-                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition, keySerde: null, valueSerde: ChangedSerializer)\n" +
                 "      <-- KTABLE-SELECT-0000000003\n" +
                 "\n" +
                 "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition], keySerde: null, valueSerde: ChangedDeserializer)\n" +
                 "      --> KTABLE-AGGREGATE-0000000007\n" +
-                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [(KTABLE-AGGREGATE-STATE-STORE-0000000004, serdes: [null, LongSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000006\n" +
                 "\n",
@@ -968,13 +981,14 @@ public class TopologyTest {
     @Test
     public void kTableNonMaterializedMapValuesShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.mapValues((readOnlyKey, value) -> null);
         final TopologyDescription describe = builder.build().describe();
+
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000003\n" +
@@ -988,15 +1002,16 @@ public class TopologyTest {
     @Test
     public void kTableAnonymousMaterializedMapValuesShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.mapValues(
             (readOnlyKey, value) -> null,
             Materialized.with(null, null));
         final TopologyDescription describe = builder.build().describe();
+
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000004\n" +
@@ -1014,20 +1029,21 @@ public class TopologyTest {
     @Test
     public void kTableNamedMaterializedMapValuesShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.mapValues(
             (readOnlyKey, value) -> null,
-            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as("store-name").withKeySerde(null).withValueSerde(null));
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store-name"));
         final TopologyDescription describe = builder.build().describe();
+
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [store-name])\n" +
+                "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [(store-name, serdes: [StringSerde, null])])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1037,13 +1053,14 @@ public class TopologyTest {
     @Test
     public void kTableNonMaterializedFilterShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.filter((key, value) -> false);
         final TopologyDescription describe = builder.build().describe();
+
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
@@ -1057,13 +1074,14 @@ public class TopologyTest {
     @Test
     public void kTableAnonymousMaterializedFilterShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.filter((key, value) -> false, Materialized.with(null, null));
         final TopologyDescription describe = builder.build().describe();
+
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000004\n" +
@@ -1081,19 +1099,19 @@ public class TopologyTest {
     @Test
     public void kTableNamedMaterializedFilterShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Object, Object> table = builder.table("input-topic");
+        final KTable<String, String> table = builder.table("input-topic", Consumed.with(Serdes.String(), Serdes.String()));
         table.filter((key, value) -> false, Materialized.as("store-name"));
         final TopologyDescription describe = builder.build().describe();
 
         Assert.assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
                 "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KTABLE-FILTER-0000000003 (stores: [store-name])\n" +
+                "    Processor: KTABLE-FILTER-0000000003 (stores: [(store-name, serdes: [StringSerde, StringSerde])])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1168,7 +1186,7 @@ public class TopologyTest {
             topology.connectProcessorAndStateStores(processorName, storeNames);
         }
         final TopologyDescription.Processor expectedProcessorNode =
-            new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
+            new InternalTopologyBuilder.Processor(processorName, Arrays.stream(storeNames).map(s -> new InternalTopologyBuilder.Store(s, Collections.singletonList("null"))).collect(Collectors.toSet()));
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedProcessorNode);
