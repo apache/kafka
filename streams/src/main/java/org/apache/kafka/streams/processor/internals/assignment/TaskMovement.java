@@ -110,10 +110,8 @@ class TaskMovement {
         if (destinationClientState.previousAssignedTasks().contains(task) && tasksToRemainingStandbys.get(task) > 0) {
             tasksToRemainingStandbys.compute(task, (t, numStandbys) -> numStandbys - 1);
             return true;
-        } else if (remainingWarmupReplicas.getAndDecrement() > 0) {
-            return true;
         } else {
-            return false;
+            return remainingWarmupReplicas.getAndDecrement() > 0;
         }
     }
 

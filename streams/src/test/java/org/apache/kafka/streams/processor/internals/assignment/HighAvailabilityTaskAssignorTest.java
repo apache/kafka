@@ -35,7 +35,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor.computeBalanceFactor;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -254,7 +254,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0));
         client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1));
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -273,7 +273,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -289,7 +289,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1));
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
         
@@ -309,7 +309,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -329,7 +329,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -346,7 +346,7 @@ public class HighAvailabilityTaskAssignorTest {
         statefulTasks = mkSet(TASK_0_0, TASK_0_1);
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1));
 
-        clientStates = getClientStatesWithOneClient();
+        clientStates = getClientStatesMap(client1);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -361,7 +361,7 @@ public class HighAvailabilityTaskAssignorTest {
         statefulTasks = mkSet(TASK_0_0, TASK_0_1);
         client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithOneClient();
+        clientStates = getClientStatesMap(client1);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -379,7 +379,7 @@ public class HighAvailabilityTaskAssignorTest {
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
         client3 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithThreeClients();
+        clientStates = getClientStatesMap(client1, client2, client3);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -399,7 +399,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -417,7 +417,7 @@ public class HighAvailabilityTaskAssignorTest {
         client2 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(50);
         client3 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(1);
 
-        clientStates = getClientStatesWithThreeClients();
+        clientStates = getClientStatesMap(client1, client2, client3);
         createTaskAssignor();
         taskAssignor.assign();
 
@@ -433,7 +433,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_2));
         client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1, TASK_0_3));
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         assertFalse(taskAssignor.assign());
 
@@ -448,7 +448,7 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         assertFalse(taskAssignor.assign());
         assertHasNoStandbyTasks(client1, client2);
@@ -461,22 +461,10 @@ public class HighAvailabilityTaskAssignorTest {
         client1 = getMockClientWithPreviousCaughtUpTasks(allTasks);
         client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
 
-        clientStates = getClientStatesWithTwoClients();
+        clientStates = getClientStatesMap(client1, client2);
         createTaskAssignor();
         assertTrue(taskAssignor.assign());
         assertThat(client2.standbyTaskCount(), equalTo(1));
-    }
-
-    private Map<UUID, ClientState> getClientStatesWithOneClient() {
-        return singletonMap(UUID_1, client1);
-    }
-
-    private Map<UUID, ClientState> getClientStatesWithTwoClients() {
-        return mkMap(mkEntry(UUID_1, client1), mkEntry(UUID_2, client2));
-    }
-
-    private Map<UUID, ClientState> getClientStatesWithThreeClients() {
-        return mkMap(mkEntry(UUID_1, client1), mkEntry(UUID_2, client2), mkEntry(UUID_3, client3));
     }
 
     private static void assertHasNoActiveTasks(final ClientState... clients) {

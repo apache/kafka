@@ -34,6 +34,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -56,11 +57,7 @@ public class TaskMovementTest {
     private final ClientState client2 = new ClientState(1);
     private final ClientState client3 = new ClientState(1);
 
-    private final Map<UUID, ClientState> clientStates = mkMap(
-        mkEntry(UUID_1, client1),
-        mkEntry(UUID_2, client2),
-        mkEntry(UUID_3, client3)
-    );
+    private final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
     private final Map<UUID, List<TaskId>> emptyWarmupAssignment = mkMap(
         mkEntry(UUID_1, EMPTY_TASK_LIST),
