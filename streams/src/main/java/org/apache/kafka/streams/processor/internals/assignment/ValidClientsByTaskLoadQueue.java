@@ -72,6 +72,7 @@ class ValidClientsByTaskLoadQueue {
             UUID candidateClient;
             while (true) {
                 candidateClient = clientsByTaskLoad.poll();
+                uniqueClients.remove(candidateClient);
                 if (candidateClient == null) {
                     offerAll(invalidPolledClients);
                     return nextLeastLoadedValidClients;
