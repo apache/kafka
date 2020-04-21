@@ -30,9 +30,9 @@ final class AssignmentUtils {
     /**
      * @return true if this client is caught-up for this task, or the task has no caught-up clients
      */
-    static boolean taskIsCaughtUpOnClient(final TaskId task,
-                                          final UUID client,
-                                          final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+    static boolean taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(final TaskId task,
+                                                                  final UUID client,
+                                                                  final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
         final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
         return caughtUpClients == null || caughtUpClients.contains(client);
     }

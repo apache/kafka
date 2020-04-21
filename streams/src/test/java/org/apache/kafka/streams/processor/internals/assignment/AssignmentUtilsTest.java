@@ -21,7 +21,7 @@ import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClient;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -36,7 +36,7 @@ public class AssignmentUtilsTest {
 
     @Test
     public void shouldReturnTrueIfTaskHasNoCaughtUpClients() {
-        assertTrue(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, emptyMap()));
+        assertTrue(taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(TASK_0_0, UUID_1, emptyMap()));
     }
 
     @Test
@@ -44,7 +44,7 @@ public class AssignmentUtilsTest {
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
         tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_1));
 
-        assertTrue(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, tasksToCaughtUpClients));
+        assertTrue(taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(TASK_0_0, UUID_1, tasksToCaughtUpClients));
     }
 
     @Test
@@ -52,6 +52,6 @@ public class AssignmentUtilsTest {
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
         tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_2));
 
-        assertFalse(taskIsCaughtUpOnClient(TASK_0_0, UUID_1, tasksToCaughtUpClients));
+        assertFalse(taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(TASK_0_0, UUID_1, tasksToCaughtUpClients));
     }
 }

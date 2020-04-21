@@ -23,6 +23,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASK_LIST;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -45,16 +46,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
 public class TaskMovementTest {
-
-    private final Set<UUID> allClients = mkSet(UUID_1, UUID_2, UUID_3);
-
     private final ClientState client1 = new ClientState(1);
     private final ClientState client2 = new ClientState(1);
     private final ClientState client3 = new ClientState(1);
@@ -82,9 +79,9 @@ public class TaskMovementTest {
             mkEntry(UUID_3, asList(TASK_0_2, TASK_1_2))
         );
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getEmptyTasksToCaughtUpClientsMap(allTasks);
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
         for (final TaskId task : allTasks) {
-            tasksToCaughtUpClients.get(task).addAll(allClients);
+            tasksToCaughtUpClients.put(task, mkSortedSet(UUID_1, UUID_2, UUID_3));
         }
         
         assertFalse(
@@ -132,20 +129,63 @@ public class TaskMovementTest {
             mkEntry(UUID_3, singletonList(TASK_0_2))
         );
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getEmptyTasksToCaughtUpClientsMap(allTasks);
-        tasksToCaughtUpClients.get(TASK_0_0).add(UUID_1);
-        tasksToCaughtUpClients.get(TASK_0_1).add(UUID_3);
-        tasksToCaughtUpClients.get(TASK_0_2).add(UUID_2);
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_1));
+        tasksToCaughtUpClients.put(TASK_0_1, mkSortedSet(UUID_3));
+        tasksToCaughtUpClients.put(TASK_0_2, mkSortedSet(UUID_2));
 
         final Map<UUID, List<TaskId>> expectedActiveTaskAssignment = mkMap(
             mkEntry(UUID_1, singletonList(TASK_0_0)),
-            mkEntry(UUID_3, singletonList(TASK_0_1)),
-            mkEntry(UUID_2, singletonList(TASK_0_2))
+            mkEntry(UUID_2, singletonList(TASK_0_2)),
+            mkEntry(UUID_3, singletonList(TASK_0_1))
         );
 
         final Map<UUID, List<TaskId>> expectedWarmupTaskAssignment = mkMap(
             mkEntry(UUID_1, EMPTY_TASK_LIST),
             mkEntry(UUID_2, singletonList(TASK_0_1)),
+            mkEntry(UUID_3, singletonList(TASK_0_2))
+        );
+
+        assertTrue(
+            assignTaskMovements(
+                balancedAssignment,
+                tasksToCaughtUpClients,
+                clientStates,
+                getMapWithNumStandbys(allTasks, 1),
+                maxWarmupReplicas)
+        );
+        verifyClientStateAssignments(expectedActiveTaskAssignment, expectedWarmupTaskAssignment);
+    }
+
+    @Test
+    public void shouldProduceBalancedAndStateConstrainedAssignment() {
+        final int maxWarmupReplicas = Integer.MAX_VALUE;
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
+
+        final Map<UUID, List<TaskId>> balancedAssignment = mkMap(
+            mkEntry(UUID_1, asList(TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_3, asList(TASK_0_2, TASK_1_2))
+        );
+
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_2, UUID_3));  // needs to be warmed up
+
+        tasksToCaughtUpClients.put(TASK_0_1, mkSortedSet(UUID_1, UUID_3));  // needs to be warmed up
+
+        tasksToCaughtUpClients.put(TASK_0_2, mkSortedSet(UUID_2));          // needs to be warmed up
+
+        tasksToCaughtUpClients.put(TASK_1_1, mkSortedSet(UUID_1));  // needs to be warmed up
+
+        final Map<UUID, List<TaskId>> expectedActiveTaskAssignment = mkMap(
+            mkEntry(UUID_1, asList(TASK_1_0, TASK_1_1)),
+            mkEntry(UUID_2, asList(TASK_0_2, TASK_0_0)),
+            mkEntry(UUID_3, asList(TASK_0_1, TASK_1_2))
+        );
+
+        final Map<UUID, List<TaskId>> expectedWarmupTaskAssignment = mkMap(
+            mkEntry(UUID_1, singletonList(TASK_0_0)),
+            mkEntry(UUID_2, asList(TASK_0_1, TASK_1_1)),
             mkEntry(UUID_3, singletonList(TASK_0_2))
         );
 
@@ -171,10 +211,10 @@ public class TaskMovementTest {
             mkEntry(UUID_3, singletonList(TASK_0_2))
         );
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getEmptyTasksToCaughtUpClientsMap(allTasks);
-        tasksToCaughtUpClients.get(TASK_0_0).add(UUID_1);
-        tasksToCaughtUpClients.get(TASK_0_1).add(UUID_3);
-        tasksToCaughtUpClients.get(TASK_0_2).add(UUID_2);
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_1));
+        tasksToCaughtUpClients.put(TASK_0_1, mkSortedSet(UUID_3));
+        tasksToCaughtUpClients.put(TASK_0_2, mkSortedSet(UUID_2));
 
         final Map<UUID, List<TaskId>> expectedActiveTaskAssignment = mkMap(
             mkEntry(UUID_1, singletonList(TASK_0_0)),
@@ -210,10 +250,10 @@ public class TaskMovementTest {
             mkEntry(UUID_3, singletonList(TASK_0_2))
         );
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = getEmptyTasksToCaughtUpClientsMap(allTasks);
-        tasksToCaughtUpClients.get(TASK_0_0).add(UUID_1);
-        tasksToCaughtUpClients.get(TASK_0_1).add(UUID_3);
-        tasksToCaughtUpClients.get(TASK_0_2).add(UUID_2);
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        tasksToCaughtUpClients.put(TASK_0_0, mkSortedSet(UUID_1));
+        tasksToCaughtUpClients.put(TASK_0_1, mkSortedSet(UUID_3));
+        tasksToCaughtUpClients.put(TASK_0_2, mkSortedSet(UUID_2));
 
         final Map<UUID, List<TaskId>> expectedActiveTaskAssignment = mkMap(
             mkEntry(UUID_1, singletonList(TASK_0_0)),
@@ -256,11 +296,4 @@ public class TaskMovementTest {
         return tasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbys));
     }
 
-    private static Map<TaskId, SortedSet<UUID>> getEmptyTasksToCaughtUpClientsMap(final Set<TaskId> tasks) {
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
-        for (final TaskId task : tasks) {
-            tasksToCaughtUpClients.put(task, new TreeSet<>());
-        }
-        return tasksToCaughtUpClients;
-    }
 }

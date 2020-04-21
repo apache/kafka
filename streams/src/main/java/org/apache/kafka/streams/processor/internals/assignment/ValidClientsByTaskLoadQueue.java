@@ -31,18 +31,31 @@ import org.apache.kafka.streams.processor.TaskId;
  * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
  */
 class ValidClientsByTaskLoadQueue {
+
     private final PriorityQueue<UUID> clientsByTaskLoad;
     private final BiFunction<UUID, TaskId, Boolean> validClientCriteria;
     private final Set<UUID> uniqueClients = new HashSet<>();
 
     ValidClientsByTaskLoadQueue(final Map<UUID, ClientState> clientStates,
                                 final BiFunction<UUID, TaskId, Boolean> validClientCriteria) {
-        clientsByTaskLoad = getClientPriorityQueueByTaskLoad(clientStates);
         this.validClientCriteria = validClientCriteria;
+
+        clientsByTaskLoad = new PriorityQueue<>(
+            (client, other) -> {
+                final double clientTaskLoad = clientStates.get(client).taskLoad();
+                final double otherTaskLoad = clientStates.get(other).taskLoad();
+                if (clientTaskLoad < otherTaskLoad) {
+                    return -1;
+                } else if (clientTaskLoad > otherTaskLoad) {
+                    return 1;
+                } else {
+                    return client.compareTo(other);
+                }
+            });
     }
 
     /**
-=     * @return the next least loaded client that satisfies the given criteria, or null if none do
+     * @return the next least loaded client that satisfies the given criteria, or null if none do
      */
     UUID poll(final TaskId task) {
         final List<UUID> validClient = poll(task, 1);
@@ -50,8 +63,7 @@ class ValidClientsByTaskLoadQueue {
     }
 
     /**
-     * @return the next N <= {@code numClientsPerTask} clients in the underlying priority queue that are valid
-     * candidates for the given task
+     * @return the next N <= {@code numClientsPerTask} clients in the underlying priority queue that are valid candidates for the given task
      */
     List<UUID> poll(final TaskId task, final int numClients) {
         final List<UUID> nextLeastLoadedValidClients = new LinkedList<>();
@@ -91,18 +103,4 @@ class ValidClientsByTaskLoadQueue {
         uniqueClients.add(client);
     }
 
-    static PriorityQueue<UUID> getClientPriorityQueueByTaskLoad(final Map<UUID, ClientState> clientStates) {
-        return new PriorityQueue<>(
-            (client, other) -> {
-                final double clientTaskLoad = clientStates.get(client).taskLoad();
-                final double otherTaskLoad = clientStates.get(other).taskLoad();
-                if (clientTaskLoad < otherTaskLoad) {
-                    return -1;
-                } else if (clientTaskLoad > otherTaskLoad) {
-                    return 1;
-                } else {
-                    return client.compareTo(other);
-                }
-            });
-    }
 }

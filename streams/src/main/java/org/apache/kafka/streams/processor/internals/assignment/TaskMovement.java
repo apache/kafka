@@ -16,22 +16,29 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClient;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
 
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.streams.processor.TaskId;
 
-public class TaskMovement {
-    final TaskId task;
+class TaskMovement {
+    private final TaskId task;
     private final UUID destination;
+    private final SortedSet<UUID> caughtUpClients;
 
-    TaskMovement(final TaskId task, final UUID destination) {
+    private TaskMovement(final TaskId task, final UUID destination, final SortedSet<UUID> caughtUpClients) {
         this.task = task;
         this.destination = destination;
+        this.caughtUpClients = caughtUpClients;
+
+        if (caughtUpClients == null || caughtUpClients.isEmpty()) {
+            throw new IllegalStateException("Should not attempt to move a task if no caught up clients exist");
+        }
     }
 
     /**
@@ -44,18 +51,17 @@ public class TaskMovement {
                                        final int maxWarmupReplicas) {
         boolean warmupReplicasAssigned = false;
 
-        final ValidClientsByTaskLoadQueue clientsByTaskLoad =
-            new ValidClientsByTaskLoadQueue(
-                clientStates,
-                (client, task) -> taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)
-            );
+        final ValidClientsByTaskLoadQueue clientsByTaskLoad = new ValidClientsByTaskLoadQueue(
+            clientStates,
+            (client, task) -> taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients)
+        );
 
         final SortedSet<TaskMovement> taskMovements = new TreeSet<>(
             (movement, other) -> {
-                final int numCaughtUpClients = tasksToCaughtUpClients.get(movement.task).size();
-                final int otherNumCaughtUpClients = tasksToCaughtUpClients.get(other.task).size();
+                final int numCaughtUpClients = movement.caughtUpClients.size();
+                final int otherNumCaughtUpClients = other.caughtUpClients.size();
                 if (numCaughtUpClients != otherNumCaughtUpClients) {
-                    return numCaughtUpClients - otherNumCaughtUpClients;
+                    return Integer.compare(numCaughtUpClients, otherNumCaughtUpClients);
                 } else {
                     return movement.task.compareTo(other.task);
                 }
@@ -66,44 +72,49 @@ public class TaskMovement {
             final UUID client = assignmentEntry.getKey();
             final ClientState state = clientStates.get(client);
             for (final TaskId task : assignmentEntry.getValue()) {
-                if (taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)) {
+                if (taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {
                     state.assignActive(task);
                 } else {
-                    final TaskMovement taskMovement = new TaskMovement(task,  client);
+                    final TaskMovement taskMovement = new TaskMovement(task, client, tasksToCaughtUpClients.get(task));
                     taskMovements.add(taskMovement);
                 }
             }
             clientsByTaskLoad.offer(client);
         }
 
-        int remainingWarmupReplicas = maxWarmupReplicas;
+        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(maxWarmupReplicas);
         for (final TaskMovement movement : taskMovements) {
-            final UUID leastLoadedClient = clientsByTaskLoad.poll(movement.task);
-            if (leastLoadedClient == null) {
+            final UUID sourceClient = clientsByTaskLoad.poll(movement.task);
+            if (sourceClient == null) {
                 throw new IllegalStateException("Tried to move task to caught-up client but none exist");
             }
 
-            final ClientState sourceClientState = clientStates.get(leastLoadedClient);
+            final ClientState sourceClientState = clientStates.get(sourceClient);
             sourceClientState.assignActive(movement.task);
+            clientsByTaskLoad.offer(sourceClient);
 
             final ClientState destinationClientState = clientStates.get(movement.destination);
-            if (destinationClientState.prevStandbyTasks().contains(movement.task) && tasksToRemainingStandbys.get(movement.task) > 0) {
-                decrementRemainingStandbys(movement.task, tasksToRemainingStandbys);
+            if (shouldAssignWarmupReplica(movement.task, destinationClientState, remainingWarmupReplicas, tasksToRemainingStandbys)) {
                 destinationClientState.assignStandby(movement.task);
-                warmupReplicasAssigned = true;
-            } else if (remainingWarmupReplicas > 0) {
-                --remainingWarmupReplicas;
-                destinationClientState.assignStandby(movement.task);
+                clientsByTaskLoad.offer(movement.destination);
                 warmupReplicasAssigned = true;
             }
-
-            clientsByTaskLoad.offer(leastLoadedClient);
         }
         return warmupReplicasAssigned;
     }
 
-    private static void decrementRemainingStandbys(final TaskId task, final Map<TaskId, Integer> tasksToRemainingStandbys) {
-        tasksToRemainingStandbys.compute(task, (t, numStandbys) -> numStandbys - 1);
+    private static boolean shouldAssignWarmupReplica(final TaskId task,
+                                                     final ClientState destinationClientState,
+                                                     final AtomicInteger remainingWarmupReplicas,
+                                                     final Map<TaskId, Integer> tasksToRemainingStandbys) {
+        if (destinationClientState.previousAssignedTasks().contains(task) && tasksToRemainingStandbys.get(task) > 0) {
+            tasksToRemainingStandbys.compute(task, (t, numStandbys) -> numStandbys - 1);
+            return true;
+        } else if (remainingWarmupReplicas.getAndDecrement() > 0) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
 }

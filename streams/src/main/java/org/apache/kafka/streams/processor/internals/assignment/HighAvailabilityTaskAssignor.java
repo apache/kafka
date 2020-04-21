@@ -16,18 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClient;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
-import static org.apache.kafka.streams.processor.internals.assignment.ValidClientsByTaskLoadQueue.getClientPriorityQueueByTaskLoad;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -101,12 +99,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private boolean assignStatefulActiveTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
-        final Map<UUID, List<TaskId>> statefulActiveTaskAssignment =
-            new DefaultBalancedAssignor().assign(
-                sortedClients,
-                statefulTasks,
-                clientsToNumberOfThreads,
-                configs.balanceFactor);
+        final Map<UUID, List<TaskId>> statefulActiveTaskAssignment = new DefaultBalancedAssignor().assign(
+            sortedClients,
+            statefulTasks,
+            clientsToNumberOfThreads,
+            configs.balanceFactor
+        );
 
         return assignTaskMovements(
             statefulActiveTaskAssignment,
@@ -118,11 +116,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private void assignStandbyReplicaTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
-        final ValidClientsByTaskLoadQueue standbyTaskClientsByTaskLoad =
-            new ValidClientsByTaskLoadQueue(
-                clientStates,
-                (client, task) -> !clientStates.get(client).assignedTasks().contains(task)
-            );
+        final ValidClientsByTaskLoadQueue standbyTaskClientsByTaskLoad = new ValidClientsByTaskLoadQueue(
+            clientStates,
+            (client, task) -> !clientStates.get(client).assignedTasks().contains(task)
+        );
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
@@ -145,14 +142,17 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private void assignStatelessActiveTasks() {
-        final PriorityQueue<UUID> statelessActiveTaskClientsQueue = getClientPriorityQueueByTaskLoad(clientStates);
-        statelessActiveTaskClientsQueue.addAll(clientStates.keySet());
+        final ValidClientsByTaskLoadQueue statelessActiveTaskClientsByTaskLoad = new ValidClientsByTaskLoadQueue(
+            clientStates,
+            (client, task) -> true
+        );
+        statelessActiveTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         for (final TaskId task : statelessTasks) {
-            final UUID client = statelessActiveTaskClientsQueue.poll();
+            final UUID client = statelessActiveTaskClientsByTaskLoad.poll(task);
             final ClientState state = clientStates.get(client);
             state.assignActive(task);
-            statelessActiveTaskClientsQueue.offer(client);
+            statelessActiveTaskClientsByTaskLoad.offer(client);
         }
     }
 
@@ -174,7 +174,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
             // Verify that this client was caught-up on all stateful active tasks
             for (final TaskId activeTask : prevActiveTasks) {
-                if (!taskIsCaughtUpOnClient(activeTask, client, tasksToCaughtUpClients)) {
+                if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(activeTask, client, tasksToCaughtUpClients)) {
                     return false;
                 }
             }
