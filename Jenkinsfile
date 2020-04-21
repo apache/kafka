@@ -34,7 +34,7 @@ def retryFlagsString(jobConfig) {
 def downstreamBuildFailureOutput = ""
 def publishStep(String configSettings) {
   configFileProvider([configFile(fileId: configSettings, variable: 'GRADLE_NEXUS_SETTINGS')]) {
-          sh "./gradlew --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchivesAll"
+          sh "./gradleAll --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchives"
   }
 }
 def job = {
