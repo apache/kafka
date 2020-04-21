@@ -78,8 +78,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        Integer count = errorCounts.get(error);
-        errorCounts.put(error, count == null ? 1 : count + 1);
+        Integer count = errorCounts.getOrDefault(error, 0);
+        errorCounts.put(error, count + 1);
     }
 
     protected abstract Struct toStruct(short version);
