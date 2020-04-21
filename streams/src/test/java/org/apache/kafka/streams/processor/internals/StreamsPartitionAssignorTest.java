@@ -546,7 +546,7 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> prevTasks10 = mkSet(TASK_0_0);
         final Set<TaskId> prevTasks11 = mkSet(TASK_0_1);
         final Set<TaskId> prevTasks20 = mkSet(TASK_0_2);
-        final Set<TaskId> standbyTasks10 = mkSet(TASK_0_1);
+        final Set<TaskId> standbyTasks10 = EMPTY_TASKS;
         final Set<TaskId> standbyTasks11 = mkSet(TASK_0_2);
         final Set<TaskId> standbyTasks20 = mkSet(TASK_0_0);
 
@@ -986,7 +986,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks00, standbyTasks01, USER_END_POINT).encode()));
+                              getInfo(UUID_1, prevTasks00, EMPTY_TASKS, USER_END_POINT).encode()));
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
@@ -1608,79 +1608,6 @@ public class StreamsPartitionAssignorTest {
                 emptyMap(),
                 0
             )));
-    }
-
-    @Test
-    public void shouldReturnNormalAssignmentForOldAndFutureInstancesDuringVersionProbing() {
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
-        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor");
-
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-        final Set<TaskId> activeTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> standbyTasks = mkSet(TASK_0_2);
-        final Map<TaskId, Set<TopicPartition>> standbyTaskMap = mkMap(
-            mkEntry(TASK_0_2, Collections.singleton(t1p2))
-        );
-        final Map<TaskId, Set<TopicPartition>> futureStandbyTaskMap = mkMap(
-            mkEntry(TASK_0_0, Collections.singleton(t1p0)),
-            mkEntry(TASK_0_1, Collections.singleton(t1p1))
-        );
-
-        createMockTaskManager(allTasks, allTasks);
-        createMockAdminClient(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3))
-        );
-
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
-
-        subscriptions.put("consumer1",
-                new Subscription(
-                        Collections.singletonList("topic1"),
-                        getInfo(UUID_1, activeTasks, standbyTasks).encode(),
-                        asList(t1p0, t1p1))
-        );
-        subscriptions.put("future-consumer",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              encodeFutureSubscription(),
-                              Collections.singletonList(t1p2))
-        );
-
-        final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        assertThat(assignment.size(), equalTo(2));
-
-        assertThat(assignment.get("consumer1").partitions(), equalTo(asList(t1p0, t1p1)));
-        assertThat(
-            AssignmentInfo.decode(assignment.get("consumer1").userData()),
-            equalTo(
-                new AssignmentInfo(
-                    LATEST_SUPPORTED_VERSION,
-                    new ArrayList<>(activeTasks),
-                    standbyTaskMap,
-                    emptyMap(),
-                    emptyMap(),
-                    0
-                )
-            )
-        );
-
-        assertThat(assignment.get("future-consumer").partitions(), equalTo(Collections.singletonList(t1p2)));
-        assertThat(
-            AssignmentInfo.decode(assignment.get("future-consumer").userData()),
-            equalTo(
-                new AssignmentInfo(
-                    LATEST_SUPPORTED_VERSION,
-                    Collections.singletonList(TASK_0_2),
-                    futureStandbyTaskMap,
-                    emptyMap(),
-                    emptyMap(),
-                    0)
-            )
-        );
     }
 
     @Test

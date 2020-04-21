@@ -245,6 +245,14 @@ public class ClientState {
         return capacity;
     }
 
+    double activeTaskLoad() {
+        return ((double) activeTaskCount()) / capacity;
+    }
+
+    double taskLoad() {
+        return ((double) assignedTaskCount()) / capacity;
+    }
+
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }
