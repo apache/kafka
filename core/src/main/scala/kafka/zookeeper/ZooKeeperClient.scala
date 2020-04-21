@@ -35,7 +35,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.collection.mutable.Set
 
@@ -200,7 +200,7 @@ class ZooKeeperClient(connectString: String,
           def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat): Unit =
             callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat, responseMetadata(sendTimeMs))),
         }, ctx.orNull)
-      case GetChildrenRequest(path, ctx) =>
+      case GetChildrenRequest(path, _, ctx) =>
         zooKeeper.getChildren(path, shouldWatch(request), new Children2Callback {
           def processResult(rc: Int, path: String, ctx: Any, children: JList[String], stat: Stat): Unit =
             callback(GetChildrenResponse(Code.get(rc), path, Option(ctx), Option(children).map(_.asScala).getOrElse(Seq.empty),
@@ -276,7 +276,7 @@ class ZooKeeperClient(connectString: String,
   // If this method is changed, the documentation for registerZNodeChangeHandler and/or registerZNodeChildChangeHandler
   // may need to be updated.
   private def shouldWatch(request: AsyncRequest): Boolean = request match {
-    case _: GetChildrenRequest => zNodeChildChangeHandlers.contains(request.path)
+    case GetChildrenRequest(_, registerWatch, _) => registerWatch && zNodeChildChangeHandlers.contains(request.path)
     case _: ExistsRequest | _: GetDataRequest => zNodeChangeHandlers.contains(request.path)
     case _ => throw new IllegalArgumentException(s"Request $request is not watchable")
   }
@@ -536,7 +536,7 @@ case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[
   type Response = SetAclResponse
 }
 
-case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
+case class GetChildrenRequest(path: String, registerWatch: Boolean, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetChildrenResponse
 }
 

@@ -44,12 +44,7 @@ import java.util.stream.Collectors;
  * A mock network client for use testing code
  */
 public class MockClient implements KafkaClient {
-    public static final RequestMatcher ALWAYS_TRUE = new RequestMatcher() {
-        @Override
-        public boolean matches(AbstractRequest body) {
-            return true;
-        }
-    };
+    public static final RequestMatcher ALWAYS_TRUE = body -> true;
 
     private static class FutureResponse {
         private final Node node;
@@ -644,7 +639,7 @@ public class MockClient implements KafkaClient {
         public void update(Time time, MetadataUpdate update) {
             MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
             maybeCheckExpectedTopics(update, builder);
-            metadata.update(update.updateResponse, time.milliseconds());
+            metadata.updateWithCurrentRequestVersion(update.updateResponse, false, time.milliseconds());
             this.lastUpdate = update;
         }
 

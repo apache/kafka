@@ -25,6 +25,7 @@ import kafka.utils.TestUtils.createTopic
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -35,7 +36,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -120,7 +121,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     val nodes = brokerAndEpochs.keys.map(_.node(listenerName))
 
     val controllerContext = new ControllerContext
-    controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
+    controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
       metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
@@ -203,10 +204,18 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
       // Send StopReplica request with correct broker epoch
       {
+        val topicStates = Seq(
+          new StopReplicaTopicState()
+            .setTopicName(tp.topic())
+            .setPartitionStates(Seq(new StopReplicaPartitionState()
+              .setPartitionIndex(tp.partition())
+              .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+              .setDeletePartition(true)).asJava)
+        ).asJava
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
           epochInRequest, // Correct broker epoch
-          true, Set(tp).asJava)
+          false, topicStates)
 
         if (isEpochInRequestStale) {
           sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)

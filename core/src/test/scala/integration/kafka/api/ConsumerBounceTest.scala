@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinator
 import org.junit.Assert._
 import org.junit.{After, Ignore, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
 /**

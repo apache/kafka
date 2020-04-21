@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
@@ -30,12 +28,10 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -48,7 +44,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -60,8 +55,6 @@ public class ConnectWorkerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectWorkerIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-source";
@@ -72,7 +65,7 @@ public class ConnectWorkerIntegrationTest {
     Properties brokerProps = new Properties();
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
         workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
@@ -118,30 +111,30 @@ public class ConnectWorkerIntegrationTest {
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Initial group of workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
+                "Connector tasks did not start in time.");
 
         WorkerHandle extraWorker = connect.addWorker();
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS + 1).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Expanded group of workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS + 1,
+                "Expanded group of workers did not start in time.");
 
-        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks are not all in running state.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
+                "Connector tasks are not all in running state.");
 
         Set<WorkerHandle> workers = connect.activeWorkers();
         assertTrue(workers.contains(extraWorker));
 
         connect.removeWorker(extraWorker);
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false) && !assertWorkersUp(NUM_WORKERS + 1).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Group of workers did not shrink in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Group of workers did not shrink in time.");
 
         workers = connect.activeWorkers();
         assertFalse(workers.contains(extraWorker));
@@ -164,14 +157,14 @@ public class ConnectWorkerIntegrationTest {
         connectorProps.put(TASKS_MAX_CONFIG, Objects.toString(numTasks));
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Initial group of workers did not start in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
-        waitForCondition(() -> assertConnectorTasksFailed(CONNECTOR_NAME, numTasks).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not fail in time");
+        connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, numTasks,
+                "Connector tasks did not fail in time");
 
         // Reconfigure the connector without the bad broker address.
         connectorProps.remove(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG);
@@ -180,11 +173,11 @@ public class ConnectWorkerIntegrationTest {
         // Restart the failed task
         String taskRestartEndpoint = connect.endpointForResource(
             String.format("connectors/%s/tasks/0/restart", CONNECTOR_NAME));
-        connect.executePost(taskRestartEndpoint, "", Collections.emptyMap());
+        connect.requestPost(taskRestartEndpoint, "", Collections.emptyMap());
 
         // Ensure the task started successfully this time
-        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
-            CONNECTOR_SETUP_DURATION_MS, "Connector tasks are not all in running state.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
+            "Connector tasks are not all in running state.");
     }
 
     /**
@@ -210,19 +203,19 @@ public class ConnectWorkerIntegrationTest {
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Initial group of workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
+                "Connector tasks did not start in time.");
 
         connect.kafka().stopOnlyKafka();
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Group of workers did not remain the same after broker shutdown");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Group of workers did not remain the same after broker shutdown");
 
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -233,78 +226,14 @@ public class ConnectWorkerIntegrationTest {
         // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Group of workers did not remain the same within the "
-                        + "designated time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Group of workers did not remain the same within the designated time.");
 
         // Allow for the workers to rebalance and reach a steady state
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
+                "Connector tasks did not start in time.");
     }
 
-    /**
-     * Confirm that the requested number of workers is up and running.
-     *
-     * @param numWorkers the number of online workers
-     * @return true if at least {@code numWorkers} are up; false otherwise
-     */
-    private Optional<Boolean> assertWorkersUp(int numWorkers) {
-        try {
-            int numUp = connect.activeWorkers().size();
-            return Optional.of(numUp >= numWorkers);
-        } catch (Exception e) {
-            log.error("Could not check active workers.", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Confirm that a connector with an exact number of tasks is running.
-     *
-     * @param connectorName the connector
-     * @param numTasks the expected number of tasks
-     * @return true if the connector and tasks are in RUNNING state; false otherwise
-     */
-    private Optional<Boolean> assertConnectorAndTasksRunning(String connectorName, int numTasks) {
-        return assertConnectorState(
-            connectorName,
-            AbstractStatus.State.RUNNING,
-            numTasks,
-            AbstractStatus.State.RUNNING);
-    }
-
-    /**
-     * Confirm that a connector is running, that it has a specific number of tasks, and that all of
-     * its tasks are in the FAILED state.
-     * @param connectorName the connector
-     * @param numTasks the expected number of tasks
-     * @return true if the connector is in RUNNING state and its tasks are in FAILED state; false otherwise
-     */
-    private Optional<Boolean> assertConnectorTasksFailed(String connectorName, int numTasks) {
-        return assertConnectorState(
-            connectorName,
-            AbstractStatus.State.RUNNING,
-            numTasks,
-            AbstractStatus.State.FAILED);
-    }
-
-    private Optional<Boolean> assertConnectorState(
-        String connectorName,
-        AbstractStatus.State connectorState,
-        int numTasks,
-        AbstractStatus.State tasksState) {
-        try {
-            ConnectorStateInfo info = connect.connectorStatus(connectorName);
-            boolean result = info != null
-                    && info.connector().state().equals(connectorState.toString())
-                    && info.tasks().size() == numTasks
-                    && info.tasks().stream().allMatch(s -> s.state().equals(tasksState.toString()));
-            return Optional.of(result);
-        } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
-            return Optional.empty();
-        }
-    }
 }

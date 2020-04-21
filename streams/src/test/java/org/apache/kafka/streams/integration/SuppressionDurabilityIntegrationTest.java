@@ -49,10 +49,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -69,8 +69,6 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
@@ -94,19 +92,18 @@ public class SuppressionDurabilityIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int COMMIT_INTERVAL = 100;
-    private final boolean eosEnabled;
 
-    @Parameters(name = "{index}: eosEnabled={0}")
-    public static Collection<Object[]> parameters() {
-        return asList(
-            new Object[] {false},
-            new Object[] {true}
-        );
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.AT_LEAST_ONCE},
+            {StreamsConfig.EXACTLY_ONCE},
+            {StreamsConfig.EXACTLY_ONCE_BETA}
+        });
     }
 
-    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
-    }
+    @Parameterized.Parameter
+    public String processingGuaranteee;
 
     @Test
     public void shouldRecoverBufferAfterShutdown() {
@@ -153,7 +150,7 @@ public class SuppressionDurabilityIntegrationTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
             mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuaranteee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 

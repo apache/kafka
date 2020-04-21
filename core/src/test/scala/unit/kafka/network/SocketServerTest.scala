@@ -27,9 +27,8 @@ import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors
 import java.util.{HashMap, Properties, Random}
 
 import com.yammer.metrics.core.{Gauge, Meter}
-import com.yammer.metrics.{Metrics => YammerMetrics}
 import javax.net.ssl._
-
+import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
@@ -55,7 +54,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.ControlThrowable
@@ -303,13 +302,23 @@ class SocketServerTest {
     testProps.put("inter.broker.listener.name", "INTERNAL")
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup(startupProcessors = false)
+    testableServer.startup(startProcessingRequests = false)
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
+
+    def controlPlaneListenerStarted() = {
+      try {
+        val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
+        sendAndReceiveControllerRequest(socket, testableServer)
+        true
+      } catch {
+        case _: Throwable => false
+      }
+    }
 
     def listenerStarted(listenerName: ListenerName) = {
       try {
@@ -322,14 +331,11 @@ class SocketServerTest {
     }
 
     try {
-      testableServer.startControlPlaneProcessor()
-      val socket1 = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
-      sendAndReceiveControllerRequest(socket1, testableServer)
-
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
-      val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
+      val futures = Map(externalEndpoint -> externalReadyFuture)
+      val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
+      TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 
@@ -341,6 +347,27 @@ class SocketServerTest {
       executor.shutdownNow()
       shutdownServerAndMetrics(testableServer)
     }
+  }
+
+  @Test
+  def testStagedListenerShutdownWhenConnectionQueueIsFull(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    val connectionQueueSize = 1
+    val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.startup(startProcessingRequests = false)
+
+    val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket1, producerRequestBytes())
+    val socket2 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket2, producerRequestBytes())
+
+    testableServer.shutdown()
   }
 
   @Test
@@ -1017,7 +1044,7 @@ class SocketServerTest {
   }
 
   @Test
-  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend() {
+  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
@@ -1100,7 +1127,7 @@ class SocketServerTest {
         s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
-    def requestMetricMeters = YammerMetrics
+    def requestMetricMeters = KafkaYammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .collect { case (k, metric: Meter) if k.getType == "RequestMetrics" => (k.toString, metric.count) }
@@ -1114,7 +1141,7 @@ class SocketServerTest {
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
 
-    val nonZeroMetricNamesAndValues = YammerMetrics
+    val nonZeroMetricNamesAndValues = KafkaYammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .filter { case (k, _) => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent") }
@@ -1135,8 +1162,8 @@ class SocketServerTest {
     }
 
     // legacy metrics not tagged
-    val yammerMetricsNames = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getType.equals("Processor"))
+    val yammerMetricsNames = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getType.equals("Processor") }
       .collect { case (k, _: Gauge[_]) => k }
     assertFalse(yammerMetricsNames.isEmpty)
 
@@ -1684,8 +1711,9 @@ class SocketServerTest {
 
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
-    val blockedPercentMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
+    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == blockedPercentMetricMBeanName
+    }.values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate

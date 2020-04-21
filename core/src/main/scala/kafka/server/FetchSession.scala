@@ -32,7 +32,7 @@ import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
 import scala.collection.{mutable, _}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]

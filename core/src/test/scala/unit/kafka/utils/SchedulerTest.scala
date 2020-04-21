@@ -16,13 +16,15 @@
  */
 package kafka.utils
 
-import org.junit.Assert._
+import java.util.Properties
 import java.util.concurrent.atomic._
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
+
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
-import org.junit.{After, Before, Test}
 import kafka.utils.TestUtils.retry
-import java.util.Properties
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class SchedulerTest {
 
@@ -129,4 +131,36 @@ class SchedulerTest {
     assertTrue(!(scheduler.taskRunning(log.producerExpireCheck)))
   }
 
+  /**
+   * Verify that scheduler lock is not held when invoking task method, allowing new tasks to be scheduled
+   * when another is being executed. This is required to avoid deadlocks when:
+   *   a) Thread1 executes a task which attempts to acquire LockA
+   *   b) Thread2 holding LockA attempts to schedule a new task
+   */
+  @Test(timeout = 15000)
+  def testMockSchedulerLocking(): Unit = {
+    val initLatch = new CountDownLatch(1)
+    val completionLatch = new CountDownLatch(2)
+    val taskLatches = List(new CountDownLatch(1), new CountDownLatch(1))
+    def scheduledTask(taskLatch: CountDownLatch): Unit = {
+      initLatch.countDown()
+      assertTrue("Timed out waiting for latch", taskLatch.await(30, TimeUnit.SECONDS))
+      completionLatch.countDown()
+    }
+    mockTime.scheduler.schedule("test1", () => scheduledTask(taskLatches.head), delay=1)
+    val tickExecutor = Executors.newSingleThreadScheduledExecutor()
+    try {
+      tickExecutor.scheduleWithFixedDelay(() => mockTime.sleep(1), 0, 1, TimeUnit.MILLISECONDS)
+
+      // wait for first task to execute and then schedule the next task while the first one is running
+      assertTrue(initLatch.await(10, TimeUnit.SECONDS))
+      mockTime.scheduler.schedule("test2", () => scheduledTask(taskLatches(1)), delay = 1)
+
+      taskLatches.foreach(_.countDown())
+      assertTrue("Tasks did not complete", completionLatch.await(10, TimeUnit.SECONDS))
+
+    } finally {
+      tickExecutor.shutdownNow()
+    }
+  }
 }

@@ -23,7 +23,7 @@ import org.apache.zookeeper.cli.CommandNotFoundException
 import org.apache.zookeeper.cli.MalformedCommandException
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ZooKeeperMainWithTlsSupportForKafka {
   val zkTlsConfigFileOption = "-zk-tls-config-file"
@@ -70,7 +70,7 @@ class ZooKeeperMainWithTlsSupportForKafka(args: Array[String], val zkClientConfi
 
   def kafkaTlsUsage(): Unit = {
     System.err.println("ZooKeeper -server host:port [-zk-tls-config-file <file>] cmd args")
-    asScalaSet(ZooKeeperMain.commandMap.keySet).toList.sorted.foreach(cmd =>
+    ZooKeeperMain.commandMap.keySet.asScala.toList.sorted.foreach(cmd =>
       System.err.println(s"\t$cmd ${ZooKeeperMain.commandMap.get(cmd)}"))
   }
 

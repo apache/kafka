@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException

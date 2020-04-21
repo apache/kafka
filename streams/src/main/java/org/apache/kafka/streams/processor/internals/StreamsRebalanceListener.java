@@ -50,10 +50,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
             streamThread.shutdown();
         } else {
-            taskManager.handleRebalanceComplete();
-
             streamThread.setState(State.PARTITIONS_ASSIGNED);
         }
+
+        taskManager.handleRebalanceComplete();
     }
 
     @Override
@@ -70,13 +70,6 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);
-            } catch (final Throwable t) {
-                log.error(
-                    "Error caught during partition revocation, " +
-                        "will abort the current process and re-throw at the end of rebalance: ",
-                    t
-                );
-                streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition revocation took {} ms.", time.milliseconds() - start);
             }
@@ -97,16 +90,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         try {
             // close all active tasks as lost but don't try to commit offsets as we no longer own them
             taskManager.handleLostAll();
-        } catch (final Throwable t) {
-            log.error(
-                "Error caught during partitions lost, " +
-                    "will abort the current process and re-throw at the end of rebalance: ",
-                t
-            );
-            streamThread.setRebalanceException(t);
         } finally {
             log.info("partitions lost took {} ms.", time.milliseconds() - start);
         }
     }
-
 }

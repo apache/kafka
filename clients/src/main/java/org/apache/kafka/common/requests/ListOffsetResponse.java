@@ -137,7 +137,6 @@ public class ListOffsetResponse extends AbstractResponse {
     public static final class PartitionData {
         public final Errors error;
         // The offsets list is only used in ListOffsetResponse v0.
-        @Deprecated
         public final List<Long> offsets;
         public final Long timestamp;
         public final Long offset;
@@ -146,7 +145,6 @@ public class ListOffsetResponse extends AbstractResponse {
         /**
          * Constructor for ListOffsetResponse v0
          */
-        @Deprecated
         public PartitionData(Errors error, List<Long> offsets) {
             this.error = error;
             this.offsets = offsets;

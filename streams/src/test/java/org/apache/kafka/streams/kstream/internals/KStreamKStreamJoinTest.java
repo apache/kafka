@@ -56,7 +56,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class KStreamKStreamJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
+    private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
@@ -85,24 +85,26 @@ public class KStreamKStreamJoinTest {
 
         left.join(
             right,
-            (value1, value2) -> value1 + value2,
+            Integer::sum,
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
         );
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", null);
-            LogCaptureAppender.unregister(appender);
 
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
                     + "offset=[0]")
             );
+
             if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 assertEquals(
                     1.0,
@@ -186,15 +188,12 @@ public class KStreamKStreamJoinTest {
     @Test
     public void shouldBuildJoinWithCustomStoresAndCorrectWindowSettings() {
         //Case where everything matches up
-        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
-        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
-
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
 
         left.join(right,
-            (value1, value2) -> value1 + value2,
+            Integer::sum,
             joinWindows,
             streamJoined);
 
@@ -251,7 +250,7 @@ public class KStreamKStreamJoinTest {
 
         joinedStream = left.join(
             right,
-            (value1, value2) -> value1 + value2,
+            Integer::sum,
             joinWindows,
             streamJoined);
 

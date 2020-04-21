@@ -78,6 +78,54 @@ public class TaskMetricsTest {
     }
 
     @Test
+    public void shouldGetActiveProcessRatioSensor() {
+        final String operation = "active-process-ratio";
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
+            .andReturn(expectedSensor);
+        final String ratioDescription = "The fraction of time the thread spent " +
+            "on processing this task among all assigned active tasks";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            ratioDescription
+        );
+
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = TaskMetrics.activeProcessRatioSensor(THREAD_ID, TASK_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetActiveBufferCountSensor() {
+        final String operation = "active-buffer-count";
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        final String countDescription = "The count of buffered records that are polled " +
+            "from consumer and not yet processed for this active task";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            countDescription
+        );
+
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = TaskMetrics.activeBufferedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
@@ -143,11 +191,8 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetCommitSensor() {
         final String operation = "commit";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
         final String totalDescription = "The total number of calls to commit";
         final String rateDescription = "The average number of calls to commit per second";
-        final String avgLatencyDescription = "The average latency of calls to commit";
-        final String maxLatencyDescription = "The maximum latency of calls to commit";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
@@ -157,14 +202,6 @@ public class TaskMetricsTest {
             operation,
             rateDescription,
             totalDescription
-        );
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            operationLatency,
-            avgLatencyDescription,
-            maxLatencyDescription
         );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 

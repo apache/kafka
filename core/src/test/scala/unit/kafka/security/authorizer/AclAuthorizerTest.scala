@@ -50,7 +50,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
 
@@ -927,7 +927,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private def getAclChangeEventAsString(patternType: PatternType) = {
     val store = ZkAclStore(patternType)
-    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath))
+    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath, registerWatch = true))
     children.maybeThrow()
     assertEquals("Expecting 1 change event", 1, children.children.size)
 

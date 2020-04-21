@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -414,7 +414,8 @@ private[log] object LogValidator extends Logging {
 
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
-        for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+        var batchIndex = 0
+        for (record <- recordsIterator.asScala) {
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           val recordError = validateRecordCompression(batchIndex, record).orElse {
             validateRecord(batch, topicPartition, record, batchIndex, now,
@@ -433,6 +434,7 @@ private[log] object LogValidator extends Logging {
               uncompressedSizeInBytes += record.sizeInBytes()
               validatedRecords += record
           }
+         batchIndex += 1
         }
         processRecordErrors(recordErrors)
       } finally {

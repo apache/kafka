@@ -88,7 +88,9 @@ public class WorkerGroupMember {
             List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class,
                     Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
-            reporters.add(new JmxReporter(JMX_PREFIX));
+            JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+            jmxReporter.configure(config.originals());
+            reporters.add(jmxReporter);
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),

@@ -192,6 +192,11 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
+  def shouldRetryPartitionWhenKafkaStorageError(): Unit = {
+    verifyRetriesPartitionOnError(Errors.KAFKA_STORAGE_ERROR)
+  }
+
+  @Test
   def shouldRemoveTopicPartitionFromWaitingSetOnUnsupportedForMessageFormat(): Unit = {
     mockCache()
     verifyCompleteDelayedOperationOnError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)

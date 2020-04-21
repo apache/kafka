@@ -27,11 +27,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
 public class CachingKeyValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
@@ -119,6 +123,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             // for null bytes, we still put it into cache indicating tombstones
             putInternal(key, value);
         } finally {
@@ -148,6 +153,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             final byte[] v = getInternal(key);
             if (v == null) {
                 putInternal(key, value);
@@ -163,6 +169,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 put(entry.key, entry.value);
@@ -178,6 +185,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             return deleteInternal(key);
         } finally {
             lock.writeLock().unlock();
@@ -202,6 +210,7 @@ public class CachingKeyValueStore
         }
         theLock.lock();
         try {
+            validateStoreOpen();
             return getInternal(key);
         } finally {
             theLock.unlock();
@@ -259,6 +268,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         lock.readLock().lock();
         try {
+            validateStoreOpen();
             return wrapped().approximateNumEntries();
         } finally {
             lock.readLock().unlock();
@@ -267,10 +277,12 @@ public class CachingKeyValueStore
 
     @Override
     public void flush() {
+        validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             cache.flush(cacheName);
-            super.flush();
+            wrapped().flush();
         } finally {
             lock.writeLock().unlock();
         }
@@ -278,14 +290,19 @@ public class CachingKeyValueStore
 
     @Override
     public void close() {
+        lock.writeLock().lock();
         try {
-            flush();
-        } finally {
-            try {
-                super.close();
-            } finally {
-                cache.close(cacheName);
+            final LinkedList<RuntimeException> suppressed = executeAll(
+                () -> cache.flush(cacheName),
+                () -> cache.close(cacheName),
+                wrapped()::close
+            );
+            if (!suppressed.isEmpty()) {
+                throwSuppressed("Caught an exception while closing caching key value store for store " + name(),
+                                suppressed);
             }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 }

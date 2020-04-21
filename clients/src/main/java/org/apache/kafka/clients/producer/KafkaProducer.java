@@ -351,7 +351,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class,
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            reporters.add(new JmxReporter(JMX_PREFIX));
+            JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+            jmxReporter.configure(userProvidedConfigs);
+            reporters.add(jmxReporter);
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -388,10 +390,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            this.transactionManager = configureTransactionState(config, logContext, log);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = new ApiVersions();
+            this.transactionManager = configureTransactionState(config, logContext);
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
@@ -413,6 +415,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners,
                         Time.SYSTEM);
@@ -458,7 +461,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        int retries = configureRetries(producerConfig, log);
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
@@ -467,7 +469,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 maxInflightRequests == 1,
                 producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                 acks,
-                retries,
+                producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
                 metricsRegistry.senderMetrics,
                 time,
                 requestTimeoutMs,
@@ -503,36 +505,36 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return deliveryTimeoutMs;
     }
 
-    private static TransactionManager configureTransactionState(ProducerConfig config, LogContext logContext, Logger log) {
+    private TransactionManager configureTransactionState(ProducerConfig config,
+                                                         LogContext logContext) {
 
         TransactionManager transactionManager = null;
 
-        boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        final boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        final boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
         if (userConfiguredTransactions && !userConfiguredIdempotence)
             log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
                     ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
         if (config.idempotenceEnabled()) {
-            String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-            int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-            long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs);
+            final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+            final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            final boolean autoDowngradeTxnCommit = config.getBoolean(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
+            transactionManager = new TransactionManager(
+                logContext,
+                transactionalId,
+                transactionTimeoutMs,
+                retryBackoffMs,
+                apiVersions,
+                autoDowngradeTxnCommit);
+
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");
             else
                 log.info("Instantiated an idempotent producer.");
         }
         return transactionManager;
-    }
-
-    private static int configureRetries(ProducerConfig config, Logger log) {
-        boolean userConfiguredRetries = config.originals().containsKey(ProducerConfig.RETRIES_CONFIG);
-        if (config.idempotenceEnabled() && !userConfiguredRetries) {
-            log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
-                    "producer is enabled.", Integer.MAX_VALUE);
-        }
-        return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
     private static int configureInflightRequests(ProducerConfig config) {
@@ -647,7 +649,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
      * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
-     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for proper fencing.
+     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for stronger fencing than
+     * {@link #sendOffsetsToTransaction(Map, String)} which only sends with consumer group id.
+     *
+     * <p>
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
@@ -961,11 +966,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
-        } catch (BufferExhaustedException e) {
-            this.errors.record();
-            this.metrics.sensor("buffer-exhausted-records").record();
-            this.interceptors.onSendError(record, tp, e);
-            throw e;
         } catch (KafkaException e) {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
@@ -1020,7 +1020,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Requesting metadata update for topic {}.", topic);
             }
             metadata.add(topic, nowMs + elapsed);
-            int version = metadata.requestUpdate();
+            int version = metadata.requestUpdateForTopic(topic);
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);

@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -226,7 +226,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
-      controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
+      controllerContext.setLiveBrokers(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()

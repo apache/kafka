@@ -199,8 +199,11 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void close() {
-        super.close();
-        streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+        try {
+            wrapped().close();
+        } finally {
+            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+        }
     }
 
     private V outerValue(final byte[] value) {

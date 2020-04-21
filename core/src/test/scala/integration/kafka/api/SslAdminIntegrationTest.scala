@@ -17,8 +17,8 @@ import java.util
 import java.util.Collections
 import java.util.concurrent._
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.KafkaConfig
@@ -36,7 +36,7 @@ import org.apache.kafka.server.authorizer._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.{Assert, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object SslAdminIntegrationTest {
@@ -259,7 +259,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def purgatoryMetric(name: String): Int = {
-    val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
     val metrics = allMetrics.filter { case (metricName, _) =>
       metricName.getMBeanName.contains("delayedOperation=AlterAcls") && metricName.getMBeanName.contains(s"name=$name")
     }.values.toList

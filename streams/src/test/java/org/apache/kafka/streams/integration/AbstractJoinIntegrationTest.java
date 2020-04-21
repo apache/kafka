@@ -55,7 +55,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -93,8 +92,6 @@ public abstract class AbstractJoinIntegrationTest {
     static final long ANY_UNIQUE_KEY = 0L;
 
     StreamsBuilder builder;
-    int numRecordsExpected = 0;
-    AtomicBoolean finalResultReached = new AtomicBoolean(false);
 
     private final List<Input<String>> input = Arrays.asList(
         new Input<>(INPUT_TOPIC_LEFT, null),

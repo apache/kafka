@@ -87,10 +87,14 @@ public class ConnectorsResource {
     private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
+    private final boolean isTopicTrackingDisabled;
+    private final boolean isTopicTrackingResetDisabled;
 
     public ConnectorsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
         this.config = config;
+        isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
     }
 
     @GET
@@ -98,7 +102,7 @@ public class ConnectorsResource {
     public Response listConnectors(
         final @Context UriInfo uriInfo,
         final @Context HttpHeaders headers
-    ) throws Throwable {
+    ) {
         if (uriInfo.getQueryParameters().containsKey("expand")) {
             Map<String, Map<String, Object>> out = new HashMap<>();
             for (String connector : herder.connectors()) {
@@ -113,7 +117,7 @@ public class ConnectorsResource {
                                 connectorExpansions.put("info", herder.connectorInfo(connector));
                                 break;
                             default:
-                                log.info("Ignoring unknown expanion type {}", expansion);
+                                log.info("Ignoring unknown expansion type {}", expansion);
                         }
                     }
                     out.put(connector, connectorExpansions);
@@ -174,17 +178,16 @@ public class ConnectorsResource {
 
     @GET
     @Path("/{connector}/status")
-    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
+    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
         return herder.connectorStatus(connector);
     }
 
     @GET
     @Path("/{connector}/topics")
-    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) throws Throwable {
-        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity("Topic tracking is disabled.")
-                    .build();
+    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
+        if (isTopicTrackingDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking is disabled.");
         }
         ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
         return Response.ok(Collections.singletonMap(info.connector(), info)).build();
@@ -192,16 +195,14 @@ public class ConnectorsResource {
 
     @PUT
     @Path("/{connector}/topics/reset")
-    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) throws Throwable {
-        if (!config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity("Topic tracking is disabled.")
-                    .build();
+    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
+        if (isTopicTrackingDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking is disabled.");
         }
-        if (!config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity("Topic tracking reset is disabled.")
-                    .build();
+        if (isTopicTrackingResetDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking reset is disabled.");
         }
         herder.resetConnectorActiveTopics(connector);
         return Response.accepted().build();
@@ -280,7 +281,7 @@ public class ConnectorsResource {
     @Path("/{connector}/tasks/{task}/status")
     public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
                                                       final @Context HttpHeaders headers,
-                                                      final @PathParam("task") Integer task) throws Throwable {
+                                                      final @PathParam("task") Integer task) {
         return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
@@ -306,8 +307,8 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
     }
 
-    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorconfig
-    // object. Throw BadRequestException on mismatch, otherwise put connectorname in config
+    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
+    // object. Throw BadRequestException on mismatch, otherwise put connectorName in config
     private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
         String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
         if (includedName != null) {

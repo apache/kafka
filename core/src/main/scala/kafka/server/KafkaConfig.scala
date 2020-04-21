@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 
 object Defaults {
@@ -239,7 +239,7 @@ object Defaults {
 
   /** ********* Sasl configuration ***********/
   val SaslMechanismInterBrokerProtocol = SaslConfigs.DEFAULT_SASL_MECHANISM
-  val SaslEnabledMechanisms = SaslConfigs.DEFAULT_SASL_ENABLED_MECHANISMS
+  val SaslEnabledMechanisms = BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
   val SaslKerberosTicketRenewWindowFactor = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitter = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_JITTER
@@ -520,6 +520,7 @@ object KafkaConfig {
   val SslSecureRandomImplementationProp = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG
   val SslClientAuthProp = BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG
   val SslPrincipalMappingRulesProp = BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG
+  var SslEngineFactoryClassProp = SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG
 
   /** ********* SASL Configuration ****************/
   val SaslMechanismInterBrokerProtocolProp = "sasl.mechanism.inter.broker.protocol"
@@ -910,6 +911,7 @@ object KafkaConfig {
   val SslSecureRandomImplementationDoc = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC
   val SslClientAuthDoc = BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC
   val SslPrincipalMappingRulesDoc = BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_DOC
+  val SslEngineFactoryClassDoc = SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC
 
   /** ********* Sasl Configuration ****************/
   val SaslMechanismInterBrokerProtocolDoc = "SASL mechanism used for inter-broker communication. Default is GSSAPI."
@@ -1173,6 +1175,7 @@ object KafkaConfig {
       .define(SslClientAuthProp, STRING, Defaults.SslClientAuthentication, in(Defaults.SslClientAuthenticationValidValues:_*), MEDIUM, SslClientAuthDoc)
       .define(SslCipherSuitesProp, LIST, Collections.emptyList(), MEDIUM, SslCipherSuitesDoc)
       .define(SslPrincipalMappingRulesProp, STRING, Defaults.SslPrincipalMappingRules, LOW, SslPrincipalMappingRulesDoc)
+      .define(SslEngineFactoryClassProp, CLASS, null, LOW, SslEngineFactoryClassDoc)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslMechanismInterBrokerProtocolProp, STRING, Defaults.SaslMechanismInterBrokerProtocol, MEDIUM, SaslMechanismInterBrokerProtocolDoc)
@@ -1229,6 +1232,38 @@ object KafkaConfig {
 
   def apply(props: java.util.Map[_, _]): KafkaConfig = new KafkaConfig(props, true)
 
+  private def typeOf(name: String): Option[ConfigDef.Type] = Option(configDef.configKeys.get(name)).map(_.`type`)
+
+  def configType(configName: String): Option[ConfigDef.Type] = {
+    val configType = configTypeExact(configName)
+    if (configType.isDefined) {
+      return configType
+    }
+    typeOf(configName) match {
+      case Some(t) => Some(t)
+      case None =>
+        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
+    }
+  }
+
+  private def configTypeExact(exactName: String): Option[ConfigDef.Type] = {
+    val configType = typeOf(exactName).orNull
+    if (configType != null) {
+      Some(configType)
+    } else {
+      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      if (configKey != null) {
+        Some(configKey.`type`)
+      } else {
+        None
+      }
+    }
+  }
+
+  def maybeSensitive(configType: Option[ConfigDef.Type]): Boolean = {
+    // If we can't determine the config entry type, treat it as a sensitive config to be safe
+    configType.isEmpty || configType.contains(ConfigDef.Type.PASSWORD)
+  }
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])

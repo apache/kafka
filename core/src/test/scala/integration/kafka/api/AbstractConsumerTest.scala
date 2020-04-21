@@ -29,7 +29,7 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.Assert._
 import org.junit.Before
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
@@ -323,11 +323,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                            partitionsToAssign: Set[TopicPartition])
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
       this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
     }
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) = {
       this(consumer, List.empty[String], partitionsToAssign)
     }
 
