@@ -801,9 +801,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 changelogMetadata.clear();
             } else {
-                log.debug("Changelog partition {} could not be found, " +
-                    "it could be already cleaned up during the handling" +
-                    "of task corruption and never restore again", partition);
+                log.debug("Changelog partition {} could not be found," +
+                    " it could be already cleaned up during the handling" +
+                    " of task corruption and never restore again", partition);
             }
         }
 

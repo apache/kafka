@@ -41,7 +41,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.AlwaysContinueProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -111,7 +110,8 @@ public class RecordCollectorTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
 
-    private final StreamPartitioner<String, Object> streamPartitioner = (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
+    private final StreamPartitioner<String, Object> streamPartitioner =
+        (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
     private MockProducer<byte[], byte[]> mockProducer;
     private StreamsProducer streamsProducer;
@@ -466,15 +466,33 @@ public class RecordCollectorTest {
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+        );
 
         thrown = assertThrows(TaskMigratedException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+        );
 
         thrown = assertThrows(TaskMigratedException.class, collector::close);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+        );
     }
 
     @Test
@@ -513,20 +531,34 @@ public class RecordCollectorTest {
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.KafkaException: KABOOM!\nException handler choose to FAIL the processing, no more records would be sent."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.")
+        );
 
         thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.KafkaException: KABOOM!\nException handler choose to FAIL the processing, no more records would be sent."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.")
+        );
 
         thrown = assertThrows(StreamsException.class, collector::close);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.KafkaException: KABOOM!\nException handler choose to FAIL the processing, no more records would be sent."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.")
+        );
     }
 
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
-        final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(RecordCollectorImpl.class);
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -553,27 +585,34 @@ public class RecordCollectorTest {
             streamsMetrics
         );
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        collector.flush();
+        try (final LogCaptureAppender logCaptureAppender =
+                 LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+
+            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+            collector.flush();
+
+            final List<String> messages = logCaptureAppender.getMessages();
+            final StringBuilder errorMessage = new StringBuilder("Messages received:");
+            for (final String error : messages) {
+                errorMessage.append("\n - ").append(error);
+            }
+            assertTrue(
+                errorMessage.toString(),
+                messages.get(messages.size() - 1)
+                    .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
+            );
+        }
 
         final Metric metric = streamsMetrics.metrics().get(new MetricName(
             "dropped-records-total",
             "stream-task-metrics",
             "The total number of dropped records",
-            mkMap(Utils.mkEntry("thread-id", Thread.currentThread().getName()), Utils.mkEntry("task-id", taskId.toString()))));
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", taskId.toString())
+            )
+        ));
         assertEquals(1.0, metric.metricValue());
-
-        final List<String> messages = logCaptureAppender.getMessages();
-        final StringBuilder errorMessage = new StringBuilder("Messages received:");
-        for (final String error : messages) {
-            errorMessage.append("\n - ").append(error);
-        }
-        assertTrue(
-            errorMessage.toString(),
-            messages.get(messages.size() - 1)
-                .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
-        );
-        LogCaptureAppender.unregister(logCaptureAppender);
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.flush();
@@ -616,15 +655,30 @@ public class RecordCollectorTest {
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
+        );
 
         thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
+        );
 
         thrown = assertThrows(StreamsException.class, collector::close);
         assertEquals(exception, thrown.getCause());
-        assertThat(thrown.getMessage(), equalTo("Error encountered sending record to topic topic for task 0_0 due to:\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
+        );
     }
 
     @Test
@@ -691,7 +745,11 @@ public class RecordCollectorTest {
             StreamsException.class,
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
-        assertThat(thrown.getMessage(), equalTo("Could not get partition information for topic topic for task 0_0. This can happen if the topic does not exist."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Could not get partition information for topic topic for task 0_0." +
+                " This can happen if the topic does not exist.")
+        );
     }
 
     @Test

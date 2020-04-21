@@ -30,7 +30,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;

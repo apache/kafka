@@ -35,7 +35,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.Test;
 
-public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
+public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private final static String STORE_NAME = "InMemoryWindowStore";
 
