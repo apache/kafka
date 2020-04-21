@@ -787,14 +787,14 @@ case class PartitionFetchState(fetchOffset: Long,
 
   def isTruncating: Boolean = state == Truncating && !isDelayed
 
-  def isDelayed: Boolean = delay.exists(_.getDelayMs > 0)
+  def isDelayed: Boolean = delay.exists(_.isDelayed)
 
   override def toString: String = {
     s"FetchState(fetchOffset=$fetchOffset" +
       s", currentLeaderEpoch=$currentLeaderEpoch" +
       s", state=$state" +
       s", lag=$lag" +
-      s", delay=${delay.map(_.delayMs).getOrElse(0)}ms" +
+      s", delay=$delay" +
       s")"
   }
 }

@@ -123,6 +123,17 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
+  def delayedItemTest(): Unit = {
+    val time = new MockTime()
+    val delayedItem = new DelayedItem(1000, time)
+    assertTrue(delayedItem.isDelayed)
+    time.sleep(999)
+    assertTrue(delayedItem.isDelayed)
+    time.sleep(1)
+    assertFalse(delayedItem.isDelayed)
+  }
+
+  @Test
   def testAbs(): Unit = {
     assertEquals(0, Utils.abs(Integer.MIN_VALUE))
     assertEquals(1, Utils.abs(-1))
