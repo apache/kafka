@@ -16,17 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes.IntegerSerde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,14 +42,15 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
@@ -83,21 +88,11 @@ public abstract class AbstractKeyValueStoreTest {
     public void shouldNotIncludeDeletedFromRangeResult() {
         store.close();
 
-        final Serializer<String> serializer = new StringSerializer() {
-            private int numCalls = 0;
-
-            @Override
-            public byte[] serialize(final String topic, final String data) {
-                if (++numCalls > 3) {
-                    fail("Value serializer is called; it should never happen");
-                }
-
-                return super.serialize(topic, data);
-            }
-        };
-
-        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
-        store = createKeyValueStore(driver.context());
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, IntegerSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, FailAfterThreeSerde.class);
+        context = new MockInternalProcessorContext(properties);
+        store = createKeyValueStore(context);
 
         store.put(0, "zero");
         store.put(1, "one");
@@ -110,23 +105,39 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(expectedContents, getContents(store.all()));
     }
 
+    public static class FailAfterThreeSerde implements Serde<String> {
+
+        @Override
+        public Serializer<String> serializer() {
+            return new StringSerializer() {
+                private int numCalls = 0;
+
+                @Override
+                public byte[] serialize(final String topic, final String data) {
+                    if (++numCalls > 3) {
+                        fail("Value serializer is called; it should never happen");
+                    }
+
+                    return super.serialize(topic, data);
+                }
+            };
+        }
+
+        @Override
+        public Deserializer<String> deserializer() {
+            return new StringDeserializer();
+        }
+    }
+
     @Test
     public void shouldDeleteIfSerializedValueIsNull() {
         store.close();
 
-        final Serializer<String> serializer = new StringSerializer() {
-            @Override
-            public byte[] serialize(final String topic, final String data) {
-                if (data.equals("null")) {
-                    // will be serialized to null bytes, indicating deletes
-                    return null;
-                }
-                return super.serialize(topic, data);
-            }
-        };
-
-        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
-        store = createKeyValueStore(driver.context());
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, IntegerSerde.class.getName());
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, SerdeNullHandler.class);
+        context = new MockInternalProcessorContext(properties);
+        store = createKeyValueStore(context);
 
         store.put(0, "zero");
         store.put(1, "one");
@@ -137,6 +148,28 @@ public abstract class AbstractKeyValueStoreTest {
         // should not include deleted records in iterator
         final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
         assertEquals(expectedContents, getContents(store.all()));
+    }
+
+    public static class SerdeNullHandler implements Serde<String> {
+
+        @Override
+        public Serializer<String> serializer() {
+            return new StringSerializer() {
+                @Override
+                public byte[] serialize(final String topic, final String data) {
+                    if (data.equals("null")) {
+                        // will be serialized to null bytes, indicating deletes
+                        return null;
+                    }
+                    return super.serialize(topic, data);
+                }
+            };
+        }
+
+        @Override
+        public Deserializer<String> deserializer() {
+            return new StringDeserializer();
+        }
     }
 
     @Test
@@ -364,7 +397,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
         final List<KeyValue<Integer, String>> expectedReturned =
-            Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+                Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
         final Iterator<KeyValue<Integer, String>> iterator = store.all();
 
         while (iterator.hasNext()) {
@@ -416,10 +449,10 @@ public abstract class AbstractKeyValueStoreTest {
 
             final List<String> messages = appender.getMessages();
             assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                    messages,
+                    hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                            " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                            " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
 

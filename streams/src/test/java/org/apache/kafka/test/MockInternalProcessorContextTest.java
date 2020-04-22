@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -97,7 +96,7 @@ public class MockInternalProcessorContextTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
 
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties);
 
         Assert.assertEquals(new File(stateDir).getAbsolutePath(), context.stateDir().getAbsolutePath());
     }
@@ -232,16 +231,6 @@ public class MockInternalProcessorContextTest {
     }
 
     @Test
-    public void shouldSetValueSerde() {
-        final MockInternalProcessorContext context = new MockInternalProcessorContext();
-
-        final Serde<String> stringSerde = Serdes.String();
-        context.setValueSerde(stringSerde);
-
-        Assert.assertSame(stringSerde, context.valueSerde());
-    }
-
-    @Test
     public void shouldSetKeySerdeFromConfig() {
         final Properties config = StreamsTestUtils.getStreamsConfig();
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
@@ -261,7 +250,7 @@ public class MockInternalProcessorContextTest {
 
     @Test
     public void shouldSetRecordContext() {
-        final InternalProcessorContext context = new MockInternalProcessorContext();
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext();
 
         final ProcessorRecordContext processorRecordContext = new ProcessorRecordContext(
                 1L,
@@ -286,35 +275,35 @@ public class MockInternalProcessorContextTest {
         Assert.assertNotNull(context.recordCollector());
     }
 
-    private static void verifyDefaultMetricsVersion(final InternalProcessorContext context) {
+    private static void verifyDefaultMetricsVersion(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(Version.LATEST, context.metrics().version());
     }
 
-    private static void verifyDefaultProcessorNodeName(final InternalProcessorContext context) {
+    private static void verifyDefaultProcessorNodeName(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_PROCESSOR_NODE_NAME, context.currentNode().name());
     }
 
-    private static void verifyDefaultHeaders(final InternalProcessorContext context) {
+    private static void verifyDefaultHeaders(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_HEADERS, context.recordContext().headers());
     }
 
-    private static void verifyDefaultOffset(final InternalProcessorContext context) {
+    private static void verifyDefaultOffset(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_OFFSET, context.recordContext().offset());
     }
 
-    private static void verifyDefaultTimestamp(final InternalProcessorContext context) {
+    private static void verifyDefaultTimestamp(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_TIMESTAMP, context.recordContext().timestamp());
     }
 
-    private static void verifyDefaultPartition(final InternalProcessorContext context) {
+    private static void verifyDefaultPartition(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_PARTITION, context.recordContext().partition());
     }
 
-    private static void verifyDefaultTopic(final InternalProcessorContext context) {
+    private static void verifyDefaultTopic(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_TOPIC, context.recordContext().topic());
     }
 
-    private static void verifyDefaultTaskId(final InternalProcessorContext context) {
+    private static void verifyDefaultTaskId(final InternalProcessorContext<Object, Object> context) {
         Assert.assertEquals(MockInternalProcessorContext.DEFAULT_TASK_ID, context.taskId());
     }
 }

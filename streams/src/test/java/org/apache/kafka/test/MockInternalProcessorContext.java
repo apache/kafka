@@ -70,8 +70,6 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private ProcessorNode currentNode;
     private StreamsMetricsImpl metrics;
     private RecordCollector recordCollector;
-    private Serde keySerde;
-    private Serde valueSerde;
 
     public MockInternalProcessorContext() {
         super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
@@ -125,20 +123,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         setCurrentNode(new ProcessorNode<>(DEFAULT_PROCESSOR_NODE_NAME));
         this.threadCache = threadCache;
         setRecordCollector(new MockRecordCollector());
-        keySerde = super.keySerde();
-        valueSerde = super.valueSerde();
         setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET, DEFAULT_PARTITION, DEFAULT_TOPIC, DEFAULT_HEADERS));
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), DEFAULT_TASK_ID.toString(), metrics);
-    }
-
-    @Override
-    public Serde<?> keySerde() {
-        return keySerde;
-    }
-
-    @Override
-    public Serde<?> valueSerde() {
-        return valueSerde;
     }
 
     @Override
@@ -226,10 +212,6 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         restoreCallback.restoreBatch(records);
 
         restoreListener.onRestoreEnd(null, storeName, 0L);
-    }
-
-    public void setValueSerde(final Serde valueSerde) {
-        this.valueSerde = valueSerde;
     }
 
     private static File createStateDir(final Properties config) {
