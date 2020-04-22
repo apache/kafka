@@ -308,6 +308,15 @@
     <allow pkg="org.bouncycastle" />
   </subpackage>
 
+  <subpackage name="raft">
+    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common.config" />
+    <allow pkg="org.apache.kafka.common.message" />
+    <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.common.protocol" />
+  </subpackage>
+
   <subpackage name="connect">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.connect.data" />
