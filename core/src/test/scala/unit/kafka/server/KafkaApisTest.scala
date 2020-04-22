@@ -1663,25 +1663,24 @@ class KafkaApisTest {
   @Test
   def testStopReplicaRequestWithCurrentBrokerEpoch(): Unit = {
     val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
+    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
   }
 
   @Test
   def testStopReplicaRequestWithNewerBrokerEpochIsValid(): Unit = {
     val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
+    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
   }
 
   @Test
   def testStopReplicaRequestWithStaleBrokerEpochIsRejected(): Unit = {
     val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
+    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
   }
 
   def testStopReplicaRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
     val controllerId = 0
     val controllerEpoch = 5
-    val brokerEpoch = 230498320L
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
     val fooPartition = new TopicPartition("foo", 0)
     val topicStates = Seq(
@@ -1707,7 +1706,7 @@ class KafkaApisTest {
       EasyMock.eq(request.context.correlationId),
       EasyMock.eq(controllerId),
       EasyMock.eq(controllerEpoch),
-      EasyMock.eq(brokerEpoch + 1),
+      EasyMock.eq(brokerEpochInRequest),
       EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
     )).andStubReturn(
       (mutable.Map(
