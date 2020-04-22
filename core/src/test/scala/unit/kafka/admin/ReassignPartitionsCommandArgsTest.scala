@@ -56,27 +56,9 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  def shouldCorrectlyParseValidMinimumLegacyExecuteOptions(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
-      "--execute",
-      "--reassignment-json-file", "myfile.json")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
   def shouldCorrectlyParseValidMinimumVerifyOptions(): Unit = {
     val args = Array(
       "--bootstrap-server", "localhost:1234",
-      "--verify",
-      "--reassignment-json-file", "myfile.json")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
-  def shouldCorrectlyParseValidMinimumLegacyVerifyOptions(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
       "--verify",
       "--reassignment-json-file", "myfile.json")
     ReassignPartitionsCommand.validateAndParseArgs(args)
@@ -231,18 +213,6 @@ class ReassignPartitionsCommandArgsTest {
     shouldFailWith("Option \"[reassignment-json-file]\" can't be used with action \"[generate]\"", args)
   }
 
-  @Test
-  def testInvalidCommandConfigArgumentForLegacyGenerate(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
-      "--generate",
-      "--broker-list", "101,102",
-      "--topics-to-move-json-file", "myfile.json",
-      "--command-config", "/tmp/command-config.properties"
-    )
-    shouldFailWith("You must specify --bootstrap-server when using \"[command-config]\"", args)
-  }
-
   ///// Test --verify
   @Test
   def shouldNotAllowVerifyWithoutReassignmentOption(): Unit = {
@@ -255,7 +225,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowBrokersListWithVerifyOption(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--broker-list", "100,101",
       "--reassignment-json-file", "myfile.json")
@@ -265,7 +235,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowThrottleWithVerifyOption(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--throttle", "100",
       "--reassignment-json-file", "myfile.json")
@@ -275,7 +245,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowTopicsOptionWithVerify(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--reassignment-json-file", "myfile.json",
       "--topics-to-move-json-file", "myfile.json")
@@ -306,14 +276,5 @@ class ReassignPartitionsCommandArgsTest {
       "--bootstrap-server", "localhost:1234",
       "--preserve-throttles")
     shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args)
-  }
-
-  ///// Test --list
-  @Test
-  def shouldNotAllowZooKeeperWithListOption(): Unit = {
-    val args = Array(
-      "--list",
-      "--zookeeper", "localhost:1234")
-    shouldFailWith("Option \"[zookeeper]\" can't be used with action \"[list]\"", args)
   }
 }
