@@ -1066,10 +1066,11 @@ class KafkaController(val config: KafkaConfig,
         // do this check only if the broker is live and there are no partitions being reassigned currently
         // and preferred replica election is not in progress
         val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContext.isReplicaOnline(leaderBroker, tp) &&
-          controllerContext.partitionLeadershipInfo(tp).leaderAndIsr.isr.contains(leaderBroker) &&
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
-          controllerContext.allTopics.contains(tp.topic))
+          controllerContext.allTopics.contains(tp.topic) &&
+          controllerContext.partitionLeadershipInfo.get(tp).forall(l => l.leaderAndIsr.isr.contains(leaderBroker))
+        )
         onReplicaElection(candidatePartitions.toSet, ElectionType.PREFERRED, AutoTriggered)
       }
     }
