@@ -248,6 +248,16 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeUserScramCredentialsRequest(struct, apiVersion);
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return new AlterUserScramCredentialsRequest(struct, apiVersion);
+            case VOTE:
+                return new VoteRequest(struct, apiVersion);
+            case BEGIN_QUORUM_EPOCH:
+                return new BeginQuorumEpochRequest(struct, apiVersion);
+            case END_QUORUM_EPOCH:
+                return new EndQuorumEpochRequest(struct, apiVersion);
+            case FETCH_QUORUM_RECORDS:
+                return new FetchQuorumRecordsRequest(struct, apiVersion);
+            case FIND_QUORUM:
+                return new FindQuorumRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
