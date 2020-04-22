@@ -91,9 +91,9 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(data.topics().stream()
-                .flatMap(topic -> topic.partitions().stream())
-                .map(partition -> Errors.forCode(partition.errorCode())));
+        return errorCounts(data.topics().stream().flatMap(topic ->
+                topic.partitions().stream().map(partition ->
+                        Errors.forCode(partition.errorCode()))));
     }
 
     public Map<TopicPartition, Errors> errors() {

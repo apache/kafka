@@ -63,12 +63,11 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        Errors topLevelErr = Errors.forCode(data.errorCode());
-        updateErrorCounts(counts, topLevelErr);
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
 
         data.responses().forEach(topicResponse ->
             topicResponse.partitions().forEach(partitionResponse ->
-            updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
+                updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
         ));
         return counts;
     }
