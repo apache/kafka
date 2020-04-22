@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 import java.util.ArrayList;
@@ -128,4 +129,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         return (ConsumerRecords<K, V>) EMPTY;
     }
 
+    @Override
+    public String toString() {
+        StringBuilder result = new StringBuilder("Fetched Records:[");
+        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
+            result.append("(topicPartition=").append(entry.getKey()).append(", records=").append(entry.getValue()).append("),");
+        }
+        result.append("]");
+        return result.toString();
+    }
 }

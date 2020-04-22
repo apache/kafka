@@ -485,7 +485,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
+        log.info("Writing checkpoint: {}", checkpointingOffsets);
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
