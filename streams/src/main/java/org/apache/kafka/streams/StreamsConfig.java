@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -206,12 +207,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
-     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for disabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for disabling topology optimization
      */
     public static final String NO_OPTIMIZATION = "none";
 
     /**
-     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for enabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for enabling topology optimization
      */
     public static final String OPTIMIZE = "all";
 
@@ -283,9 +284,25 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
+     * If you enable this feature Kafka Streams will use more resources (like broker connections)
+     * compared to the {@link #AT_LEAST_ONCE} case.
+     *
+     * @see #EXACTLY_ONCE_BETA
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
+
+    /**
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once (beta) requires broker version 2.5 or higher.
+     * If you enable this feature Kafka Streams will use less resources (like broker connections)
+     * compare to the {@link #EXACTLY_ONCE} case.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
@@ -297,6 +314,11 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String METRICS_LATEST = "latest";
 
+    /** {@code acceptable.recovery.lag} */
+    public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
+    private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up for an active task." +
+                                                                  "Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_ID_CONFIG = "application.id";
@@ -306,6 +328,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to a user-defined endpoint that can be used for state store discovery and interactive queries on this KafkaStreams instance.";
+
+    /** {@code balance.factor} */
+    public static final String BALANCE_FACTOR_CONFIG = "balance.factor";
+    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of stateful (and total) active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
 
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
@@ -392,6 +418,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
+    /** {@code max.warmup.replicas} */
+    public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
+    private static final String MAX_WARMUP_REPLICAS_DOC = "The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping " +
+                                                              " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
+                                                              " traffic and cluster state can be used for high availability. Must be at least 1.";
+
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -427,11 +459,19 @@ public class StreamsConfig extends AbstractConfig {
     public static final String POLL_MS_CONFIG = "poll.ms";
     private static final String POLL_MS_DOC = "The amount of time in milliseconds to block waiting for input.";
 
+    /** {@code probing.rebalance.interval.ms} */
+    public static final String PROBING_REBALANCE_INTERVAL_MS_CONFIG = "probing.rebalance.interval.ms";
+    private static final String PROBING_REBALANCE_INTERVAL_MS_DOC = "The maximum time to wait before triggering a rebalance to probe for warmup replicas that have finished warming up and are ready to become active. Probing rebalances " +
+                                                                        "will continue to be triggered until the assignment is balanced according to the " + BALANCE_FACTOR_CONFIG + ". Must be at least 1 minute.";
+
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
-    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>. " +
-        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting " +
+    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
+        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), <code>" + EXACTLY_ONCE + "</code>, " +
+        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
+        "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
+        "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
 
     /** {@code receive.buffer.bytes} */
@@ -495,8 +535,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
     private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
         "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 2.4 to a newer version it is not required to specify this config. " +
-        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" + UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
+        "When upgrading from 2.4 to a newer version it is not required to specify this config. Default is `null`. " +
+        "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
+        UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
+        UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
+        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -513,10 +556,16 @@ public class StreamsConfig extends AbstractConfig {
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
 
 
-    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
-    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS = new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
-    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS = new String[] {ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-                                                                                        ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
+        new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
+        new String[] {
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG
+        };
 
     static {
         CONFIG = new ConfigDef()
@@ -544,6 +593,12 @@ public class StreamsConfig extends AbstractConfig {
 
             // MEDIUM
 
+            .define(ACCEPTABLE_RECOVERY_LAG_CONFIG,
+                    Type.LONG,
+                    10_000L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    ACCEPTABLE_RECOVERY_LAG_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
@@ -595,10 +650,16 @@ public class StreamsConfig extends AbstractConfig {
                     0L,
                     Importance.MEDIUM,
                     MAX_TASK_IDLE_MS_DOC)
+            .define(MAX_WARMUP_REPLICAS_CONFIG,
+                    Type.INT,
+                    2,
+                    atLeast(1),
+                    Importance.MEDIUM,
+                    MAX_WARMUP_REPLICAS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -620,6 +681,12 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
+            .define(BALANCE_FACTOR_CONFIG,
+                    Type.INT,
+                    1,
+                    atLeast(1),
+                    Importance.LOW,
+                    BALANCE_FACTOR_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                     Type.INT,
                     1000,
@@ -684,6 +751,12 @@ public class StreamsConfig extends AbstractConfig {
                     100L,
                     Importance.LOW,
                     POLL_MS_DOC)
+            .define(PROBING_REBALANCE_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    atLeast(60 * 1000L),
+                    Importance.LOW,
+                    PROBING_REBALANCE_INTERVAL_MS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
                     Type.INT,
                     32 * 1024,
@@ -799,6 +872,8 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
         public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
         public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
+        public static final String NEXT_PROBING_REBALANCE_MS = "__next.probing.rebalance.ms__";
+        public static final String TIME = "__time__";
     }
 
     /**
@@ -907,7 +982,7 @@ public class StreamsConfig extends AbstractConfig {
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
-        eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(this);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
         }
@@ -918,8 +993,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> configUpdates =
             CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
-        final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
-        if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+        if (StreamThread.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
@@ -935,6 +1009,9 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+            consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
+        }
         consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
@@ -944,40 +1021,19 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps, final String[] nonConfigurableConfigs) {
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
+                                                              final String[] nonConfigurableConfigs) {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
         // Thus the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
-        if (eosEnabled) {
-            final Object maxInFlightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-
-            if (maxInFlightRequests != null) {
-                final int maxInFlightRequestsAsInteger;
-                if (maxInFlightRequests instanceof Integer) {
-                    maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
-                } else if (maxInFlightRequests instanceof String) {
-                    try {
-                        maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
-                    } catch (final NumberFormatException e) {
-                        throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
-                    }
-                } else {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
-                }
-
-                if (maxInFlightRequestsAsInteger > 5) {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
-                }
-            }
-        }
+        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
+        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
-                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + EXACTLY_ONCE + ". Hence, ";
-                final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
@@ -997,10 +1053,38 @@ public class StreamsConfig extends AbstractConfig {
                                     "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
                             clientProvidedProps.remove(config);
                         }
+                    } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
+                        log.warn(String.format(nonConfigurableConfigMessage,
+                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
+                        clientProvidedProps.remove(config);
                     }
                 }
             }
+        }
 
+        if (eosEnabled) {
+            verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
+        }
+    }
+
+    private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
+        if (maxInFlightRequests != null) {
+            final int maxInFlightRequestsAsInteger;
+            if (maxInFlightRequests instanceof Integer) {
+                maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
+            } else if (maxInFlightRequests instanceof String) {
+                try {
+                    maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
+                } catch (final NumberFormatException e) {
+                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
+                }
+            } else {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
+            }
+
+            if (maxInFlightRequestsAsInteger > 5) {
+                throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
+            }
         }
     }
 
@@ -1120,6 +1204,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        // no need to set instance id for a restore consumer
+        baseConsumerProps.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
@@ -1152,6 +1239,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        // no need to set instance id for a restore consumer
+        baseConsumerProps.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-global-consumer");
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
@@ -1179,9 +1269,17 @@ public class StreamsConfig extends AbstractConfig {
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
+        // When using EOS alpha, stream should auto-downgrade the transactional commit protocol to be compatible with older brokers.
+        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+            props.put("internal.auto.downgrade.txn.commit", true);
+        }
+
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         return props;
     }

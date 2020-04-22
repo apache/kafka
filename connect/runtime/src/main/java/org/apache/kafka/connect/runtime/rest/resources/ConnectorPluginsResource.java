@@ -78,7 +78,8 @@ public class ConnectorPluginsResource {
             );
         }
 
-        return herder.validateConnectorConfig(connectorConfig);
+        // the validated configs don't need to be logged
+        return herder.validateConnectorConfig(connectorConfig, false);
     }
 
     @GET

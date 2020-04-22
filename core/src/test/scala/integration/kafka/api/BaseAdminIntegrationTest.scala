@@ -33,7 +33,7 @@ import org.junit.Assert._
 import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 

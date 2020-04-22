@@ -56,7 +56,9 @@
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
-    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
+    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of the producers used by Kafka source tasks and the consumers used by Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>producer.</code> and <code>consumer.</code> respectively. The only Kafka client parameter that is inherited without a prefix from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sources and once for Kafka sinks.</p> 
+    
+    <p>Starting with 2.3.0, client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
 
     <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).</p>
 
@@ -248,6 +250,12 @@
     <ul>
         <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
         <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
+    </ul>
+
+    <p>The following is a supported REST request at the top-level (root) endpoint:</p>
+
+    <ul>
+        <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
@@ -489,7 +497,7 @@
     Schema schema = SchemaBuilder.struct().name(NAME)
         .field("name", Schema.STRING_SCHEMA)
         .field("age", Schema.INT_SCHEMA)
-        .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+        .field("admin", SchemaBuilder.bool().defaultValue(false).build())
         .build();
 
     Struct struct = new Struct(schema)

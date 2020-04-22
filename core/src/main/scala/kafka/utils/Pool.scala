@@ -21,8 +21,8 @@ import java.util.concurrent._
 
 import org.apache.kafka.common.KafkaException
 
-import collection.mutable
-import collection.JavaConverters._
+import collection.Set
+import scala.jdk.CollectionConverters._
 
 class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
@@ -69,7 +69,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def remove(key: K, value: V): Boolean = pool.remove(key, value)
 
-  def keys: mutable.Set[K] = pool.keySet.asScala
+  def keys: Set[K] = pool.keySet.asScala
 
   def values: Iterable[V] = pool.values.asScala
 

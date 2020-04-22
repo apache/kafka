@@ -361,14 +361,19 @@ public class StateDirectory {
      * @return The list of all the non-empty local directories for stream tasks
      */
     File[] listNonEmptyTaskDirectories() {
-        final File[] taskDirectories = !stateDir.exists() ? new File[0] :
-            stateDir.listFiles(pathname -> {
-                if (!pathname.isDirectory() || !PATH_NAME.matcher(pathname.getName()).matches()) {
-                    return false;
-                } else {
-                    return !taskDirEmpty(pathname);
-                }
-            });
+        final File[] taskDirectories;
+        if (!hasPersistentStores || !stateDir.exists()) {
+            taskDirectories = new File[0];
+        } else {
+            taskDirectories =
+                stateDir.listFiles(pathname -> {
+                    if (!pathname.isDirectory() || !PATH_NAME.matcher(pathname.getName()).matches()) {
+                        return false;
+                    } else {
+                        return !taskDirEmpty(pathname);
+                    }
+                });
+        }
 
         return taskDirectories == null ? new File[0] : taskDirectories;
     }
@@ -378,8 +383,14 @@ public class StateDirectory {
      * @return The list of all the existing local directories for stream tasks
      */
     File[] listAllTaskDirectories() {
-        final File[] taskDirectories = !stateDir.exists() ? new File[0] :
-            stateDir.listFiles(pathname -> pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches());
+        final File[] taskDirectories;
+        if (!hasPersistentStores || !stateDir.exists()) {
+            taskDirectories = new File[0];
+        } else {
+            taskDirectories =
+                stateDir.listFiles(pathname -> pathname.isDirectory()
+                                                   && PATH_NAME.matcher(pathname.getName()).matches());
+        }
 
         return taskDirectories == null ? new File[0] : taskDirectories;
     }

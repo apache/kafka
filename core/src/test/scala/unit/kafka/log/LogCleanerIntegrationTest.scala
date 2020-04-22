@@ -28,8 +28,8 @@ import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.collection.{Iterable, JavaConverters, Seq}
+import scala.collection.{Iterable, Seq}
+import scala.jdk.CollectionConverters._
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
@@ -90,7 +90,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(filter(_))
+      .filter { case (k, _) => filter(k) }
       .headOption
       .getOrElse { fail(s"Unable to find metric") }
       .asInstanceOf[(Any, Gauge[Any])]
@@ -178,7 +178,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    import JavaConverters._
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt

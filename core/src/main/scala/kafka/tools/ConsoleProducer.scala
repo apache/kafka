@@ -31,7 +31,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
 

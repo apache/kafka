@@ -27,6 +27,12 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ToInternal;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -35,16 +41,18 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
+import org.apache.kafka.common.metrics.Metrics;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -75,13 +83,26 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger);
 
+    private List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
+    private Metrics metrics;
     private MockInternalProcessorContext context;
+    private final ToInternal toInternal = new ToInternal();
 
     @Before
     public void initializeStore() {
-        context = new MockInternalProcessorContext(new LogContext("testCache "), 100000L);
+        metrics = new Metrics();
+        final StreamsMetricsImpl metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
+        context = new MockInternalProcessorContext(metrics, new ThreadCache(new LogContext("testCache "), 100000, metrics)) {
+
+            @SuppressWarnings("unchecked")
+            @Override
+            public <K, V> void forward(K key, V value, To to) {
+                toInternal.update(to);
+                results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
+            }
+        };
         initStore(true);
         processor.init(context);
     }
@@ -186,7 +207,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     new Change<>(3L, null),
                     time)
             ),
-            results()
+            results
         );
 
     }
@@ -260,14 +281,14 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
                     GAP_MS + 1 + GAP_MS / 2)
             ),
-            results()
+            results
         );
     }
 
     @Test
     public void shouldGetAggregatedValuesFromValueGetter() {
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
-        getter.init(context);
+        getter.init(new ForwardingDisabledProcessorContext(context));
         context.setTimestamp(0);
         processor.process("a", "1");
         context.setTimestamp(GAP_MS + 1);
@@ -304,7 +325,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     new Change<>(1L, null),
                     0L)
             ),
-            results()
+            results
         );
     }
 
@@ -332,7 +353,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     new Change<>(2L, null),
                     5L)
             ),
-            results()
+            results
         );
 
     }
@@ -348,14 +369,22 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext<Object, Object> context = createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
         );
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        processor.process(null, "1");
-        LogCaptureAppender.unregister(appender);
+
+        try (final LogCaptureAppender appender =
+                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
+
+            processor.process(null, "1");
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
+            );
+        }
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(
@@ -368,10 +397,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
             );
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
-        );
     }
 
     @Test
@@ -385,8 +410,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext<Object, Object> context = createInternalMockProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
@@ -409,10 +433,19 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
         processor.process("dummy", "dummy");
 
-        // record is late
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
-        processor.process("Late1", "1");
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender =
+                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
+
+            // record is late
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            processor.process("Late1", "1");
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record for expired window." +
+                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[1]")
+            );
+        }
 
         final MetricName dropTotal;
         final MetricName dropRate;
@@ -462,9 +495,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
             (Double) context.metrics().metrics().get(dropRate).metricValue(),
             greaterThan(0.0)
         );
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record for expired window. key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[1]"));
     }
 
     @Test
@@ -478,8 +508,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final InternalProcessorContext context = createInternalProcessorContext(builtInMetricsVersion);
+        final InternalProcessorContext<Object, Object> context = createInternalMockProcessorContext(builtInMetricsVersion);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
@@ -490,31 +519,39 @@ public class KStreamSessionWindowAggregateProcessorTest {
         initStore(false);
         processor.init(context);
 
-        // dummy record to establish stream time = 0
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
-        processor.process("dummy", "dummy");
+        try (final LogCaptureAppender appender =
+                 LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
-        // record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
-        processor.process("OnTime1", "1");
+            // dummy record to establish stream time = 0
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            processor.process("dummy", "dummy");
 
-        // dummy record to advance stream time = 1
-        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
-        processor.process("dummy", "dummy");
+            // record arrives on time, should not be skipped
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            processor.process("OnTime1", "1");
 
-        // delayed record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
-        processor.process("OnTime2", "1");
+            // dummy record to advance stream time = 1
+            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+            processor.process("dummy", "dummy");
 
-        // dummy record to advance stream time = 2
-        context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", null));
-        processor.process("dummy", "dummy");
+            // delayed record arrives on time, should not be skipped
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            processor.process("OnTime2", "1");
 
-        // delayed record arrives late
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
-        processor.process("Late1", "1");
+            // dummy record to advance stream time = 2
+            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", null));
+            processor.process("dummy", "dummy");
 
-        LogCaptureAppender.unregister(appender);
+            // delayed record arrives late
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            processor.process("Late1", "1");
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record for expired window." +
+                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[2]")
+            );
+        }
 
         final MetricName dropTotal;
         final MetricName dropRate;
@@ -564,16 +601,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertThat(
             (Double) context.metrics().metrics().get(dropRate).metricValue(),
             greaterThan(0.0));
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record for expired window. key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[2]"));
     }
 
-    private static InternalProcessorContext createInternalProcessorContext(final String builtInMetricsVersion) {
-        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
-        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
-
+    private MockInternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(props);
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), context.metrics());
         final StoreBuilder<SessionStore<String, Long>> storeBuilder =
             Stores.sessionStoreBuilder(
                 Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
@@ -583,10 +617,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final SessionStore<String, Long> sessionStore = storeBuilder.build();
         sessionStore.init(context, sessionStore);
         return context;
-    }
-
-    private List<KeyValueTimestamp<Object, Object>> results() {
-        return context.forwarded().stream().map(cf -> new KeyValueTimestamp<>(cf.keyValue().key, cf.keyValue().value, cf.timestamp())).collect(Collectors.toList());
     }
 
 }

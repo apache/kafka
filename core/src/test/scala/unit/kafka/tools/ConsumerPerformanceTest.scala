@@ -65,7 +65,8 @@ class ConsumerPerformanceTest {
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
-      "--messages", "10"
+      "--messages", "10",
+      "--print-metrics"
     )
 
     //When

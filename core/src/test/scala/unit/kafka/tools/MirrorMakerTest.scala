@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.consumer.BaseConsumerRecord
 import org.apache.kafka.common.record.{RecordBatch, TimestampType}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.junit.Assert._
 import org.junit.Test
 

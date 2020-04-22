@@ -20,8 +20,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -35,7 +36,6 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -534,9 +534,15 @@ public class KTableKTableLeftJoinTest {
         final MockProcessorContext context = new MockProcessorContext(props);
         context.setRecordMetadata("left", -1, -2, null, -3);
         join.init(context);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        join.process(null, new Change<>("new", "old"));
-        LogCaptureAppender.unregister(appender);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableLeftJoin.class)) {
+            join.process(null, new Change<>("new", "old"));
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
+            );
+        }
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(
@@ -544,13 +550,12 @@ public class KTableKTableLeftJoinTest {
                 getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
         }
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<Integer, String> outputTopic,
                                                final Integer expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<Integer, String>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 }

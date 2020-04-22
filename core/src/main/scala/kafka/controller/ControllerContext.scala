@@ -74,19 +74,19 @@ case class ReplicaAssignment private (replicas: Seq[Int],
 class ControllerContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
-  var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
-  private var liveBrokers: Set[Broker] = Set.empty
-  private var liveBrokerEpochs: Map[Int, Long] = Map.empty
+  val shuttingDownBrokerIds = mutable.Set.empty[Int]
+  private val liveBrokers = mutable.Set.empty[Broker]
+  private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
-  var allTopics: Set[String] = Set.empty
+  val allTopics = mutable.Set.empty[String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
   val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
-  val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
+  val replicasOnOfflineDirs = mutable.Map.empty[Int, Set[TopicPartition]]
 
   val topicsToBeDeleted = mutable.Set.empty[String]
 
@@ -113,7 +113,7 @@ class ControllerContext {
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
   private def clearTopicsState(): Unit = {
-    allTopics = Set.empty
+    allTopics.clear()
     partitionAssignments.clear()
     partitionLeadershipInfo.clear()
     partitionsBeingReassigned.clear()
@@ -124,11 +124,10 @@ class ControllerContext {
   }
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
-    partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty)
-      .get(topicPartition.partition) match {
-        case Some(partitionAssignment) => partitionAssignment.replicas
-        case None => Seq.empty
-      }
+    partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty).get(topicPartition.partition) match {
+      case Some(partitionAssignment) => partitionAssignment.replicas
+      case None => Seq.empty
+    }
   }
 
   def partitionFullReplicaAssignment(topicPartition: TopicPartition): ReplicaAssignment = {
@@ -161,21 +160,24 @@ class ControllerContext {
     }.toSet
   }
 
-  def setLiveBrokerAndEpochs(brokerAndEpochs: Map[Broker, Long]): Unit = {
-    liveBrokers = brokerAndEpochs.keySet
-    liveBrokerEpochs =
-      brokerAndEpochs map { case (broker, brokerEpoch) => (broker.id, brokerEpoch)}
+  def setLiveBrokers(brokerAndEpochs: Map[Broker, Long]): Unit = {
+    clearLiveBrokers()
+    addLiveBrokers(brokerAndEpochs)
   }
 
-  def addLiveBrokersAndEpochs(brokerAndEpochs: Map[Broker, Long]): Unit = {
-    liveBrokers = liveBrokers ++ brokerAndEpochs.keySet
-    liveBrokerEpochs = liveBrokerEpochs ++
-      (brokerAndEpochs map { case (broker, brokerEpoch) => (broker.id, brokerEpoch)})
+  private def clearLiveBrokers(): Unit = {
+    liveBrokers.clear()
+    liveBrokerEpochs.clear()
+  }
+
+  def addLiveBrokers(brokerAndEpochs: Map[Broker, Long]): Unit = {
+    liveBrokers ++= brokerAndEpochs.keySet
+    liveBrokerEpochs ++= brokerAndEpochs.map { case (broker, brokerEpoch) => (broker.id, brokerEpoch) }
   }
 
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
-    liveBrokers = liveBrokers.filter(broker => !brokerIds.contains(broker.id))
-    liveBrokerEpochs = liveBrokerEpochs.filter { case (id, _) => !brokerIds.contains(id) }
+    liveBrokers --= liveBrokers.filter(broker => brokerIds.contains(broker.id))
+    liveBrokerEpochs --= brokerIds
   }
 
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
@@ -184,7 +186,7 @@ class ControllerContext {
   }
 
   // getter
-  def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet -- shuttingDownBrokerIds
+  def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
@@ -270,15 +272,20 @@ class ControllerContext {
     epoch = 0
     epochZkVersion = 0
     clearTopicsState()
-    setLiveBrokerAndEpochs(Map.empty)
+    clearLiveBrokers()
+  }
+
+  def setAllTopics(topics: Set[String]): Unit = {
+    allTopics.clear()
+    allTopics ++= topics
   }
 
   def removeTopic(topic: String): Unit = {
     allTopics -= topic
     partitionAssignments.remove(topic)
-    partitionLeadershipInfo.foreach {
-      case (topicPartition, _) if topicPartition.topic == topic => partitionLeadershipInfo.remove(topicPartition)
-      case _ =>
+    partitionLeadershipInfo.foreach { case (topicPartition, _) =>
+      if (topicPartition.topic == topic)
+        partitionLeadershipInfo.remove(topicPartition)
     }
   }
 

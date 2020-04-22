@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions
 
 class ReassignPartitionsZNodeTest {
 
@@ -42,15 +43,14 @@ class ReassignPartitionsZNodeTest {
   @Test
   def testDecodeInvalidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode("invalid json".getBytes)
-    assertTrue(result.isLeft)
-    assertTrue(result.left.get.isInstanceOf[JsonProcessingException])
+    val exception = result.left.getOrElse(Assertions.fail(s"decode should have failed, result $result"))
+    assertTrue(exception.isInstanceOf[JsonProcessingException])
   }
 
   @Test
   def testDecodeValidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode(reassignmentJson.getBytes)
-    assertTrue(result.isRight)
-    val assignmentMap = result.right.get
-    assertEquals(Seq(replica1, replica2), assignmentMap(new TopicPartition(topic, partition1)))
+    val replicas = result.map(assignmentMap => assignmentMap(new TopicPartition(topic, partition1)))
+    assertEquals(Right(Seq(replica1, replica2)), replicas)
   }
 }

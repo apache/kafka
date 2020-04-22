@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.Map;
 
 /**
  * The default partitioning strategy:
@@ -50,11 +48,25 @@ public class DefaultPartitioner implements Partitioner {
      * @param cluster The current cluster metadata
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+        return partition(topic, key, keyBytes, value, valueBytes, cluster, cluster.partitionsForTopic(topic).size());
+    }
+
+    /**
+     * Compute the partition for the given record.
+     *
+     * @param topic The topic name
+     * @param numPartitions The number of partitions of the given {@code topic}
+     * @param key The key to partition on (or null if no key)
+     * @param keyBytes serialized key to partition on (or null if no key)
+     * @param value The value to partition on or null
+     * @param valueBytes serialized value to partition on or null
+     * @param cluster The current cluster metadata
+     */
+    public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster,
+                         int numPartitions) {
         if (keyBytes == null) {
             return stickyPartitionCache.partition(topic, cluster);
-        } 
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        int numPartitions = partitions.size();
+        }
         // hash the keyBytes to choose a partition
         return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }

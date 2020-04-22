@@ -26,7 +26,7 @@ import org.junit.Test
 
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
   private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp
@@ -272,7 +272,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   def testDescribeClientQuotasMatchPartial(): Unit = {
     setupDescribeClientQuotasMatchTest()
 
-    def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean) {
+    def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean): Unit = {
       val result = describeClientQuotas(filter)
       val (expectedMatches, expectedNonMatches) = matchEntities.partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
@@ -359,7 +359,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testClientQuotasUnsupportedEntityTypes() {
+  def testClientQuotasUnsupportedEntityTypes(): Unit = {
     val entity = new ClientQuotaEntity(Map(("other" -> "name")).asJava)
     try {
       verifyDescribeEntityQuotas(entity, Map())

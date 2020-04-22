@@ -31,7 +31,7 @@ import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class ControllerEventManagerTest {
@@ -111,7 +111,9 @@ class ControllerEventManagerTest {
     }
 
     // The metric should not already exist
-    assertTrue(KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
+    assertTrue(KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == metricName
+    }.values.isEmpty)
 
     controllerEventManager = new ControllerEventManager(0, eventProcessor,
       time, controllerStats.rateAndTimeMetrics)
@@ -124,8 +126,9 @@ class ControllerEventManagerTest {
     TestUtils.waitUntilTrue(() => processedEvents.get() == 2,
       "Timed out waiting for processing of all events")
 
-    val queueTimeHistogram = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
-      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
+    val queueTimeHistogram = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == metricName
+    }.values.headOption.getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
 
     assertEquals(2, queueTimeHistogram.count)
     assertEquals(0, queueTimeHistogram.min, 0.01)
@@ -179,8 +182,9 @@ class ControllerEventManagerTest {
   }
 
   private def timer(metricName: String): Timer = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
-      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == metricName
+    }.values.headOption.getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
   }
 
 }

@@ -206,6 +206,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
+    val traceEnabled = stateChangeLog.isTraceEnabled
     partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     invalidPartitions.foreach(partition => logInvalidTransition(partition, targetState))
@@ -213,7 +214,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     targetState match {
       case NewPartition =>
         validPartitions.foreach { partition =>
-          stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState with " +
+          stateChangeLog.info(s"Changed partition $partition state from ${partitionState(partition)} to $targetState with " +
             s"assigned replicas ${controllerContext.partitionReplicaAssignment(partition).mkString(",")}")
           controllerContext.putPartitionState(partition, NewPartition)
         }
@@ -224,7 +225,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         if (uninitializedPartitions.nonEmpty) {
           val successfulInitializations = initializeLeaderAndIsrForPartitions(uninitializedPartitions)
           successfulInitializations.foreach { partition =>
-            stateChangeLog.trace(s"Changed partition $partition from ${partitionState(partition)} to $targetState with state " +
+            stateChangeLog.info(s"Changed partition $partition from ${partitionState(partition)} to $targetState with state " +
               s"${controllerContext.partitionLeadershipInfo(partition).leaderAndIsr}")
             controllerContext.putPartitionState(partition, OnlinePartition)
           }
@@ -239,7 +240,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 
           electionResults.foreach {
             case (partition, Right(leaderAndIsr)) =>
-              stateChangeLog.trace(
+              stateChangeLog.info(
                 s"Changed partition $partition from ${partitionState(partition)} to $targetState with state $leaderAndIsr"
               )
               controllerContext.putPartitionState(partition, OnlinePartition)
@@ -252,13 +253,15 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         }
       case OfflinePartition =>
         validPartitions.foreach { partition =>
-          stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
+          if (traceEnabled)
+            stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
           controllerContext.putPartitionState(partition, OfflinePartition)
         }
         Map.empty
       case NonExistentPartition =>
         validPartitions.foreach { partition =>
-          stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
+          if (traceEnabled)
+            stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
           controllerContext.putPartitionState(partition, NonExistentPartition)
         }
         Map.empty
@@ -431,7 +434,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     val UpdateLeaderAndIsrResult(finishedUpdates, updatesToRetry) = zkClient.updateLeaderAndIsr(
       adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
     finishedUpdates.foreach { case (partition, result) =>
-      result.right.foreach { leaderAndIsr =>
+      result.foreach { leaderAndIsr =>
         val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)

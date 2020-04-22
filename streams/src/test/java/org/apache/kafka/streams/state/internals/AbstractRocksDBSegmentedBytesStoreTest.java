@@ -404,24 +404,24 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
         bytesStore.init(context, bytesStore);
 
-        // write a record to advance stream time, with a high enough timestamp
-        // that the subsequent record in windows[0] will already be expired.
-        bytesStore.put(serializeKey(new Windowed<>("dummy", nextSegmentWindow)), serializeValue(0));
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            // write a record to advance stream time, with a high enough timestamp
+            // that the subsequent record in windows[0] will already be expired.
+            bytesStore.put(serializeKey(new Windowed<>("dummy", nextSegmentWindow)), serializeValue(0));
 
-        final Bytes key = serializeKey(new Windowed<>("a", windows[0]));
-        final byte[] value = serializeValue(5);
-        bytesStore.put(key, value);
+            final Bytes key = serializeKey(new Windowed<>("a", windows[0]));
+            final byte[] value = serializeValue(5);
+            bytesStore.put(key, value);
 
-        LogCaptureAppender.unregister(appender);
+            final List<String> messages = appender.getMessages();
+            assertThat(messages, hasItem("Skipping record for expired segment."));
+        }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         final String threadId = Thread.currentThread().getName();
@@ -472,8 +472,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
-        final List<String> messages = appender.getMessages();
-        assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
     private Set<String> segmentDirs() {
@@ -502,7 +500,12 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             final KeyValue<Bytes, byte[]> next = iterator.next();
             if (schema instanceof WindowKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                    WindowKeySchema.fromStoreKey(next.key.get(), windowSizeForTimeWindow, stateSerdes.keyDeserializer(), stateSerdes.topic()),
+                    WindowKeySchema.fromStoreKey(
+                        next.key.get(),
+                        windowSizeForTimeWindow,
+                        stateSerdes.keyDeserializer(),
+                        stateSerdes.topic()
+                    ),
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);

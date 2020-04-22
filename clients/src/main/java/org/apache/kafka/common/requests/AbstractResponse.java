@@ -131,11 +131,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct);
             case ADD_OFFSETS_TO_TXN:
-                return new AddOffsetsToTxnResponse(struct);
+                return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:
                 return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
-                return new WriteTxnMarkersResponse(struct);
+                return new WriteTxnMarkersResponse(struct, version);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
@@ -147,11 +147,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DESCRIBE_CONFIGS:
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
-                return new DescribeLogDirsResponse(struct);
+                return new DescribeLogDirsResponse(struct, version);
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:

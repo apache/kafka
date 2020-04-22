@@ -44,7 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 @SuppressWarnings("PointlessArithmeticExpression")
-public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
+public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
     private static final String METRICS_SCOPE = "test-state-id";

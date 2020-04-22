@@ -45,7 +45,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   ValueTransformerSupplierWithKeyAsJava
 }
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream KStream]] and delegates method calls to the

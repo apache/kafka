@@ -45,18 +45,25 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk_sasl = False, zk_client_port = True, zk_client_secure_port = False,
-                 zk_tls_encrypt_only = False):
+                 zk_tls_encrypt_only = False, version=DEV_BRANCH):
         """
         :type context
         """
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
+        if (zk_client_secure_port or zk_tls_encrypt_only) and not version.supports_tls_to_zookeeper():
+            raise Exception("Cannot use TLS with a ZooKeeper version that does not support it: %s" % str(version))
         if not zk_client_port and not zk_client_secure_port:
             raise Exception("Cannot disable both ZK clientPort and clientSecurePort")
         self.zk_client_port = zk_client_port
         self.zk_client_secure_port = zk_client_secure_port
         self.zk_tls_encrypt_only = zk_tls_encrypt_only
         super(ZookeeperService, self).__init__(context, num_nodes)
+        self.set_version(version)
+
+    def set_version(self, version):
+        for node in self.nodes:
+            node.version = version
 
     @property
     def security_config(self):

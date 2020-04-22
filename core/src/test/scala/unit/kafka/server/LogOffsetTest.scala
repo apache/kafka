@@ -31,7 +31,7 @@ import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogOffsetTest extends BaseRequestTest {
 

@@ -18,19 +18,14 @@ package org.apache.kafka.streams;
 
 import java.util.LinkedList;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -53,6 +48,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -90,10 +86,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsWithoutTimeout;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -744,7 +739,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        adminClient = clientSupplier.getAdmin(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
+        adminClient = clientSupplier.getAdmin(config.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StreamThreadStateStoreProvider> storeProviders = new ArrayList<>();
@@ -767,6 +762,9 @@ public class KafkaStreams implements AutoCloseable {
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i], internalTopologyBuilder));
         }
 
+        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
+            Math.toIntExact(Arrays.stream(threads).filter(thread -> thread.state().isAlive()).count()));
+
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
@@ -778,14 +776,18 @@ public class KafkaStreams implements AutoCloseable {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+        stateDirCleaner = setupStateDirCleaner();
+
+        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
+        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private ScheduledExecutorService setupStateDirCleaner() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
             thread.setDaemon(true);
             return thread;
         });
-
-        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
-        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
     private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,
@@ -808,17 +810,12 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
-        if (endPoint == null || endPoint.trim().isEmpty()) {
+        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
+        if (hostInfo == null) {
             return StreamsMetadataState.UNKNOWN_HOST;
+        } else {
+            return hostInfo;
         }
-        final String host = getHost(endPoint);
-        final Integer port = getPort(endPoint);
-
-        if (host == null || port == null) {
-            throw new ConfigException(String.format("Error parsing host address %s. Expected format host:port.", endPoint));
-        }
-
-        return new HostInfo(host, port);
     }
 
     /**
@@ -1225,17 +1222,9 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
-        try {
-            allEndOffsets = adminClient.listOffsets(
-                allPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
-            ).all().get();
-        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
-            throw new StreamsException("Unable to obtain end offsets from kafka", e);
-        }
-
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsetsWithoutTimeout(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
+
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
             // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
             // from zero instead of the real "earliest offset" for the changelog.

@@ -43,7 +43,7 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -51,7 +51,7 @@ import java.util.Properties;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 @SuppressWarnings("rawtypes")
-public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext<Object, Object> {
 
     public static final TaskId DEFAULT_TASK_ID = new TaskId(0, 0);
     public static final RecordHeaders DEFAULT_HEADERS = new RecordHeaders();
@@ -65,7 +65,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public static final int DEFAULT_MAX_CACHE_SIZE_BYTES = 0;
     public static final String DEFAULT_METRICS_VERSION = StreamsConfig.METRICS_LATEST;
 
-    private final Map<String, StateRestoreCallback> restoreCallbacks = new HashMap<>();
+    private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ThreadCache threadCache;
     private ProcessorNode currentNode;
     private StreamsMetricsImpl metrics;
@@ -163,12 +163,12 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode currentNode() {
+    public ProcessorNode<?, ?> currentNode() {
         return currentNode;
     }
 
@@ -247,10 +247,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     private static String getMetricsVersion(final Properties config) {
-        if (config.containsKey(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)) {
-            return config.getProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG);
-        }
-        return DEFAULT_METRICS_VERSION;
+        return config.getProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, DEFAULT_METRICS_VERSION);
     }
 
     private static Metrics createMetrics() {

@@ -248,7 +248,7 @@ public class Metadata implements Closeable {
      * is set for topics if required and expired topics are removed from the metadata.
      *
      * @param requestVersion The request version corresponding to the update response, as provided by
-     *     {@link #newMetadataRequestAndVersion()}.
+     *     {@link #newMetadataRequestAndVersion(long)}.
      * @param response metadata response received from the broker
      * @param isPartialUpdate whether the metadata request was for a subset of the active topics
      * @param nowMs current time in milliseconds

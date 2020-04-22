@@ -570,6 +570,7 @@ public class Fetcher<K, V> implements Closeable {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
+                    .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
             ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
@@ -795,7 +796,8 @@ public class Fetcher<K, V> implements Closeable {
 
             subscriptions.setNextAllowedRetry(fetchPostitions.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, partitionsToValidate);
+            RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+                offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPostitions);
             future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
                 @Override
                 public void onSuccess(OffsetsForLeaderEpochClient.OffsetForEpochResult offsetsResult) {

@@ -39,7 +39,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Try}
@@ -348,7 +348,7 @@ class KafkaController(val config: KafkaConfig,
     info(s"New broker startup callback for ${newBrokers.mkString(",")}")
     newBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val newBrokersSet = newBrokers.toSet
-    val existingBrokers = controllerContext.liveOrShuttingDownBrokerIds -- newBrokers
+    val existingBrokers = controllerContext.liveOrShuttingDownBrokerIds.diff(newBrokersSet)
     // Send update metadata request to all the existing brokers in the cluster so that they know about the new brokers
     // via this update. No need to include any partition states in the request since there are no partition state changes.
     sendUpdateMetadataRequest(existingBrokers.toSeq, Set.empty)
@@ -725,9 +725,9 @@ class KafkaController(val config: KafkaConfig,
   private def initializeControllerContext(): Unit = {
     // update controller cache with delete topic information
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
-    controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
+    controllerContext.setLiveBrokers(curBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
-    controllerContext.allTopics = zkClient.getAllTopicsInCluster(true)
+    controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getFullReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
       case (topicPartition, replicaAssignment) =>
@@ -736,7 +736,7 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionsBeingReassigned.add(topicPartition)
     }
     controllerContext.partitionLeadershipInfo.clear()
-    controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
+    controllerContext.shuttingDownBrokerIds.clear()
     // register broker modifications handlers
     registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
     // update the leader and isr cache for all existing partitions from Zookeeper
@@ -848,8 +848,9 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateReplicaAssignmentForPartition(topicPartition: TopicPartition, assignment: ReplicaAssignment): Unit = {
-    var topicAssignment = controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic)
-    topicAssignment += topicPartition -> assignment
+    val topicAssignment = mutable.Map() ++=
+      controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic) +=
+      (topicPartition -> assignment)
 
     val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic, topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
@@ -884,7 +885,7 @@ class KafkaController(val config: KafkaConfig,
           case e: IllegalStateException =>
             handleIllegalState(e)
         }
-        stateChangeLog.trace(s"Sent LeaderAndIsr request $updatedLeaderIsrAndControllerEpoch with " +
+        stateChangeLog.info(s"Sent LeaderAndIsr request $updatedLeaderIsrAndControllerEpoch with " +
           s"new replica assignment $assignment to leader ${updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader} " +
           s"for partition being reassigned $topicPartition")
 
@@ -1194,9 +1195,9 @@ class KafkaController(val config: KafkaConfig,
     }
 
     val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicPartition])
-    val currentOfflineReplicas = previousOfflineReplicas -- onlineReplicas ++ offlineReplicas
+    val currentOfflineReplicas = mutable.Set() ++= previousOfflineReplicas --= onlineReplicas ++= offlineReplicas
     controllerContext.replicasOnOfflineDirs.put(brokerId, currentOfflineReplicas)
-    val newOfflineReplicas = currentOfflineReplicas -- previousOfflineReplicas
+    val newOfflineReplicas = currentOfflineReplicas.diff(previousOfflineReplicas)
 
     if (newOfflineReplicas.nonEmpty) {
       stateChangeLogger.info(s"Mark replicas ${newOfflineReplicas.mkString(",")} on broker $brokerId as offline")
@@ -1221,7 +1222,7 @@ class KafkaController(val config: KafkaConfig,
     topicDeletionManager.failReplicaDeletion(replicasInError)
     if (replicasInError.size != partitionErrors.size) {
       // some replicas could have been successfully deleted
-      val deletedReplicas = partitionErrors.keySet -- partitionsInError
+      val deletedReplicas = partitionErrors.keySet.diff(partitionsInError)
       topicDeletionManager.completeReplicaDeletion(deletedReplicas.map(PartitionAndReplica(_, replicaId)))
     }
   }
@@ -1364,8 +1365,8 @@ class KafkaController(val config: KafkaConfig,
     val curBrokerIdAndEpochs = curBrokerAndEpochs map { case (broker, epoch) => (broker.id, epoch) }
     val curBrokerIds = curBrokerIdAndEpochs.keySet
     val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-    val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
-    val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+    val newBrokerIds = curBrokerIds.diff(liveOrShuttingDownBrokerIds)
+    val deadBrokerIds = liveOrShuttingDownBrokerIds.diff(curBrokerIds)
     val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
       .filter(brokerId => curBrokerIdAndEpochs(brokerId) > controllerContext.liveBrokerIdAndEpochs(brokerId))
     val newBrokerAndEpochs = curBrokerAndEpochs.filter { case (broker, _) => newBrokerIds.contains(broker.id) }
@@ -1384,13 +1385,13 @@ class KafkaController(val config: KafkaConfig,
     bouncedBrokerAndEpochs.keySet.foreach(controllerChannelManager.addBroker)
     deadBrokerIds.foreach(controllerChannelManager.removeBroker)
     if (newBrokerIds.nonEmpty) {
-      controllerContext.addLiveBrokersAndEpochs(newBrokerAndEpochs)
+      controllerContext.addLiveBrokers(newBrokerAndEpochs)
       onBrokerStartup(newBrokerIdsSorted)
     }
     if (bouncedBrokerIds.nonEmpty) {
       controllerContext.removeLiveBrokers(bouncedBrokerIds)
       onBrokerFailure(bouncedBrokerIdsSorted)
-      controllerContext.addLiveBrokersAndEpochs(bouncedBrokerAndEpochs)
+      controllerContext.addLiveBrokers(bouncedBrokerAndEpochs)
       onBrokerStartup(bouncedBrokerIdsSorted)
     }
     if (deadBrokerIds.nonEmpty) {
@@ -1422,8 +1423,8 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) return
     val topics = zkClient.getAllTopicsInCluster(true)
     val newTopics = topics -- controllerContext.allTopics
-    val deletedTopics = controllerContext.allTopics -- topics
-    controllerContext.allTopics = topics
+    val deletedTopics = controllerContext.allTopics.diff(topics)
+    controllerContext.setAllTopics(topics)
 
     registerPartitionModificationsHandlers(newTopics.toSeq)
     val addedPartitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(newTopics)

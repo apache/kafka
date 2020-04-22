@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsRespon
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest {
 

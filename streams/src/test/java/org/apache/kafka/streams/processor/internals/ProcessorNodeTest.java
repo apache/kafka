@@ -109,7 +109,7 @@ public class ProcessorNodeTest {
     private void testMetrics(final String builtInMetricsVersion) {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties);
         final StreamsMetricsImpl metrics = context.metrics();
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
@@ -195,7 +195,7 @@ public class ProcessorNodeTest {
     public void testTopologyLevelClassCastExceptionDirect() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties);
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
