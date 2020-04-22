@@ -39,8 +39,8 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * This class is responsible for refreshing Kerberos credentials for
@@ -48,8 +48,6 @@ import java.util.Set;
  */
 public class KerberosLogin extends AbstractLogin {
     private static final Logger log = LoggerFactory.getLogger(KerberosLogin.class);
-
-    private static final Random RNG = new Random();
 
     private final Time time = Time.SYSTEM;
     private Thread t;
@@ -307,8 +305,8 @@ public class KerberosLogin extends AbstractLogin {
         long expires = tgt.getEndTime().getTime();
         log.info("[Principal={}]: TGT valid starting at: {}", principal, tgt.getStartTime());
         log.info("[Principal={}]: TGT expires: {}", principal, tgt.getEndTime());
-        long proposedRefresh = start + (long) ((expires - start) *
-                (ticketRenewWindowFactor + (ticketRenewJitter * RNG.nextDouble())));
+        long proposedRefresh = start + (long) ((expires - start) * (ticketRenewWindowFactor
+                + (ticketRenewJitter * ThreadLocalRandom.current().nextDouble())));
 
         if (proposedRefresh > expires)
             // proposedRefresh is too far in the future: it's after ticket expires: simply return now.
