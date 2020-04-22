@@ -1723,22 +1723,31 @@ class KafkaApisTest {
     EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
     val capturedResponse = expectNoThrottling()
+    val t0p0 = new TopicPartition("t0", 0)
+    val t0p1 = new TopicPartition("t0", 1)
+    val t0p2 = new TopicPartition("t0", 2)
+    val partitionResults = Map(
+      t0p0 -> Errors.NONE,
+      t0p1 -> Errors.LOG_DIR_NOT_FOUND,
+      t0p2 -> Errors.INVALID_TOPIC_EXCEPTION)
     EasyMock.expect(replicaManager.alterReplicaLogDirs(EasyMock.eq(Map(
-      new TopicPartition("t0", 0) -> "/foo",
-      new TopicPartition("t0", 1) -> "/foo",
-      new TopicPartition("t0", 2) -> "/foo"))))
-      .andReturn(Map(
-        new TopicPartition("t0", 0) -> Errors.NONE,
-        new TopicPartition("t0", 1) -> Errors.LOG_DIR_NOT_FOUND,
-        new TopicPartition("t0", 2) -> Errors.INVALID_TOPIC_EXCEPTION))
+      t0p0 -> "/foo",
+      t0p1 -> "/foo",
+      t0p2 -> "/foo"))))
+    .andReturn(partitionResults)
     EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel)
 
     createKafkaApis().handleAlterReplicaLogDirsRequest(request)
 
     val response = readResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS, alterReplicaLogDirsRequest, capturedResponse)
       .asInstanceOf[AlterReplicaLogDirsResponse]
+    assertEquals(partitionResults, response.data.results.asScala.flatMap { tr =>
+      tr.partitions().asScala.map { pr =>
+        new TopicPartition(tr.topicName(), pr.partitionIndex()) -> Errors.forCode(pr.errorCode())
+      }
+    }.toMap)
     assertEquals(Map(Errors.NONE -> 1,
       Errors.LOG_DIR_NOT_FOUND -> 1,
-      Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts())
+      Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts)
   }
 }

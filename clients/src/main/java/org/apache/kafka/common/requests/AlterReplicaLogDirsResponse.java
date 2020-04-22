@@ -26,7 +26,14 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
-
+/**
+ * Possible error codes:
+ *
+ * {@link Errors#LOG_DIR_NOT_FOUND}
+ * {@link Errors#KAFKA_STORAGE_ERROR}
+ * {@link Errors#REPLICA_NOT_AVAILABLE}
+ * {@link Errors#UNKNOWN_SERVER_ERROR}
+ */
 public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     private final AlterReplicaLogDirsResponseData data;

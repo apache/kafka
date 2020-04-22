@@ -69,11 +69,6 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     @Override
-    public AlterReplicaLogDirsResponse getErrorResponse(Throwable e) {
-        return (AlterReplicaLogDirsResponse) super.getErrorResponse(e);
-    }
-
-    @Override
     public AlterReplicaLogDirsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData();
         data.setResults(this.data.dirs().stream().flatMap(alterDir ->

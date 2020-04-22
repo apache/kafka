@@ -38,10 +38,9 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   val topic = "topic"
 
   private def findErrorForPartition(response: AlterReplicaLogDirsResponse, tp: TopicPartition): Errors = {
-    Errors.forCode(response.data.results.asScala.groupBy(x => x.topicName).get(tp.topic).get
-      .flatMap(x => x.partitions.asScala)
-      .find(p => p.partitionIndex == tp.partition)
-      .get.errorCode)
+    Errors.forCode(response.data.results.asScala
+      .find(x => x.topicName == tp.topic).get.partitions.asScala
+      .find(p => p.partitionIndex == tp.partition).get.errorCode)
   }
 
   @Test
@@ -124,9 +123,9 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
         .setTopics(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(
           tps.groupBy { case (tp, _) => tp.topic }
             .map { case (topic, tpPartitions) =>
-          new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
-            .setName(topic)
-            .setPartitions(tpPartitions.map{case (tp, _) => tp.partition.asInstanceOf[Integer]}.toList.asJava)
+              new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+                .setName(topic)
+                .setPartitions(tpPartitions.map{case (tp, _) => tp.partition.asInstanceOf[Integer]}.toList.asJava)
         }.toList.asJava.iterator))
     }
     val data = new AlterReplicaLogDirsRequestData()

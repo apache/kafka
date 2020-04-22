@@ -2217,7 +2217,6 @@ public class KafkaAdminClient extends AdminClient {
             TopicPartitionReplica replica = entry.getKey();
             String logDir = entry.getValue();
             int brokerId = replica.brokerId();
-            TopicPartition topicPartition = new TopicPartition(replica.topic(), replica.partition());
             AlterReplicaLogDirsRequestData value = replicaAssignmentByBroker.computeIfAbsent(brokerId,
                 key -> new AlterReplicaLogDirsRequestData());
             AlterReplicaLogDir alterReplicaLogDir = value.dirs().find(logDir);
@@ -2226,13 +2225,12 @@ public class KafkaAdminClient extends AdminClient {
                 alterReplicaLogDir.setPath(logDir);
                 value.dirs().add(alterReplicaLogDir);
             }
-            AlterReplicaLogDirTopic alterReplicaLogDirTopic = alterReplicaLogDir.topics().find(topicPartition.topic());
+            AlterReplicaLogDirTopic alterReplicaLogDirTopic = alterReplicaLogDir.topics().find(replica.topic());
             if (alterReplicaLogDirTopic == null) {
-                alterReplicaLogDirTopic = new AlterReplicaLogDirTopic();
+                alterReplicaLogDirTopic = new AlterReplicaLogDirTopic().setName(replica.topic());
                 alterReplicaLogDir.topics().add(alterReplicaLogDirTopic);
             }
-            alterReplicaLogDirTopic.setName(topicPartition.topic())
-                    .partitions().add(topicPartition.partition());
+            alterReplicaLogDirTopic.partitions().add(replica.partition());
         }
 
         final long now = time.milliseconds();

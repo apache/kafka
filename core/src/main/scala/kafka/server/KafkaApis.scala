@@ -2588,7 +2588,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeConfigsResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
-
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {
     val alterReplicaDirsRequest = request.body[AlterReplicaLogDirsRequest]
     if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {

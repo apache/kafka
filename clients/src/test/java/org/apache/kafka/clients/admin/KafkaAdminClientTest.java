@@ -3390,18 +3390,16 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testAlterReplicaLogDirsSuccess() throws Exception {
-        Node node0 = new Node(0, "localhost", 8120);
-        Node node1 = new Node(1, "localhost", 8121);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
-            createAlterLogDirsResponse(env, node1, Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.NONE, 0);
 
             TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
 
             Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
-            logDirs.put(tpr0, "/data0");
-            logDirs.put(tpr1, "/data1");
+            assertNull(logDirs.put(tpr0, "/data0"));
+            assertNull(logDirs.put(tpr1, "/data1"));
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
             result.values().get(tpr0).get();
             result.values().get(tpr1).get();
@@ -3410,11 +3408,9 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testAlterReplicaLogDirsLogDirNotFound() throws Exception {
-        Node node0 = new Node(0, "localhost", 8120);
-        Node node1 = new Node(1, "localhost", 8121);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
-            createAlterLogDirsResponse(env, node1, Errors.LOG_DIR_NOT_FOUND, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.LOG_DIR_NOT_FOUND, 0);
 
             TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
@@ -3423,24 +3419,20 @@ public class KafkaAdminClientTest {
             logDirs.put(tpr0, "/data0");
             logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
-            result.values().get(tpr0).get();
+            assertNull(result.values().get(tpr0).get());
             TestUtils.assertFutureError(result.values().get(tpr1), LogDirNotFoundException.class);
         }
     }
 
     @Test
     public void testAlterReplicaLogDirsUnrequested() throws Exception {
-        Node node0 = new Node(0, "localhost", 8120);
-        Node node1 = new Node(1, "localhost", 8121);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, node0, Errors.NONE, 0);
-            createAlterLogDirsResponse(env, node1, Errors.NONE, 1, 2);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.NONE, 1, 2);
 
-            TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
 
             Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
-            logDirs.put(tpr0, "/data0");
             logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
             // alterReplicaLogDirs() error handling fails all futures, but some of them may already be completed
@@ -3449,12 +3441,12 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partition) {
+    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {
         env.kafkaClient().prepareResponseFrom(new AlterReplicaLogDirsResponse(
                 new AlterReplicaLogDirsResponseData().setResults(singletonList(
                         new AlterReplicaLogDirTopicResult()
                                 .setTopicName("topic")
-                                .setPartitions(Arrays.stream(partition).boxed().map(partitionId ->
+                                .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
                                         new AlterReplicaLogDirPartitionResult()
                                                 .setPartitionIndex(partitionId)
                                                 .setErrorCode(error.code())).collect(Collectors.toList()))))), node);

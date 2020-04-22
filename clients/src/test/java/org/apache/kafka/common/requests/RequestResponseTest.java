@@ -39,6 +39,8 @@ import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -2206,9 +2208,12 @@ public class RequestResponseTest {
     private AlterReplicaLogDirsRequest createAlterReplicaLogDirsRequest() {
         AlterReplicaLogDirsRequestData data = new AlterReplicaLogDirsRequestData();
         data.dirs().add(
-                new AlterReplicaLogDirsRequestData.AlterReplicaLogDir().setPath("/data0").setTopics(
-                        new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(Collections.singletonList(
-                                new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic().setPartitions(singletonList(0)).setName("topic")
+                new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+                        .setPath("/data0")
+                        .setTopics(new AlterReplicaLogDirTopicCollection(Collections.singletonList(
+                                new AlterReplicaLogDirTopic()
+                                        .setPartitions(singletonList(0))
+                                        .setName("topic")
                         ).iterator())
                 )
         );
