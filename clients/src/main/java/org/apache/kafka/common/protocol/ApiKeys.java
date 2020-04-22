@@ -16,19 +16,21 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
-import org.apache.kafka.common.message.ApiVersionsRequestData;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
+import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
@@ -59,12 +61,18 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.EndQuorumEpochRequestData;
+import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
+import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
+import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.FindQuorumRequestData;
+import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
@@ -99,10 +107,12 @@ import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
+import org.apache.kafka.common.message.VoteRequestData;
+import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -217,7 +227,14 @@ public enum ApiKeys {
     DESCRIBE_CLIENT_QUOTAS(48, "DescribeClientQuotas", DescribeClientQuotasRequestData.SCHEMAS,
             DescribeClientQuotasResponseData.SCHEMAS),
     ALTER_CLIENT_QUOTAS(49, "AlterClientQuotas", AlterClientQuotasRequestData.SCHEMAS,
-            AlterClientQuotasResponseData.SCHEMAS);
+            AlterClientQuotasResponseData.SCHEMAS),
+
+    // Quorum APIs
+    VOTE(50, "Vote", true, VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
+    BEGIN_QUORUM_EPOCH(51, "BeginQuorumEpoch", true, BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
+    END_QUORUM_EPOCH(52, "EndQuorumEpoch", true, EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
+    FETCH_QUORUM_RECORDS(53, "FetchQuorumRecords", true, FetchQuorumRecordsRequestData.SCHEMAS, FetchQuorumRecordsResponseData.SCHEMAS),
+    FIND_QUORUM(55, "FindQuorum", true, FindQuorumRequestData.SCHEMAS, FindQuorumResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
