@@ -44,7 +44,6 @@ import org.junit.runners.Parameterized;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -101,7 +100,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + "-test";
+        final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 

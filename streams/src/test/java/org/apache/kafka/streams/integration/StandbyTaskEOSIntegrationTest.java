@@ -34,7 +34,9 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -75,6 +77,9 @@ public class StandbyTaskEOSIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+
+    @Rule
+    public TestName testName = new TestName();
 
     @Before
     public void createTopics() throws Exception {
@@ -154,7 +159,10 @@ public class StandbyTaskEOSIntegrationTest {
 
     private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String suffix = testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId + suffix);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
