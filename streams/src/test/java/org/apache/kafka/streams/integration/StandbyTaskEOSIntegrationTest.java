@@ -159,7 +159,10 @@ public class StandbyTaskEOSIntegrationTest {
 
     private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId + testName.getMethodName());
+        final String suffix = testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId + suffix);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);

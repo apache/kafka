@@ -116,10 +116,16 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        topicB = "topic-b-" + testName.getMethodName();
-        inputTopic = "input-topic-" + testName.getMethodName();
-        outputTopic = "output-topic-" + testName.getMethodName();
-        applicationId = "kstream-repartition-stream-test-" + testName.getMethodName();
+        final String suffix = testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_')
+            .replace(' ', '_')
+            .replace('=', '_');
+
+        topicB = "topic-b-" + suffix;
+        inputTopic = "input-topic-" + suffix;
+        outputTopic = "output-topic-" + suffix;
+        applicationId = "kstream-repartition-stream-test-" + suffix;
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);

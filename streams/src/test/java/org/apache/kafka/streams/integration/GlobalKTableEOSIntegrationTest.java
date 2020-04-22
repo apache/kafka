@@ -108,7 +108,9 @@ public class GlobalKTableEOSIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-eos-test-" + testName.getMethodName();
+        final String applicationId = "globalTable-eos-test-" + testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -289,8 +291,11 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + testName.getMethodName();
-        globalTableTopic = "globalTable-" + testName.getMethodName();
+        final String suffix = testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
+        streamTopic = "stream-" + suffix;
+        globalTableTopic = "globalTable-" + suffix;
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
