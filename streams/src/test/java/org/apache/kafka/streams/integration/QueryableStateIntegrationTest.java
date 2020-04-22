@@ -67,6 +67,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -197,7 +198,7 @@ public class QueryableStateIntegrationTest {
     public void before() throws Exception {
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "queryable-state-" + testNo.incrementAndGet();
+        final String applicationId = "queryable-state-" + (new TestName()).getMethodName();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

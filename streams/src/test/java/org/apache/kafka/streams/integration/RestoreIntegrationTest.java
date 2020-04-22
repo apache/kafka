@@ -56,6 +56,7 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.File;
 import java.time.Duration;
@@ -119,7 +120,7 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(APPID);
+        final Properties props = props(APPID + (new TestName()).getMethodName());
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
@@ -184,7 +185,7 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(APPID);
+        final Properties props = props(APPID + (new TestName()).getMethodName());
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -254,7 +255,7 @@ public class RestoreIntegrationTest {
                     Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(APPID));
+        kafkaStreams = new KafkaStreams(builder.build(), props(APPID + (new TestName()).getMethodName()));
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();

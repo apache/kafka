@@ -59,6 +59,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 @Category(IntegrationTest.class)
 public class OptimizedKTableIntegrationTest {
@@ -216,8 +217,8 @@ public class OptimizedKTableIntegrationTest {
         final String applicationId = "streamsApp";
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(++port));
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + (new TestName()).getMethodName());
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

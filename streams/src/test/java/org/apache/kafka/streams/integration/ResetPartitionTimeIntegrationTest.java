@@ -38,6 +38,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -91,7 +92,7 @@ public class ResetPartitionTimeIntegrationTest {
 
     @Test
     public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
-        final String appId = "appId";
+        final String appId = (new TestName()).getMethodName();
         final String input = "input";
         final String outputRaw = "output-raw";
 

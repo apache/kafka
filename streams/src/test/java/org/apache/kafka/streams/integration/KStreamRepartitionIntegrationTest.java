@@ -47,6 +47,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -83,7 +84,6 @@ import static org.junit.Assert.assertTrue;
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final AtomicInteger TEST_NUM = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -112,12 +112,11 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        final int testNum = TEST_NUM.incrementAndGet();
-
-        topicB = "topic-b-" + testNum;
-        inputTopic = "input-topic-" + testNum;
-        outputTopic = "output-topic-" + testNum;
-        applicationId = "kstream-repartition-stream-test-" + testNum;
+        final TestName name = new TestName();
+        topicB = "topic-b-" + name.getMethodName();
+        inputTopic = "input-topic-" + name.getMethodName();
+        outputTopic = "output-topic-" + name.getMethodName();
+        applicationId = "kstream-repartition-stream-test-" + name.getMethodName();
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);

@@ -68,6 +68,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,7 +85,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
@@ -102,7 +102,6 @@ public class KStreamAggregationIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
@@ -121,7 +120,7 @@ public class KStreamAggregationIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" + testNo.incrementAndGet();
+        final String applicationId = "kgrouped-stream-test-" + (new TestName()).getMethodName();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -788,9 +787,9 @@ public class KStreamAggregationIntegrationTest {
 
 
     private void createTopics() throws InterruptedException {
-        streamOneInput = "stream-one-" + testNo;
-        outputTopic = "output-" + testNo;
-        userSessionsStream = userSessionsStream + "-" + testNo;
+        streamOneInput = "stream-one-" + (new TestName()).getMethodName();
+        outputTopic = "output-" + (new TestName()).getMethodName();
+        userSessionsStream = userSessionsStream + "-" + (new TestName()).getMethodName();
         CLUSTER.createTopic(streamOneInput, 3, 1);
         CLUSTER.createTopics(userSessionsStream, outputTopic);
     }
@@ -813,7 +812,7 @@ public class KStreamAggregationIntegrationTest {
                                                                  final int numMessages) throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + (new TestName()).getMethodName());
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
@@ -834,7 +833,7 @@ public class KStreamAggregationIntegrationTest {
                                                                                               final int numMessages) throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + (new TestName()).getMethodName());
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());

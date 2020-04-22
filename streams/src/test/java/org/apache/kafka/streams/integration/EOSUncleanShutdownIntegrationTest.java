@@ -38,6 +38,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -101,7 +102,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + "-test";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + (new TestName()).getMethodName();
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
