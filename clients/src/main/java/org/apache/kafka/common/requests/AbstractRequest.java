@@ -243,6 +243,18 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeClientQuotasRequest(struct, apiVersion);
             case ALTER_CLIENT_QUOTAS:
                 return new AlterClientQuotasRequest(struct, apiVersion);
+
+            // Quorum APIs
+            case VOTE:
+                return new VoteRequest(struct, apiVersion);
+            case BEGIN_QUORUM_EPOCH:
+                return new BeginQuorumEpochRequest(struct, apiVersion);
+            case END_QUORUM_EPOCH:
+                return new EndQuorumEpochRequest(struct, apiVersion);
+            case FETCH_QUORUM_RECORDS:
+                return new FetchQuorumRecordsRequest(struct, apiVersion);
+            case FIND_QUORUM:
+                return new FindQuorumRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
