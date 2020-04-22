@@ -112,6 +112,11 @@ class LogValidatorTest {
     checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
+  @Test
+  def testLogAppendTimeNonCompressedV2(): Unit = {
+    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
+  }
+
   private def checkLogAppendTimeNonCompressed(magic: Byte): Unit = {
     val now = System.currentTimeMillis()
     // The timestamps should be overwritten
@@ -135,15 +140,14 @@ class LogValidatorTest {
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
     validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
-    assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
+    // we index from last offset in version 2 instead of base offset
+    val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
+    assertEquals(s"The offset of max timestamp should be $expectedMaxTimestampOffset",
+      expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
       compressed = false)
-  }
-
-  def testLogAppendTimeNonCompressedV2(): Unit = {
-    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test
