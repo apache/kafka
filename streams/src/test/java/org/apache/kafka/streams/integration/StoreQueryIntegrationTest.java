@@ -75,6 +75,9 @@ public class StoreQueryIntegrationTest {
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    @Rule
+    public TestName testName = new TestName();
+
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
 
@@ -325,7 +328,7 @@ public class StoreQueryIntegrationTest {
     }
 
     private Properties streamsConfiguration() {
-        final String applicationId = "streamsApp" + (new TestName()).getMethodName();
+        final String applicationId = "streamsApp" + testName.getMethodName();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);

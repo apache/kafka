@@ -71,6 +71,9 @@ public class OptimizedKTableIntegrationTest {
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    @Rule
+    public final TestName name = new TestName();
+
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
 
@@ -217,7 +220,7 @@ public class OptimizedKTableIntegrationTest {
         final String applicationId = "streamsApp";
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + (new TestName()).getMethodName());
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + name.getMethodName());
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());

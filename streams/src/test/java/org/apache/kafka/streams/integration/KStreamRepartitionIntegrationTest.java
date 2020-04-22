@@ -45,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
@@ -107,16 +108,18 @@ public class KStreamRepartitionIntegrationTest {
         });
     }
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws InterruptedException {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        final TestName name = new TestName();
-        topicB = "topic-b-" + name.getMethodName();
-        inputTopic = "input-topic-" + name.getMethodName();
-        outputTopic = "output-topic-" + name.getMethodName();
-        applicationId = "kstream-repartition-stream-test-" + name.getMethodName();
+        topicB = "topic-b-" + testName.getMethodName();
+        inputTopic = "input-topic-" + testName.getMethodName();
+        outputTopic = "output-topic-" + testName.getMethodName();
+        applicationId = "kstream-repartition-stream-test-" + testName.getMethodName();
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
@@ -805,7 +808,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + TEST_NUM.get());
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + testName.getMethodName());
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.CoreMatchers;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
@@ -53,6 +54,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
+
+    @Rule
+    public TestName testName = new TestName();
 
     @Test
     public void shouldWorkWithDefaultSerdes() {
@@ -233,9 +237,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         )));
     }
 
-    private static void validateTopologyCanProcessData(final StreamsBuilder builder) {
+    private void validateTopologyCanProcessData(final StreamsBuilder builder) {
         final Properties config = new Properties();
-        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-" + (new TestName()).getMethodName());
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-" + testName.getMethodName());
         config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());

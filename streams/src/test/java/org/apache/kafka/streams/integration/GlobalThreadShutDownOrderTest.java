@@ -42,6 +42,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
@@ -92,12 +93,15 @@ public class GlobalThreadShutDownOrderTest {
     private final List<Long> retrievedValuesList = new ArrayList<>();
     private boolean firstRecordProcessed;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "global-thread-shutdown-test" + (new TestName()).getMethodName();
+        final String applicationId = "global-thread-shutdown-test" + testName.getMethodName();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

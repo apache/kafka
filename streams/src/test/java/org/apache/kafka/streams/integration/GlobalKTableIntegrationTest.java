@@ -46,6 +46,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
@@ -78,12 +79,15 @@ public class GlobalKTableIntegrationTest {
     private KStream<String, Long> stream;
     private MockProcessorSupplier<String, String> supplier;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-test-" + (new TestName()).getMethodName();
+        final String applicationId = "globalTableTopic-table-test-" + testName.getMethodName();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -268,8 +272,8 @@ public class GlobalKTableIntegrationTest {
     }
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + (new TestName()).getMethodName();
-        globalTableTopic = "globalTable-" + (new TestName()).getMethodName();
+        streamTopic = "stream-" + testName.getMethodName();
+        globalTableTopic = "globalTable-" + testName.getMethodName();
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }

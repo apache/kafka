@@ -42,6 +42,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
@@ -111,6 +112,9 @@ public class RocksDBMetricsIntegrationTest {
     @Parameter
     public String processingGuarantee;
 
+    @Rule
+    public TestName name = new TestName();
+
     @Before
     public void before() throws Exception {
         CLUSTER.createTopic(STREAM_INPUT_ONE, 1, 3);
@@ -150,7 +154,7 @@ public class RocksDBMetricsIntegrationTest {
 
     private Properties streamsConfig() {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + (new TestName()).getMethodName());
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + name.getMethodName());
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());

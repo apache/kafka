@@ -35,6 +35,7 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
@@ -84,6 +85,9 @@ public class EOSUncleanShutdownIntegrationTest {
     @ClassRule
     public static final TemporaryFolder TEST_FOLDER = new TemporaryFolder(TestUtils.tempDirectory());
 
+    @Rule
+    public TestName testName = new TestName();
+
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Long COMMIT_INTERVAL = 100L;
@@ -102,7 +106,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + (new TestName()).getMethodName();
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testName.getMethodName();
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
