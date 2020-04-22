@@ -152,7 +152,7 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
 
-        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, "at_least_once")
 
         with self.driver.node.account.monitor_log(self.driver.STDOUT_FILE) as driver_monitor:
             self.driver.start()
