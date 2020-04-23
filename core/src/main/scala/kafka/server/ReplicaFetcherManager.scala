@@ -22,9 +22,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
 class ReplicaFetcherManager(brokerConfig: KafkaConfig,
+                            private val time: Time,
                             protected val replicaManager: ReplicaManager,
                             metrics: Metrics,
-                            time: Time,
                             threadNamePrefix: Option[String] = None,
                             quotaManager: ReplicationQuotaManager)
       extends AbstractFetcherManager[ReplicaFetcherThread](
@@ -35,8 +35,8 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, failedPartitions, replicaManager,
-      metrics, time, quotaManager)
+    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, time, failedPartitions,
+      replicaManager, metrics, quotaManager)
   }
 
   def shutdown(): Unit = {

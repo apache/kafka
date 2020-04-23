@@ -27,6 +27,7 @@ import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.utils.MockTime
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -819,6 +820,7 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
+      time = new MockTime(),
       failedPartitions,
       brokerTopicStats = new BrokerTopicStats) {
 

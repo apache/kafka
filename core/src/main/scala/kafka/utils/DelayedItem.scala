@@ -21,9 +21,7 @@ import java.util.concurrent._
 
 import org.apache.kafka.common.utils.Time
 
-class DelayedItem(val delayMs: Long, val time: Time) extends Logging {
-  def this(delayMs: Long) = this(delayMs, Time.SYSTEM)
-
+class DelayedItem(val delayMs: Long, private val time: Time) extends Logging {
   private val dueNs = time.nanoseconds + TimeUnit.MILLISECONDS.toNanos(delayMs)
 
   /**
