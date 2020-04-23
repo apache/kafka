@@ -91,9 +91,9 @@ object ConsumerGroupCommand extends Logging {
     val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim.toLowerCase.capitalize)).toSet.toList
     if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
       val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
-      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(",")}")
+      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
     }
-    return parsedStates
+    parsedStates
   }
 
   val MISSING_COLUMN_VALUE = "-"
@@ -198,7 +198,7 @@ object ConsumerGroupCommand extends Logging {
            else
              consumerGroupStatesFromString(stateValue)
            val listings = listConsumerGroupsWithState(states)
-           printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)).toList)
+           printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
         } else
          listConsumerGroups().foreach(println(_))
     }
@@ -1074,7 +1074,7 @@ object ConsumerGroupCommand extends Logging {
         val mutuallyExclusiveOpts: Set[OptionSpec[_]] = Set(membersOpt, offsetsOpt, stateOpt)
         if (mutuallyExclusiveOpts.toList.map(o => if (options.has(o)) 1 else 0).sum > 1) {
           CommandLineUtils.printUsageAndDie(parser,
-            s"Option $describeOpt takes at most one of these options: $mutuallyExclusiveOpts")
+            s"Option $describeOpt takes at most one of these options: ${mutuallyExclusiveOpts.mkString(", ")}")
         }
       } else {
         if (options.has(timeoutMsOpt))

@@ -38,7 +38,7 @@
       { "name": "ProtocolType", "type": "string", "versions": "0+",
         "about": "The group protocol type." },
       { "name": "GroupState", "type": "string", "versions": "4+", "tag": 0, "taggedVersions": "4+", "ignorable": true,
-        "about": "The group state string." }
+        "nullableVersions": "4+", "default": "null", "about": "The group state string." }
     ]}
   ]
 }

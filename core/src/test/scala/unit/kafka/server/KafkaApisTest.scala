@@ -1730,10 +1730,10 @@ class KafkaApisTest {
       GroupOverview("group1", "protocol1", "Stable"),
       GroupOverview("goupp2", "qwerty", "Empty")
     )
-    val response = listGroupRequest(Option.empty, overviews)
+    val response = listGroupRequest(None, overviews)
     assertEquals(2, response.data.groups.size)
-    assertEquals("", response.data.groups.get(0).groupState)
-    assertEquals("", response.data.groups.get(1).groupState)
+    assertNull(response.data.groups.get(0).groupState)
+    assertNull(response.data.groups.get(1).groupState)
   }
 
   @Test
@@ -1741,7 +1741,7 @@ class KafkaApisTest {
     val overviews = List(
       GroupOverview("group1", "protocol1", "Stable")
     )
-    val response = listGroupRequest(Option.apply("Stable"), overviews)
+    val response = listGroupRequest(Some("Stable"), overviews)
     assertEquals(1, response.data.groups.size)
     assertEquals("Stable", response.data.groups.get(0).groupState)
   }
@@ -1765,7 +1765,7 @@ class KafkaApisTest {
 
     val response = readResponse(ApiKeys.LIST_GROUPS, listGroupsRequest, capturedResponse).asInstanceOf[ListGroupsResponse]
     assertEquals(Errors.NONE.code, response.data.errorCode)
-    return response
+    response
   }
 
   /**
