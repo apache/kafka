@@ -196,17 +196,6 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<Integer> previousEpoch() {
-        if (epochStartOffsets.size() >= 2) {
-            return Optional.of(epochStartOffsets.get(epochStartOffsets.size() - 2).epoch);
-        } else if (epochStartOffsets.size() == 1) {
-            return Optional.of(0);
-        } else {
-            return Optional.empty();
-        }
-    }
-
-    @Override
     public void assignEpochStartOffset(int epoch, long startOffset) {
         if (startOffset != endOffset())
             throw new IllegalStateException("Can only assign epoch for the end offset");

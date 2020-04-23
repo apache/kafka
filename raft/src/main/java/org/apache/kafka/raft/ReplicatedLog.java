@@ -52,13 +52,6 @@ public interface ReplicatedLog {
     int lastFetchedEpoch();
 
     /**
-     * The previous epoch. Is always defined for leaders since there is always
-     * the leader's epoch and the primordial epoch.
-     * @return The previous epoch if it exists.
-     */
-    Optional<Integer> previousEpoch();
-
-    /**
      * Find the first epoch less than or equal to the given epoch and its end offset,
      * if one exists.
      */
