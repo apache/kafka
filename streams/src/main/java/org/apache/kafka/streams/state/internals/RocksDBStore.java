@@ -190,13 +190,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         // Setup metrics before the database is opened, otherwise the metrics are not updated
         // with the measurements from Rocks DB
-        maybeSetUpMetricsRecorder(context, configs);
+        maybeSetUpMetricsRecorder(configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
     }
 
-    private void maybeSetUpMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
+    private void maybeSetUpMetricsRecorder(final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 

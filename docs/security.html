@@ -754,22 +754,22 @@ keyUsage               = digitalSignature, keyEncipherment
         credentials will be used to authenticate new connections.</p>
         <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i>:
         <pre class="brush: bash;">
-    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice
         </pre>
         <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created
         and the SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in Zookeeper.
         See <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a> for details on SCRAM identity and the individual fields.
         <p>The following examples also require a user <i>admin</i> for inter-broker communication which can be created using:
         <pre class="brush: bash;">
-    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin
+    > bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin
         </pre>
         <p>Existing credentials may be listed using the <i>--describe</i> option:
         <pre class="brush: bash;">
-    > bin/kafka-configs.sh --zookeeper localhost:2181 --describe --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --describe --entity-type users --entity-name alice
         </pre>
         <p>Credentials may be deleted for one or more SCRAM mechanisms using the <i>--delete</i> option:
         <pre class="brush: bash;">
-    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice
         </pre>
         </li>
         <li><h5><a id="security_sasl_scram_brokerconfig" href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>

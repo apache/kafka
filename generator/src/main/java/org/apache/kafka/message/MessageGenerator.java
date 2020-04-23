@@ -112,6 +112,30 @@ public final class MessageGenerator {
 
     static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
 
+    static final String JSON_NODE_CLASS = "com.fasterxml.jackson.databind.JsonNode";
+
+    static final String OBJECT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ObjectNode";
+
+    static final String JSON_NODE_FACTORY_CLASS = "com.fasterxml.jackson.databind.node.JsonNodeFactory";
+
+    static final String BOOLEAN_NODE_CLASS = "com.fasterxml.jackson.databind.node.BooleanNode";
+
+    static final String SHORT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ShortNode";
+
+    static final String INT_NODE_CLASS = "com.fasterxml.jackson.databind.node.IntNode";
+
+    static final String LONG_NODE_CLASS = "com.fasterxml.jackson.databind.node.LongNode";
+
+    static final String TEXT_NODE_CLASS = "com.fasterxml.jackson.databind.node.TextNode";
+
+    static final String BINARY_NODE_CLASS = "com.fasterxml.jackson.databind.node.BinaryNode";
+
+    static final String NULL_NODE_CLASS = "com.fasterxml.jackson.databind.node.NullNode";
+
+    static final String ARRAY_NODE_CLASS = "com.fasterxml.jackson.databind.node.ArrayNode";
+
+    static final String DOUBLE_NODE_CLASS = "com.fasterxml.jackson.databind.node.DoubleNode";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

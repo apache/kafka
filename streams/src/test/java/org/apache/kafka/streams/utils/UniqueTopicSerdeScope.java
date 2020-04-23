@@ -21,8 +21,10 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -39,6 +41,10 @@ public class UniqueTopicSerdeScope {
         final UniqueTopicSerdeDecorator<T> decorator = new UniqueTopicSerdeDecorator<>(delegate);
         decorator.configure(config.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)), isKey);
         return decorator;
+    }
+
+    public Set<String> registeredTopics() {
+        return Collections.unmodifiableSet(topicTypeRegistry.keySet());
     }
 
     public class UniqueTopicSerdeDecorator<T> implements Serde<T> {

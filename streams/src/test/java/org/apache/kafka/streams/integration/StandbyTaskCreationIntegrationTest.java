@@ -37,8 +37,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.util.Properties;
 import java.util.function.Predicate;
@@ -50,6 +52,9 @@ public class StandbyTaskCreationIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @Rule
+    public TestName testName = new TestName();
 
     private static final String INPUT_TOPIC = "input-topic";
 
@@ -70,7 +75,7 @@ public class StandbyTaskCreationIntegrationTest {
     }
 
     private Properties streamsConfiguration() {
-        final String applicationId = "testApp";
+        final String applicationId = "testApp" + testName.getMethodName();
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

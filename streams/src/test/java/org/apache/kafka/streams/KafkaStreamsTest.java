@@ -148,7 +148,7 @@ public class KafkaStreamsTest {
     public void before() throws Exception {
         time = new MockTime();
         supplier = new MockClientSupplier();
-        supplier.setClusterForAdminClient(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
         streamsStateListener = new StateListenerStub();
         threadStatelistenerCapture = EasyMock.newCapture();
         metricsReportersCapture = EasyMock.newCapture();
@@ -192,6 +192,7 @@ public class KafkaStreamsTest {
         ClientMetrics.addApplicationIdMetric(anyObject(StreamsMetricsImpl.class), EasyMock.eq(APPLICATION_ID));
         ClientMetrics.addTopologyDescriptionMetric(anyObject(StreamsMetricsImpl.class), anyString());
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
+        ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);
@@ -210,10 +211,9 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class),
             anyInt()
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
-        EasyMock.expect(StreamThread.getSharedAdminClientId(
-            anyString()
-        )).andReturn("admin").anyTimes();
 
+        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
+        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(0L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(1L).anyTimes();
         prepareStreamThread(streamThreadOne, true);
@@ -800,15 +800,15 @@ public class KafkaStreamsTest {
     public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
         props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
 
-        assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
+                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+        }
     }
 
     @Test
@@ -915,13 +915,14 @@ public class KafkaStreamsTest {
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
             isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
             Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(globalStoreBuilder,
+        topology.addGlobalStore(
+            globalStoreBuilder,
             "global",
             Serdes.String().deserializer(),
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier<byte[], byte[]>());
+            new MockProcessorSupplier<>());
         return topology;
     }
 

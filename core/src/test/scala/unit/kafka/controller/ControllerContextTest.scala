@@ -18,7 +18,6 @@
 package unit.kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.PartitionAndReplica
 import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -47,7 +46,7 @@ class ControllerContextTest {
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
 
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0

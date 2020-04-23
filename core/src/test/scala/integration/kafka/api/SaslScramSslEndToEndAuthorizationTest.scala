@@ -21,7 +21,7 @@ import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.junit.Before
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {

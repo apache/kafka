@@ -45,7 +45,7 @@
       { "name": "NumPartitions", "type": "int32", "versions": "5+", "default": "-1", "ignorable": true,
         "about": "Number of partitions of the topic." },
       { "name": "ReplicationFactor", "type": "int16", "versions": "5+", "default": "-1", "ignorable": true,
-        "about": "Replicator factor of the topic." },
+        "about": "Replication factor of the topic." },
       { "name": "Configs", "type": "[]CreatableTopicConfigs", "versions": "5+", "nullableVersions": "5+", "ignorable": true,
         "about": "Configuration of the topic.", "fields": [
         { "name": "Name", "type": "string", "versions": "5+",

@@ -29,10 +29,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Base64.Encoder;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
@@ -44,10 +48,12 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -75,6 +81,8 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -115,9 +123,11 @@ import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandl
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1536,6 +1546,48 @@ public class SaslAuthenticatorTest {
             // ignore, expected
             server.verifyReauthenticationMetrics(0, 1);
         }
+    }
+
+    @Test
+    public void testCorrelationId() {
+        SaslClientAuthenticator authenticator = new SaslClientAuthenticator(
+              Collections.emptyMap(),
+              null,
+              "node",
+              null,
+              null,
+              null,
+              "plain",
+              false,
+              null,
+              null,
+            new LogContext()
+        ) {
+            @Override
+            SaslClient createSaslClient() {
+                return null;
+            }
+        };
+        int count = (SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID - SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID) * 2;
+        Set<Integer> ids = IntStream.range(0, count)
+            .mapToObj(i -> authenticator.nextCorrelationId())
+            .collect(Collectors.toSet());
+        assertEquals(SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID - SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + 1, ids.size());
+        ids.forEach(id -> {
+            assertTrue(id >= SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
+            assertTrue(SaslClientAuthenticator.isReserved(id));
+        });
+    }
+
+    @Test
+    public void testConvertListOffsetResponseToSaslHandshakeResponse() {
+        ListOffsetResponse response = new ListOffsetResponse(0, Collections.singletonMap(new TopicPartition("topic", 0),
+            new ListOffsetResponse.PartitionData(Errors.NONE, 0, 0, Optional.empty())));
+        ByteBuffer buffer = response.serialize(ApiKeys.LIST_OFFSETS, LIST_OFFSETS.latestVersion(), 0);
+        final RequestHeader header0 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
+        Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header0));
+        final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
+        Assert.assertThrows(IllegalStateException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header1));
     }
     
     /**

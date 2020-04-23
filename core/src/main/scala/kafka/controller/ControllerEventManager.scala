@@ -27,7 +27,7 @@ import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"

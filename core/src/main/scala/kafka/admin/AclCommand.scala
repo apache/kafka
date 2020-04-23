@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.io.StdIn
@@ -147,8 +147,9 @@ object AclCommand extends Logging {
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
+              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+            }.filter { case (_, acls) => acls.nonEmpty }
 
             for ((resource, acls) <- filteredResourceToAcls)
               println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
@@ -263,8 +264,9 @@ object AclCommand extends Logging {
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
+              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+            }.filter { case (_, acls) => acls.nonEmpty }
 
             for ((resource, acls) <- filteredResourceToAcls)
               println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")

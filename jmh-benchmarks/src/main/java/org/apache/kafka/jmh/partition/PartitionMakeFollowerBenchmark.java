@@ -121,7 +121,7 @@ public class PartitionMakeFollowerBenchmark {
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
             partitionStateStore, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager);
-        partition.createLogIfNotExists(0, true, false, offsetCheckpoints);
+        partition.createLogIfNotExists(true, false, offsetCheckpoints);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
                 new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
@@ -154,7 +154,7 @@ public class PartitionMakeFollowerBenchmark {
             .setZkVersion(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        return partition.makeFollower(0, partitionState, 0, offsetCheckpoints);
+        return partition.makeFollower(partitionState, offsetCheckpoints);
     }
 
     private static LogConfig createLogConfig() {

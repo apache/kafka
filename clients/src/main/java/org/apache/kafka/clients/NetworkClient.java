@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -938,9 +939,15 @@ public class NetworkClient implements KafkaClient {
      * Validate that the response corresponds to the request we expect or else explode
      */
     private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
-        if (requestHeader.correlationId() != responseHeader.correlationId())
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
+                    && !SaslClientAuthenticator.isReserved(responseHeader.correlationId()))
+                throw new SchemaException("the response is unrelated to Sasl request since its correlation id is " + responseHeader.correlationId()
+                    + " and the reserved range for Sasl request is [ "
+                    + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + "," + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
             throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
                     + ") does not match request (" + requestHeader.correlationId() + "), request header: " + requestHeader);
+        }
     }
 
     /**
@@ -1155,6 +1162,15 @@ public class NetworkClient implements KafkaClient {
         return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, defaultRequestTimeoutMs, null);
     }
 
+    // visible for testing
+    int nextCorrelationId() {
+        if (SaslClientAuthenticator.isReserved(correlation)) {
+            // the numeric overflow is fine as negative values is acceptable
+            correlation = SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + 1;
+        }
+        return correlation++;
+    }
+
     @Override
     public ClientRequest newClientRequest(String nodeId,
                                           AbstractRequest.Builder<?> requestBuilder,
@@ -1162,7 +1178,7 @@ public class NetworkClient implements KafkaClient {
                                           boolean expectResponse,
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
+        return new ClientRequest(nodeId, requestBuilder, nextCorrelationId(), clientId, createdTimeMs, expectResponse,
                 requestTimeoutMs, callback);
     }
 
