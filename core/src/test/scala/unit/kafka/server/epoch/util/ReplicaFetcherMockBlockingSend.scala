@@ -44,7 +44,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
                                      time: Time)
   extends BlockingSend {
 
-  private val client = new MockClient(new SystemTime, new MockMetadataUpdater {
+  private val client = new MockClient(Time.SYSTEM, new MockMetadataUpdater {
     override def fetchNodes(): util.List[Node] = Collections.emptyList()
     override def isUpdateNeeded: Boolean = false
     override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}

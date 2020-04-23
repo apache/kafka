@@ -30,7 +30,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.Time
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
 import org.junit.Assert._
@@ -61,7 +61,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(replicaManager.futureLogExists(t1p0)).thenReturn(false)
 
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread",
@@ -122,6 +122,7 @@ class ReplicaAlterLogDirsThreadTest {
       isReassignmentFetch = false)
     mockFetchFromCurrentLog(t1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
+    val time = Time.SYSTEM
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread",
@@ -131,7 +132,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = new BrokerTopicStats,
-      time = new SystemTime())
+      time = time)
 
     // Initially we add the partition with an older epoch which results in an error
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch - 1)))
@@ -213,7 +214,7 @@ class ReplicaAlterLogDirsThreadTest {
     mockFetchFromCurrentLog(t1p0, requestData, config, replicaManager, responseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread",
       sourceBroker = endPoint,
@@ -287,7 +288,7 @@ class ReplicaAlterLogDirsThreadTest {
     replay(partitionT1p0, partitionT1p1, replicaManager)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -335,7 +336,7 @@ class ReplicaAlterLogDirsThreadTest {
     replay(partitionT1p0, replicaManager)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -420,7 +421,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -495,7 +496,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -552,7 +553,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -629,7 +630,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -692,7 +693,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -734,7 +735,7 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -787,7 +788,7 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val time = new SystemTime()
+    val time = Time.SYSTEM
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,

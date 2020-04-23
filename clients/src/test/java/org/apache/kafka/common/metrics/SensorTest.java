@@ -23,7 +23,6 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
@@ -70,17 +69,17 @@ public class SensorTest {
         MetricConfig debugConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
         MetricConfig infoConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
 
-        Sensor infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, debugConfig, Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
-        infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, debugConfig, Time.SYSTEM,
             0, Sensor.RecordingLevel.DEBUG);
         assertTrue(infoSensor.shouldRecord());
 
-        Sensor debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
+        Sensor debugSensor = new Sensor(null, "debugSensor", null, infoConfig, Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(debugSensor.shouldRecord());
-        debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
+        debugSensor = new Sensor(null, "debugSensor", null, infoConfig, Time.SYSTEM,
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
     }
