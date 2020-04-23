@@ -34,6 +34,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     public final AddPartitionsToTxnRequestData data;
 
+    private List<TopicPartition> cachedPartitions = null;
+
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
         public final AddPartitionsToTxnRequestData data;
 
@@ -52,10 +54,13 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             for (TopicPartition topicPartition : partitions) {
                 String topicName = topicPartition.topic();
 
-                List<Integer> subPartitions = partitionMap.getOrDefault(topicName,
-                    new ArrayList<>());
-                subPartitions.add(topicPartition.partition());
-                partitionMap.put(topicName, subPartitions);
+                partitionMap.compute(topicName, (key, subPartitions) -> {
+                    if (subPartitions == null) {
+                        subPartitions = new ArrayList<>();
+                    }
+                    subPartitions.add(topicPartition.partition());
+                    return subPartitions;
+               });
             }
 
             AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
@@ -75,10 +80,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         @Override
         public AddPartitionsToTxnRequest build(short version) {
             return new AddPartitionsToTxnRequest(data, version);
-        }
-
-        public List<TopicPartition> partitions() {
-            return getPartitions(data);
         }
 
         static List<TopicPartition> getPartitions(AddPartitionsToTxnRequestData data) {
@@ -108,7 +109,11 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     public List<TopicPartition> partitions() {
-        return Builder.getPartitions(data);
+        if (cachedPartitions != null) {
+            return cachedPartitions;
+        }
+        cachedPartitions = Builder.getPartitions(data);
+        return cachedPartitions;
     }
 
     @Override
@@ -119,7 +124,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     @Override
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         final HashMap<TopicPartition, Errors> errors = new HashMap<>();
-        for (TopicPartition partition : Builder.getPartitions(data)) {
+        for (TopicPartition partition : partitions()) {
             errors.put(partition, Errors.forException(e));
         }
         return new AddPartitionsToTxnResponse(throttleTimeMs, errors);
