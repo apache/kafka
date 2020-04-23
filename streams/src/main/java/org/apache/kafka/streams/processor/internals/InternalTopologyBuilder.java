@@ -1247,7 +1247,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    boolean usesPatternSubscription() {
+    synchronized boolean usesPatternSubscription() {
         return !nodeToSourcePatterns.isEmpty();
     }
 
@@ -1257,6 +1257,10 @@ public class InternalTopologyBuilder {
 
     synchronized Pattern sourceTopicPattern() {
         return sourceTopicPattern;
+    }
+
+    public boolean hasNoNonGlobalTopology() {
+        return !usesPatternSubscription() && sourceTopicCollection().isEmpty();
     }
 
     private boolean isGlobalSource(final String nodeName) {
