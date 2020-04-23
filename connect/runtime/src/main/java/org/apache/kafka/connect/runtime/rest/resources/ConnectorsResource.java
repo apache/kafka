@@ -344,10 +344,9 @@ public class ConnectorsResource {
                     String forwardedUrl = targetException.forwardUrl();
                     if (forwardedUrl == null) {
                         // the target didn't know of the leader at this moment.
-                        // we don't, it probably means that a rebalance has taken place.
                         throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                                "Cannot complete request momentarily due no known leader URL, "
-                                + "perhaps because of a conflicting operation (e.g. worker rebalance)");
+                                "Cannot complete request momentarily due to no known leader URL, "
+                                + "likely because a rebalance was underway.");
                     }
                     String forwardUrl = UriBuilder.fromUri(forwardedUrl)
                             .path(path)
