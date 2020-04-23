@@ -615,11 +615,11 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopicRight.pipeInput("tick", "tick", 21L);
+            inputTopicRight.pipeInput("tick", "tick1", 21L);
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("tick", "(null,tick)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("tick", "(null,tick1)", 21), // just a testing artifact
                     new KeyValueTimestamp<>("A", "(b,2)", 13L)
                 )
             );
@@ -703,11 +703,11 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopicLeft.pipeInput("tick", "tick", 21L);
+            inputTopicLeft.pipeInput("tick", "tick1", 21L);
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("tick", "(tick,null)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("tick", "(tick1,null)", 21), // just a testing artifact
                     new KeyValueTimestamp<>("A", "(2,b)", 13L)
                 )
             );
