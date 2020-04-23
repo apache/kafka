@@ -176,9 +176,9 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               final Serializer<V> valueSerializer,
                                                               final Deserializer<V> valueDeserializer) {
         final StateSerdes<K, V> serdes = new StateSerdes<>(
-                "unexpected",
-                Serdes.serdeFrom(keySerializer, keyDeserializer),
-                Serdes.serdeFrom(valueSerializer, valueDeserializer));
+            "unexpected",
+            Serdes.serdeFrom(keySerializer, keyDeserializer),
+            Serdes.serdeFrom(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<>(serdes);
     }
 
@@ -207,8 +207,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 new StreamsConfig(props),
                 "threadId",
                 new MockClientSupplier(),
-               null,
-               null,
+                null,
+                null,
                 logContext),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics())
