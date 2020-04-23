@@ -33,5 +33,5 @@ public final class OperatingSystem {
         NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         IS_WINDOWS = NAME.startsWith("windows");
         IS_ZOS = NAME.startsWith("z/os");
-     }
+    }
 }
