@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -94,7 +96,7 @@ public class SourceNodeTest {
                 TestUtils.tempDirectory(),
                 new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()))
         );
-        final StreamsMetricsImpl metrics = context.metrics();
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), Collections.singletonList("topic"), new TheDeserializer(), new TheDeserializer());
         node.init(context);
@@ -129,7 +131,7 @@ public class SourceNodeTest {
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
 
             final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
-            final Sensor processSensor = metrics.nodeLevelSensor(
+            final Sensor processSensor = context.metrics().nodeLevelSensor(
                 threadId,
                 context.taskId().toString(),
                 context.currentNode().name(),
