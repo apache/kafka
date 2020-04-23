@@ -3084,9 +3084,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
     // if the controller hasn't been upgraded to use KIP-380
     if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
+    else {
       // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified
       // about the new broker epoch and sends a control request with this epoch before the broker learns about it
-    else brokerEpochInRequest < controller.brokerEpoch
+      brokerEpochInRequest < controller.brokerEpoch
+    }
   }
 
 }
