@@ -2017,7 +2017,7 @@ public final class MessageDataGenerator {
         if (!struct.fields().isEmpty()) {
             buffer.printf("%s other = (%s) obj;%n", className, className);
             for (FieldSpec field : struct.fields()) {
-                if ((!elementKeysAreEqual) || field.mapKey()) {
+                if (!elementKeysAreEqual || field.mapKey()) {
                     generateFieldEquals(field);
                 }
             }
