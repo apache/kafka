@@ -66,10 +66,10 @@ import scala.Option;
 @Measurement(iterations = 5)
 @Fork(3)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@State(Scope.Benchmark)
+@State(value = Scope.Benchmark)
 public class CheckpointBench {
 
-    @Param({"2000"})
+    @Param({"100", "1000", "2000"})
     public int numTopics;
 
     @Param({"3"})
