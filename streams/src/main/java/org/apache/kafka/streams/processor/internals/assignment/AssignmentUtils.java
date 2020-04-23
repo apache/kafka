@@ -16,20 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.UUID;
 
-public interface StateConstrainedBalancedAssignor {
+final class AssignmentUtils {
 
-    Map<UUID, List<TaskId>> assign(final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedClients,
-                                   final int balanceFactor,
-                                   final Set<UUID> clients,
-                                   final Map<UUID, Integer> clientsToNumberOfStreamThread,
-                                   final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients);
+    private AssignmentUtils() {}
+
+    /**
+     * @return true if this client is caught-up for this task, or the task has no caught-up clients
+     */
+    static boolean taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(final TaskId task,
+                                                                  final UUID client,
+                                                                  final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
+        return caughtUpClients == null || caughtUpClients.contains(client);
+    }
+
+
 }

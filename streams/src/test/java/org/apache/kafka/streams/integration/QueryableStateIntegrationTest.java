@@ -65,8 +65,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +96,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
@@ -140,17 +141,16 @@ public class QueryableStateIntegrationTest {
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
 
     private void createTopics() throws Exception {
-        streamOne = streamOne + "-" + testNo;
-        streamConcurrent = streamConcurrent + "-" + testNo;
-        streamThree = streamThree + "-" + testNo;
-        outputTopic = outputTopic + "-" + testNo;
-        outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
-        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + testNo;
-        outputTopicThree = outputTopicThree + "-" + testNo;
-        streamTwo = streamTwo + "-" + testNo;
+        streamOne = streamOne + "-" + name.getMethodName();
+        streamConcurrent = streamConcurrent + "-" + name.getMethodName();
+        streamThree = streamThree + "-" + name.getMethodName();
+        outputTopic = outputTopic + "-" + name.getMethodName();
+        outputTopicConcurrent = outputTopicConcurrent + "-" + name.getMethodName();
+        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + name.getMethodName();
+        outputTopicThree = outputTopicThree + "-" + name.getMethodName();
+        streamTwo = streamTwo + "-" + name.getMethodName();
         CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
@@ -193,11 +193,14 @@ public class QueryableStateIntegrationTest {
         return input;
     }
 
+    @Rule
+    public TestName name = new TestName();
+
     @Before
     public void before() throws Exception {
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "queryable-state-" + testNo.incrementAndGet();
+        final String applicationId = "queryable-state-" + name.getMethodName();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

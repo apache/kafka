@@ -3262,12 +3262,14 @@ become t=300,000).</span></p>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.TimeWindows</span><span class="o">;</span>
 
 <span class="c1">// A tumbling time window with a size of 5 minutes (and, by definition, an implicit</span>
-<span class="c1">// advance interval of 5 minutes).</span>
+<span class="c1">// advance interval of 5 minutes). Note the explicit grace period, as the current</span>
+<span class="c1">// default value is 24 hours, which may be larger than needed for smaller windows. </span>
 <span class="kt">Duration</span> <span class="n">windowSizeMs</span> <span class="o">=</span> <span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span>
-<span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">);</span>
+<span class="kt">Duration</span> <span class="n">gracePeriodMs</span> <span class="o">=</span> <span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span>
+<span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">).</span><span class="na">grace</span><span class="o">(</span><span class="n">gracePeriodMs</span><span class="o">);</span>
 
 <span class="c1">// The above is equivalent to the following code:</span>
-<span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">).</span><span class="na">advanceBy</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">);</span>
+<span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">).</span><span class="na">advanceBy</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">).</span><span class="na">grace</span><span class="o">(</span><span class="n">gracePeriodMs</span><span class="o">);</span>
 </pre></div>
                         </div>
                     </div>

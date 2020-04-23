@@ -800,15 +800,15 @@ public class KafkaStreamsTest {
     public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
         props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
 
-        assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
+                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+        }
     }
 
     @Test

@@ -246,7 +246,7 @@ public class KeyValueStoreTestDriver<K, V> {
         stateSerdes = serdes;
 
         context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
-            ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
+            final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override
             public ThreadCache getCache() {
@@ -331,7 +331,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the processing context; never null
      * @see #addEntryToRestoreLog(Object, Object)
      */
-    public ProcessorContext context() {
+    public ProcessorContext<Object, Object> context() {
         return context;
     }
 
