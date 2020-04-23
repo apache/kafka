@@ -51,7 +51,7 @@ import static org.mockito.Mockito.verify;
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
-    private final long maxBlockTimeMs = 2000;
+    private final long maxBlockTimeMs = 10;
     private final String metricGroup = "TestMetrics";
 
     @After
@@ -185,7 +185,7 @@ public class BufferPoolTest {
             // this is good
         }
         // Thread scheduling sometimes means that deallocation varies by this point
-        assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 8 && pool.availableMemory() <= 10);
+        assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 7 && pool.availableMemory() <= 10);
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
         assertTrue("BufferExhaustedException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
         assertTrue("BufferExhaustedException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);

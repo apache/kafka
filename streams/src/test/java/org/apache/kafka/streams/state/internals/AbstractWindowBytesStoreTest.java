@@ -16,30 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.time.Instant.ofEpochMilli;
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.StreamsTestUtils.toSet;
-import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -63,13 +39,36 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
-public abstract class WindowBytesStoreTest {
+import static java.time.Instant.ofEpochMilli;
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.toSet;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+public abstract class AbstractWindowBytesStoreTest {
 
     static final long WINDOW_SIZE = 3L;
     static final long SEGMENT_INTERVAL = 60_000L;
@@ -83,10 +82,10 @@ public abstract class WindowBytesStoreTest {
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
     abstract <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
-                                                               final long windowSize,
-                                                               final boolean retainDuplicates,
-                                                               final Serde<K> keySerde,
-                                                               final Serde<V> valueSerde);
+                                                       final long windowSize,
+                                                       final boolean retainDuplicates,
+                                                       final Serde<K> keySerde,
+                                                       final Serde<V> valueSerde);
 
     abstract String getMetricsScope();
 
@@ -680,22 +679,31 @@ public abstract class WindowBytesStoreTest {
         windowStore.put("aa", "0004", 1);
         windowStore.put("a", "0005", 0x7a00000000000000L - 1);
 
-        final Set expected = new HashSet<>(asList("0001", "0003", "0005"));
-        assertThat(valuesToSet(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))), equalTo(expected));
+        final Set<String> expected = new HashSet<>(asList("0001", "0003", "0005"));
+        assertThat(
+            valuesToSet(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            equalTo(expected)
+        );
 
         Set<KeyValue<Windowed<String>, String>> set =
             toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(set, equalTo(new HashSet<>(asList(
-            windowedPair("a", "0001", 0, windowSize),
-            windowedPair("a", "0003", 1, windowSize),
-            windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)
-        ))));
+        assertThat(
+            set,
+            equalTo(new HashSet<>(asList(
+                windowedPair("a", "0001", 0, windowSize),
+                windowedPair("a", "0003", 1, windowSize),
+                windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)
+            )))
+        );
 
         set = toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(set, equalTo(new HashSet<>(asList(
-            windowedPair("aa", "0002", 0, windowSize),
-            windowedPair("aa", "0004", 1, windowSize)
-        ))));
+        assertThat(
+            set,
+            equalTo(new HashSet<>(asList(
+                windowedPair("aa", "0002", 0, windowSize),
+                windowedPair("aa", "0004", 1, windowSize)
+            )))
+        );
     }
 
     @Test
@@ -763,15 +771,21 @@ public abstract class WindowBytesStoreTest {
         windowStore.put(key2, "8", 59999);
         windowStore.put(key3, "9", 59999);
 
-        final Set expectedKey1 = new HashSet<>(asList("1", "4", "7"));
-        assertThat(valuesToSet(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey1));
-        final Set expectedKey2 = new HashSet<>(asList("2", "5", "8"));
-        assertThat(valuesToSet(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey2));
-        final Set expectedKey3 = new HashSet<>(asList("3", "6", "9"));
-        assertThat(valuesToSet(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey3));
+        final Set<String> expectedKey1 = new HashSet<>(asList("1", "4", "7"));
+        assertThat(
+            valuesToSet(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            equalTo(expectedKey1)
+        );
+        final Set<String> expectedKey2 = new HashSet<>(asList("2", "5", "8"));
+        assertThat(
+            valuesToSet(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            equalTo(expectedKey2)
+        );
+        final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
+        assertThat(
+            valuesToSet(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            equalTo(expectedKey3)
+        );
     }
 
     @Test
@@ -792,17 +806,18 @@ public abstract class WindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        setClassLoggerToDebug();
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L);
+            assertFalse(iterator.hasNext());
 
-        final KeyValueIterator iterator = windowStore.fetch(-1, 1, 0L, 10L);
-        assertFalse(iterator.hasNext());
-
-        final List<String> messages = appender.getMessages();
-        assertThat(messages,
-            hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
-                + "Note that the built-in numerical serdes do not follow this for negative numbers"));
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
     }
 
     @Test
@@ -816,9 +831,6 @@ public abstract class WindowBytesStoreTest {
     }
 
     private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
-        setClassLoggerToDebug();
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final WindowStore<Integer, String> windowStore =
@@ -831,14 +843,17 @@ public abstract class WindowBytesStoreTest {
         context.setTime(1L);
         windowStore.init(context, windowStore);
 
-        // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
-        windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
+            windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
 
-        // Try inserting a record with timestamp 0 -- should be dropped
-        windowStore.put(1, "late record", 0L);
-        windowStore.put(1, "another on-time record", RETENTION_PERIOD + 1);
+            // Try inserting a record with timestamp 0 -- should be dropped
+            windowStore.put(1, "late record", 0L);
+            windowStore.put(1, "another on-time record", RETENTION_PERIOD + 1);
 
-        LogCaptureAppender.unregister(appender);
+            final List<String> messages = appender.getMessages();
+            assertThat(messages, hasItem("Skipping record for expired segment."));
+        }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
@@ -891,8 +906,6 @@ public abstract class WindowBytesStoreTest {
         }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
-        final List<String> messages = appender.getMessages();
-        assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
     @Test

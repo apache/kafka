@@ -26,7 +26,6 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class StopReplicaResponse extends AbstractResponse {
 
@@ -60,7 +59,7 @@ public class StopReplicaResponse extends AbstractResponse {
         if (data.errorCode() != Errors.NONE.code())
             // Minor optimization since the top-level error applies to all partitions
             return Collections.singletonMap(error(), data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())).collect(Collectors.toList()));
+        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())));
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {

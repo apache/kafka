@@ -1592,7 +1592,6 @@ public class InternalTopologyBuilder {
 
     public final static class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
         private final TopicNameExtractor<K, V> topicNameExtractor;
-
         public Sink(final String name,
                     final TopicNameExtractor<K, V> topicNameExtractor) {
             super(name);

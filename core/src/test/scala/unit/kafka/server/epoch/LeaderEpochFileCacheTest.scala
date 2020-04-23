@@ -40,7 +40,7 @@ class LeaderEpochFileCacheTest {
     override def write(epochs: Seq[EpochEntry]): Unit = this.epochs = epochs
     override def read(): Seq[EpochEntry] = this.epochs
   }
-  private val cache = new LeaderEpochFileCache(tp, logEndOffset _, checkpoint)
+  private val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)
 
   @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
@@ -231,12 +231,12 @@ class LeaderEpochFileCacheTest {
     val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
 
     //Given
-    val cache = new LeaderEpochFileCache(tp, logEndOffset _, checkpoint)
+    val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)
     cache.assign(epoch = 2, startOffset = 6)
 
     //When
     val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath))
-    val cache2 = new LeaderEpochFileCache(tp, logEndOffset _, checkpoint2)
+    val cache2 = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint2)
 
     //Then
     assertEquals(1, cache2.epochEntries.size)

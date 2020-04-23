@@ -83,9 +83,12 @@ public class ProcessorStateManagerTest {
     private final String persistentStoreName = "persistentStore";
     private final String persistentStoreTwoName = "persistentStore2";
     private final String nonPersistentStoreName = "nonPersistentStore";
-    private final String persistentStoreTopicName = ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreName);
-    private final String persistentStoreTwoTopicName = ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreTwoName);
-    private final String nonPersistentStoreTopicName = ProcessorStateManager.storeChangelogTopic(applicationId, nonPersistentStoreName);
+    private final String persistentStoreTopicName =
+        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreName);
+    private final String persistentStoreTwoTopicName =
+        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreTwoName);
+    private final String nonPersistentStoreTopicName =
+        ProcessorStateManager.storeChangelogTopic(applicationId, nonPersistentStoreName);
     private final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
     private final MockKeyValueStore persistentStoreTwo = new MockKeyValueStore(persistentStoreTwoName, true);
     private final MockKeyValueStore nonPersistentStore = new MockKeyValueStore(nonPersistentStoreName, false);
@@ -98,7 +101,8 @@ public class ProcessorStateManagerTest {
     private final String value = "the-value";
     private final byte[] keyBytes = new byte[] {0x0, 0x0, 0x0, 0x1};
     private final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-    private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord =
+        new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
     private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final LogContext logContext = new LogContext("process-state-manager-test ");
 
@@ -192,7 +196,10 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback);
 
-        assertThrows(IllegalStateException.class, () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L)));
+        assertThrows(
+            IllegalStateException.class,
+            () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L))
+        );
     }
 
     @Test
@@ -590,31 +597,30 @@ public class ProcessorStateManagerTest {
     @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Test
     public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-
         stateDirectory.clean();
-        stateMgr.checkpoint(singletonMap(persistentStorePartition, 10L));
-        LogCaptureAppender.unregister(appender);
 
-        boolean foundExpectedLogMessage = false;
-        for (final LogCaptureAppender.Event event : appender.getEvents()) {
-            if ("WARN".equals(event.getLevel())
-                && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
-                && event.getMessage().endsWith(".checkpoint]")
-                && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ProcessorStateManager.class)) {
+            stateMgr.checkpoint(singletonMap(persistentStorePartition, 10L));
 
-                foundExpectedLogMessage = true;
-                break;
+            boolean foundExpectedLogMessage = false;
+            for (final LogCaptureAppender.Event event : appender.getEvents()) {
+                if ("WARN".equals(event.getLevel())
+                    && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
+                    && event.getMessage().endsWith(".checkpoint]")
+                    && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
+
+                    foundExpectedLogMessage = true;
+                    break;
+                }
             }
+            assertTrue(foundExpectedLogMessage);
         }
-        assertTrue(foundExpectedLogMessage);
     }
 
     @Test
-    public void shouldThrowIfLoadCheckpointThrows() throws IOException {
+    public void shouldThrowIfLoadCheckpointThrows() throws Exception {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -730,7 +736,10 @@ public class ProcessorStateManagerTest {
             final TaskCorruptedException exception = assertThrows(TaskCorruptedException.class,
                 () -> stateMgr.initializeStoreOffsetsFromCheckpoint(false));
 
-            assertEquals(Collections.singletonMap(taskId, stateMgr.changelogPartitions()), exception.corruptedTaskWithChangelogs());
+            assertEquals(
+                Collections.singletonMap(taskId, stateMgr.changelogPartitions()),
+                exception.corruptedTaskWithChangelogs()
+            );
         } finally {
             stateMgr.close();
         }

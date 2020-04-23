@@ -13,14 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-group=org.apache.kafka
-# NOTE: When you change this version number, you should also make sure to update
-# the version numbers in
-#  - docs/js/templateData.js
-#  - tests/kafkatest/__init__.py
-#  - tests/kafkatest/version.py (variable DEV_VERSION)
-#  - kafka-merge-pr.py
-version=2.6.0-SNAPSHOT
-scalaVersion=2.13.2
-task=build
-org.gradle.jvmargs=-Xmx1024m -Xss2m
+# Convenient way to invoke a gradle command with all Scala versions supported
+# by default
+./gradlew "$@" -PscalaVersion=2.12 && ./gradlew "$@" -PscalaVersion=2.13
+

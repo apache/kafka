@@ -66,11 +66,11 @@ public class DeleteRecordsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (DeleteRecordsResponseData.DeleteRecordsTopicResult topicResponses : data.topics()) {
-            for (DeleteRecordsResponseData.DeleteRecordsPartitionResult response : topicResponses.partitions()) {
-                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()));
-            }
-        }
+        data.topics().forEach(topicResponses ->
+            topicResponses.partitions().forEach(response ->
+                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()))
+            )
+        );
         return errorCounts;
     }
 

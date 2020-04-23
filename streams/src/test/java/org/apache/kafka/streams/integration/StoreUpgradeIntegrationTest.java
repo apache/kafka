@@ -45,8 +45,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.time.Duration;
 import java.util.LinkedList;
@@ -62,20 +64,22 @@ public class StoreUpgradeIntegrationTest {
     private static final String STORE_NAME = "store";
 
     private KafkaStreams kafkaStreams;
-    private static int testCounter = 0;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @Before
     public void createTopics() throws Exception {
-        inputStream = "input-stream-" + testCounter;
+        inputStream = "input-stream-" + testName.getMethodName();
         CLUSTER.createTopic(inputStream);
     }
 
+    @Rule
+    public TestName testName = new TestName();
+
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "addId-" + testCounter++);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "addId-" + testName.getMethodName());
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
