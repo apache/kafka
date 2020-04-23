@@ -80,7 +80,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger);
 
-    private List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
+    private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private MockInternalProcessorContext context;
@@ -88,7 +88,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Before
     public void initializeStore() {
-        results = new ArrayList<>();
         context = new MockInternalProcessorContext(new LogContext("testCache "), 100000) {
 
             @SuppressWarnings("unchecked")
@@ -613,5 +612,4 @@ public class KStreamSessionWindowAggregateProcessorTest {
         sessionStore.init(context, sessionStore);
         return context;
     }
-
 }
