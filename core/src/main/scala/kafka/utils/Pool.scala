@@ -18,6 +18,7 @@
 package kafka.utils
 
 import java.util.concurrent._
+import java.util.function.BiConsumer
 
 import org.apache.kafka.common.KafkaException
 
@@ -74,6 +75,12 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def values: Iterable[V] = pool.values.asScala
 
   def clear(): Unit = { pool.clear() }
+
+  def foreachEntry(f: (K, V) => Unit): Unit = {
+    pool.forEach(new BiConsumer[K,V] {
+      override def accept(t: K, u: V): Unit = f(t, u)
+    })
+  }
   
   override def size: Int = pool.size
   

@@ -69,7 +69,7 @@ import scala.Option;
 @State(Scope.Benchmark)
 public class CheckpointBench {
 
-    @Param({"100", "1000", "2000"})
+    @Param({"2000"})
     public int numTopics;
 
     @Param({"3"})

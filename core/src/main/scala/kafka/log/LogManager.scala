@@ -1011,8 +1011,8 @@ class LogManager(logDirs: Seq[File],
     def addToDir(tp: TopicPartition, log: Log): Unit = {
       byDir.getOrElseUpdate(log.parentDir, new mutable.AnyRefMap[TopicPartition, Log]()).put(tp, log)
     }
-    currentLogs.foreach { case (tp, log) => addToDir(tp, log) }
-    futureLogs.foreach { case (tp, log) => addToDir(tp, log) }
+    currentLogs.foreachEntry(addToDir)
+    futureLogs.foreachEntry(addToDir)
     byDir
   }
 
