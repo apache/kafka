@@ -47,6 +47,8 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     public final AddPartitionsToTxnResponseData data;
 
+    private Map<TopicPartition, Errors> cachedErrorsMap = null;
+
     public AddPartitionsToTxnResponse(Struct struct, short version) {
         this.data = new AddPartitionsToTxnResponseData(struct, version);
     }
@@ -90,16 +92,20 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     public Map<TopicPartition, Errors> errors() {
-        Map<TopicPartition, Errors> errorsMap = new HashMap<>();
+        if (cachedErrorsMap != null) {
+            return cachedErrorsMap;
+        }
+
+        cachedErrorsMap = new HashMap<>();
 
         for (AddPartitionsToTxnTopicResult topicResult : this.data.results()) {
             for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
-                errorsMap.put(new TopicPartition(
+                cachedErrorsMap.put(new TopicPartition(
                         topicResult.name(), partitionResult.partitionIndex()),
                     Errors.forCode(partitionResult.errorCode()));
             }
         }
-        return errorsMap;
+        return cachedErrorsMap;
     }
 
     @Override

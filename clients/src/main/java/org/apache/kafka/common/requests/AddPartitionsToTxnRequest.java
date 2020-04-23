@@ -60,7 +60,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     }
                     subPartitions.add(topicPartition.partition());
                     return subPartitions;
-               });
+                });
             }
 
             AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
