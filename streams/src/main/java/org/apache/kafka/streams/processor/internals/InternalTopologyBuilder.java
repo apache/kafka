@@ -1247,7 +1247,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    synchronized boolean usesPatternSubscription() {
+    boolean usesPatternSubscription() {
         return !nodeToSourcePatterns.isEmpty();
     }
 
