@@ -1417,8 +1417,10 @@ public class TransactionManager {
                 } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     reenqueue();
                     return;
-                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                    fatalError(error.exception());
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
+                    // For older versions, we could still receive INVALID_PRODUCER_EPOCH from transaction coordinator.
+                    // We just treat it the same as PRODUCE_FENCED.
+                    fatalError(Errors.PRODUCER_FENCED.exception());
                     return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatalError(error.exception());
@@ -1575,8 +1577,10 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                fatalError(error.exception());
+            } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
+                // For older versions, we could still receive INVALID_PRODUCER_EPOCH from transaction coordinator.
+                // We just treat it the same as PRODUCE_FENCED.
+                fatalError(Errors.PRODUCER_FENCED.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.INVALID_TXN_STATE) {
@@ -1632,8 +1636,10 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                 abortableErrorIfPossible(error.exception());
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                fatalError(error.exception());
+            } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
+                // For older versions, we could still receive INVALID_PRODUCER_EPOCH from transaction coordinator.
+                // We just treat it the same as PRODUCE_FENCED.
+                fatalError(Errors.PRODUCER_FENCED.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
