@@ -28,8 +28,8 @@
         <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
         <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
       </div>
-    </div -->
-  </div>
+    </div>
+  </div -->
 
 
     <div class="section" id="streams-dsl">
@@ -49,7 +49,7 @@
                             <li><a class="reference internal" href="#join-co-partitioning-requirements" id="id14">Join co-partitioning requirements</a></li>
                             <li><a class="reference internal" href="#kstream-kstream-join" id="id15">KStream-KStream Join</a></li>
                             <li><a class="reference internal" href="#ktable-ktable-equi-join" id="id16">KTable-KTable Equi-Join</a></li>
-                            <li><a class="reference internal" href="#ktable-ktable-fk-join" id="id16">KTable-KTable Foreign-Key Join</a></li>
+                            <li><a class="reference internal" href="#ktable-ktable-fk-join" id="id34">KTable-KTable Foreign-Key Join</a></li>
                             <li><a class="reference internal" href="#kstream-ktable-join" id="id17">KStream-KTable Join</a></li>
                             <li><a class="reference internal" href="#kstream-globalktable-join" id="id18">KStream-GlobalKTable Join</a></li>
                         </ul>
@@ -1114,7 +1114,7 @@
           <span class="o">.</span><span class="na">withValueSerde</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">()));</span>
 
 <span class="c1">// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o"><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
     <span class="n">aggregate</span><span class="o">(</span>
         <span class="k">new</span> <span class="n">Initializer</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;()</span> <span class="o">{</span> <span class="cm">/* initializer */</span>
             <span class="nd">@Override</span>
@@ -2153,7 +2153,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this table with another table.
-                                    The result is an ever-updating KTable that represents the &#8220;current&#8221; result of the join.
+                                    The result is an ever-updating KTable that represents the &quot;current&quot; result of the join.
                                     <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2430,7 +2430,7 @@
                     </div>
                     <div class="section" id="ktable-ktable-fk-join"> <span
                         id="streams-developer-guide-dsl-joins-ktable-ktable-fk"></span>
-                      <h5><a class="toc-backref" href="#id16">KTable-KTable Foreign-Key
+                      <h5><a class="toc-backref" href="#id34">KTable-KTable Foreign-Key
                           Join</a></h5>
                       <p>KTable-KTable foreign-key joins are always <em>non-windowed</em>
                         joins. Foreign-key joins are analogous to joins in SQL. As a rough example: 
@@ -2471,13 +2471,13 @@
                             <td>
                               <p class="first"><strong>Inner Join</strong></p>
                               <ul class="last simple">
-                                <li>(KTable, KTable) → KTable</li>
+                                <li>(KTable, KTable) &rarr; KTable</li>
                               </ul>
                             </td>
                             <td>
                               <p class="first">Performs a foreign-key INNER JOIN of this
                                 table with another table. The result is an ever-updating
-                                KTable that represents the “current” result of the join.
+                                KTable that represents the &quot;current&quot; result of the join.
                                 <a class="reference external"
                 href="/%7B%7Bversion%7D%7D/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                               <div class="highlight-java">
