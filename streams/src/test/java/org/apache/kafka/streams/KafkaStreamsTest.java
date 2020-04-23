@@ -840,7 +840,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("topic", Materialized.as("store"));
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -899,7 +899,7 @@ public class KafkaStreamsTest {
     public void shouldNotCreateStreamThreadsForGlobalOnlyTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
-        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
         assertThat(streams.threads.length, equalTo(0));
     }
@@ -908,7 +908,7 @@ public class KafkaStreamsTest {
     public void shouldNotTransitToErrorStateWithGlobalOnlyTopology() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
-        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
         streams.setStateListener((newState, oldState) -> {
             if (newState.equals(State.ERROR)) {
                 throw new AssertionError("Should not have transitioned to ERROR state with no stream threads");
