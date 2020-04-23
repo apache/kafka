@@ -28,7 +28,6 @@ import java.util.List;
  * <p>Common use cases are ability to provide principal per connector, <code>sasl.jaas.config</code>
  * and/or enforcing that the producer/consumer configurations for optimizations are within acceptable ranges.
  */
-@SuppressWarnings("try") // can't override close() to now declare throws Exception until Kafka 3.0
 public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable {
 
 
