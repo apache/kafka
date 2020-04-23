@@ -60,6 +60,11 @@ public class SyncGroupResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
+    @Override
+    public String toString() {
+        return data.toString();
+    }
+
     public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
         return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer), version);
     }
