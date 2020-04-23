@@ -29,12 +29,17 @@
     --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
     || { echo 'Test steps failed'; exit 1; }
 
-# Verify that Kafka Streams archetype compiles
 if [ $JAVA_HOME = "/home/jenkins/tools/java/latest11" ] ; then
   echo "Skipping Kafka Streams archetype test for Java 11"
   exit 0
 fi
 
+if [ $JAVA_HOME = "/home/jenkins/tools/java/latest14" ] ; then
+  echo "Skipping Kafka Streams archetype test for Java 14"
+  exit 0
+fi
+
+# Verify that Kafka Streams archetype compiles
 ./gradlew streams:install clients:install connect:json:install connect:api:install \
     || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
 

@@ -19,9 +19,8 @@ package kafka.log
 
 import java.io.PrintWriter
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.KafkaMetricsGroup
+import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
@@ -29,8 +28,8 @@ import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.collection.{Iterable, JavaConverters, Seq}
+import scala.collection.{Iterable, Seq}
+import scala.jdk.CollectionConverters._
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
@@ -78,8 +77,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
 
     TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 2000L)
-    val expectedTotalUncleanableBytes = LogCleaner.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
-      LogCleaner.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
+    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
+      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
@@ -90,8 +89,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
-    Metrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(filter(_))
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => filter(k) }
       .headOption
       .getOrElse { fail(s"Unable to find metric") }
       .asInstanceOf[(Any, Gauge[Any])]
@@ -179,7 +178,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    import JavaConverters._
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt

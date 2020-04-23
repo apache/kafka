@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -158,9 +159,10 @@ public class TestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Node> replicas = Collections.singletonList(leader);
+                List<Integer> replicaIds = Collections.singletonList(leader.id());
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, i, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
+                        Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
+                        replicaIds, replicaIds, replicaIds));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
@@ -179,12 +181,12 @@ public class TestUtils {
     @FunctionalInterface
     public interface PartitionMetadataSupplier {
         MetadataResponse.PartitionMetadata supply(Errors error,
-                              int partition,
-                              Node leader,
+                              TopicPartition partition,
+                              Optional<Integer> leaderId,
                               Optional<Integer> leaderEpoch,
-                              List<Node> replicas,
-                              List<Node> isr,
-                              List<Node> offlineReplicas);
+                              List<Integer> replicas,
+                              List<Integer> isr,
+                              List<Integer> offlineReplicas);
     }
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
@@ -262,14 +264,11 @@ public class TestUtils {
         }
         file.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Utils.delete(file);
-                } catch (IOException e) {
-                    log.error("Error deleting {}", file.getAbsolutePath(), e);
-                }
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
             }
         });
 
@@ -277,27 +276,26 @@ public class TestUtils {
     }
 
     public static Properties producerConfig(final String bootstrapServers,
-                                            final Class keySerializer,
-                                            final Class valueSerializer,
+                                            final Class<?> keySerializer,
+                                            final Class<?> valueSerializer,
                                             final Properties additional) {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         properties.put(ProducerConfig.ACKS_CONFIG, "all");
-        properties.put(ProducerConfig.RETRIES_CONFIG, 0);
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
         properties.putAll(additional);
         return properties;
     }
 
-    public static Properties producerConfig(final String bootstrapServers, final Class keySerializer, final Class valueSerializer) {
+    public static Properties producerConfig(final String bootstrapServers, final Class<?> keySerializer, final Class<?> valueSerializer) {
         return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer,
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer,
                                             final Properties additional) {
 
         final Properties consumerConfig = new Properties();
@@ -312,8 +310,8 @@ public class TestUtils {
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer) {
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             groupId,
             keyDeserializer,
@@ -324,7 +322,7 @@ public class TestUtils {
     /**
      * returns consumer config with random UUID for the Group ID
      */
-    public static Properties consumerConfig(final String bootstrapServers, final Class keyDeserializer, final Class valueDeserializer) {
+    public static Properties consumerConfig(final String bootstrapServers, final Class<?> keyDeserializer, final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             UUID.randomUUID().toString(),
             keyDeserializer,
@@ -416,6 +414,8 @@ public class TestUtils {
             try {
                 runnable.call();
                 return;
+            } catch (final NoRetryException e) {
+                throw e;
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
@@ -559,5 +559,11 @@ public class TestUtils {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
     }
 }

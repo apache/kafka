@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
@@ -39,6 +40,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -183,5 +186,27 @@ public class SensorTest {
                 service.shutdownNow();
             }
         }
+    }
+
+    @Test
+    public void shouldReturnPresenceOfMetrics() {
+        final Metrics metrics = new Metrics();
+        final Sensor sensor = metrics.sensor("sensor");
+
+        assertThat(sensor.hasMetrics(), is(false));
+
+        sensor.add(
+            new MetricName("name1", "group1", "description1", Collections.emptyMap()),
+            new WindowedSum()
+        );
+
+        assertThat(sensor.hasMetrics(), is(true));
+
+        sensor.add(
+            new MetricName("name2", "group2", "description2", Collections.emptyMap()),
+            new CumulativeCount()
+        );
+
+        assertThat(sensor.hasMetrics(), is(true));
     }
 }

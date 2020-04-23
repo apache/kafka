@@ -51,13 +51,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
                             final InternalStreamsBuilder builder,
-                            final Set<String> sourceNodes,
+                            final Set<String> subTopologySourceNodes,
                             final String name,
                             final Serde<K> keySerde,
                             final Serde<V> valSerde,
                             final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                             final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, valSerde, subTopologySourceNodes, streamsGraphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
     }

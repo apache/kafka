@@ -47,6 +47,7 @@ import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -156,19 +157,16 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
         String fullName = aliases.containsKey(connectorClassOrAlias)
                           ? aliases.get(connectorClassOrAlias)
                           : connectorClassOrAlias;
-        PluginClassLoader classLoader = pluginClassLoader(fullName);
-        if (classLoader == null) {
-            log.error(
-                    "Plugin class loader for connector: '{}' was not found. Returning: {}",
-                    connectorClassOrAlias,
-                    this
-            );
-            return this;
-        }
+        ClassLoader classLoader = pluginClassLoader(fullName);
+        if (classLoader == null) classLoader = this;
+        log.debug(
+            "Getting plugin class loader: '{}' for connector: {}",
+            classLoader,
+            connectorClassOrAlias
+        );
         return classLoader;
     }
 
@@ -342,7 +340,14 @@ public class DelegatingClassLoader extends URLClassLoader {
             Class<T> klass,
             ClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
-        Set<Class<? extends T>> plugins = reflections.getSubTypesOf(klass);
+        Set<Class<? extends T>> plugins;
+        try {
+            plugins = reflections.getSubTypesOf(klass);
+        } catch (ReflectionsException e) {
+            log.debug("Reflections scanner could not find any classes for URLs: " +
+                    reflections.getConfiguration().getUrls(), e);
+            return Collections.emptyList();
+        }
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {

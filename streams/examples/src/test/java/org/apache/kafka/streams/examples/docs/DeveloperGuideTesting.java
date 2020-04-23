@@ -145,20 +145,20 @@ public class DeveloperGuideTesting {
         assertThat(outputTopic.isEmpty(), is(true));
     }
 
-    public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+    public static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
         @Override
         public Processor<String, Long> get() {
             return new CustomMaxAggregator();
         }
     }
 
-    public class CustomMaxAggregator implements Processor<String, Long> {
-        ProcessorContext context;
+    public static class CustomMaxAggregator implements Processor<String, Long> {
+        ProcessorContext<Object, Object> context;
         private KeyValueStore<String, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             this.context = context;
             context.schedule(Duration.ofSeconds(60), PunctuationType.WALL_CLOCK_TIME, time -> flushStore());
             context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, time -> flushStore());

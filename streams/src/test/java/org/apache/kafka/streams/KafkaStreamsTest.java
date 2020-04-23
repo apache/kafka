@@ -17,9 +17,14 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -76,11 +81,13 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -141,7 +148,7 @@ public class KafkaStreamsTest {
     public void before() throws Exception {
         time = new MockTime();
         supplier = new MockClientSupplier();
-        supplier.setClusterForAdminClient(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
         streamsStateListener = new StateListenerStub();
         threadStatelistenerCapture = EasyMock.newCapture();
         metricsReportersCapture = EasyMock.newCapture();
@@ -161,8 +168,8 @@ public class KafkaStreamsTest {
         // setup metrics
         PowerMock.expectNew(Metrics.class,
             anyObject(MetricConfig.class),
-            EasyMock.capture(metricsReportersCapture),
-            EasyMock.anyObject(Time.class)
+            capture(metricsReportersCapture),
+            anyObject(Time.class)
         ).andAnswer(() -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());
@@ -185,6 +192,7 @@ public class KafkaStreamsTest {
         ClientMetrics.addApplicationIdMetric(anyObject(StreamsMetricsImpl.class), EasyMock.eq(APPLICATION_ID));
         ClientMetrics.addTopologyDescriptionMetric(anyObject(StreamsMetricsImpl.class), anyString());
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
+        ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);
@@ -203,10 +211,9 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class),
             anyInt()
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
-        EasyMock.expect(StreamThread.getSharedAdminClientId(
-            anyString()
-        )).andReturn("admin").anyTimes();
 
+        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
+        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(0L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(1L).anyTimes();
         prepareStreamThread(streamThreadOne, true);
@@ -226,7 +233,7 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class)
         ).andReturn(globalStreamThread).anyTimes();
         EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
-        globalStreamThread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        globalStreamThread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         globalStreamThread.start();
@@ -240,7 +247,7 @@ public class KafkaStreamsTest {
         globalStreamThread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             globalThreadState.set(GlobalStreamThread.State.DEAD);
@@ -272,7 +279,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
-        thread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        thread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         thread.start();
@@ -296,7 +303,7 @@ public class KafkaStreamsTest {
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             state.set(StreamThread.State.DEAD);
@@ -313,6 +320,9 @@ public class KafkaStreamsTest {
                 Thread.sleep(50L);
                 return null;
             }).anyTimes();
+
+        EasyMock.expect(thread.activeTasks()).andStubReturn(emptyList());
+        EasyMock.expect(thread.allTasks()).andStubReturn(Collections.emptyMap());
     }
 
     @Test
@@ -469,7 +479,7 @@ public class KafkaStreamsTest {
 
         assertTrue(supplier.consumer.closed());
         assertTrue(supplier.restoreConsumer.closed());
-        for (final MockProducer p : supplier.producers) {
+        for (final MockProducer<byte[], byte[]> p : supplier.producers) {
             assertTrue(p.closed());
         }
     }
@@ -659,15 +669,43 @@ public class KafkaStreamsTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithSerializerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", Serdes.String().serializer());
+        streams.queryMetadataForKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test
+    public void shouldGetQueryMetadataWithSerializerWhenRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        streams.start();
+        assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
+    public void shouldNotGetQueryMetadataWithPartitionerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+        streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+    }
+
+    @Test
+    public void shouldReturnEmptyLocalStorePartitionLags() {
+        // Mock all calls made to compute the offset lags,
+        final ListOffsetsResult result = EasyMock.mock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(Collections.emptyMap());
+
+        EasyMock.expect(result.all()).andReturn(allFuture);
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+            .addMockedMethod("listOffsets", Map.class).createMock();
+        EasyMock.expect(mockAdminClient.listOffsets(anyObject())).andStubReturn(result);
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+            .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, mockClientSupplier, time);
+        streams.start();
+        assertEquals(0, streams.allLocalStorePartitionLags().size());
     }
 
     @Test
@@ -762,15 +800,15 @@ public class KafkaStreamsTest {
     public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
         props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
 
-        assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
+                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+        }
     }
 
     @Test
@@ -877,13 +915,14 @@ public class KafkaStreamsTest {
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
             isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
             Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(globalStoreBuilder,
+        topology.addGlobalStore(
+            globalStoreBuilder,
             "global",
             Serdes.String().deserializer(),
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<>());
         return topology;
     }
 

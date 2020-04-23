@@ -35,6 +35,7 @@ public class ClientMetrics {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
     private static final String VERSION_FROM_FILE;
     private static final String COMMIT_ID_FROM_FILE;
     private static final String DEFAULT_VALUE = "unknown";
@@ -58,6 +59,7 @@ public class ClientMetrics {
     private static final String TOPOLOGY_DESCRIPTION_DESCRIPTION =
         "The description of the topology executed in the Kafka Streams client";
     private static final String STATE_DESCRIPTION = "The state of the Kafka Streams client";
+    private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The current number of alive stream threads that are running or participating in rebalance";
 
     public static String version() {
         return VERSION_FROM_FILE;
@@ -109,6 +111,16 @@ public class ClientMetrics {
         streamsMetrics.addClientLevelMutableMetric(
             STATE,
             STATE_DESCRIPTION,
+            RecordingLevel.INFO,
+            stateProvider
+        );
+    }
+
+    public static void addNumAliveStreamThreadMetric(final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> stateProvider) {
+        streamsMetrics.addClientLevelMutableMetric(
+            ALIVE_STREAM_THREADS,
+            ALIVE_STREAM_THREADS_DESCRIPTION,
             RecordingLevel.INFO,
             stateProvider
         );

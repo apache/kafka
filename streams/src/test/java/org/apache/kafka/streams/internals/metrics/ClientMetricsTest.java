@@ -16,71 +16,60 @@
  */
 package org.apache.kafka.streams.internals.metrics;
 
-
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
-import static org.easymock.EasyMock.and;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.not;
-import static org.easymock.EasyMock.notNull;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
 public class ClientMetricsTest {
+    private static final String COMMIT_ID = "test-commit-ID";
+    private static final String VERSION = "test-version";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
 
-    private interface OneParamMetricAdder {
-        void addMetric(final StreamsMetricsImpl streamsMetrics);
-    }
-
-    private interface TwoParamMetricAdder {
-        void addMetric(final StreamsMetricsImpl streamsMetrics, final String value);
-    }
-
-    /*
-     * This test may fail when executed from a IDE since it expects the /kafka/kafka-streams-version.properties on the
-     * class path.
-     */
     @Test
     public void shouldAddVersionMetric() {
         final String name = "version";
         final String description = "The version of the Kafka Streams client";
-        setUpAndVerifyMetricOneParam(name, description, ClientMetrics::addVersionMetric);
+        setUpAndVerifyImmutableMetric(name, description, VERSION, () -> ClientMetrics.addVersionMetric(streamsMetrics));
     }
 
-    /*
-     * This test may fail when executed from a IDE since it expects the /kafka/kafka-streams-version.properties on the
-     * class path.
-     */
     @Test
     public void shouldAddCommitIdMetric() {
         final String name = "commit-id";
         final String description = "The version control commit ID of the Kafka Streams client";
-        setUpAndVerifyMetricOneParam(name, description, ClientMetrics::addCommitIdMetric);
+        setUpAndVerifyImmutableMetric(name, description, COMMIT_ID, () -> ClientMetrics.addCommitIdMetric(streamsMetrics));
     }
 
     @Test
     public void shouldAddApplicationIdMetric() {
         final String name = "application-id";
         final String description = "The application ID of the Kafka Streams client";
-        setUpAndVerifyMetricTwoParam(name, description, "thisIsAnID", ClientMetrics::addApplicationIdMetric);
+        final String applicationId = "thisIsAnID";
+        setUpAndVerifyImmutableMetric(
+            name,
+            description,
+            applicationId,
+            () -> ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationId)
+        );
     }
 
     @Test
     public void shouldAddTopologyDescriptionMetric() {
         final String name = "topology-description";
         final String description = "The description of the topology executed in the Kafka Streams client";
-        setUpAndVerifyMetricTwoParam(
+        final String topologyDescription = "thisIsATopologyDescription";
+        setUpAndVerifyImmutableMetric(
             name,
             description,
-            "thisIsATopologyDescription",
-            ClientMetrics::addTopologyDescriptionMetric
+            topologyDescription,
+            () -> ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, topologyDescription)
         );
     }
 
@@ -89,39 +78,48 @@ public class ClientMetricsTest {
         final String name = "state";
         final String description = "The state of the Kafka Streams client";
         final Gauge<State> stateProvider = (config, now) -> State.RUNNING;
+        setUpAndVerifyMutableMetric(
+            name,
+            description,
+            stateProvider,
+            () -> ClientMetrics.addStateMetric(streamsMetrics, stateProvider)
+        );
+    }
+
+    @Test
+    public void shouldAddAliveStreamThreadsMetric() {
+        final String name = "alive-stream-threads";
+        final String description = "The current number of alive stream threads that are running or participating in rebalance";
+        final Gauge<Integer> valueProvider = (config, now) -> 1;
+        setUpAndVerifyMutableMetric(
+            name,
+            description,
+            valueProvider,
+            () -> ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, valueProvider)
+        );
+    }
+
+    private <K> void setUpAndVerifyMutableMetric(final String name,
+                                                 final String description,
+                                                 final Gauge<K> valueProvider,
+                                                 final Runnable metricAdder) {
         streamsMetrics.addClientLevelMutableMetric(
             eq(name),
             eq(description),
             eq(RecordingLevel.INFO),
-            eq(stateProvider)
+            eq(valueProvider)
         );
         replay(streamsMetrics);
 
-        ClientMetrics.addStateMetric(streamsMetrics, stateProvider);
+        metricAdder.run();
 
         verify(streamsMetrics);
     }
 
-    private void setUpAndVerifyMetricOneParam(final String name,
-                                              final String description,
-                                              final OneParamMetricAdder metricAdder) {
-        streamsMetrics.addClientLevelImmutableMetric(
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            and(not(eq("unknown")), notNull())
-        );
-        replay(streamsMetrics);
-
-        metricAdder.addMetric(streamsMetrics);
-
-        verify(streamsMetrics);
-    }
-
-    private void setUpAndVerifyMetricTwoParam(final String name,
-                                              final String description,
-                                              final String value,
-                                              final TwoParamMetricAdder metricAdder) {
+    private void setUpAndVerifyImmutableMetric(final String name,
+                                               final String description,
+                                               final String value,
+                                               final Runnable metricAdder) {
         streamsMetrics.addClientLevelImmutableMetric(
             eq(name),
             eq(description),
@@ -130,7 +128,7 @@ public class ClientMetricsTest {
         );
         replay(streamsMetrics);
 
-        metricAdder.addMetric(streamsMetrics, value);
+        metricAdder.run();
 
         verify(streamsMetrics);
     }

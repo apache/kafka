@@ -72,12 +72,70 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
+    <p>
+        We add a new <code>cogroup()</code> operator (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-150+-+Kafka-Streams+Cogroup">KIP-150</a>>)
+        that allows to aggregate multiple streams in a single operation.
+        Cogrouped streams can also be windowed before they are aggregated.
+        We refer to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html">developer guide</a> for more details.
+    </p>
+    <p>
+        We added a new <code>KStream.toTable()</code> API to translate an input event stream into a changelog stream as per
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-523%3A+Add+KStream%23toTable+to+the+Streams+DSL">KIP-523</a>.
+    </p>
+    <p>
+        We added a new Serde type <code>Void</code> in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-527%3A+Add+VoidSerde+to+Serdes">KIP-527</a> to represent
+        null keys or null values from input topic.
+    </p>
+    <p>
+        Deprecated <code>UsePreviousTimeOnInvalidTimestamp</code> and replaced it with <code>UsePartitionTimeOnInvalidTimeStamp</code> as per
+        <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=130028807">KIP-530</a>.
+    </p>
+    <p>
+        Deprecated <code>KafkaStreams.store(String, QueryableStoreType)</code> and replaced it with <code>KafkaStreams.store(StoreQueryParameters)</code> to allow querying
+        for specific partition and specific task type as per
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a>.
+    </p>
+
     <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
+    <p>     
+         As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-213+Support+non-key+joining+in+KTable">KIP-213</a>). 
+         This joiner allows for records to be joined between two KTables with different keys. 
+         Both <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#ktable-ktable-fk-join">INNER and LEFT foreign-key joins</a> 
+         are supported.
+    </p>
+    <p>
+        In the 2.4 release, you now can name all operators in a Kafka Streams DSL topology via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</a>.
+        Giving your operators meaningful names makes it easier to understand the topology 
+        description (<code>Topology#describe()#toString()</code>) and 
+        understand the full context of what your Kafka Streams application is doing.
+        <br />
+        There are new overloads on most <code>KStream</code> and <code>KTable</code> methods 
+        that accept a <code>Named</code> object.  Typically you'll provide a name for the DSL operation by 
+        using <code>Named.as("my operator name")</code>.  Naming of repartition topics for aggregation 
+        operations will still use <code>Grouped</code> and join operations will use 
+        either <code>Joined</code> or the new <code>StreamJoined</code> object.
 
-    <!-- Placeholder KIP-213 -->
-    <!-- Placeholder KIP-307 -->
-    <!-- Placeholder KIP-479 -->
-
+    </p>
+    <p>
+        Before the 2.4.0 version of Kafka Streams, users of the DSL could not name the state stores involved in a stream-stream join.
+        If users changed their topology and added a operator before the
+        join, the internal names of the state stores would shift, requiring an application reset when redeploying.
+        In the 2.4.0 release, Kafka Streams adds the <code>StreamJoined</code>
+        class, which gives users the ability to name the join processor, repartition topic(s) (if a repartition is required),
+        and the state stores involved in the join.  Also, by naming the state stores, the changelog topics
+        backing the state stores are named as well.  It's important to note that naming the stores
+        <strong>will not</strong> make them queryable via Interactive Queries.
+        <br/>
+        Another feature delivered by <code>StreamJoined</code> is that you can now configure the type of state store used in the join.
+        You can elect to use in-memory stores or custom state stores for a stream-stream join.  Note that the provided stores
+        will not be available for querying via Interactive Queries.  With the addition
+        of <code>StreamJoined</code>, stream-stream join operations
+        using <code>Joined</code> have been deprecated. Please switch over to stream-stream join methods using the
+        new overloaded methods.  You can get more details from
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>.
+    </p>
     <p>
         With the introduction of incremental cooperative rebalancing, Streams no longer requires all tasks be revoked at the beginning of a rebalance. Instead, at the completion of the rebalance only those tasks which are to be migrated to another consumer
         for overall load balance will need to be closed and revoked. This changes the semantics of the <code>StateListener</code> a bit, as it will not necessarily transition to <code>REBALANCING</code> at the beginning of a rebalance anymore. Note that
@@ -128,7 +186,7 @@
         Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly.
         If you use a custom <code>PartitionGrouper</code> and stop to use it, the created tasks might change.
         Hence, you will need to reset your application to upgrade it.
-    </p>
+    
 
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
@@ -317,7 +375,7 @@
 
     <p>
         We are introducing static membership towards Kafka Streams user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
-        For more details on how to use it, checkout <a href="/{{version}}/design/#static_membership">static membership design</a>.
+        For more details on how to use it, checkout <a href="/{{version}}/documentation/#static_membership">static membership design</a>.
         Note, Kafka Streams uses the same <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code>, and you only need to make sure it is uniquely defined across
         different stream instances in one application.
     </p>

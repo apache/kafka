@@ -15,6 +15,7 @@
 package kafka.api
 
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
 
 import kafka.api.QuotaTestClients._
@@ -29,7 +30,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
@@ -56,9 +57,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
 
   // Low enough quota that a producer sending a small payload in a tight loop should get throttled
-  val defaultProducerQuota = 8000
-  val defaultConsumerQuota = 2500
-  val defaultRequestQuota = Int.MaxValue
+  val defaultProducerQuota: Long = 8000
+  val defaultConsumerQuota: Long = 2500
+  val defaultRequestQuota: Double = Long.MaxValue.toDouble
 
   val topic1 = "topic-1"
   var leaderNode: KafkaServer = _
@@ -83,7 +84,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
     // Consumer should read in a bursty manner and get throttled immediately
-    quotaTestClients.consumeUntilThrottled(produced)
+    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
@@ -94,8 +95,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, Long.MaxValue.toString)
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, Long.MaxValue.toString)
 
-    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Int.MaxValue)
-    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Int.MaxValue)
+    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
 
     val numRecords = 1000
     assertEquals(numRecords, quotaTestClients.produceUntilThrottled(numRecords))
@@ -107,10 +108,27 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Test
+  def testProducerConsumerOverrideLowerQuota(): Unit = {
+    // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
+    // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
+    // In this case, 250 * 10 < 4096
+    quotaTestClients.overrideQuotas(2000, 250, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(2000, 250, Long.MaxValue.toDouble)
+
+    val numRecords = 1000
+    val produced = quotaTestClients.produceUntilThrottled(numRecords)
+    quotaTestClients.verifyProduceThrottle(expectThrottle = true)
+
+    // Consumer should be able to consume at least one record, even when throttled
+    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
+    quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
+  }
+
+  @Test
   def testQuotaOverrideDelete(): Unit = {
     // Override producer and consumer quotas to unlimited
-    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Int.MaxValue)
-    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Int.MaxValue)
+    quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
+    quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
 
     val numRecords = 1000
     assertEquals(numRecords, quotaTestClients.produceUntilThrottled(numRecords))
@@ -121,6 +139,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     // Delete producer and consumer quota overrides. Consumer and producer should now be
     // throttled since broker defaults are very small
     quotaTestClients.removeQuotaOverrides()
+    quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
@@ -194,19 +213,23 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
+    val timeoutMs = TimeUnit.MINUTES.toMillis(1)
+
     consumer.subscribe(Collections.singleton(topic))
     var numConsumed = 0
     var throttled = false
+    val startMs = System.currentTimeMillis
     do {
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
-    }  while (numConsumed < maxRecords && !throttled)
+    }  while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
     // If throttled, wait for the records from the last fetch to be received
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
-      while (numConsumed < minRecords)
+      val startMs = System.currentTimeMillis
+      while (numConsumed < minRecords && System.currentTimeMillis < startMs + timeoutMs)
         numConsumed += consumer.poll(Duration.ofMillis(100L)).count
     }
     numConsumed
@@ -292,10 +315,10 @@ abstract class QuotaTestClients(topic: String,
       val overrideProducerRequestQuota = quota(quotaManagers.request, userPrincipal, producerClientId)
       val overrideConsumerRequestQuota = quota(quotaManagers.request, userPrincipal, consumerClientId)
 
-      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have producer quota", Quota.upperBound(producerQuota), overrideProducerQuota)
-      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have consumer quota", Quota.upperBound(consumerQuota), overrideConsumerQuota)
-      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota), overrideProducerRequestQuota)
-      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota), overrideConsumerRequestQuota)
+      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have producer quota", Quota.upperBound(producerQuota.toDouble), overrideProducerQuota)
+      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have consumer quota", Quota.upperBound(consumerQuota.toDouble), overrideConsumerQuota)
+      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota.toDouble), overrideProducerRequestQuota)
+      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota.toDouble), overrideConsumerRequestQuota)
     }
   }
 }

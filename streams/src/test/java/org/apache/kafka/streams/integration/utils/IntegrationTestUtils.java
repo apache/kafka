@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import java.lang.reflect.Field;
-import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -55,6 +51,7 @@ import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -65,12 +62,17 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
@@ -743,10 +745,13 @@ public class IntegrationTestUtils {
     /**
      * Starts the given {@link KafkaStreams} instances and waits for all of them to reach the
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
-     * that this method returns and the calling function executes its next statement.
+     * that this method returns and the calling function executes its next statement.<p>
+     *
+     * When the application is already started use {@link #waitForApplicationState(List, State, Duration)}
+     * to wait for instances to reach {@link State#RUNNING} state.
      *
      * @param streamsList the list of streams instances to run.
-     * @param timeout the time to wait for the streams to all be in @{link State#RUNNING} state.
+     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
      */
     public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList,
                                                            final Duration timeout) throws InterruptedException {
@@ -809,6 +814,65 @@ public class IntegrationTestUtils {
         }
     }
 
+    /**
+     * Waits for the given {@link KafkaStreams} instances to all be in a  {@link State#RUNNING}
+     * state. Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
+     * because this method uses polling, which can be more error prone and slightly slower.
+     *
+     * @param streamsList the list of streams instances to run.
+     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
+     */
+    public static void waitForApplicationState(final List<KafkaStreams> streamsList,
+                                               final State state,
+                                               final Duration timeout) throws InterruptedException {
+        retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
+            final Map<KafkaStreams, State> streamsToStates = streamsList
+                .stream()
+                .collect(Collectors.toMap(stream -> stream, KafkaStreams::state));
+
+            final Map<KafkaStreams, State> wrongStateMap = streamsToStates.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != state)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            final String reason = String.format("Expected all streams instances in %s to be %s within %d ms, but the following were not: %s",
+                streamsList, state, timeout.toMillis(), wrongStateMap);
+            assertThat(reason, wrongStateMap.isEmpty());
+        });
+    }
+
+    private static class ConsumerGroupInactiveCondition implements TestCondition {
+        private final Admin adminClient;
+        private final String applicationId;
+
+        private ConsumerGroupInactiveCondition(final Admin adminClient,
+                                               final String applicationId) {
+            this.adminClient = adminClient;
+            this.applicationId = applicationId;
+        }
+
+        @Override
+        public boolean conditionMet() {
+            try {
+                final ConsumerGroupDescription groupDescription =
+                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
+                        .describedGroups()
+                        .get(applicationId)
+                        .get();
+                return groupDescription.members().isEmpty();
+            } catch (final ExecutionException | InterruptedException e) {
+                return false;
+            }
+        }
+    }
+
+    public static void waitForEmptyConsumerGroup(final Admin adminClient,
+                                                 final String applicationId,
+                                                 final long timeoutMs) throws Exception {
+        TestUtils.waitForCondition(new IntegrationTestUtils.ConsumerGroupInactiveCondition(adminClient, applicationId), timeoutMs,
+            "Test consumer group " + applicationId + " still active even after waiting " + timeoutMs + " ms.");
+    }
+
     private static StateListener getStateListener(final KafkaStreams streams) {
         try {
             final Field field = streams.getClass().getDeclaredField("stateListener");
@@ -818,7 +882,6 @@ public class IntegrationTestUtils {
             throw new RuntimeException("Failed to get StateListener through reflection", e);
         }
     }
-
 
     public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
                                                        final String topic,

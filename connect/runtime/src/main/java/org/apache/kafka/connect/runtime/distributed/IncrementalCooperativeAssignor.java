@@ -153,6 +153,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset,
                                                             Map<String, ExtendedWorkerState> memberConfigs,
                                                             WorkerCoordinator coordinator, short protocolVersion) {
+        log.debug("Performing task assignment during generation: {} with memberId: {}",
+                coordinator.generationId(), coordinator.memberId());
+
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
@@ -350,6 +353,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment) {
         if (lostAssignments.isEmpty()) {
+            resetDelay();
             return;
         }
 
@@ -359,6 +363,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         if (scheduledRebalance > 0 && now >= scheduledRebalance) {
             // delayed rebalance expired and it's time to assign resources
+            log.debug("Delayed rebalance expired. Reassigning lost tasks");
             Optional<WorkerLoad> candidateWorkerLoad = Optional.empty();
             if (!candidateWorkersForReassignment.isEmpty()) {
                 candidateWorkerLoad = pickCandidateWorkerForReassignment(completeWorkerAssignment);
@@ -366,15 +371,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
             if (candidateWorkerLoad.isPresent()) {
                 WorkerLoad workerLoad = candidateWorkerLoad.get();
+                log.debug("A candidate worker has been found to assign lost tasks: {}", workerLoad.worker());
                 lostAssignments.connectors().forEach(workerLoad::assign);
                 lostAssignments.tasks().forEach(workerLoad::assign);
             } else {
+                log.debug("No single candidate worker was found to assign lost tasks. Treating lost tasks as new tasks");
                 newSubmissions.connectors().addAll(lostAssignments.connectors());
                 newSubmissions.tasks().addAll(lostAssignments.tasks());
             }
-            candidateWorkersForReassignment.clear();
-            scheduledRebalance = 0;
-            delay = 0;
+            resetDelay();
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
@@ -382,15 +387,27 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 // a delayed rebalance is in progress, but it's not yet time to reassign
                 // unaccounted resources
                 delay = calculateDelay(now);
+                log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", delay);
             } else {
                 // This means scheduledRebalance == 0
                 // We could also also extract the current minimum delay from the group, to make
                 // independent of consecutive leader failures, but this optimization is skipped
                 // at the moment
                 delay = maxDelay;
+                log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
+                        delay, scheduledRebalance, now, scheduledRebalance - now);
             }
             scheduledRebalance = now + delay;
         }
+    }
+
+    private void resetDelay() {
+        candidateWorkersForReassignment.clear();
+        scheduledRebalance = 0;
+        if (delay != 0) {
+            log.debug("Resetting delay from previous value: {} to 0", delay);
+        }
+        delay = 0;
     }
 
     private Set<String> candidateWorkersForReassignment(List<WorkerLoad> completeWorkerAssignment) {

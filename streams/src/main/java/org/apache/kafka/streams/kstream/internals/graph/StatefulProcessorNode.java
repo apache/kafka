@@ -14,13 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
-
 
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -31,13 +28,13 @@ import java.util.stream.Stream;
 public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<? extends StateStore> storeBuilder;
+    private final StoreBuilder<?> storeBuilder;
 
     /**
      * Create a node representing a stateful processor, where the named stores have already been registered.
      */
     public StatefulProcessorNode(final ProcessorParameters<K, V> processorParameters,
-                                 final Set<StoreBuilder<? extends StateStore>> preRegisteredStores,
+                                 final Set<StoreBuilder<?>> preRegisteredStores,
                                  final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
         super(processorParameters.processorName(), processorParameters);
         final Stream<String> registeredStoreNames = preRegisteredStores.stream().map(StoreBuilder::name);
@@ -65,7 +62,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V> processorParameters,
-                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder) {
+                                 final StoreBuilder<?> materializedKTableStoreBuilder) {
         super(nodeName, processorParameters);
 
         this.storeNames = null;
@@ -84,7 +81,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
         final String processorName = processorParameters().processorName();
-        final ProcessorSupplier processorSupplier = processorParameters().processorSupplier();
+        final ProcessorSupplier<K, V> processorSupplier = processorParameters().processorSupplier();
 
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 

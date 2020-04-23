@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Test group state transitions and other GroupMetadata functionality
@@ -325,25 +325,25 @@ class GroupMetadataTest {
     group.add(member, _ => ())
 
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertEquals("roundrobin", group.protocolOrNull)
+    assertEquals("roundrobin", group.protocolName.orNull)
   }
 
   @Test
   def testInitNextGenerationEmptyGroup(): Unit = {
     assertEquals(Empty, group.currentState)
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
   }
 
   @Test
@@ -568,7 +568,7 @@ class GroupMetadataTest {
     })
 
     assertTrue(group.hasAllMembersJoined)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingJoin)
   }
@@ -578,7 +578,7 @@ class GroupMetadataTest {
     group.add(member)
 
     assertFalse(member.isAwaitingJoin)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertFalse(member.isAwaitingJoin)
   }
 
@@ -587,7 +587,7 @@ class GroupMetadataTest {
     group.add(member)
     member.awaitingSyncCallback = _ => {}
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingSync)
   }
@@ -596,9 +596,30 @@ class GroupMetadataTest {
   def testNotInvokeSyncCallback(): Unit = {
     group.add(member)
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertFalse(invoked)
     assertFalse(member.isAwaitingSync)
+  }
+
+  @Test
+  def testHasPendingNonTxnOffsets(): Unit = {
+    val partition = new TopicPartition("foo", 0)
+    val offset = offsetAndMetadata(37)
+
+    group.prepareOffsetCommit(Map(partition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(partition))
+  }
+
+  @Test
+  def testHasPendingTxnOffsets(): Unit = {
+    val txnPartition = new TopicPartition("foo", 1)
+    val offset = offsetAndMetadata(37)
+    val producerId = 5
+
+    group.prepareTxnOffsetCommit(producerId, Map(txnPartition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(txnPartition))
+
+    assertFalse(group.hasPendingOffsetCommitsForTopicPartition(new TopicPartition("non-exist", 0)))
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {

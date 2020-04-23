@@ -283,38 +283,38 @@ public class RepartitionOptimizingTest {
                                                                   + "    Source: sourceStream (topics: [input])\n"
                                                                   + "      --> source-map\n"
                                                                   + "    Processor: source-map (stores: [])\n"
-                                                                  + "      --> process-filter, KSTREAM-FILTER-0000000035\n"
+                                                                  + "      --> process-filter, count-groupByKey-repartition-filter\n"
                                                                   + "      <-- sourceStream\n"
                                                                   + "    Processor: process-filter (stores: [])\n"
                                                                   + "      --> process-mapValues\n"
                                                                   + "      <-- source-map\n"
-                                                                  + "    Processor: KSTREAM-FILTER-0000000035 (stores: [])\n"
-                                                                  + "      --> KSTREAM-SINK-0000000034\n"
+                                                                  + "    Processor: count-groupByKey-repartition-filter (stores: [])\n"
+                                                                  + "      --> count-groupByKey-repartition-sink\n"
                                                                   + "      <-- source-map\n"
                                                                   + "    Processor: process-mapValues (stores: [])\n"
                                                                   + "      --> process\n"
                                                                   + "      <-- process-filter\n"
-                                                                  + "    Sink: KSTREAM-SINK-0000000034 (topic: count-groupByKey-repartition)\n"
-                                                                  + "      <-- KSTREAM-FILTER-0000000035\n"
+                                                                  + "    Sink: count-groupByKey-repartition-sink (topic: count-groupByKey-repartition)\n"
+                                                                  + "      <-- count-groupByKey-repartition-filter\n"
                                                                   + "    Processor: process (stores: [])\n"
                                                                   + "      --> none\n"
                                                                   + "      <-- process-mapValues\n"
                                                                   + "\n"
                                                                   + "  Sub-topology: 1\n"
-                                                                  + "    Source: KSTREAM-SOURCE-0000000036 (topics: [count-groupByKey-repartition])\n"
+                                                                  + "    Source: count-groupByKey-repartition-source (topics: [count-groupByKey-repartition])\n"
                                                                   + "      --> aggregate, count, join-filter, reduce-filter\n"
                                                                   + "    Processor: count (stores: [count-store])\n"
                                                                   + "      --> count-toStream\n"
-                                                                  + "      <-- KSTREAM-SOURCE-0000000036\n"
+                                                                  + "      <-- count-groupByKey-repartition-source\n"
                                                                   + "    Processor: count-toStream (stores: [])\n"
                                                                   + "      --> join-other-windowed, count-to\n"
                                                                   + "      <-- count\n"
                                                                   + "    Processor: join-filter (stores: [])\n"
                                                                   + "      --> join-this-windowed\n"
-                                                                  + "      <-- KSTREAM-SOURCE-0000000036\n"
+                                                                  + "      <-- count-groupByKey-repartition-source\n"
                                                                   + "    Processor: reduce-filter (stores: [])\n"
                                                                   + "      --> reduce-peek\n"
-                                                                  + "      <-- KSTREAM-SOURCE-0000000036\n"
+                                                                  + "      <-- count-groupByKey-repartition-source\n"
                                                                   + "    Processor: join-other-windowed (stores: [other-join-store])\n"
                                                                   + "      --> join-other-join\n"
                                                                   + "      <-- count-toStream\n"
@@ -326,7 +326,7 @@ public class RepartitionOptimizingTest {
                                                                   + "      <-- reduce-filter\n"
                                                                   + "    Processor: aggregate (stores: [aggregate-store])\n"
                                                                   + "      --> aggregate-toStream\n"
-                                                                  + "      <-- KSTREAM-SOURCE-0000000036\n"
+                                                                  + "      <-- count-groupByKey-repartition-source\n"
                                                                   + "    Processor: join-other-join (stores: [join-store])\n"
                                                                   + "      --> join-merge\n"
                                                                   + "      <-- join-other-windowed\n"
@@ -357,105 +357,105 @@ public class RepartitionOptimizingTest {
 
 
 
-    private static final String EXPECTED_UNOPTIMIZED_TOPOLOGY = "Topologies:\n"
-                                                                    + "   Sub-topology: 0\n"
-                                                                    + "    Source: sourceStream (topics: [input])\n"
-                                                                    + "      --> source-map\n"
-                                                                    + "    Processor: source-map (stores: [])\n"
-                                                                    + "      --> reduce-filter, process-filter, KSTREAM-FILTER-0000000006, join-filter, KSTREAM-FILTER-0000000012\n"
-                                                                    + "      <-- sourceStream\n"
-                                                                    + "    Processor: reduce-filter (stores: [])\n"
-                                                                    + "      --> reduce-peek\n"
-                                                                    + "      <-- source-map\n"
-                                                                    + "    Processor: join-filter (stores: [])\n"
-                                                                    + "      --> KSTREAM-FILTER-0000000026\n"
-                                                                    + "      <-- source-map\n"
-                                                                    + "    Processor: process-filter (stores: [])\n"
-                                                                    + "      --> process-mapValues\n"
-                                                                    + "      <-- source-map\n"
-                                                                    + "    Processor: reduce-peek (stores: [])\n"
-                                                                    + "      --> KSTREAM-FILTER-0000000020\n"
-                                                                    + "      <-- reduce-filter\n"
-                                                                    + "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n"
-                                                                    + "      --> KSTREAM-SINK-0000000005\n"
-                                                                    + "      <-- source-map\n"
-                                                                    + "    Processor: KSTREAM-FILTER-0000000012 (stores: [])\n"
-                                                                    + "      --> KSTREAM-SINK-0000000011\n"
-                                                                    + "      <-- source-map\n"
-                                                                    + "    Processor: KSTREAM-FILTER-0000000020 (stores: [])\n"
-                                                                    + "      --> KSTREAM-SINK-0000000019\n"
-                                                                    + "      <-- reduce-peek\n"
-                                                                    + "    Processor: KSTREAM-FILTER-0000000026 (stores: [])\n"
-                                                                    + "      --> KSTREAM-SINK-0000000025\n"
-                                                                    + "      <-- join-filter\n"
-                                                                    + "    Processor: process-mapValues (stores: [])\n"
-                                                                    + "      --> process\n"
-                                                                    + "      <-- process-filter\n"
-                                                                    + "    Sink: KSTREAM-SINK-0000000005 (topic: count-groupByKey-repartition)\n"
-                                                                    + "      <-- KSTREAM-FILTER-0000000006\n"
-                                                                    + "    Sink: KSTREAM-SINK-0000000011 (topic: aggregate-groupByKey-repartition)\n"
-                                                                    + "      <-- KSTREAM-FILTER-0000000012\n"
-                                                                    + "    Sink: KSTREAM-SINK-0000000019 (topic: reduce-groupByKey-repartition)\n"
-                                                                    + "      <-- KSTREAM-FILTER-0000000020\n"
-                                                                    + "    Sink: KSTREAM-SINK-0000000025 (topic: join-left-repartition)\n"
-                                                                    + "      <-- KSTREAM-FILTER-0000000026\n"
-                                                                    + "    Processor: process (stores: [])\n"
-                                                                    + "      --> none\n"
-                                                                    + "      <-- process-mapValues\n"
-                                                                    + "\n"
-                                                                    + "  Sub-topology: 1\n"
-                                                                    + "    Source: KSTREAM-SOURCE-0000000007 (topics: [count-groupByKey-repartition])\n"
-                                                                    + "      --> count\n"
-                                                                    + "    Processor: count (stores: [count-store])\n"
-                                                                    + "      --> count-toStream\n"
-                                                                    + "      <-- KSTREAM-SOURCE-0000000007\n"
-                                                                    + "    Processor: count-toStream (stores: [])\n"
-                                                                    + "      --> join-other-windowed, count-to\n"
-                                                                    + "      <-- count\n"
-                                                                    + "    Source: KSTREAM-SOURCE-0000000027 (topics: [join-left-repartition])\n"
-                                                                    + "      --> join-this-windowed\n"
-                                                                    + "    Processor: join-other-windowed (stores: [other-join-store])\n"
-                                                                    + "      --> join-other-join\n"
-                                                                    + "      <-- count-toStream\n"
-                                                                    + "    Processor: join-this-windowed (stores: [join-store])\n"
-                                                                    + "      --> join-this-join\n"
-                                                                    + "      <-- KSTREAM-SOURCE-0000000027\n"
-                                                                    + "    Processor: join-other-join (stores: [join-store])\n"
-                                                                    + "      --> join-merge\n"
-                                                                    + "      <-- join-other-windowed\n"
-                                                                    + "    Processor: join-this-join (stores: [other-join-store])\n"
-                                                                    + "      --> join-merge\n"
-                                                                    + "      <-- join-this-windowed\n"
-                                                                    + "    Processor: join-merge (stores: [])\n"
-                                                                    + "      --> join-to\n"
-                                                                    + "      <-- join-this-join, join-other-join\n"
-                                                                    + "    Sink: count-to (topic: outputTopic_0)\n"
-                                                                    + "      <-- count-toStream\n"
-                                                                    + "    Sink: join-to (topic: joinedOutputTopic)\n"
-                                                                    + "      <-- join-merge\n"
-                                                                    + "\n"
-                                                                    + "  Sub-topology: 2\n"
-                                                                    + "    Source: KSTREAM-SOURCE-0000000013 (topics: [aggregate-groupByKey-repartition])\n"
-                                                                    + "      --> aggregate\n"
-                                                                    + "    Processor: aggregate (stores: [aggregate-store])\n"
-                                                                    + "      --> aggregate-toStream\n"
-                                                                    + "      <-- KSTREAM-SOURCE-0000000013\n"
-                                                                    + "    Processor: aggregate-toStream (stores: [])\n"
-                                                                    + "      --> reduce-to\n"
-                                                                    + "      <-- aggregate\n"
-                                                                    + "    Sink: reduce-to (topic: outputTopic_1)\n"
-                                                                    + "      <-- aggregate-toStream\n"
-                                                                    + "\n"
-                                                                    + "  Sub-topology: 3\n"
-                                                                    + "    Source: KSTREAM-SOURCE-0000000021 (topics: [reduce-groupByKey-repartition])\n"
-                                                                    + "      --> reducer\n"
-                                                                    + "    Processor: reducer (stores: [reduce-store])\n"
-                                                                    + "      --> reduce-toStream\n"
-                                                                    + "      <-- KSTREAM-SOURCE-0000000021\n"
-                                                                    + "    Processor: reduce-toStream (stores: [])\n"
-                                                                    + "      --> KSTREAM-SINK-0000000023\n"
-                                                                    + "      <-- reducer\n"
-                                                                    + "    Sink: KSTREAM-SINK-0000000023 (topic: outputTopic_2)\n"
-                                                                    + "      <-- reduce-toStream\n\n";
+    private static final String EXPECTED_UNOPTIMIZED_TOPOLOGY = "Topologies:\n" +
+        "   Sub-topology: 0\n" +
+        "    Source: sourceStream (topics: [input])\n" +
+        "      --> source-map\n" +
+        "    Processor: source-map (stores: [])\n" +
+        "      --> reduce-filter, process-filter, aggregate-groupByKey-repartition-filter, count-groupByKey-repartition-filter, join-filter\n" +
+        "      <-- sourceStream\n" +
+        "    Processor: reduce-filter (stores: [])\n" +
+        "      --> reduce-peek\n" +
+        "      <-- source-map\n" +
+        "    Processor: join-filter (stores: [])\n" +
+        "      --> join-left-repartition-filter\n" +
+        "      <-- source-map\n" +
+        "    Processor: process-filter (stores: [])\n" +
+        "      --> process-mapValues\n" +
+        "      <-- source-map\n" +
+        "    Processor: reduce-peek (stores: [])\n" +
+        "      --> reduce-groupByKey-repartition-filter\n" +
+        "      <-- reduce-filter\n" +
+        "    Processor: aggregate-groupByKey-repartition-filter (stores: [])\n" +
+        "      --> aggregate-groupByKey-repartition-sink\n" +
+        "      <-- source-map\n" +
+        "    Processor: count-groupByKey-repartition-filter (stores: [])\n" +
+        "      --> count-groupByKey-repartition-sink\n" +
+        "      <-- source-map\n" +
+        "    Processor: join-left-repartition-filter (stores: [])\n" +
+        "      --> join-left-repartition-sink\n" +
+        "      <-- join-filter\n" +
+        "    Processor: process-mapValues (stores: [])\n" +
+        "      --> process\n" +
+        "      <-- process-filter\n" +
+        "    Processor: reduce-groupByKey-repartition-filter (stores: [])\n" +
+        "      --> reduce-groupByKey-repartition-sink\n" +
+        "      <-- reduce-peek\n" +
+        "    Sink: aggregate-groupByKey-repartition-sink (topic: aggregate-groupByKey-repartition)\n" +
+        "      <-- aggregate-groupByKey-repartition-filter\n" +
+        "    Sink: count-groupByKey-repartition-sink (topic: count-groupByKey-repartition)\n" +
+        "      <-- count-groupByKey-repartition-filter\n" +
+        "    Sink: join-left-repartition-sink (topic: join-left-repartition)\n" +
+        "      <-- join-left-repartition-filter\n" +
+        "    Processor: process (stores: [])\n" +
+        "      --> none\n" +
+        "      <-- process-mapValues\n" +
+        "    Sink: reduce-groupByKey-repartition-sink (topic: reduce-groupByKey-repartition)\n" +
+        "      <-- reduce-groupByKey-repartition-filter\n" +
+        "\n" +
+        "  Sub-topology: 1\n" +
+        "    Source: count-groupByKey-repartition-source (topics: [count-groupByKey-repartition])\n" +
+        "      --> count\n" +
+        "    Processor: count (stores: [count-store])\n" +
+        "      --> count-toStream\n" +
+        "      <-- count-groupByKey-repartition-source\n" +
+        "    Processor: count-toStream (stores: [])\n" +
+        "      --> join-other-windowed, count-to\n" +
+        "      <-- count\n" +
+        "    Source: join-left-repartition-source (topics: [join-left-repartition])\n" +
+        "      --> join-this-windowed\n" +
+        "    Processor: join-other-windowed (stores: [other-join-store])\n" +
+        "      --> join-other-join\n" +
+        "      <-- count-toStream\n" +
+        "    Processor: join-this-windowed (stores: [join-store])\n" +
+        "      --> join-this-join\n" +
+        "      <-- join-left-repartition-source\n" +
+        "    Processor: join-other-join (stores: [join-store])\n" +
+        "      --> join-merge\n" +
+        "      <-- join-other-windowed\n" +
+        "    Processor: join-this-join (stores: [other-join-store])\n" +
+        "      --> join-merge\n" +
+        "      <-- join-this-windowed\n" +
+        "    Processor: join-merge (stores: [])\n" +
+        "      --> join-to\n" +
+        "      <-- join-this-join, join-other-join\n" +
+        "    Sink: count-to (topic: outputTopic_0)\n" +
+        "      <-- count-toStream\n" +
+        "    Sink: join-to (topic: joinedOutputTopic)\n" +
+        "      <-- join-merge\n" +
+        "\n" +
+        "  Sub-topology: 2\n" +
+        "    Source: aggregate-groupByKey-repartition-source (topics: [aggregate-groupByKey-repartition])\n" +
+        "      --> aggregate\n" +
+        "    Processor: aggregate (stores: [aggregate-store])\n" +
+        "      --> aggregate-toStream\n" +
+        "      <-- aggregate-groupByKey-repartition-source\n" +
+        "    Processor: aggregate-toStream (stores: [])\n" +
+        "      --> reduce-to\n" +
+        "      <-- aggregate\n" +
+        "    Sink: reduce-to (topic: outputTopic_1)\n" +
+        "      <-- aggregate-toStream\n" +
+        "\n" +
+        "  Sub-topology: 3\n" +
+        "    Source: reduce-groupByKey-repartition-source (topics: [reduce-groupByKey-repartition])\n" +
+        "      --> reducer\n" +
+        "    Processor: reducer (stores: [reduce-store])\n" +
+        "      --> reduce-toStream\n" +
+        "      <-- reduce-groupByKey-repartition-source\n" +
+        "    Processor: reduce-toStream (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000023\n" +
+        "      <-- reducer\n" +
+        "    Sink: KSTREAM-SINK-0000000023 (topic: outputTopic_2)\n" +
+        "      <-- reduce-toStream\n\n";
 
 }

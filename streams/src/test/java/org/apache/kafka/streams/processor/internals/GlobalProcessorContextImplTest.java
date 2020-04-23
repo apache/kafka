@@ -51,9 +51,9 @@ public class GlobalProcessorContextImplTest {
     private static final String UNKNOWN_STORE = "unknown-store";
     private static final String CHILD_PROCESSOR = "child";
 
-    private GlobalProcessorContextImpl globalContext;
+    private GlobalProcessorContextImpl<Object, Object> globalContext;
 
-    private ProcessorNode child;
+    private ProcessorNode<?, ?> child;
     private ProcessorRecordContext recordContext;
 
     @Before
@@ -74,13 +74,13 @@ public class GlobalProcessorContextImplTest {
         expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
         replay(stateManager);
 
-        globalContext = new GlobalProcessorContextImpl(
+        globalContext = new GlobalProcessorContextImpl<>(
             streamsConfig,
             stateManager,
             null,
             null);
 
-        final ProcessorNode processorNode = mock(ProcessorNode.class);
+        final ProcessorNode<?, ?> processorNode = mock(ProcessorNode.class);
         globalContext.setCurrentNode(processorNode);
 
         child = mock(ProcessorNode.class);
@@ -104,7 +104,6 @@ public class GlobalProcessorContextImplTest {
         assertNull(globalContext.getStateStore(UNKNOWN_STORE));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldForwardToSingleChild() {
         child.process(null, null);

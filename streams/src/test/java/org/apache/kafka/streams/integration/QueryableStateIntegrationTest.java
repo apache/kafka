@@ -29,10 +29,14 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.StoreQueryParameters;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -45,28 +49,37 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.StringReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -75,28 +88,34 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
+import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
+
+    private static final long DEFAULT_TIMEOUT_MS = 120 * 1000;
 
     private static final int NUM_BROKERS = 1;
 
@@ -118,22 +137,20 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
-    private int numberOfWordsPerIteration = 0;
     private Set<String> inputValuesKeys;
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
 
     private void createTopics() throws Exception {
-        streamOne = streamOne + "-" + testNo;
-        streamConcurrent = streamConcurrent + "-" + testNo;
-        streamThree = streamThree + "-" + testNo;
-        outputTopic = outputTopic + "-" + testNo;
-        outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
-        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + testNo;
-        outputTopicThree = outputTopicThree + "-" + testNo;
-        streamTwo = streamTwo + "-" + testNo;
+        streamOne = streamOne + "-" + name.getMethodName();
+        streamConcurrent = streamConcurrent + "-" + name.getMethodName();
+        streamThree = streamThree + "-" + name.getMethodName();
+        outputTopic = outputTopic + "-" + name.getMethodName();
+        outputTopicConcurrent = outputTopicConcurrent + "-" + name.getMethodName();
+        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + name.getMethodName();
+        outputTopicThree = outputTopicThree + "-" + name.getMethodName();
+        streamTwo = streamTwo + "-" + name.getMethodName();
         CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
@@ -176,16 +193,19 @@ public class QueryableStateIntegrationTest {
         return input;
     }
 
+    @Rule
+    public TestName name = new TestName();
+
     @Before
     public void before() throws Exception {
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "queryable-state-" + testNo.incrementAndGet();
+        final String applicationId = "queryable-state-" + name.getMethodName();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("state-" + applicationId).getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -196,7 +216,6 @@ public class QueryableStateIntegrationTest {
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
             final String[] words = sentence.split("\\W+");
-            numberOfWordsPerIteration += words.length;
             Collections.addAll(inputValuesKeys, words);
         }
     }
@@ -242,131 +261,182 @@ public class QueryableStateIntegrationTest {
         return new KafkaStreams(builder.build(), streamsConfiguration);
     }
 
-    private class StreamRunnable implements Runnable {
-        private final KafkaStreams myStream;
-        private boolean closed = false;
-        private final KafkaStreamsTest.StateListenerStub stateListener = new KafkaStreamsTest.StateListenerStub();
 
-        StreamRunnable(final String inputTopic,
-                       final String outputTopic,
-                       final String outputTopicWindowed,
-                       final String storeName,
-                       final String windowStoreName,
-                       final int queryPort) {
-            final Properties props = (Properties) streamsConfiguration.clone();
-            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
-            myStream = createCountStream(inputTopic, outputTopic, outputTopicWindowed, storeName, windowStoreName, props);
-            myStream.setStateListener(stateListener);
-        }
-
-        @Override
-        public void run() {
-            myStream.start();
-
-            try {
-                TestUtils.waitForCondition(
-                    () -> stateListener.mapStates.containsKey(KafkaStreams.State.RUNNING),
-                    "Did not start successfully after " + TestUtils.DEFAULT_MAX_WAIT_MS + " ms"
-                );
-            } catch (final InterruptedException e) {
-                if (!stateListener.mapStates.containsKey(KafkaStreams.State.RUNNING))
-                    fail("Did not start successfully");
+    private void verifyOffsetLagFetch(final List<KafkaStreams> streamsList,
+        final Set<String> stores,
+        final List<Integer> partitionsPerStreamsInstance) {
+        for (int i = 0; i < streamsList.size(); i++) {
+            final Map<String, Map<Integer, LagInfo>> localLags = streamsList.get(i).allLocalStorePartitionLags();
+            final int expectedPartitions = partitionsPerStreamsInstance.get(i);
+            assertThat(localLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
+            if (expectedPartitions > 0) {
+                assertThat(localLags.keySet(), equalTo(stores));
             }
-        }
-
-        public void close() {
-            if (!closed) {
-                myStream.close();
-                closed = true;
-            }
-        }
-
-        public boolean isClosed() {
-            return closed;
-        }
-
-        public final KafkaStreams getStream() {
-            return myStream;
-        }
-
-        final KafkaStreamsTest.StateListenerStub getStateListener() {
-            return stateListener;
         }
     }
 
-    private void verifyAllKVKeys(final StreamRunnable[] streamRunnables,
+    @Deprecated // using KafkaStreams#metadataForKey
+    private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
-                                 final KafkaStreamsTest.StateListenerStub stateListenerStub,
+                                 final KafkaStreamsTest.StateListenerStub stateListener,
                                  final Set<String> keys,
-                                 final String storeName) throws Exception {
-        for (final String key : keys) {
-            TestUtils.waitForCondition(
-                () -> {
-                    try {
-                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                                 final String storeName,
+                                 final long timeout,
+                                 final boolean pickInstanceByPort) throws Exception {
+        retryOnExceptionWithTimeout(timeout, () -> {
+            final List<String> noMetadataKeys = new ArrayList<>();
+            final List<String> nullStoreKeys = new ArrayList<>();
+            final List<String> nullValueKeys = new ArrayList<>();
+            final Map<String, Exception> exceptionalKeys = new TreeMap<>();
+            final StringSerializer serializer = new StringSerializer();
 
-                        if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
-                            return false;
-                        }
-                        final int index = metadata.hostInfo().port();
-                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyKeyValueStore<String, Long> store =
-                            streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore());
-
-                        return store != null && store.get(key) != null;
-                    } catch (final IllegalStateException e) {
-                        // Kafka Streams instance may have closed but rebalance hasn't happened
-                        return false;
-                    } catch (final InvalidStateStoreException e) {
-                        // there must have been at least one rebalance state
-                        assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
-                        return false;
+            for (final String key: keys) {
+                try {
+                    final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
+                    if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
+                        noMetadataKeys.add(key);
+                        continue;
                     }
-                },
-                120000,
-                "waiting for metadata, store and value to be non null");
-        }
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    if (!pickInstanceByPort) {
+                        assertThat("Should have standbys to query from", !queryMetadata.getStandbyHosts().isEmpty());
+                    }
+
+                    final int index = queryMetadata.getActiveHost().port();
+                    final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final QueryableStoreType<ReadOnlyKeyValueStore<String, Long>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+                    final ReadOnlyKeyValueStore<String, Long> store =
+                        streamsWithKey.store(StoreQueryParameters.fromNameAndType(storeName, queryableStoreType).enableStaleStores());
+                    if (store == null) {
+                        nullStoreKeys.add(key);
+                        continue;
+                    }
+
+                    if (store.get(key) == null) {
+                        nullValueKeys.add(key);
+                    }
+                } catch (final InvalidStateStoreException e) {
+                    if (stateListener.mapStates.get(KafkaStreams.State.REBALANCING) < 1) {
+                        throw new NoRetryException(new AssertionError(
+                            String.format("Received %s for key %s and expected at least one rebalancing state, but had none",
+                                e.getClass().getName(), key)));
+                    }
+                } catch (final Exception e) {
+                    exceptionalKeys.put(key, e);
+                }
+            }
+
+            assertNoKVKeyFailures(storeName, timeout, noMetadataKeys, nullStoreKeys, nullValueKeys, exceptionalKeys);
+        });
     }
 
-    private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables,
+    @Deprecated // using KafkaStreams#metadataForKey
+    private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
                                        final Set<String> keys,
                                        final String storeName,
                                        final Long from,
-                                       final Long to) throws Exception {
-        for (final String key : keys) {
-            TestUtils.waitForCondition(
-                () -> {
-                    try {
-                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                        if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
-                            return false;
-                        }
-                        final int index = metadata.hostInfo().port();
-                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyWindowStore<String, Long> store =
-                            streamsWithKey.store(storeName, QueryableStoreTypes.windowStore());
-                        return store != null && store.fetch(key, ofEpochMilli(from), ofEpochMilli(to)) != null;
-                    } catch (final IllegalStateException e) {
-                        // Kafka Streams instance may have closed but rebalance hasn't happened
-                        return false;
-                    } catch (final InvalidStateStoreException e) {
-                        // there must have been at least one rebalance state
-                        assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
-                        return false;
+                                       final Long to,
+                                       final long timeout,
+                                       final boolean pickInstanceByPort) throws Exception {
+        retryOnExceptionWithTimeout(timeout, () -> {
+            final List<String> noMetadataKeys = new ArrayList<>();
+            final List<String> nullStoreKeys = new ArrayList<>();
+            final List<String> nullValueKeys = new ArrayList<>();
+            final Map<String, Exception> exceptionalKeys = new TreeMap<>();
+            final StringSerializer serializer = new StringSerializer();
+
+            for (final String key: keys) {
+                try {
+                    final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
+                    if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
+                        noMetadataKeys.add(key);
+                        continue;
                     }
-                },
-                120000,
-                "waiting for metadata, store and value to be non null");
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    if (pickInstanceByPort) {
+                        assertThat(queryMetadata.getStandbyHosts().size(), equalTo(0));
+                    } else {
+                        assertThat("Should have standbys to query from", !queryMetadata.getStandbyHosts().isEmpty());
+                    }
+
+                    final int index = queryMetadata.getActiveHost().port();
+                    final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final QueryableStoreType<ReadOnlyWindowStore<String, Long>> queryableWindowStoreType = QueryableStoreTypes.windowStore();
+                    final ReadOnlyWindowStore<String, Long> store =
+                        streamsWithKey.store(StoreQueryParameters.fromNameAndType(storeName, queryableWindowStoreType).enableStaleStores());
+                    if (store == null) {
+                        nullStoreKeys.add(key);
+                        continue;
+                    }
+
+                    if (store.fetch(key, ofEpochMilli(from), ofEpochMilli(to)) == null) {
+                        nullValueKeys.add(key);
+                    }
+                } catch (final InvalidStateStoreException e) {
+                    // there must have been at least one rebalance state
+                    if (stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) < 1) {
+                        throw new NoRetryException(new AssertionError(
+                            String.format("Received %s for key %s and expected at least one rebalancing state, but had none",
+                                e.getClass().getName(), key)));
+                    }
+                } catch (final Exception e) {
+                    exceptionalKeys.put(key, e);
+                }
+            }
+
+            assertNoKVKeyFailures(storeName, timeout, noMetadataKeys, nullStoreKeys, nullValueKeys, exceptionalKeys);
+        });
+    }
+
+    private void assertNoKVKeyFailures(final String storeName,
+                                       final long timeout,
+                                       final List<String> noMetadataKeys,
+                                       final List<String> nullStoreKeys,
+                                       final List<String> nullValueKeys,
+                                       final Map<String, Exception> exceptionalKeys) throws IOException {
+        final StringBuilder reason = new StringBuilder();
+        reason.append(String.format("Not all keys are available for store %s in %d ms", storeName, timeout));
+        if (!noMetadataKeys.isEmpty()) {
+            reason.append("\n    * No metadata is available for these keys: ").append(noMetadataKeys);
         }
+        if (!nullStoreKeys.isEmpty()) {
+            reason.append("\n    * No store is available for these keys: ").append(nullStoreKeys);
+        }
+        if (!nullValueKeys.isEmpty()) {
+            reason.append("\n    * No value is available for these keys: ").append(nullValueKeys);
+        }
+        if (!exceptionalKeys.isEmpty()) {
+            reason.append("\n    * Exceptions were raised for the following keys: ");
+            for (final Entry<String, Exception> entry : exceptionalKeys.entrySet()) {
+                reason.append(String.format("\n        %s:", entry.getKey()));
+
+                final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                final Exception exception = entry.getValue();
+
+                exception.printStackTrace(new PrintStream(baos));
+                try (final BufferedReader reader = new BufferedReader(new StringReader(baos.toString()))) {
+                    String line = reader.readLine();
+                    while (line != null) {
+                        reason.append("\n            ").append(line);
+                        line = reader.readLine();
+                    }
+                }
+            }
+        }
+
+        assertThat(reason.toString(),
+            noMetadataKeys.isEmpty() && nullStoreKeys.isEmpty() && nullValueKeys.isEmpty() && exceptionalKeys.isEmpty());
     }
 
     @Test
-    public void queryOnRebalance() throws Exception {
+    public void shouldBeAbleToQueryDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
-        final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
-        final Thread[] streamThreads = new Thread[numThreads];
+        final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
+        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -375,74 +445,188 @@ public class QueryableStateIntegrationTest {
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
         for (int i = 0; i < numThreads; i++) {
-            streamRunnables[i] = new StreamRunnable(
-                streamThree,
-                outputTopicThree,
-                outputTopicConcurrentWindowed,
-                storeName,
-                windowStoreName,
-                i);
-            streamThreads[i] = new Thread(streamRunnables[i]);
-            streamThreads[i].start();
+            final Properties props = (Properties) streamsConfiguration.clone();
+            props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleToQueryDuringRebalance-" + i).getPath());
+            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
+            final KafkaStreams streams =
+                createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
+            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            streams.setStateListener(listener);
+            listeners.add(listener);
+            streamsList.add(streams);
         }
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
+
+        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
 
-            for (int i = 0; i < numThreads; i++) {
+            for (int i = 0; i < streamsList.size(); i++) {
                 verifyAllKVKeys(
-                    streamRunnables,
-                    streamRunnables[i].getStream(),
-                    streamRunnables[i].getStateListener(),
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
                     inputValuesKeys,
-                    storeName + "-" + streamThree);
+                    storeName + "-" + streamThree,
+                    DEFAULT_TIMEOUT_MS,
+                    true);
                 verifyAllWindowedKeys(
-                    streamRunnables,
-                    streamRunnables[i].getStream(),
-                    streamRunnables[i].getStateListener(),
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
                     inputValuesKeys,
                     windowStoreName + "-" + streamThree,
                     0L,
-                    WINDOW_SIZE);
-                assertEquals(KafkaStreams.State.RUNNING, streamRunnables[i].getStream().state());
+                    WINDOW_SIZE,
+                    DEFAULT_TIMEOUT_MS,
+                    true);
             }
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
             // kill N-1 threads
-            for (int i = 1; i < numThreads; i++) {
-                streamRunnables[i].close();
-                streamThreads[i].interrupt();
-                streamThreads[i].join();
+            for (int i = 1; i < streamsList.size(); i++) {
+                final Duration closeTimeout = Duration.ofSeconds(60);
+                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
+                    streamsList.get(i).close(closeTimeout));
             }
+
+            waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 0));
+
+            // It's not enough to assert that the first instance is RUNNING because it is possible
+            // for the above checks to succeed while the instance is in a REBALANCING state.
+            waitForApplicationState(streamsList.subList(0, 1), State.RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 0));
+
+            // Even though the closed instance(s) are now in NOT_RUNNING there is no guarantee that
+            // the running instance is aware of this, so we must run our follow up queries with
+            // enough time for the shutdown to be detected.
 
             // query from the remaining thread
             verifyAllKVKeys(
-                streamRunnables,
-                streamRunnables[0].getStream(),
-                streamRunnables[0].getStateListener(),
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
                 inputValuesKeys,
-                storeName + "-" + streamThree);
+                storeName + "-" + streamThree,
+                DEFAULT_TIMEOUT_MS,
+                true);
             verifyAllWindowedKeys(
-                streamRunnables,
-                streamRunnables[0].getStream(),
-                streamRunnables[0].getStateListener(),
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
                 inputValuesKeys,
                 windowStoreName + "-" + streamThree,
                 0L,
-                WINDOW_SIZE);
-            assertEquals(KafkaStreams.State.RUNNING, streamRunnables[0].getStream().state());
+                WINDOW_SIZE,
+                DEFAULT_TIMEOUT_MS,
+                true);
+            retryOnExceptionWithTimeout(DEFAULT_TIMEOUT_MS, () -> verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0)));
         } finally {
-            for (int i = 0; i < numThreads; i++) {
-                if (!streamRunnables[i].isClosed()) {
-                    streamRunnables[i].close();
-                    streamThreads[i].interrupt();
-                    streamThreads[i].join();
-                }
+            for (final KafkaStreams streams : streamsList) {
+                streams.close();
             }
         }
     }
 
     @Test
-    public void concurrentAccesses() throws Exception {
+    public void shouldBeAbleQueryStandbyStateDuringRebalance() throws Exception {
+        final int numThreads = STREAM_TWO_PARTITIONS;
+        final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
+        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
+        producerRunnable.run();
+
+        // create stream threads
+        final String storeName = "word-count-store";
+        final String windowStoreName = "windowed-word-count-store";
+        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+        for (int i = 0; i < numThreads; i++) {
+            final Properties props = (Properties) streamsConfiguration.clone();
+            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
+            props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+            props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleQueryStandbyStateDuringRebalance-" + i).getPath());
+            final KafkaStreams streams =
+                createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
+            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            streams.setStateListener(listener);
+            listeners.add(listener);
+            streamsList.add(streams);
+        }
+        startApplicationAndWaitUntilRunning(streamsList, ofSeconds(60));
+        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
+
+        try {
+            waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
+
+            // Ensure each thread can serve all keys by itself; i.e standby replication works.
+            for (int i = 0; i < streamsList.size(); i++) {
+                verifyAllKVKeys(
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
+                    inputValuesKeys,
+                    storeName + "-" + streamThree,
+                    DEFAULT_TIMEOUT_MS,
+                    false);
+                verifyAllWindowedKeys(
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
+                    inputValuesKeys,
+                    windowStoreName + "-" + streamThree,
+                    0L,
+                    WINDOW_SIZE,
+                    DEFAULT_TIMEOUT_MS,
+                    false);
+            }
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
+
+            // kill N-1 threads
+            for (int i = 1; i < streamsList.size(); i++) {
+                final Duration closeTimeout = Duration.ofSeconds(60);
+                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
+                    streamsList.get(i).close(closeTimeout));
+            }
+
+            waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0));
+
+            // Now, confirm that all the keys are still queryable on the remaining thread, regardless of the state
+            verifyAllKVKeys(
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
+                inputValuesKeys,
+                storeName + "-" + streamThree,
+                DEFAULT_TIMEOUT_MS,
+                false);
+            verifyAllWindowedKeys(
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
+                inputValuesKeys,
+                windowStoreName + "-" + streamThree,
+                0L,
+                WINDOW_SIZE,
+                DEFAULT_TIMEOUT_MS,
+                false);
+
+            retryOnExceptionWithTimeout(DEFAULT_TIMEOUT_MS, () -> verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0)));
+        } finally {
+            for (final KafkaStreams streams : streamsList) {
+                streams.close();
+            }
+        }
+    }
+
+    @Test
+    public void shouldAllowConcurrentAccesses() throws Exception {
         final int numIterations = 500000;
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
@@ -462,20 +646,19 @@ public class QueryableStateIntegrationTest {
         producerThread.start();
 
         try {
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, numberOfWordsPerIteration);
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrentWindowed, numberOfWordsPerIteration);
-
+            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
+            
             final ReadOnlyKeyValueStore<String, Long> keyValueStore =
-                kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore());
+                kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore()));
 
             final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.windowStore());
+                kafkaStreams.store(StoreQueryParameters.fromNameAndType(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.windowStore()));
 
             final Map<String, Long> expectedWindowState = new HashMap<>();
             final Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
                 verifyGreaterOrEqual(inputValuesKeys.toArray(new String[0]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, true);
+                    expectedCount, windowStore, keyValueStore);
             }
         } finally {
             producerRunnable.shutdown();
@@ -532,9 +715,9 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
-            myFilterStore = kafkaStreams.store("queryFilter", QueryableStoreTypes.keyValueStore());
+            myFilterStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryFilter", QueryableStoreTypes.keyValueStore()));
         final ReadOnlyKeyValueStore<String, Long>
-            myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.keyValueStore());
+            myFilterNotStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryFilterNot", QueryableStoreTypes.keyValueStore()));
 
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
             TestUtils.waitForCondition(() -> expectedEntry.value.equals(myFilterStore.get(expectedEntry.key)),
@@ -598,7 +781,7 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
         final ReadOnlyKeyValueStore<String, Long> myMapStore =
-            kafkaStreams.store("queryMapValues", QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryMapValues", QueryableStoreTypes.keyValueStore()));
         for (final KeyValue<String, String> batchEntry : batch1) {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
@@ -646,10 +829,10 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
-            myMapStore = kafkaStreams.store("queryMapValues",
-            QueryableStoreTypes.keyValueStore());
+            myMapStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryMapValues",
+            QueryableStoreTypes.keyValueStore()));
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertEquals(myMapStore.get(expectedEntry.key), expectedEntry.value);
+            assertEquals(expectedEntry.value, myMapStore.get(expectedEntry.key));
         }
         for (final KeyValue<String, String> batchEntry : batch1) {
             final KeyValue<String, Long> batchEntryMapValue =
@@ -707,10 +890,10 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+            myCount = kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
 
         final ReadOnlyWindowStore<String, Long> windowStore =
-            kafkaStreams.store(windowStoreName, QueryableStoreTypes.windowStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(windowStoreName, QueryableStoreTypes.windowStore()));
         verifyCanGetByKey(keys,
             expectedCount,
             expectedCount,
@@ -749,10 +932,10 @@ public class QueryableStateIntegrationTest {
             "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, Long> store =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
-            () -> new Long(8).equals(store.get("hello")),
+            () -> Long.valueOf(8).equals(store.get("hello")),
             maxWaitMs,
             "wait for count to be 8");
 
@@ -769,7 +952,7 @@ public class QueryableStateIntegrationTest {
                 try {
                     assertEquals(
                         Long.valueOf(8L),
-                        kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
+                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.<String, Long>keyValueStore())).get("hello"));
                     return true;
                 } catch (final InvalidStateStoreException ise) {
                     return false;
@@ -790,7 +973,7 @@ public class QueryableStateIntegrationTest {
         @Override
         public boolean conditionMet() {
             try {
-                kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.<String, Long>keyValueStore()));
                 return true;
             } catch (final InvalidStateStoreException ise) {
                 return false;
@@ -848,7 +1031,7 @@ public class QueryableStateIntegrationTest {
             "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, String> store =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
             () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
@@ -875,7 +1058,7 @@ public class QueryableStateIntegrationTest {
             "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, String> store2 =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
 
         try {
             TestUtils.waitForCondition(
@@ -956,30 +1139,21 @@ public class QueryableStateIntegrationTest {
      * @param expectedCount         Expected count
      * @param windowStore           Window Store
      * @param keyValueStore         Key-value store
-     * @param failIfKeyNotFound     if true, tests fails if an expected key is not found in store. If false,
-     *                              the method merely inserts the new found key into the list of
-     *                              expected keys.
      */
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
-                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore,
-                                      final boolean failIfKeyNotFound) {
+                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore) {
         final Map<String, Long> windowState = new HashMap<>();
         final Map<String, Long> countState = new HashMap<>();
 
         for (final String key : keys) {
             final Map<String, Long> map = fetchMap(windowStore, key);
-            if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
-                fail("Key in windowed-store not found " + key);
-            }
             windowState.putAll(map);
             final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
-            } else if (failIfKeyNotFound) {
-                fail("Key in key-value-store not found " + key);
             }
         }
 
@@ -1005,6 +1179,7 @@ public class QueryableStateIntegrationTest {
 
     private void waitUntilAtLeastNumRecordProcessed(final String topic,
                                                     final int numRecs) throws Exception {
+        final long timeout = DEFAULT_TIMEOUT_MS;
         final Properties config = new Properties();
         config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "queryable-state-consumer");
@@ -1015,7 +1190,7 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            120 * 1000);
+            timeout);
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,

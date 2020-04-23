@@ -71,7 +71,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
                        followerStartOffset: Long,
                        followerFetchTimeMs: Long,
-                       leaderEndOffset: Long): Unit = {
+                       leaderEndOffset: Long,
+                       lastSentHighwatermark: Long): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -81,7 +82,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     _logEndOffsetMetadata = followerFetchOffsetMetadata
     lastFetchLeaderLogEndOffset = leaderEndOffset
     lastFetchTimeMs = followerFetchTimeMs
-    trace(s"Updated state of replica to $this")
+    updateLastSentHighWatermark(lastSentHighwatermark)
   }
 
   /**
@@ -92,9 +93,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     * When handling fetches, the last sent high watermark for a replica is checked to see if we should return immediately
     * in order to propagate the HW more expeditiously. See KIP-392
     */
-  def updateLastSentHighWatermark(highWatermark: Long): Unit = {
+  private def updateLastSentHighWatermark(highWatermark: Long): Unit = {
     _lastSentHighWatermark = highWatermark
-    trace(s"Updated HW of replica to $highWatermark")
   }
 
   def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {

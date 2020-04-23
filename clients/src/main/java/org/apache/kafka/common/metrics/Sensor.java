@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -289,6 +288,15 @@ public final class Sensor {
     }
 
     /**
+     * Return if metrics were registered with this sensor.
+     *
+     * @return true if metrics were registered, false otherwise
+     */
+    public synchronized boolean hasMetrics() {
+        return !metrics.isEmpty();
+    }
+
+    /**
      * Return true if the Sensor is eligible for removal due to inactivity.
      *        false otherwise
      */
@@ -297,7 +305,7 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return unmodifiableList(new LinkedList<>(this.metrics.values()));
+        return unmodifiableList(new ArrayList<>(this.metrics.values()));
     }
 
     /**
