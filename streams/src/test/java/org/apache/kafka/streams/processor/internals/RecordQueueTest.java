@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -70,7 +71,7 @@ public class RecordQueueTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
-        context = new MockInternalProcessorContext(properties);
+        context = new MockInternalProcessorContext(properties, new Metrics());
         final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
         mockSourceNodeWithMetrics = new MockSourceNode<>(new String[]{"topic"}, intDeserializer, intDeserializer);
         final TimestampExtractor timestampExtractor = new MockTimestampExtractor();

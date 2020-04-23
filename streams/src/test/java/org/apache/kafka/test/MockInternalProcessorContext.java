@@ -18,10 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -73,48 +70,27 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     public MockInternalProcessorContext() {
         super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
-        init(StreamsTestUtils.getStreamsConfig());
-    }
-
-    public MockInternalProcessorContext(final Properties config) {
-        this(config, createStateDir(config));
-    }
-
-    public MockInternalProcessorContext(final File stateDir) {
-        this(StreamsTestUtils.getStreamsConfig(), stateDir);
-    }
-
-    public MockInternalProcessorContext(final Properties config, final File stateDir) {
-        super(config, DEFAULT_TASK_ID, stateDir);
-        init(config);
-    }
-
-    public MockInternalProcessorContext(final StreamsMetricsImpl metrics, final ThreadCache threadCache) {
-        super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
-        init(metrics, threadCache);
+        final StreamsMetricsImpl metrics = (StreamsMetricsImpl) super.metrics();
+        init(metrics, new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, metrics));
     }
 
     public MockInternalProcessorContext(final LogContext logContext, final long maxCacheSizeBytes) {
         super(StreamsTestUtils.getStreamsConfig(), DEFAULT_TASK_ID, TestUtils.tempDirectory());
-        final Metrics metrics = createMetrics();
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, DEFAULT_CLIENT_ID, DEFAULT_METRICS_VERSION);
-        final ThreadCache threadCache = createThreadCache(StreamsTestUtils.getStreamsConfig(), logContext, maxCacheSizeBytes, metrics);
+        final StreamsMetricsImpl streamsMetrics = (StreamsMetricsImpl) super.metrics();
+        final ThreadCache threadCache = new ThreadCache(logContext, maxCacheSizeBytes, streamsMetrics);
         init(streamsMetrics, threadCache);
     }
 
-    public MockInternalProcessorContext(final Properties config, final TaskId taskId, final Metrics metrics) {
-        super(config, taskId, createStateDir(config));
-        init(config, metrics);
-    }
-
-    private void init(final Properties config) {
-        init(config, createMetrics());
-    }
-
-    private void init(final Properties config, final Metrics metrics) {
-        final ThreadCache threadCache = createThreadCache(config, new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, metrics);
+    public MockInternalProcessorContext(final Properties config, final Metrics metrics) {
+        super(config, DEFAULT_TASK_ID, createStateDir(config));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, DEFAULT_CLIENT_ID, getMetricsVersion(config));
+        final ThreadCache threadCache = new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, streamsMetrics);
         init(streamsMetrics, threadCache);
+    }
+
+    public MockInternalProcessorContext(final Properties config, final File stateDir, final ThreadCache cache) {
+        super(config, DEFAULT_TASK_ID, stateDir);
+        init((StreamsMetricsImpl) super.metrics(), cache);
     }
 
     private void init(final StreamsMetricsImpl metrics, final ThreadCache threadCache) {
@@ -140,11 +116,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public void setRecordContext(final ProcessorRecordContext recordContext) {
         setRecordMetadata(
-                recordContext.topic(),
-                recordContext.partition(),
-                recordContext.offset(),
-                recordContext.headers(),
-                recordContext.timestamp()
+            recordContext.topic(),
+            recordContext.partition(),
+            recordContext.offset(),
+            recordContext.headers(),
+            recordContext.timestamp()
         );
     }
 
@@ -221,18 +197,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         return TestUtils.tempDirectory();
     }
 
-    private static ThreadCache createThreadCache(final Properties config,
-                                                 final LogContext logContext,
-                                                 final long maxCacheSizeBytes,
-                                                 final Metrics metrics) {
-        return new ThreadCache(logContext, maxCacheSizeBytes, new StreamsMetricsImpl(metrics, DEFAULT_CLIENT_ID, getMetricsVersion(config)));
-    }
-
     private static String getMetricsVersion(final Properties config) {
         return config.getProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, DEFAULT_METRICS_VERSION);
-    }
-
-    private static Metrics createMetrics() {
-        return new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     }
 }

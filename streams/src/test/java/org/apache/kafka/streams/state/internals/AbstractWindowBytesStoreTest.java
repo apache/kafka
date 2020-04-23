@@ -19,14 +19,17 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -55,6 +58,8 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
 import static org.apache.kafka.test.StreamsTestUtils.toSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -95,7 +100,8 @@ public abstract class AbstractWindowBytesStoreTest {
 
         recordCollector = new MockRecordCollector();
         final Properties properties = StreamsTestUtils.getStreamsConfig();
-        context = new MockInternalProcessorContext(properties, baseDir);
+        final ThreadCache cache = new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        context = new MockInternalProcessorContext(properties, baseDir, cache);
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
 
@@ -827,7 +833,7 @@ public abstract class AbstractWindowBytesStoreTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig, new Metrics());
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
         windowStore.init(context, windowStore);

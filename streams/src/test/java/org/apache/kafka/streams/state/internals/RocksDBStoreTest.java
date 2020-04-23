@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -64,6 +66,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
@@ -104,7 +108,8 @@ public class RocksDBStoreTest {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         dir = TestUtils.tempDirectory();
-        context = new MockInternalProcessorContext(props, dir);
+        final ThreadCache cache = new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        context = new MockInternalProcessorContext(props, dir, cache);
         rocksDBStore = getRocksDBStore();
     }
 
@@ -122,7 +127,7 @@ public class RocksDBStoreTest {
     }
 
     private InternalProcessorContext<Object, Object> getProcessorContext(final Properties streamsProps) {
-        return new MockInternalProcessorContext(streamsProps);
+        return new MockInternalProcessorContext(streamsProps, new Metrics());
     }
 
     private InternalProcessorContext<Object, Object> getProcessorContext(
@@ -291,7 +296,11 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalProcessorContext tmpContext = new MockInternalProcessorContext(tmpDir);
+        final InternalProcessorContext<Object, Object> tmpContext = new MockInternalProcessorContext(
+            StreamsTestUtils.getStreamsConfig(),
+            tmpDir,
+            new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()))
+        );
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -504,40 +513,40 @@ public class RocksDBStoreTest {
     public void shouldThrowNullPointerExceptionOnNullPut() {
         rocksDBStore.init(context, rocksDBStore);
         assertThrows(
-                NullPointerException.class,
-                () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
+            NullPointerException.class,
+            () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPutAll() {
         rocksDBStore.init(context, rocksDBStore);
         assertThrows(
-                NullPointerException.class,
-                () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
+            NullPointerException.class,
+            () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullGet() {
         rocksDBStore.init(context, rocksDBStore);
         assertThrows(
-                NullPointerException.class,
-                () -> rocksDBStore.get(null));
+            NullPointerException.class,
+            () -> rocksDBStore.get(null));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnDelete() {
         rocksDBStore.init(context, rocksDBStore);
         assertThrows(
-                NullPointerException.class,
-                () -> rocksDBStore.delete(null));
+            NullPointerException.class,
+            () -> rocksDBStore.delete(null));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnRange() {
         rocksDBStore.init(context, rocksDBStore);
         assertThrows(
-                NullPointerException.class,
-                () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
+            NullPointerException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
     }
 
     @Test(expected = ProcessorStateException.class)
@@ -555,7 +564,7 @@ public class RocksDBStoreTest {
         init(TestingBloomFilterRocksDBConfigSetter.class);
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
-        context = new MockInternalProcessorContext(props);
+        context = new MockInternalProcessorContext(props, new Metrics());
 
         enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);

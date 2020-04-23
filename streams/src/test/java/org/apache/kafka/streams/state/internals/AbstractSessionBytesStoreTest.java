@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -84,7 +85,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
-        context = new MockInternalProcessorContext(properties);
+        context = new MockInternalProcessorContext(properties, new Metrics());
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
         sessionStore.init(context, sessionStore);
@@ -408,7 +409,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsConfig, new Metrics());
         context.setRecordCollector(recordCollector);
         context.setTimestamp(1L);
         sessionStore.init(context, sessionStore);

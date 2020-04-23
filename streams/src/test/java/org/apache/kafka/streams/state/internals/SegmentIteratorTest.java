@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -55,7 +56,7 @@ public class SegmentIteratorTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        final InternalProcessorContext context = new MockInternalProcessorContext(properties);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties, new Metrics());
         segmentOne.init(context, segmentOne);
         segmentTwo.init(context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());

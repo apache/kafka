@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.IntegerSerde;
@@ -91,7 +92,7 @@ public abstract class AbstractKeyValueStoreTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, IntegerSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, FailAfterThreeSerde.class);
-        context = new MockInternalProcessorContext(properties);
+        context = new MockInternalProcessorContext(properties, new Metrics());
         store = createKeyValueStore(context);
 
         store.put(0, "zero");
@@ -136,7 +137,7 @@ public abstract class AbstractKeyValueStoreTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, IntegerSerde.class.getName());
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, SerdeNullHandler.class);
-        context = new MockInternalProcessorContext(properties);
+        context = new MockInternalProcessorContext(properties, new Metrics());
         store = createKeyValueStore(context);
 
         store.put(0, "zero");

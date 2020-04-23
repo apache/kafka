@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -219,5 +220,13 @@ public final class StreamsTestUtils {
                                          final Map<String, String> tags) {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
+    }
+
+    public static boolean containsMetric(final StreamsMetricsImpl streamsMetrics,
+                                         final String name,
+                                         final String group,
+                                         final Map<String, String> tags) {
+        final MetricName metricName = new MetricName(name, group, "", tags);
+        return streamsMetrics.metrics().containsKey(metricName);
     }
 }

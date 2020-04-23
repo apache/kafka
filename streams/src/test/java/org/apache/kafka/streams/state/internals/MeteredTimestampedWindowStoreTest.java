@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
@@ -48,7 +46,6 @@ public class MeteredTimestampedWindowStoreTest {
         Serdes.String(),
         new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
     );
-    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
 
     {
         EasyMock.expect(innerStoreMock.name()).andReturn("mocked-store").anyTimes();
@@ -60,7 +57,7 @@ public class MeteredTimestampedWindowStoreTest {
         properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
-        context = new MockInternalProcessorContext(properties, MockInternalProcessorContext.DEFAULT_TASK_ID, metrics);
+        context = new MockInternalProcessorContext(properties, new Metrics());
     }
 
     @Test

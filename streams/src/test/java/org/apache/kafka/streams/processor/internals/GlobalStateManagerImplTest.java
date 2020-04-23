@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -35,10 +36,12 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -59,6 +62,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -134,7 +139,11 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig);
-        stateManager.setGlobalProcessorContext(new MockInternalProcessorContext(stateDirectory.globalStateDir()));
+        stateManager.setGlobalProcessorContext(new MockInternalProcessorContext(
+            StreamsTestUtils.getStreamsConfig(),
+            stateDirectory.globalStateDir(),
+            new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()))
+        ));
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 

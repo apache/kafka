@@ -43,6 +43,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -105,7 +106,7 @@ public class CachingWindowStoreTest {
         cachingStore = new CachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        context = new MockInternalProcessorContext(new MockStreamsMetrics(new Metrics()), cache);
+        context = new MockInternalProcessorContext(StreamsTestUtils.getStreamsConfig(), TestUtils.tempDirectory(), cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
     }
@@ -685,7 +686,7 @@ public class CachingWindowStoreTest {
         EasyMock.replay(underlyingStore);
         cachingStore = new CachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cache = EasyMock.createNiceMock(ThreadCache.class);
-        context = new MockInternalProcessorContext(new MockStreamsMetrics(new Metrics()), cache);
+        context = new MockInternalProcessorContext(StreamsTestUtils.getStreamsConfig(), TestUtils.tempDirectory(), cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
     }

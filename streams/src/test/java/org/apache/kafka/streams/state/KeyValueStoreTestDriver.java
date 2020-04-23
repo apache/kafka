@@ -52,6 +52,9 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
+
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
@@ -245,7 +248,8 @@ public class KeyValueStoreTestDriver<K, V> {
         stateDir.mkdirs();
         stateSerdes = serdes;
 
-        context = new MockInternalProcessorContext(props, stateDir) {
+        final ThreadCache cache = new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        context = new MockInternalProcessorContext(props, stateDir, cache) {
             ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override

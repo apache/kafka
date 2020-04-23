@@ -22,7 +22,6 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.AbstractNotifyingRestoreCallback;
@@ -30,12 +29,9 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Assert;
@@ -46,6 +42,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_TASK_ID;
 
 public class MockInternalProcessorContextTest {
 
@@ -77,7 +75,7 @@ public class MockInternalProcessorContextTest {
     private static void shouldReturnMetricsVersion(final Version version, final String builtInMetricsVersion) {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(properties);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(properties, new Metrics());
 
         Assert.assertEquals(version, context.metrics().version());
         verifyDefaultRecordCollector(context);
@@ -96,7 +94,7 @@ public class MockInternalProcessorContextTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
 
-        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(properties, new Metrics());
 
         Assert.assertEquals(new File(stateDir).getAbsolutePath(), context.stateDir().getAbsolutePath());
     }
@@ -211,30 +209,10 @@ public class MockInternalProcessorContextTest {
     }
 
     @Test
-    public void shouldSetThreadCacheAndMetrics() {
-        final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
-        final ThreadCache threadCache = new ThreadCache(new LogContext(""), 0, streamsMetrics);
-
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(streamsMetrics, threadCache);
-
-        Assert.assertSame(streamsMetrics, context.metrics());
-        Assert.assertSame(threadCache, context.getCache());
-        verifyDefaultRecordCollector(context);
-        verifyDefaultTaskId(context);
-        verifyDefaultTopic(context);
-        verifyDefaultPartition(context);
-        verifyDefaultTimestamp(context);
-        verifyDefaultOffset(context);
-        verifyDefaultHeaders(context);
-        verifyDefaultProcessorNodeName(context);
-    }
-
-    @Test
     public void shouldSetKeySerdeFromConfig() {
         final Properties config = StreamsTestUtils.getStreamsConfig();
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(config);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(config, new Metrics());
 
         Assert.assertEquals(Serdes.StringSerde.class, context.keySerde().getClass());
     }
@@ -243,7 +221,7 @@ public class MockInternalProcessorContextTest {
     public void shouldSetValueSerdeFromConfig() {
         final Properties config = StreamsTestUtils.getStreamsConfig();
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(config);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(config, new Metrics());
 
         Assert.assertEquals(Serdes.StringSerde.class, context.valueSerde().getClass());
     }
@@ -304,6 +282,6 @@ public class MockInternalProcessorContextTest {
     }
 
     private static void verifyDefaultTaskId(final InternalProcessorContext<Object, Object> context) {
-        Assert.assertEquals(MockInternalProcessorContext.DEFAULT_TASK_ID, context.taskId());
+        Assert.assertEquals(DEFAULT_TASK_ID, context.taskId());
     }
 }

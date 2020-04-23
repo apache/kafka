@@ -29,9 +29,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ToInternal;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -41,7 +39,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -86,19 +83,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
-    private Metrics metrics;
     private MockInternalProcessorContext context;
     private final ToInternal toInternal = new ToInternal();
 
     @Before
     public void initializeStore() {
-        metrics = new Metrics();
-        final StreamsMetricsImpl metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
-        context = new MockInternalProcessorContext(metrics, new ThreadCache(new LogContext("testCache "), 100000, metrics)) {
+        results = new ArrayList<>();
+        context = new MockInternalProcessorContext(new LogContext("testCache "), 100000) {
 
             @SuppressWarnings("unchecked")
             @Override
-            public <K, V> void forward(K key, V value, To to) {
+            public <K, V> void forward(final K key, final V value, final To to) {
                 toInternal.update(to);
                 results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
             }
@@ -606,7 +601,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private MockInternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(props);
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(props, new Metrics());
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), context.metrics());
         final StoreBuilder<SessionStore<String, Long>> storeBuilder =
             Stores.sessionStoreBuilder(

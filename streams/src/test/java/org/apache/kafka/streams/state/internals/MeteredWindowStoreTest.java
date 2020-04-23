@@ -24,13 +24,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -42,6 +41,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
@@ -78,7 +78,7 @@ public class MeteredWindowStoreTest {
     private static final String STORE_NAME = "mocked-store";
 
     private final String threadId = Thread.currentThread().getName();
-    private InternalProcessorContext context;
+    private InternalProcessorContext<Object, Object> context;
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
@@ -110,8 +110,9 @@ public class MeteredWindowStoreTest {
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
-        context = new MockInternalProcessorContext(streamsMetrics, new ThreadCache(new LogContext("testCache "), 0, streamsMetrics));
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        context = new MockInternalProcessorContext(props, metrics);
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
         threadIdTagKey =

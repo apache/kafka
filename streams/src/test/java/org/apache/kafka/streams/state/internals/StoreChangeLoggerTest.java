@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -45,7 +46,7 @@ public class StoreChangeLoggerTest {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        context = new MockInternalProcessorContext(properties);
+        context = new MockInternalProcessorContext(properties, new Metrics());
         context.setRecordCollector(collector);
         final String topic = "topic";
         changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
