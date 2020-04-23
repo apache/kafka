@@ -83,7 +83,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     
     def hasNext: Boolean = iter.hasNext
     
-    def next: (K, V) = {
+    def next(): (K, V) = {
       val n = iter.next
       (n.getKey, n.getValue)
     }
