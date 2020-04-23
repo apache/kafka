@@ -6,7 +6,7 @@ You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/
 
 Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
 
-Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
+Scala 2.13 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
 
 ### Build a jar and run it ###
     ./gradlew jar

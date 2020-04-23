@@ -264,7 +264,7 @@ def command_stage_docs():
 
     cmd("Building docs", "./gradlew -Pversion=%s clean aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
 
-    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.12-%s-site-docs.tgz' % gradle_version_override)
+    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
     if not os.path.exists(versioned_docs_path):
@@ -663,8 +663,8 @@ Now you should sanity check it before proceeding. All subsequent steps start mak
 Some suggested steps:
 
  * Grab the source archive and make sure it compiles: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz
- * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s.tgz
- * Extract and verify one of the site docs jars: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s-site-docs.tgz
+ * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.13-%(release_version)s.tgz
+ * Extract and verify one of the site docs jars: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.13-%(release_version)s-site-docs.tgz
  * Build a sample against jars in the staging repo: (TODO: Can we get a temporary URL before "closing" the staged artifacts?)
  * Validate GPG signatures on at least one file:
       wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz &&
