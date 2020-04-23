@@ -36,6 +36,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
@@ -69,6 +70,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestClient.class)
@@ -800,6 +803,22 @@ public class ConnectorsResourceTest {
 
         connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, true);
 
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCompleteOrForwardWithErrorAndNoForwardUrl() throws Throwable {
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
+        String leaderUrl = null;
+        expectAndCallbackException(cb, new NotLeaderException("not leader", leaderUrl));
+
+        PowerMock.replayAll();
+
+        ConnectRestException e = assertThrows(ConnectRestException.class, () -> {
+            connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        });
+        assertTrue(e.getMessage().contains("no known leader URL"));
         PowerMock.verifyAll();
     }
 
