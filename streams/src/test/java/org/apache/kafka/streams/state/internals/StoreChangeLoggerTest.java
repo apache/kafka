@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Properties;
@@ -38,11 +39,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class StoreChangeLoggerTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
-    private final MockInternalProcessorContext context;
+    private MockInternalProcessorContext context;
 
-    private final StoreChangeLogger<Integer, String> changeLogger;
+    private StoreChangeLogger<Integer, String> changeLogger;
 
-    public StoreChangeLoggerTest() {
+    @Before
+    public void init() {
         final Properties properties = StreamsTestUtils.getStreamsConfig();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);

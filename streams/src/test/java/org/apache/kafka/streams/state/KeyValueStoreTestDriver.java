@@ -201,17 +201,17 @@ public class KeyValueStoreTestDriver<K, V> {
 
         final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
         final RecordCollector recordCollector = new RecordCollectorImpl(
-                logContext,
-                new TaskId(0, 0),
-                new StreamsProducer(
-                        new StreamsConfig(props),
-                        "threadId",
-                        new MockClientSupplier(),
-                        null,
-                        null,
-                        logContext),
-                new DefaultProductionExceptionHandler(),
-                new MockStreamsMetrics(new Metrics())
+            logContext,
+            new TaskId(0, 0),
+            new StreamsProducer(
+                new StreamsConfig(props),
+                "threadId",
+                new MockClientSupplier(),
+               null,
+               null,
+                logContext),
+            new DefaultProductionExceptionHandler(),
+            new MockStreamsMetrics(new Metrics())
         ) {
             @Override
             public <K1, V1> void send(final String topic,

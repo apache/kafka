@@ -398,7 +398,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
         final List<KeyValue<Integer, String>> expectedReturned =
-                Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+            Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
         final Iterator<KeyValue<Integer, String>> iterator = store.all();
 
         while (iterator.hasNext()) {
@@ -450,10 +450,10 @@ public abstract class AbstractKeyValueStoreTest {
 
             final List<String> messages = appender.getMessages();
             assertThat(
-                    messages,
-                    hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                            " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                            " Note that the built-in numerical serdes do not follow this for negative numbers")
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
 

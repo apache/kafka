@@ -286,7 +286,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldIterateOverRange() {
         final int items = addItemsToCache();
         final KeyValueIterator<Bytes, byte[]> range =
-                store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
+            store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
         while (range.hasNext()) {
             results.add(range.next().key);
@@ -442,10 +442,10 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
                           final byte[] oldValue,
                           final long timestamp) {
             forwarded.put(
-                    keyDeserializer.deserialize(null, key),
-                    new Change<>(
-                            valueDesializer.deserialize(null, newValue),
-                            valueDesializer.deserialize(null, oldValue)));
+                keyDeserializer.deserialize(null, key),
+                new Change<>(
+                    valueDesializer.deserialize(null, newValue),
+                    valueDesializer.deserialize(null, oldValue)));
         }
     }
 }
