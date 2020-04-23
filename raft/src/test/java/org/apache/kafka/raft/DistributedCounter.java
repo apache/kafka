@@ -37,18 +37,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DistributedCounter implements DistributedStateMachine {
     private final Logger log;
-    private final RaftManager manager;
+    private final KafkaRaftClient client;
     private final AtomicInteger committed = new AtomicInteger(0);
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
     private AtomicInteger uncommitted;
 
-    public DistributedCounter(RaftManager manager, LogContext logContext) {
-        this.manager = manager;
+    public DistributedCounter(KafkaRaftClient client, LogContext logContext) {
+        this.client = client;
         this.log = logContext.logger(DistributedCounter.class);
     }
 
     public synchronized void initialize() throws IOException {
-        manager.initialize(this);
+        client.initialize(this);
     }
 
     @Override
@@ -106,9 +106,11 @@ public class DistributedCounter implements DistributedStateMachine {
     }
 
     public synchronized CompletableFuture<Integer> increment() {
-        int incremented = value() + 1;
+        int incremented = uncommitted != null ?
+            uncommitted.get() + 1 :
+            value() + 1;
         Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
-        CompletableFuture<OffsetAndEpoch> future = manager.append(records);
+        CompletableFuture<OffsetAndEpoch> future = client.append(records);
         return future.thenApply(offsetAndEpoch -> incremented);
     }
 

@@ -34,7 +34,7 @@ import static org.junit.Assert.assertTrue;
 
 public class SimpleKeyValueStoreTest {
 
-    private RaftManager setupSingleNodeRaftManager() {
+    private KafkaRaftClient setupSingleNodeRaftManager() {
         int localId = 1;
         int electionTimeoutMs = 10000;
         int electionJitterMs = 50;
@@ -52,14 +52,14 @@ public class SimpleKeyValueStoreTest {
             .map(id -> new InetSocketAddress("localhost", 9990 + id))
             .collect(Collectors.toList());
 
-        return new RaftManager(channel, log, quorum, time,
+        return new KafkaRaftClient(channel, log, quorum, time,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, retryBackoffMs, requestTimeoutMs, logContext);
     }
 
     @Test
     public void testPutAndGet() throws Exception {
-        RaftManager manager = setupSingleNodeRaftManager();
+        KafkaRaftClient manager = setupSingleNodeRaftManager();
         manager.initialize(new NoOpStateMachine());
         SimpleKeyValueStore<Integer, Integer> store = new SimpleKeyValueStore<>(manager,
                 new Serdes.IntegerSerde(), new Serdes.IntegerSerde());
