@@ -1069,8 +1069,11 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
           controllerContext.allTopics.contains(tp.topic) &&
-          controllerContext.partitionLeadershipInfo.get(tp).forall(l => l.leaderAndIsr.isr.contains(leaderBroker))
-        )
+          PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(
+            controllerContext.partitionReplicaAssignment(tp),
+            controllerContext.partitionLeadershipInfo(tp).leaderAndIsr.isr,
+            controllerContext.liveBrokerIds.toSet).nonEmpty
+       )
         onReplicaElection(candidatePartitions.toSet, ElectionType.PREFERRED, AutoTriggered)
       }
     }
