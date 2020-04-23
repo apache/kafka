@@ -175,7 +175,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     parameters[i] = new WriteBufferManager(1L, new LRUCache(1L));
                     break;
                 default:
-                    parameters[i] = parameterTypes[i].newInstance();
+                    parameters[i] = parameterTypes[i].getConstructor().newInstance();
             }
         }
 
@@ -241,7 +241,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     parameters[i] = new RemoveEmptyValueCompactionFilter();
                     break;
                 case "org.rocksdb.AbstractCompactionFilterFactory":
-                    parameters[i] = new AbstractCompactionFilterFactory() {
+                    parameters[i] = new AbstractCompactionFilterFactory<AbstractCompactionFilter<?>>() {
 
                         @Override
                         public AbstractCompactionFilter<?> createCompactionFilter(final Context context) {
@@ -279,7 +279,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     parameters[i] = new PlainTableConfig();
                     break;
                 default:
-                    parameters[i] = parameterTypes[i].newInstance();
+                    parameters[i] = parameterTypes[i].getConstructor().newInstance();
             }
         }
 
@@ -292,15 +292,18 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
             = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        optionsFacadeDbOptions.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender =
+            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
+            optionsFacadeDbOptions.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
 
-        assertThat(appender.getMessages(), hasItem(""
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(
+                appender.getMessages(),
+                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
+                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
+                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
+                    " (or `org.rocksdb.ColumnFamilyOptions`).")
+            );
+        }
     }
 
     @Test
@@ -309,14 +312,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
             = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        optionsFacadeDbOptions.compactionOptionsFIFO();
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender =
+            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
+            optionsFacadeDbOptions.compactionOptionsFIFO();
 
-        assertThat(appender.getMessages(), hasItem(""
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(
+                appender.getMessages(),
+                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
+                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
+                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
+                    " (or `org.rocksdb.ColumnFamilyOptions`).")
+            );
+        }
     }
 }

@@ -122,6 +122,11 @@ public interface FieldType {
         }
 
         @Override
+        public boolean isFloat() {
+            return true;
+        }
+
+        @Override
         public String toString() {
             return NAME;
         }
@@ -315,6 +320,13 @@ public interface FieldType {
      * Returns true if this is a bytes type.
      */
     default boolean isBytes() {
+        return false;
+    }
+
+    /**
+     * Returns true if this is a floating point type.
+     */
+    default boolean isFloat() {
         return false;
     }
 

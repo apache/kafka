@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -121,8 +122,8 @@ public class KTableMapValuesTest {
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
-            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
+            getter2.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table2.name)));
+            getter3.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table3.name)));
 
             inputTopic1.pipeInput("A", "01", 50L);
             inputTopic1.pipeInput("B", "01", 10L);
@@ -180,7 +181,7 @@ public class KTableMapValuesTest {
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
-                Integer::new,
+                s -> Integer.valueOf(s),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table3 =
@@ -189,7 +190,7 @@ public class KTableMapValuesTest {
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table4 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
 
         assertEquals(storeName2, table2.queryableStoreName());
         assertEquals(storeName3, table3.queryableStoreName());
@@ -206,7 +207,7 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
@@ -247,7 +248,7 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
         table2.enableSendingOldValues();
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();

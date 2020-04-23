@@ -494,7 +494,7 @@ public class ProcessorTopologyTest {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
                 Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String());
         topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
-                .addProcessor(processor, () -> new StatefulProcessor(storeSupplier.name()), "source")
+                .addProcessor(processor, (ProcessorSupplier<String, String>) () -> new StatefulProcessor(storeSupplier.name()), "source")
                 .addStateStore(storeBuilder, processor);
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
@@ -592,7 +592,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }
@@ -606,7 +606,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }

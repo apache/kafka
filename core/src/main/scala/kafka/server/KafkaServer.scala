@@ -50,7 +50,7 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
 
 object KafkaServer {
@@ -270,7 +270,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
-        socketServer.startup(startupProcessors = false)
+        socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -307,9 +307,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>
-            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
+            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.map { case (ep, cs) =>
+              ep -> cs.toCompletableFuture
+            }
           case None =>
-            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
+            brokerInfo.broker.endPoints.map { ep =>
+              ep.toJava -> CompletableFuture.completedFuture[Void](null)
+            }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,
@@ -348,8 +352,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        socketServer.startControlPlaneProcessor(authorizerFutures)
-        socketServer.startDataPlaneProcessors(authorizerFutures)
+        socketServer.startProcessingRequests(authorizerFutures)
+
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
@@ -726,7 +730,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
 
     if (brokerMetadataSet.size > 1) {
-      val builder = StringBuilder.newBuilder
+      val builder = new StringBuilder
 
       for ((logDir, brokerMetadata) <- brokerMetadataMap)
         builder ++= s"- $logDir -> $brokerMetadata\n"

@@ -514,8 +514,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
-    val persistedAssignments = assignment.mapValues(ReplicaAssignment(_)).toMap
+  def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
+    val persistedAssignments = assignment.map { case (k, v) => k -> ReplicaAssignment(v) }
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(persistedAssignments))
   }
 
@@ -583,7 +583,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return the replica assignment for each partition from the given topics.
    */
   def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicPartition, Seq[Int]] = {
-    getFullReplicaAssignmentForTopics(topics).mapValues(_.replicas).toMap
+    getFullReplicaAssignmentForTopics(topics).map { case (k, v) => k -> v.replicas }
   }
 
   /**

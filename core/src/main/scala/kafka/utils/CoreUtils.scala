@@ -240,7 +240,7 @@ object CoreUtils {
   /**
    * Returns a list of duplicated items
    */
-  def duplicates[T](s: Traversable[T]): Iterable[T] = {
+  def duplicates[T](s: Iterable[T]): Iterable[T] = {
     s.groupBy(identity)
       .map { case (k, l) => (k, l.size)}
       .filter { case (_, l) => l > 1 }

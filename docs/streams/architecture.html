@@ -80,6 +80,11 @@
         tasks will be automatically restarted on other instances and continue to consume from the same stream partitions.
     </p>
 
+    <p><b>NOTE:</b> Topic partitions are assigned to tasks, and tasks are assigned to all threads over all instances, in a best-effort attempt
+        to trade off load-balancing and stickiness of stateful tasks. For this assignment, Kafka Streams uses the
+        <a href="https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamsPartitionAssignor.java">StreamsPartitionAssignor</a>
+        class and doesn't let you change to a different assignor. If you try to use a different assignor, Kafka Streams ignores it.
+
     <p>
         The following diagram shows two tasks each assigned with one partition of the input streams.
     </p>

@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Represents the sensors aggregated per client
@@ -162,7 +162,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val time: Time,
                          threadNamePrefix: String,
                          clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
-  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
+  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault.toDouble)
   private val clientQuotaType = quotaTypeToClientQuotaType(quotaType)
   @volatile private var quotaTypesEnabled = clientQuotaCallback match {
     case Some(_) => QuotaTypes.CustomQuotas
@@ -176,7 +176,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private[server] val throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix)
   private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
 
-  private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
+  private val delayQueueSensor = metrics.sensor(quotaType.toString + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
     quotaType.toString,
     "Tracks the size of the delay queue"), new CumulativeSum())
@@ -230,6 +230,22 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       recordAndGetThrottleTimeMs(session, clientId, value, timeMs)
     } else {
       0
+    }
+  }
+
+  /**
+   * Returns maximum value (produced/consume bytes or request processing time) that could be recorded without guaranteed throttling.
+   * Recording any larger value will always be throttled, even if no other values were recorded in the quota window.
+   * This is used for deciding the maximum bytes that can be fetched at once
+   */
+  def getMaxValueInQuotaWindow(session: Session, clientId: String): Double = {
+    if (quotasEnabled) {
+      val clientSensors = getOrCreateQuotaSensors(session, clientId)
+      Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags.asJava))
+        .map(_.toDouble * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds)
+        .getOrElse(Double.MaxValue)
+    } else {
+      Double.MaxValue
     }
   }
 
@@ -490,8 +506,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       }
     } else {
       val quotaMetricName = clientRateMetricName(Map.empty)
-      allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
-        case (metricName, metric) =>
+      allMetrics.asScala.foreach { case (metricName, metric) =>
+        if (metricName.name == quotaMetricName.name && metricName.group == quotaMetricName.group) {
           val metricTags = metricName.tags
           Option(quotaLimit(metricTags)).foreach { newQuota =>
             if (newQuota != metric.config.quota.bound) {
@@ -499,6 +515,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
               metric.config(getQuotaMetricConfig(newQuota))
             }
           }
+        }
       }
     }
   }

@@ -66,6 +66,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -118,6 +119,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -3553,6 +3557,60 @@ public class FetcherTest {
     }
 
     @Test
+    public void testOffsetValidationRequestGrouping() {
+        buildFetcher();
+        assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
+
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 3,
+            Collections.emptyMap(), singletonMap(topicName, 4),
+            tp -> 5), false, 0L);
+
+        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                metadata.currentLeader(tp).leader, Optional.of(4));
+            subscriptions.seekUnvalidated(tp,
+                new SubscriptionState.FetchPosition(0, Optional.of(4), leaderAndEpoch));
+        }
+
+        Set<TopicPartition> allRequestedPartitions = new HashSet<>();
+
+        for (Node node : metadata.fetch().nodes()) {
+            apiVersions.update(node.idString(), NodeApiVersions.create());
+
+            Set<TopicPartition> expectedPartitions = subscriptions.assignedPartitions().stream()
+                .filter(tp ->
+                    metadata.currentLeader(tp).leader.equals(Optional.of(node)))
+                .collect(Collectors.toSet());
+
+            assertTrue(expectedPartitions.stream().noneMatch(allRequestedPartitions::contains));
+            assertTrue(expectedPartitions.size() > 0);
+            allRequestedPartitions.addAll(expectedPartitions);
+
+            Map<TopicPartition, EpochEndOffset> endOffsets = expectedPartitions.stream().collect(Collectors.toMap(
+                Function.identity(),
+                tp -> new EpochEndOffset(Errors.NONE, 4, 0)
+            ));
+
+            OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(endOffsets);
+            client.prepareResponseFrom(new MockClient.RequestMatcher() {
+                @Override
+                public boolean matches(AbstractRequest body) {
+                    OffsetsForLeaderEpochRequest request = (OffsetsForLeaderEpochRequest) body;
+                    return expectedPartitions.equals(request.epochsByTopicPartition().keySet());
+                }
+            }, response, node);
+        }
+
+        assertEquals(subscriptions.assignedPartitions(), allRequestedPartitions);
+
+        fetcher.validateOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertTrue(subscriptions.assignedPartitions()
+            .stream().noneMatch(subscriptions::awaitingValidation));
+    }
+
+    @Test
     public void testOffsetValidationAwaitsNodeApiVersion() {
         buildFetcher();
         assignFromUser(singleton(tp0));
@@ -3932,6 +3990,74 @@ public class FetcherTest {
         });
     }
 
+    @Test
+    public void testBeginningOffsets() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, 2L));
+        assertEquals(singletonMap(tp0, 2L), fetcher.beginningOffsets(singleton(tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsDuplicateTopicPartition() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, 2L));
+        assertEquals(singletonMap(tp0, 2L), fetcher.beginningOffsets(asList(tp0, tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsMultipleTopicPartitions() {
+        buildFetcher();
+        Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(tp0, 2L);
+        expectedOffsets.put(tp1, 4L);
+        expectedOffsets.put(tp2, 6L);
+        assignFromUser(expectedOffsets.keySet());
+        client.prepareResponse(listOffsetResponse(Errors.NONE, ListOffsetRequest.EARLIEST_TIMESTAMP, expectedOffsets));
+        assertEquals(expectedOffsets, fetcher.beginningOffsets(asList(tp0, tp1, tp2), time.timer(5000L)));
+    }
+
+    @Test
+    public void testBeginningOffsetsEmpty() {
+        buildFetcher();
+        assertEquals(emptyMap(), fetcher.beginningOffsets(emptyList(), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsets() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, 5L));
+        assertEquals(singletonMap(tp0, 5L), fetcher.endOffsets(singleton(tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsDuplicateTopicPartition() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, 5L));
+        assertEquals(singletonMap(tp0, 5L), fetcher.endOffsets(asList(tp0, tp0), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsMultipleTopicPartitions() {
+        buildFetcher();
+        Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(tp0, 5L);
+        expectedOffsets.put(tp1, 7L);
+        expectedOffsets.put(tp2, 9L);
+        assignFromUser(expectedOffsets.keySet());
+        client.prepareResponse(listOffsetResponse(Errors.NONE, ListOffsetRequest.LATEST_TIMESTAMP, expectedOffsets));
+        assertEquals(expectedOffsets, fetcher.endOffsets(asList(tp0, tp1, tp2), time.timer(5000L)));
+    }
+
+    @Test
+    public void testEndOffsetsEmpty() {
+        buildFetcher();
+        assertEquals(emptyMap(), fetcher.endOffsets(emptyList(), time.timer(5000L)));
+    }
+
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
         return body -> {
@@ -3950,6 +4076,16 @@ public class FetcherTest {
                 Optional.empty());
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
+        return new ListOffsetResponse(allPartitionData);
+    }
+
+    private ListOffsetResponse listOffsetResponse(Errors error, long timestamp, Map<TopicPartition, Long> offsets) {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+            ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp,
+                entry.getValue(), Optional.empty());
+            allPartitionData.put(entry.getKey(), partitionData);
+        }
         return new ListOffsetResponse(allPartitionData);
     }
 

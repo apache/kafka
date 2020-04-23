@@ -43,7 +43,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void transitToRestoreActive() {
+    public void enforceRestoreActive() {
         // do nothing
     }
 

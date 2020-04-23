@@ -19,7 +19,7 @@ package kafka.utils.json
 
 import scala.collection.{Map, Seq}
 import scala.collection.compat._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
 
@@ -82,7 +82,7 @@ object DecodeJson {
 
   implicit def decodeOption[E](implicit decodeJson: DecodeJson[E]): DecodeJson[Option[E]] = (node: JsonNode) => {
     if (node.isNull) Right(None)
-    else decodeJson.decodeEither(node).right.map(Some(_))
+    else decodeJson.decodeEither(node).map(Some(_))
   }
 
   implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = (node: JsonNode) => {
@@ -93,7 +93,7 @@ object DecodeJson {
 
   implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = (node: JsonNode) => {
     if (node.isObject)
-      decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))
+      decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).map(v => (e.getKey, v)))
     else Left(s"Expected JSON object, received $node")
   }
 

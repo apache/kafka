@@ -28,7 +28,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.InvalidPidMappingException
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 // Test class that uses a very small transaction timeout to trigger InvalidPidMapping errors
