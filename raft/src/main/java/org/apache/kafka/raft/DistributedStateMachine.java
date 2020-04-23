@@ -51,9 +51,10 @@ public interface DistributedStateMachine {
     OffsetAndEpoch position();
 
     /**
-     * Apply committed records to the state machine.
+     * Apply committed records to the state machine. Committed records should not
+     * be lost by the quorum.
      *
-     * @param records The records to apply
+     * @param records The records to apply to the state machine
      */
     void apply(Records records);
 
@@ -62,10 +63,10 @@ public interface DistributedStateMachine {
      * state before this method is invoked in a new leader epoch.
      *
      * Note that acceptance does not guarantee that the records will become committed
-     * since that depends on replication to the quorum. If there is a leader change,
-     * accepted records may be lost.
+     * since that depends on replication to the quorum. For example, if there is a leader
+     * change before the record can be committed, then accepted records may be lost.
      *
-     * @param records The recor
+     * @param records The records appended to the leader
      * @return true if the records should be appended to the log
      */
     boolean accept(Records records);

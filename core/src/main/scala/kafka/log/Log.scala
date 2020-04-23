@@ -1257,8 +1257,6 @@ class Log(@volatile private var _dir: File,
 
   def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch)
 
-  def previousEpoch: Option[Int] = leaderEpochCache.flatMap(_.previousEpoch)
-
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
       val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch)

@@ -42,8 +42,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,10 +55,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-
-// TODO:
-// - Figure out locking (probably read-write lock like normal partitions)
-// - Deletion of old log data: do we need any guarantees on the consistency of the log start offset?
 
 /**
  * This class implements a Kafkaesque version of the Raft protocol. Leader election
@@ -105,7 +99,7 @@ import java.util.function.Supplier;
  *    APIs for the same purpose, but we separated it initially for clarity.
  *
  */
-public class RaftManager {
+public class KafkaRaftClient implements RaftClient {
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
     private final Time time;
@@ -123,20 +117,19 @@ public class RaftManager {
     private final ConnectionCache connections;
 
     private BlockingQueue<PendingAppendRequest> unsentAppends;
-    private Map<Integer, PendingAppendRequest> sentAppends;
     private DistributedStateMachine stateMachine;
 
-    public RaftManager(NetworkChannel channel,
-                       ReplicatedLog log,
-                       QuorumState quorum,
-                       Time time,
-                       InetSocketAddress advertisedListener,
-                       List<InetSocketAddress> bootstrapServers,
-                       int electionTimeoutMs,
-                       int electionJitterMs,
-                       int retryBackoffMs,
-                       int requestTimeoutMs,
-                       LogContext logContext) {
+    public KafkaRaftClient(NetworkChannel channel,
+                           ReplicatedLog log,
+                           QuorumState quorum,
+                           Time time,
+                           InetSocketAddress advertisedListener,
+                           List<InetSocketAddress> bootstrapServers,
+                           int electionTimeoutMs,
+                           int electionJitterMs,
+                           int retryBackoffMs,
+                           int requestTimeoutMs,
+                           LogContext logContext) {
         this.channel = channel;
         this.log = log;
         this.quorum = quorum;
@@ -148,19 +141,18 @@ public class RaftManager {
         this.requestTimeoutMs = requestTimeoutMs;
         this.bootTimestamp = time.milliseconds();
         this.advertisedListener = advertisedListener;
-        this.logger = logContext.logger(RaftManager.class);
+        this.logger = logContext.logger(KafkaRaftClient.class);
         this.connections = new ConnectionCache(channel, bootstrapServers,
             retryBackoffMs, requestTimeoutMs, logContext);
-        this.sentAppends = new HashMap<>();
         this.unsentAppends = new ArrayBlockingQueue<>(10);
         this.connections.maybeUpdate(quorum.localId, new HostInfo(advertisedListener, bootTimestamp));
     }
 
     private void applyCommittedRecordsToStateMachine() {
         quorum.highWatermark().ifPresent(highWatermark -> {
-            while (stateMachine.position().offset < highWatermark) {
+            while (stateMachine.position().offset < highWatermark && shutdown.get() == null) {
                 OffsetAndEpoch position = stateMachine.position();
-                Records records = read(position);
+                Records records = readCommitted(position);
                 logger.trace("Applying committed records at {} to the state machine", position);
                 stateMachine.apply(records);
             }
@@ -193,6 +185,7 @@ public class RaftManager {
         }
     }
 
+    @Override
     public void initialize(DistributedStateMachine stateMachine) throws IOException {
         this.stateMachine = stateMachine;
         quorum.initialize(log.endOffset());
@@ -905,7 +898,6 @@ public class RaftManager {
             if (quorum.isVoter() && electionTimer.isExpired())
                 becomeCandidate();
 
-            clearTimedOutAppends(electionTimer.currentTimeMs());
             maybeSendRequests(electionTimer.currentTimeMs());
             maybeSendOrHandleAppendRequest(electionTimer.currentTimeMs());
 
@@ -937,23 +929,13 @@ public class RaftManager {
         }
     }
 
-    private void clearTimedOutAppends(long currentTimeMs) {
-        Iterator<PendingAppendRequest> pendingAppendIter = sentAppends.values().iterator();
-        while (pendingAppendIter.hasNext()) {
-            PendingAppendRequest pendingAppend = pendingAppendIter.next();
-            if (!pendingAppend.isTimedOut(currentTimeMs))
-                break;
-            pendingAppendIter.remove();
-            pendingAppend.fail(new TimeoutException());
-        }
-    }
-
     /**
      * Append a set of records to the log. Acknowledgement of this
      *
      * @param records The records to write to the log.
      * @return The uncommitted base offset and epoch of the appended records
      */
+    @Override
     public CompletableFuture<OffsetAndEpoch> append(Records records) {
         if (shutdown.get() != null)
             throw new IllegalStateException("Cannot append records while we are shutting down");
@@ -974,10 +956,7 @@ public class RaftManager {
      * @param offsetAndEpoch The first offset to read from and the previous consumed epoch
      * @return A set of records beginning at the request offset
      */
-    public Records read(OffsetAndEpoch offsetAndEpoch) {
-        if (shutdown.get() != null)
-            throw new IllegalStateException("Cannot append records while we are shutting down");
-
+    private Records readCommitted(OffsetAndEpoch offsetAndEpoch) {
         Optional<OffsetAndEpoch> endOffset = log.endOffsetForEpoch(offsetAndEpoch.epoch);
         if (!endOffset.isPresent() || offsetAndEpoch.offset > endOffset.get().offset) {
             throw new LogTruncationException("The requested offset and epoch " + offsetAndEpoch +
@@ -993,6 +972,7 @@ public class RaftManager {
         }
     }
 
+    @Override
     public void shutdown(int timeoutMs) {
         // TODO: Safe to access epoch? Need to reset connections to be able to send EndQuorumEpoch? Block until shutdown completes?
         shutdown.set(new GracefulShutdown(timeoutMs, quorum.epoch()));

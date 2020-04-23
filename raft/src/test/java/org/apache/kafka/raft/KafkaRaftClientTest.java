@@ -53,7 +53,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class RaftManagerTest {
+public class KafkaRaftClientTest {
     private final int localId = 0;
     private final int electionTimeoutMs = 10000;
     private final int retryBackoffMs = 50;
@@ -68,7 +68,7 @@ public class RaftManagerTest {
         return new InetSocketAddress("localhost", 9990 + id);
     }
 
-    private RaftManager buildManager(Set<Integer> voters) throws IOException {
+    private KafkaRaftClient buildClient(Set<Integer> voters) throws IOException {
         LogContext logContext = new LogContext();
         QuorumState quorum = new QuorumState(localId, voters, electionStore, logContext);
 
@@ -76,18 +76,18 @@ public class RaftManagerTest {
             .map(this::mockAddress)
             .collect(Collectors.toList());
 
-        RaftManager manager = new RaftManager(channel, log, quorum, time,
+        KafkaRaftClient client = new KafkaRaftClient(channel, log, quorum, time,
             mockAddress(localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, retryBackoffMs, requestTimeoutMs, logContext);
-        manager.initialize(new NoOpStateMachine());
-        return manager;
+        client.initialize(new NoOpStateMachine());
+        return client;
     }
 
     @Test
     public void testInitializeSingleMemberQuorum() throws IOException {
-        RaftManager manager = buildManager(Collections.singleton(localId));
+        KafkaRaftClient client = buildClient(Collections.singleton(localId));
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
-        manager.poll();
+        client.poll();
         assertEquals(0, channel.drainSendQueue().size());
     }
 
@@ -95,27 +95,27 @@ public class RaftManagerTest {
     public void testInitializeAsCandidate() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withVotedCandidate(1, localId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(-1, 1, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int requestId = assertSentVoteRequest(1, 0, 0L);
         VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(requestId, voteResponse, otherNodeId));
 
         // Become leader after receiving the vote
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
 
         // Send BeginQuorumEpoch to voters
-        manager.poll();
+        client.poll();
         assertBeginQuorumEpochRequest(1);
     }
 
@@ -124,34 +124,34 @@ public class RaftManagerTest {
         int epoch = 1;
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withVotedCandidate(epoch, localId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(localId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int requestId = assertSentVoteRequest(epoch, 0, 0L);
 
         time.sleep(requestTimeoutMs);
-        manager.poll();
+        client.poll();
         int retryId = assertSentVoteRequest(epoch, 0, 0L);
 
         // Even though we have resent the request, we should still accept the response to
         // the first request if it arrives late.
         VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(requestId, voteResponse, otherNodeId));
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, localId), electionStore.read());
 
         // If the second request arrives later, it should have no effect
         VoteResponseData retryResponse = voteResponse(true, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(retryId, retryResponse, otherNodeId));
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, localId), electionStore.read());
     }
 
@@ -159,33 +159,33 @@ public class RaftManagerTest {
     public void testRetryElection() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withVotedCandidate(1, localId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(-1, 1, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         // Quorum size is two. If the other member rejects, then we need to schedule a revote.
         int requestId = assertSentVoteRequest(1, 0, 0L);
         VoteResponseData voteResponse = voteResponse(false, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(requestId, voteResponse, otherNodeId));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withUnknownLeader(1), electionStore.read());
 
         // If no new election is held, we will become a candidate again after awaiting the backoff time
         time.sleep(retryBackoffMs);
-        manager.poll();
+        client.poll();
         int retryId = assertSentVoteRequest(2, 0, 0L);
         VoteResponseData retryVoteResponse = voteResponse(true, Optional.empty(), 2);
         channel.mockReceive(new RaftResponse.Inbound(retryId, retryVoteResponse, otherNodeId));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(2, localId), electionStore.read());
     }
 
@@ -195,16 +195,16 @@ public class RaftManagerTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         electionStore.write(ElectionState.withElectedLeader(epoch, otherNodeId));
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(otherNodeId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
     }
@@ -218,16 +218,16 @@ public class RaftManagerTest {
         electionStore.write(ElectionState.withElectedLeader(epoch, otherNodeId));
         log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
 
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(otherNodeId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         assertSentFetchQuorumRecordsRequest(epoch, 1L, lastEpoch);
     }
@@ -241,22 +241,22 @@ public class RaftManagerTest {
         electionStore.write(ElectionState.withElectedLeader(epoch, otherNodeId));
         log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
 
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(otherNodeId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         assertSentFetchQuorumRecordsRequest(epoch, 1L, lastEpoch);
 
         time.sleep(electionTimeoutMs);
 
-        manager.poll();
+        client.poll();
         assertSentVoteRequest(epoch + 1, lastEpoch, 1L);
     }
 
@@ -265,14 +265,14 @@ public class RaftManagerTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
-        manager.poll();
+        client.poll();
         int requestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(requestId,
             findQuorumResponse(leaderId, epoch, voters), -1));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId), electionStore.read());
     }
 
@@ -281,23 +281,23 @@ public class RaftManagerTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
-        manager.poll();
+        client.poll();
         int requestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(requestId, findQuorumFailure(Errors.UNKNOWN_SERVER_ERROR), -1));
 
-        manager.poll();
+        client.poll();
         assertEquals(0, channel.drainSendQueue().size());
 
         time.sleep(retryBackoffMs);
 
-        manager.poll();
+        client.poll();
         int retryId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(retryId,
             findQuorumResponse(leaderId, epoch, voters), -1));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId), electionStore.read());
     }
 
@@ -306,19 +306,19 @@ public class RaftManagerTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
-        manager.poll();
+        client.poll();
         int requestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(requestId,
             findQuorumResponse(leaderId, epoch, voters), -1));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId), electionStore.read());
 
         time.sleep(electionTimeoutMs);
 
-        manager.poll();
+        client.poll();
         assertSentFindQuorumRequest();
     }
 
@@ -327,26 +327,26 @@ public class RaftManagerTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
-        manager.poll();
+        client.poll();
         int requestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(requestId,
             findQuorumResponse(leaderId, epoch, voters), -1));
 
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId), electionStore.read());
 
-        manager.poll();
+        client.poll();
         int fetchRequestId = assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
 
         FetchQuorumRecordsResponseData response = fetchRecordsResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L,
                 Errors.BROKER_NOT_AVAILABLE);
         channel.mockReceive(new RaftResponse.Inbound(fetchRequestId, response, leaderId));
-        manager.poll();
+        client.poll();
 
         assertEquals(ElectionState.withUnknownLeader(epoch), electionStore.read());
-        manager.poll();
+        client.poll();
         assertSentFindQuorumRequest();
     }
 
@@ -355,35 +355,35 @@ public class RaftManagerTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
-        manager.poll();
+        client.poll();
         int requestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(requestId,
             findQuorumResponse(leaderId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId), electionStore.read());
         assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
 
         time.sleep(requestTimeoutMs);
-        manager.poll();
+        client.poll();
 
         assertEquals(ElectionState.withUnknownLeader(epoch), electionStore.read());
-        manager.poll();
+        client.poll();
         assertSentFindQuorumRequest();
     }
 
     @Test
     public void testLeaderHandlesFindQuorum() throws IOException {
-        RaftManager manager = buildManager(Collections.singleton(localId));
+        KafkaRaftClient client = buildClient(Collections.singleton(localId));
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
 
         int observerId = 1;
         FindQuorumRequestData request = new FindQuorumRequestData().setReplicaId(observerId);
         channel.mockReceive(new RaftRequest.Inbound(channel.newRequestId(), request, time.milliseconds()));
 
-        manager.poll();
+        client.poll();
         assertSentFindQuorumResponse(1, Optional.of(localId));
     }
 
@@ -391,85 +391,85 @@ public class RaftManagerTest {
     public void testLeaderGracefulShutdown() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
         // Elect ourselves as the leader
         assertEquals(ElectionState.withVotedCandidate(1, localId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(-1, 1, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int voteRequestId = assertSentVoteRequest(1, 0, 0L);
         VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(voteRequestId, voteResponse, otherNodeId));
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        manager.shutdown(shutdownTimeoutMs);
+        client.shutdown(shutdownTimeoutMs);
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
-        assertTrue(manager.isRunning());
+        assertTrue(client.isRunning());
 
         // Send EndQuorumEpoch request to the other vote
-        manager.poll();
-        assertTrue(manager.isRunning());
+        client.poll();
+        assertTrue(client.isRunning());
         assertSentEndQuorumEpochRequest(1, localId);
 
         // Graceful shutdown completes when the epoch is bumped
         VoteRequestData newVoteRequest = voteRequest(2, otherNodeId, 0, 0L);
         channel.mockReceive(new RaftRequest.Inbound(channel.newRequestId(), newVoteRequest, time.milliseconds()));
 
-        manager.poll();
-        assertFalse(manager.isRunning());
+        client.poll();
+        assertFalse(client.isRunning());
     }
 
     @Test
     public void testLeaderGracefulShutdownTimeout() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
 
         // Elect ourselves as the leader
         assertEquals(ElectionState.withVotedCandidate(1, localId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(-1, 1, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int voteRequestId = assertSentVoteRequest(1, 0, 0L);
         VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
         channel.mockReceive(new RaftResponse.Inbound(voteRequestId, voteResponse, otherNodeId));
-        manager.poll();
+        client.poll();
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        manager.shutdown(shutdownTimeoutMs);
+        client.shutdown(shutdownTimeoutMs);
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
-        assertTrue(manager.isRunning());
+        assertTrue(client.isRunning());
 
         // Send EndQuorumEpoch request to the other vote
-        manager.poll();
-        assertTrue(manager.isRunning());
+        client.poll();
+        assertTrue(client.isRunning());
         assertSentEndQuorumEpochRequest(1, localId);
 
         // The shutdown timeout is hit before we receive any requests or responses indicating an epoch bump
         time.sleep(shutdownTimeoutMs);
 
-        manager.poll();
-        assertFalse(manager.isRunning());
+        client.poll();
+        assertFalse(client.isRunning());
     }
 
     @Test
@@ -477,29 +477,29 @@ public class RaftManagerTest {
         int otherNodeId = 1;
         int epoch = 5;
         electionStore.write(ElectionState.withElectedLeader(epoch, otherNodeId));
-        RaftManager manager = buildManager(Utils.mkSet(localId, otherNodeId));
+        KafkaRaftClient client = buildClient(Utils.mkSet(localId, otherNodeId));
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
 
-        manager.poll();
+        client.poll();
 
         int shutdownTimeoutMs = 5000;
-        manager.shutdown(shutdownTimeoutMs);
-        assertTrue(manager.isRunning());
-        manager.poll();
-        assertFalse(manager.isRunning());
+        client.shutdown(shutdownTimeoutMs);
+        assertTrue(client.isRunning());
+        client.poll();
+        assertFalse(client.isRunning());
     }
 
     @Test
     public void testGracefulShutdownSingleMemberQuorum() throws IOException {
-        RaftManager manager = buildManager(Collections.singleton(localId));
+        KafkaRaftClient client = buildClient(Collections.singleton(localId));
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
-        manager.poll();
+        client.poll();
         assertEquals(0, channel.drainSendQueue().size());
         int shutdownTimeoutMs = 5000;
-        manager.shutdown(shutdownTimeoutMs);
-        assertTrue(manager.isRunning());
-        manager.poll();
-        assertFalse(manager.isRunning());
+        client.shutdown(shutdownTimeoutMs);
+        assertTrue(client.isRunning());
+        client.poll();
+        assertFalse(client.isRunning());
     }
 
     @Test
@@ -508,16 +508,16 @@ public class RaftManagerTest {
         int epoch = 5;
         electionStore.write(ElectionState.withElectedLeader(epoch, otherNodeId));
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(otherNodeId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int fetchQuorumRequestId = assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
         Records records = MemoryRecords.withRecords(0L, CompressionType.NONE,
@@ -525,13 +525,13 @@ public class RaftManagerTest {
         FetchQuorumRecordsResponseData response = fetchRecordsResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
         channel.mockReceive(new RaftResponse.Inbound(fetchQuorumRequestId, response, otherNodeId));
 
-        manager.poll();
+        client.poll();
         assertEquals(2L, log.endOffset());
     }
 
     @Test
     public void testLeaderAppendSingleMemberQuorum() throws IOException {
-        RaftManager manager = buildManager(Collections.singleton(localId));
+        KafkaRaftClient client = buildClient(Collections.singleton(localId));
         assertEquals(ElectionState.withElectedLeader(1, localId), electionStore.read());
 
         SimpleRecord[] appendRecords = new SimpleRecord[] {
@@ -542,17 +542,17 @@ public class RaftManagerTest {
         Records records = MemoryRecords.withRecords(0L, CompressionType.NONE, 1, appendRecords);
 
         // First append the data
-        manager.append(records);
-        manager.poll();
+        client.append(records);
+        client.poll();
 
-        assertEquals(OptionalLong.of(3L), manager.highWatermark());
+        assertEquals(OptionalLong.of(3L), client.highWatermark());
 
         // Now try reading it
         int otherNodeId = 1;
         FetchQuorumRecordsRequestData fetchRequest = fetchRecordsRequest(1, otherNodeId, 0L);
         channel.mockReceive(new RaftRequest.Inbound(channel.newRequestId(), fetchRequest, time.milliseconds()));
 
-        manager.poll();
+        client.poll();
 
         MemoryRecords fetchedRecords = assertFetchQuorumRecordsResponse(1, localId);
         List<MutableRecordBatch> batches = Utils.toList(fetchedRecords.batchIterator());
@@ -578,17 +578,17 @@ public class RaftManagerTest {
                 new SimpleRecord("foo".getBytes()),
                 new SimpleRecord("bar".getBytes())), lastEpoch);
 
-        RaftManager manager = buildManager(voters);
+        KafkaRaftClient client = buildClient(voters);
         assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId), electionStore.read());
         assertEquals(2L, log.endOffset());
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int findQuorumRequestId = assertSentFindQuorumRequest();
         channel.mockReceive(new RaftResponse.Inbound(findQuorumRequestId,
             findQuorumResponse(otherNodeId, epoch, voters), -1));
 
-        pollUntilSend(manager);
+        pollUntilSend(client);
 
         int requestId = assertSentFetchQuorumRecordsRequest(epoch, 2L, lastEpoch);
 
@@ -597,11 +597,11 @@ public class RaftManagerTest {
         channel.mockReceive(new RaftResponse.Inbound(requestId, response, otherNodeId));
 
         // Poll again to complete truncation
-        manager.poll();
+        client.poll();
         assertEquals(1L, log.endOffset());
 
         // Now we should be fetching
-        manager.poll();
+        client.poll();
         assertSentFetchQuorumRecordsRequest(epoch, 1L, lastEpoch);
     }
 
@@ -771,9 +771,9 @@ public class RaftManagerTest {
                 .setReplicaId(replicaId);
     }
 
-    private void pollUntilSend(RaftManager manager) throws InterruptedException {
+    private void pollUntilSend(KafkaRaftClient client) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            manager.poll();
+            client.poll();
             return channel.hasSentMessages();
         }, "Condition failed to be satisfied before timeout");
     }

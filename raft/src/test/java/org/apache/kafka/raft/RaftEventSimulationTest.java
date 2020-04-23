@@ -621,10 +621,10 @@ public class RaftEventSimulationTest {
             List<InetSocketAddress> bootstrapServers = Collections.singletonList(
                 new InetSocketAddress("localhost", 9000));
 
-            RaftManager raftManager = new RaftManager(channel, persistentState.log, quorum, time,
+            KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time,
                 new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
                 ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, logContext);
-            RaftNode node = new RaftNode(nodeId, raftManager, persistentState.log, channel,
+            RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();
             running.put(nodeId, node);
@@ -633,7 +633,7 @@ public class RaftEventSimulationTest {
 
     private static class RaftNode {
         final int nodeId;
-        final RaftManager manager;
+        final KafkaRaftClient manager;
         final MockLog log;
         final MockNetworkChannel channel;
         final MockElectionStore store;
@@ -642,7 +642,7 @@ public class RaftEventSimulationTest {
         DistributedCounter counter;
 
         private RaftNode(int nodeId,
-                         RaftManager manager,
+                         KafkaRaftClient manager,
                          MockLog log,
                          MockNetworkChannel channel,
                          MockElectionStore store,
@@ -808,7 +808,7 @@ public class RaftEventSimulationTest {
             return (Integer) Type.INT32.read(value);
         }
 
-        private void assertCommittedData(RaftManager manager, MockLog log) {
+        private void assertCommittedData(KafkaRaftClient manager, MockLog log) {
             manager.highWatermark().ifPresent(highWatermark -> {
                 List<MockLog.LogEntry> entries = log.readEntries(0L, highWatermark);
                 if (committedLog.size() < entries.size()) {

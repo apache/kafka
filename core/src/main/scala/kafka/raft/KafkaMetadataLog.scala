@@ -79,10 +79,6 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
     log.truncateTo(offset)
   }
 
-  override def previousEpoch: Optional[Integer] = {
-    log.previousEpoch.map(_.asInstanceOf[Integer]).asJava
-  }
-
   override def assignEpochStartOffset(epoch: Int, startOffset: Long): Unit = {
     log.maybeAssignEpochStartOffset(epoch, startOffset)
   }
