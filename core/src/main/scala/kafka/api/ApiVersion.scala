@@ -346,8 +346,6 @@ case object KAFKA_2_5_IV0 extends DefaultApiVersion {
   val id: Int = 26
 }
 
-<<<<<<< HEAD
-=======
 case object KAFKA_2_6_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.6"
   val subVersion = "IV0"
@@ -355,7 +353,6 @@ case object KAFKA_2_6_IV0 extends DefaultApiVersion {
   val id: Int = 27
 }
 
->>>>>>> apache-repo/trunk
 object ApiVersionValidator extends Validator {
 
   override def ensureValid(name: String, value: Any): Unit = {

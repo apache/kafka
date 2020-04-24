@@ -523,12 +523,12 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     import consumerRecord._
 
-    def writeOffset = {
+    def writeOffset():Unit = {
       output.write(consumerRecord.offset().toString.getBytes("UTF-8"))
       output.write(":".getBytes("UTF-8"))
     }
 
-    writeOffset
+    writeOffset()
 
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)

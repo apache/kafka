@@ -22,6 +22,8 @@ import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.log.remote.RemoteLogManager;
+import kafka.log.remote.RemoteLogManagerConfig;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -106,7 +108,7 @@ public class HighwatermarkCheckpointBench {
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, RemoteLogManager.DefaultConfig());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
@@ -128,6 +130,7 @@ public class HighwatermarkCheckpointBench {
                 zkClient,
                 this.scheduler,
                 this.logManager,
+                Option.empty(),
                 new AtomicBoolean(false),
                 this.quotaManagers,
                 brokerTopicStats,

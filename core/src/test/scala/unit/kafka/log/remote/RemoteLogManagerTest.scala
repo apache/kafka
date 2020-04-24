@@ -24,7 +24,7 @@ import java.util.{Collections, Optional, Properties}
 import java.{lang, util}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.log.{CleanerConfig, Log, LogConfig, LogManager}
+import kafka.log.{AppendOrigin, CleanerConfig, Log, LogConfig, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server._
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -113,7 +113,7 @@ class RemoteLogManagerTest {
   }
 
   @Test
-  def testRSMConfigInvocation() {
+  def testRSMConfigInvocation():Unit = {
 
     def logFetcher(tp: TopicPartition): Option[Log] = logManager.getLog(tp)
 
@@ -131,8 +131,7 @@ class RemoteLogManagerTest {
   }
 
   @Test
-  def testRemoteLogRecordsFetch() {
-    val lastOffset = 5
+  def testRemoteLogRecordsFetch(): Unit = {
     // return the lastOffset to verify when out of range offsets are requested.
     EasyMock.expect(rlmMock.close()).anyTimes()
     EasyMock.replay(rlmMock)
@@ -148,7 +147,7 @@ class RemoteLogManagerTest {
       .setZkVersion(1)
       .setReplicas(Collections.singletonList(brokerId))
       .setIsNew(true)
-    partition.makeLeader(1, leaderState, 1, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+    partition.makeLeader(leaderState, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
     val recordsArray = Array(new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -159,8 +158,8 @@ class RemoteLogManagerTest {
     val inputMemoryRecords = Map(topicPartition -> MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
       recordsArray: _*))
 
-    replicaManager.appendRecords(timeout = 30000, requiredAcks = 1, internalTopicsAllowed = true, isFromClient = true,
-      entriesPerPartition = inputMemoryRecords, responseCallback = _ => ())
+    replicaManager.appendRecords(timeout = 30000, requiredAcks = 1, internalTopicsAllowed = true,
+      origin = AppendOrigin.Client, entriesPerPartition = inputMemoryRecords, responseCallback = _ => ())
 
     def logReadResultFor(fetchOffset: Long): LogReadResult = {
       val partitionInfo = Seq((topicPartition, new PartitionData(fetchOffset, 0, 1000,
@@ -224,7 +223,7 @@ class MockRemoteStorageManager extends RemoteStorageManager {
   override def fetchTimestampIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = new ByteArrayInputStream(
     Array.emptyByteArray)
 
-  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = true
+  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
 }
 
 class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {

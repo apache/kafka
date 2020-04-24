@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{Closeable, File, RandomAccessFile}
+import java.io.{File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
@@ -27,7 +27,7 @@ import kafka.common.IndexOffsetOverflowException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem}
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
+abstract class AbstractIndex[K, V](var _file: File, val baseOffset: Long,
                                    val maxIndexSize: Int = -1, val writable: Boolean) extends CleanableIndex(_file) {
   import AbstractIndex._
 
@@ -152,8 +152,6 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
    * True iff there are no more slots available in this index
    */
   def isFull: Boolean = _entries >= _maxEntries
-
-  def file: File = _file
 
   def maxEntries: Int = _maxEntries
 
@@ -419,7 +417,7 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
 }
 
 object AbstractIndex extends Logging {
-  override val loggerName: String = classOf[AbstractIndex].getName
+  override val loggerName: String = classOf[AbstractIndex[_, _]].getName
 }
 
 object IndexSearchType extends Enumeration {

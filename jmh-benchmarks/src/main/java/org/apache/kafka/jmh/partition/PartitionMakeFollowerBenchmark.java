@@ -25,6 +25,7 @@ import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
@@ -110,7 +111,8 @@ public class PartitionMakeFollowerBenchmark {
             new BrokerState(),
             brokerTopicStats,
             logDirFailureChannel,
-            Time.SYSTEM);
+            Time.SYSTEM,
+            RemoteLogManager.DefaultConfig());
 
         TopicPartition tp = new TopicPartition("topic", 0);
 

@@ -39,7 +39,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RemoteLogInpu
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Searching._
 import scala.collection.Set
 
@@ -432,7 +432,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
 
     override def toString: String = {
-      this.getClass + s"[$tp]"
+      this.getClass.toString + s"[$tp]"
     }
   }
 
@@ -444,7 +444,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     val fetchMaxBytes  = remoteStorageFetchInfo.fetchMaxByes
     val tp = remoteStorageFetchInfo.topicPartition
     val fetchInfo: PartitionData = remoteStorageFetchInfo.fetchInfo
-    val fetchIsolation = remoteStorageFetchInfo.fetchIsolation
 
     val offset = fetchInfo.fetchOffset
     val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)

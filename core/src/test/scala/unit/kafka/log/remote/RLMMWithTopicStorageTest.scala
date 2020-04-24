@@ -28,7 +28,7 @@ import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.log.remote.storage.{RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This test is added here as it needs the brokers to be run to test the `RemoteLogMetadataManager` implementation

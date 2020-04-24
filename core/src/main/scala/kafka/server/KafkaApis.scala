@@ -49,6 +49,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, REMOT
 import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
+import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
@@ -1087,7 +1088,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"'${config.remoteLogMetadataTopicReplicationFactor}' for the offsets topic (configured via " +
             s"'${KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp}'). This error can be ignored if the cluster " +
             s"is starting up and not all brokers are up yet.")
-          new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true,
+          metadataResponseTopic(Errors.COORDINATOR_NOT_AVAILABLE, topic, true,
             util.Collections.emptyList())
         } else {
           val props = new Properties()

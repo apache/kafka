@@ -31,8 +31,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import kafka.log.remote.MockRemoteLogManager
 
-import scala.collection.JavaConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 class DelayedRemoteFetchTest extends EasyMockSupport {
   val tp = new TopicPartition("test", 0)
@@ -40,7 +40,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
   var isRemoteFetchExecuted = false
 
   @Test
-  def testRemoteFetch: Unit = {
+  def testRemoteFetch(): Unit = {
     var replied = false
 
     def responseCallback(r: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
@@ -60,7 +60,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
   }
 
   @Test
-  def testRemoteFetchTimeout: Unit = {
+  def testRemoteFetchTimeout(): Unit = {
     var replied = false
 
     def responseCallback(r: Seq[(TopicPartition, FetchPartitionData)]): Unit = {

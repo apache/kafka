@@ -30,20 +30,19 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
+import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -58,11 +57,11 @@ import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{ElectionType, Node, TopicPartition}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -186,7 +185,7 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           threadNamePrefix: Option[String] = None) {
+           threadNamePrefix: Option[String] = None) = {
     this(config, metrics, time, zkClient, scheduler, logManager, remoteLogManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -440,12 +439,12 @@ class ReplicaManager(val config: KafkaConfig,
         val partitions = stoppedPartitions.keySet
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
-        remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions, stopReplicaRequest.deletePartitions))
 
         stoppedPartitions.foreach { case (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition
           try {
             stopReplica(topicPartition, deletePartition)
+            remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions, deletePartition))
             responseMap.put(topicPartition, Errors.NONE)
           } catch {
             case e: KafkaStorageException =>
