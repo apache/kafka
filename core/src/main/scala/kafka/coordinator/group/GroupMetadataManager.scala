@@ -208,11 +208,23 @@ class GroupMetadataManager(brokerId: Int,
     case None =>
       false
   }
+
   /**
-   * Get the group associated with the given groupId, or null if not found
+   * Get the group associated with the given groupId or null if not found
    */
   def getGroup(groupId: String): Option[GroupMetadata] = {
     Option(groupMetadataCache.get(groupId))
+  }
+
+  /**
+   * Get the group associated with the given groupId - the group is created if createIfNotExist
+   * is true - or null if not found
+   */
+  def getOrMaybeCreateGroup(groupId: String, createIfNotExist: Boolean): Option[GroupMetadata] = {
+    if (createIfNotExist)
+      Option(groupMetadataCache.getAndMaybePut(groupId, new GroupMetadata(groupId, Empty, time)))
+    else
+      Option(groupMetadataCache.get(groupId))
   }
 
   /**
