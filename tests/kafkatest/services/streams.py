@@ -309,17 +309,12 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
                                                           command)
         self.NUM_THREADS = num_threads
         self.PROCESSING_GUARANTEE = processing_guarantee
-        self.extra_properties = {}
-
-    def set_config(self, key, value):
-        self.extra_properties[key] = value
 
     def prop_file(self):
-        properties = self.extra_properties.copy()
-        properties[streams_property.STATE_DIR] = self.PERSISTENT_ROOT
-        properties[streams_property.KAFKA_SERVERS] = self.kafka.bootstrap_servers()
-        properties[streams_property.PROCESSING_GUARANTEE] = self.PROCESSING_GUARANTEE
-        properties[streams_property.NUM_THREADS] = self.NUM_THREADS
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
+                      streams_property.NUM_THREADS: self.NUM_THREADS}
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
