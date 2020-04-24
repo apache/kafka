@@ -46,8 +46,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -57,7 +59,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -85,7 +86,6 @@ public class GlobalKTableEOSIntegrationTest {
     @Parameterized.Parameter
     public String eosConfig;
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
     private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
@@ -100,12 +100,17 @@ public class GlobalKTableEOSIntegrationTest {
     private KStream<String, Long> stream;
     private ForeachAction<String, String> foreachAction;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-eos-test-" + testNo.incrementAndGet();
+        final String applicationId = "globalTable-eos-test-" + testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -286,8 +291,11 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + testNo;
-        globalTableTopic = "globalTable-" + testNo;
+        final String suffix = testName.getMethodName()
+            .replace('[', '_')
+            .replace(']', '_');
+        streamTopic = "stream-" + suffix;
+        globalTableTopic = "globalTable-" + suffix;
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }

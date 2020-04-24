@@ -46,14 +46,15 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -65,7 +66,6 @@ public class GlobalKTableIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
     private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
@@ -79,12 +79,15 @@ public class GlobalKTableIntegrationTest {
     private KStream<String, Long> stream;
     private MockProcessorSupplier<String, String> supplier;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-test-" + testNo.incrementAndGet();
+        final String applicationId = "globalTableTopic-table-test-" + testName.getMethodName();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -269,8 +272,8 @@ public class GlobalKTableIntegrationTest {
     }
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + testNo;
-        globalTableTopic = "globalTable-" + testNo;
+        streamTopic = "stream-" + testName.getMethodName();
+        globalTableTopic = "globalTable-" + testName.getMethodName();
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }

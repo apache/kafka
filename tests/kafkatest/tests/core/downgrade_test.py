@@ -15,6 +15,7 @@
 
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
+from ducktape.utils.util import wait_until
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -26,10 +27,12 @@ from kafkatest.utils import is_int
 from kafkatest.version import LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, V_0_9_0_0, V_0_11_0_0, DEV_BRANCH, KafkaVersion
 
 class TestDowngrade(EndToEndTest):
+    PARTITIONS = 3
+    REPLICATION_FACTOR = 3
 
     TOPIC_CONFIG = {
-        "partitions": 3,
-        "replication-factor": 3,
+        "partitions": PARTITIONS,
+        "replication-factor": REPLICATION_FACTOR,
         "configs": {"min.insync.replicas": 2}
     }
 
@@ -43,6 +46,7 @@ class TestDowngrade(EndToEndTest):
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(kafka_version)
             node.config[config_property.MESSAGE_FORMAT_VERSION] = str(kafka_version)
             self.kafka.start_node(node)
+            self.wait_until_rejoin()
 
     def downgrade_to(self, kafka_version):
         for node in self.kafka.nodes:
@@ -51,6 +55,7 @@ class TestDowngrade(EndToEndTest):
             del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
             del node.config[config_property.MESSAGE_FORMAT_VERSION]
             self.kafka.start_node(node)
+            self.wait_until_rejoin()
 
     def setup_services(self, kafka_version, compression_types, security_protocol):
         self.create_zookeeper()
@@ -70,6 +75,11 @@ class TestDowngrade(EndToEndTest):
         self.create_consumer(log_level="DEBUG",
                              version=kafka_version)
         self.consumer.start()
+
+    def wait_until_rejoin(self):
+        for partition in range(0, self.PARTITIONS):
+            wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.REPLICATION_FACTOR, 
+                    timeout_sec=60, backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
     @cluster(num_nodes=7)
     @parametrize(version=str(LATEST_2_3), compression_types=["none"])
@@ -113,3 +123,4 @@ class TestDowngrade(EndToEndTest):
         self.logger.info("Second pass bounce - rolling downgrade")
         self.downgrade_to(kafka_version)
         self.run_validation()
+        assert self.kafka.check_protocol_errors(self)

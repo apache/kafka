@@ -484,6 +484,12 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
     scalaCompileOptions.additionalParameters += inlineFrom
 
+    if (versions.baseScala != '2.12') {
+      scalaCompileOptions.additionalParameters += ["-opt-warnings"]
+      // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
+      scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
+    }
+
     // these options are valid for Scala versions < 2.13 only
     // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala == '2.12') {
