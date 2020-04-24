@@ -103,8 +103,12 @@ public final class MessageDataGenerator {
         generateClassToJson(className, struct, parentVersions);
         buffer.printf("%n");
         generateClassSize(className, struct, parentVersions);
+        if (isSetElement) {
+            buffer.printf("%n");
+            generateClassEquals(className, struct, true);
+        }
         buffer.printf("%n");
-        generateClassEquals(className, struct, isSetElement);
+        generateClassEquals(className, struct, false);
         buffer.printf("%n");
         generateClassHashCode(struct, isSetElement);
         buffer.printf("%n");
@@ -2003,15 +2007,17 @@ public final class MessageDataGenerator {
         buffer.printf("_cache.cacheSerializedValue(%s, _stringBytes);%n", name);
     }
 
-    private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys) {
+    private void generateClassEquals(String className, StructSpec struct,
+                                     boolean elementKeysAreEqual) {
         buffer.printf("@Override%n");
-        buffer.printf("public boolean equals(Object obj) {%n");
+        buffer.printf("public boolean %s(Object obj) {%n",
+            elementKeysAreEqual ? "elementKeysAreEqual" : "equals");
         buffer.incrementIndent();
         buffer.printf("if (!(obj instanceof %s)) return false;%n", className);
         if (!struct.fields().isEmpty()) {
             buffer.printf("%s other = (%s) obj;%n", className, className);
             for (FieldSpec field : struct.fields()) {
-                if ((!onlyMapKeys) || field.mapKey()) {
+                if (!elementKeysAreEqual || field.mapKey()) {
                     generateFieldEquals(field);
                 }
             }
