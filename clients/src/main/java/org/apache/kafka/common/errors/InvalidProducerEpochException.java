@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This fatal exception indicates that the produce request sent to the partition leader
+ * contains a non-matching producer epoch. When you encounter this exception, you must close the producer instance.
+ */
 public class InvalidProducerEpochException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

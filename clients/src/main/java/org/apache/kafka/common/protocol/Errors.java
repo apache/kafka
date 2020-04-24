@@ -229,7 +229,7 @@ public enum Errors {
             OutOfOrderSequenceException::new),
     DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number.",
             DuplicateSequenceException::new),
-    INVALID_PRODUCER_EPOCH(47, "Producer attempted to produce with an old epoch." ,
+    INVALID_PRODUCER_EPOCH(47, "Producer attempted to produce with an old epoch.",
             InvalidProducerEpochException::new),
     INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state.",
             InvalidTxnStateException::new),

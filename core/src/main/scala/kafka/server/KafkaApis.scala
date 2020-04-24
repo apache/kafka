@@ -2024,8 +2024,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val finalError =
             if (endTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
-              // For older version clients, they could not understand the new PRODUCER_FENCED error code,
-              // so we need to return the old INVALID_PRODUCER_EPOCH to have the same handling.
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
             } else {
               error
@@ -2199,17 +2199,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
-
-            val partitionResults =
-
-            if (addPartitionsToTxnRequest.version < 2) {
-              combinedCommitStatus ++= combinedCommitStatus.collect {
-                case (tp, error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS => tp -> Errors.COORDINATOR_NOT_AVAILABLE
+            val finalError =
+              if (addPartitionsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+                // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                Errors.INVALID_PRODUCER_EPOCH
+              } else {
+                error
               }
-            }
 
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.map{tp => (tp, error)}.toMap.asJava)
+              partitionsToAdd.map{tp => (tp, finalError)}.toMap.asJava)
             trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
             responseBody
           }
@@ -2250,8 +2250,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val finalError =
             if (addOffsetsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
-              // For older version clients, they could not understand the new PRODUCER_FENCED error code,
-              // so we need to return the old INVALID_PRODUCER_EPOCH to have the same handling.
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
             } else {
               error

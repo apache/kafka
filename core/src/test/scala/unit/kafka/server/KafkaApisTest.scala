@@ -447,11 +447,14 @@ class KafkaApisTest {
     val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
     val groupId = "groupId"
 
+    val producerId = 15L
+    val epoch = 0.toShort
+
     val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
       "txnId",
       groupId,
-      15L,
-      0.toShort,
+      producerId,
+      epoch,
       Map(topicPartition -> partitionOffsetCommitData).asJava,
       false
     ).build(1)
@@ -459,8 +462,8 @@ class KafkaApisTest {
 
     EasyMock.expect(groupCoordinator.handleTxnCommitOffsets(
       EasyMock.eq(groupId),
-      EasyMock.eq(15L),
-      EasyMock.eq(0),
+      EasyMock.eq(producerId),
+      EasyMock.eq(epoch),
       EasyMock.anyString(),
       EasyMock.eq(Option.empty),
       EasyMock.anyInt(),
@@ -478,6 +481,145 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
       .asInstanceOf[TxnOffsetCommitResponse]
     assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInAddOffsetToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator, txnCoordinator)
+
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Errors => Unit]  = EasyMock.newCapture()
+
+    val groupId = "groupId"
+    val transactionalId = "txnId"
+    val producerId = 15L
+    val epoch = 0.toShort
+
+    val addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
+      new AddOffsetsToTxnRequestData()
+        .setGroupId(groupId)
+        .setTransactionalId(transactionalId)
+        .setProducerId(producerId)
+        .setProducerEpoch(epoch)
+    ).build(1)
+    val request = buildRequest(addOffsetsToTxnRequest)
+
+    val partition = 1
+    EasyMock.expect(groupCoordinator.partitionFor(
+      EasyMock.eq(groupId)
+    )).andReturn(partition)
+
+    EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(producerId),
+      EasyMock.eq(epoch),
+      EasyMock.eq(Set(new TopicPartition(topic, partition))),
+      EasyMock.capture(responseCallback)
+    )).andAnswer(
+      () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, groupCoordinator)
+
+    createKafkaApis().handleAddOffsetsToTxnRequest(request)
+
+    val response = readResponse(ApiKeys.ADD_OFFSETS_TO_TXN, addOffsetsToTxnRequest, capturedResponse)
+      .asInstanceOf[AddOffsetsToTxnResponse]
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInAddPartitionToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Errors => Unit]  = EasyMock.newCapture()
+
+    val transactionalId = "txnId"
+    val producerId = 15L
+    val epoch = 0.toShort
+
+    val partition = 1
+    val topicPartition = new TopicPartition(topic, partition)
+
+    val addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(
+      transactionalId,
+      producerId,
+      epoch,
+      Collections.singletonList(topicPartition)
+    ).build(1)
+    val request = buildRequest(addPartitionsToTxnRequest)
+
+    EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(producerId),
+      EasyMock.eq(epoch),
+      EasyMock.eq(Set(topicPartition)),
+
+      EasyMock.capture(responseCallback)
+    )).andAnswer(
+      () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+    createKafkaApis().handleAddPartitionToTxnRequest(request)
+
+    val response = readResponse(ApiKeys.ADD_PARTITIONS_TO_TXN, addPartitionsToTxnRequest, capturedResponse)
+      .asInstanceOf[AddPartitionsToTxnResponse]
+    assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors())
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInEndTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Errors => Unit]  = EasyMock.newCapture()
+
+    val transactionalId = "txnId"
+    val producerId = 15L
+    val epoch = 0.toShort
+
+    val endTxnRequest = new EndTxnRequest.Builder(
+      new EndTxnRequestData()
+        .setTransactionalId(transactionalId)
+        .setProducerId(producerId)
+        .setProducerEpoch(epoch)
+        .setCommitted(true)
+    ).build(1)
+    val request = buildRequest(endTxnRequest)
+
+    EasyMock.expect(txnCoordinator.handleEndTransaction(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(producerId),
+      EasyMock.eq(epoch),
+      EasyMock.eq(TransactionResult.COMMIT),
+      EasyMock.capture(responseCallback)
+    )).andAnswer(
+      () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+    createKafkaApis().handleEndTxnRequest(request)
+
+    val response = readResponse(ApiKeys.END_TXN, endTxnRequest, capturedResponse)
+      .asInstanceOf[EndTxnResponse]
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
   }
 
   @Test
