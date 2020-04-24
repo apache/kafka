@@ -97,7 +97,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     private CommittedLogMetadataStore committedLogMetadataStore;
     private ConsumerTask consumerTask;
-    private boolean initialized;
+    private volatile boolean initialized;
+    private boolean configured;
 
     private static class ProducerCallback implements Callback {
         private volatile RecordMetadata recordMetadata;
@@ -333,7 +334,12 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
+    public synchronized void configure(Map<String, ?> configs) {
+        if (configured) {
+            log.info("configure is already invoked earlier.");
+            return;
+        }
+
         this.configs = Collections.unmodifiableMap(configs);
 
         Object propVal = configs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
@@ -348,6 +354,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         File metadataLogFile = new File(logDir, COMMITTED_LOG_METADATA_FILE_NAME);
         committedLogMetadataStore = new CommittedLogMetadataStore(metadataLogFile);
 
+        configured = true;
         log.info("RLMMWithTopicStorage is initialized: {}", this);
     }
 
