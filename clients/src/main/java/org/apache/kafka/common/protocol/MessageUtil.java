@@ -154,4 +154,13 @@ public final class MessageUtil {
         }
         return node.asDouble();
     }
+
+    public static byte[] duplicate(byte[] array) {
+        if (array == null) {
+            return null;
+        }
+        byte[] newArray = new byte[array.length];
+        System.arraycopy(array, 0, newArray, 0, array.length);
+        return newArray;
+    }
 }
