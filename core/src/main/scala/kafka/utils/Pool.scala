@@ -77,9 +77,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def clear(): Unit = { pool.clear() }
 
   def foreachEntry(f: (K, V) => Unit): Unit = {
-    pool.forEach(new BiConsumer[K,V] {
-      override def accept(t: K, u: V): Unit = f(t, u)
-    })
+    pool.forEach((k, v) => f(k, v))
   }
   
   override def size: Int = pool.size
