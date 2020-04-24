@@ -20,7 +20,7 @@ import java.io.{Closeable, File}
 
 import org.apache.kafka.common.utils.Utils
 
-abstract class CleanableIndex(@volatile var file: File) extends Closeable {
+abstract class CleanableIndex(@volatile var _file: File) extends Closeable {
 
   /**
    * Rename the file that backs this offset index
@@ -28,8 +28,8 @@ abstract class CleanableIndex(@volatile var file: File) extends Closeable {
    * @throws IOException if rename fails
    */
   def renameTo(toBeRenamedFile: File): Unit = {
-    try Utils.atomicMoveWithFallback(file.toPath, toBeRenamedFile.toPath)
-    finally file = toBeRenamedFile
+    try Utils.atomicMoveWithFallback(_file.toPath, toBeRenamedFile.toPath)
+    finally _file = toBeRenamedFile
   }
 
   def deleteIfExists(): Boolean
