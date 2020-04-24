@@ -22,9 +22,9 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.junit.Assert._
 import org.junit.Test
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
-final class TopicCommandTest {
+class TopicCommandTest {
   @Test
   def testIsNotUnderReplicatedWhenAdding(): Unit = {
     val replicaIds = List(1, 2)
