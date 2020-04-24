@@ -47,6 +47,8 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -889,10 +891,12 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionOnEmptyTopology() {
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)
-        );
+        try {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+            fail("Should have thrown IllegalArgumentException");
+        } catch (final IllegalArgumentException e) {
+            assertThat(e.getMessage(), equalTo("Topology has no stream threads and no global threads"));
+        }
     }
 
     @Test
@@ -905,15 +909,10 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldNotTransitToErrorStateWithGlobalOnlyTopology() throws InterruptedException {
+    public void shouldTransitToRunningWithGlobalOnlyTopology() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
-        streams.setStateListener((newState, oldState) -> {
-            if (newState.equals(State.ERROR)) {
-                throw new AssertionError("Should not have transitioned to ERROR state with no stream threads");
-            }
-        });
 
         assertThat(streams.threads.length, equalTo(0));
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
@@ -928,7 +927,6 @@ public class KafkaStreamsTest {
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
             "Streams never stopped.");
-
     }
 
     @SuppressWarnings("unchecked")

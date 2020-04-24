@@ -705,7 +705,7 @@ public class KafkaStreams implements AutoCloseable {
 
         final int numStreamThreads;
         if (internalTopologyBuilder.hasNoNonGlobalTopology()) {
-            log.warn("Overriding number of StreamThreads to zero for global-only topology");
+            log.info("Overriding number of StreamThreads to zero for global-only topology");
             numStreamThreads = 0;
         } else {
             numStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
