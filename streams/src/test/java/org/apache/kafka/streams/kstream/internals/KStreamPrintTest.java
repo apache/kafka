@@ -45,7 +45,7 @@ public class KStreamPrintTest {
             "test-stream"));
 
         printProcessor = kStreamPrint.get();
-        final ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        final ProcessorContext<Object, Object> processorContext = EasyMock.createNiceMock(ProcessorContext.class);
         EasyMock.replay(processorContext);
 
         printProcessor.init(processorContext);

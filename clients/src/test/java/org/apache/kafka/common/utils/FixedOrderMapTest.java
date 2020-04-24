@@ -69,18 +69,4 @@ public class FixedOrderMapTest {
         }
         assertThat(map.get("a"), is(0));
     }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldForbidConditionalClear() {
-        final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
-        map.put("a", 0);
-        try {
-            map.clear();
-            fail("expected exception");
-        } catch (final RuntimeException e) {
-            assertThat(e, CoreMatchers.instanceOf(UnsupportedOperationException.class));
-        }
-        assertThat(map.get("a"), is(0));
-    }
 }

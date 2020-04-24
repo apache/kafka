@@ -20,7 +20,7 @@ package org.apache.kafka.trogdor.workload;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -31,10 +31,10 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
@@ -174,7 +174,7 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private class MetadataSustainedConnection extends ClaimableConnection {
 
-        private AdminClient client;
+        private Admin client;
         private final Properties props;
 
         MetadataSustainedConnection() {
@@ -198,7 +198,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                     SustainedConnectionWorker.this.totalMetadataConnections.incrementAndGet();
 
                     // Create the admin client connection.
-                    this.client = AdminClient.create(this.props);
+                    this.client = Admin.create(this.props);
                 }
 
                 // Fetch some metadata to keep the connection alive.

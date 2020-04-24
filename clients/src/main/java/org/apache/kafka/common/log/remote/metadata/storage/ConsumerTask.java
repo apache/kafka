@@ -71,7 +71,7 @@ class ConsumerTask implements Runnable, Closeable {
     private Map<Integer, Long> targetEndOffsets = new ConcurrentHashMap<>();
 
     // map of topic-partition vs committed offsets
-    private Map<Integer, Long> committedOffsets = new ConcurrentHashMap<>();
+    private volatile Map<Integer, Long> committedOffsets = new ConcurrentHashMap<>();
 
     private static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
     private long lastSyncedTs = System.currentTimeMillis();
@@ -214,7 +214,7 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    public void syncCommittedDataAndOffsets(boolean forceSync) {
+    private void syncCommittedDataAndOffsets(boolean forceSync) {
         if (!forceSync && System.currentTimeMillis() - lastSyncedTs < 60_000) {
             return;
         }

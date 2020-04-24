@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /**
@@ -64,7 +65,7 @@ public class KTableKTableForeignKeyJoinResolutionNode<K, V, KO, VO> extends Stre
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        topologyBuilder.addInternalTopic(finalRepartitionTopicName);
+        topologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
         //Repartition back to the original partitioning structure
         topologyBuilder.addSink(finalRepartitionSinkName, finalRepartitionTopicName,
                 keySerde.serializer(), subResponseSerde.serializer(),

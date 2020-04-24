@@ -16,64 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.Map;
 
-class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
-
-    private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
-        @Override
-        public <K, V> void send(final String topic,
-                                final K key,
-                                final V value,
-                                final Headers headers,
-                                final Integer partition,
-                                final Long timestamp,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valueSerializer) {
-        }
-
-        @Override
-        public <K, V> void send(final String topic,
-                                final K key,
-                                final V value,
-                                final Headers headers,
-                                final Long timestamp,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valueSerializer,
-                                final StreamPartitioner<? super K, ? super V> partitioner) {}
-
-        @Override
-        public void init(final Producer<byte[], byte[]> producer) {}
-
-        @Override
-        public void flush() {}
-
-        @Override
-        public void close() {}
-
-        @Override
-        public Map<TopicPartition, Long> offsets() {
-            return Collections.emptyMap();
-        }
-    };
+class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements RecordCollector.Supplier {
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
@@ -99,7 +55,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
 
     @Override
     public RecordCollector recordCollector() {
-        return NO_OP_COLLECTOR;
+        // return null collector specifically since in standby task it should not be called;
+        // if ever then we would throw NPE, which should never happen
+        return null;
     }
 
     /**
@@ -146,7 +104,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public void forward(final Void key, final Void value) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -154,16 +112,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public void forward(final Void key, final Void value, final To to) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -172,7 +121,16 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      */
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public void forward(final Void key, final Void value, final int childIndex) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    @Deprecated
+    public void forward(final Void key, final Void value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -197,7 +155,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 
@@ -218,7 +176,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
         // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
 
@@ -226,7 +184,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public ProcessorNode currentNode() {
+    public ProcessorNode<?, ?> currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 }

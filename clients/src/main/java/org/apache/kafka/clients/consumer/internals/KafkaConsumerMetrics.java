@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -24,18 +25,17 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
-public class KafkaConsumerMetrics {
+public class KafkaConsumerMetrics implements AutoCloseable {
+    private final MetricName lastPollMetricName;
+    private final Sensor timeBetweenPollSensor;
+    private final Sensor pollIdleSensor;
     private final Metrics metrics;
-
-    private Sensor timeBetweenPollSensor;
-    private Sensor pollIdleSensor;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
-
         String metricGroupName = metricGrpPrefix + "-metrics";
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
@@ -44,10 +44,9 @@ public class KafkaConsumerMetrics {
             else
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
-        metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
-                metricGroupName,
-                "The number of seconds since the last poll() invocation."),
-                lastPoll);
+        this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
+                metricGroupName, "The number of seconds since the last poll() invocation.");
+        metrics.addMetric(lastPollMetricName, lastPoll);
 
         this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
         this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
@@ -77,5 +76,12 @@ public class KafkaConsumerMetrics {
         long pollTimeMs = pollEndMs - pollStartMs;
         double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
         this.pollIdleSensor.record(pollIdleRatio);
+    }
+
+    @Override
+    public void close() {
+        metrics.removeMetric(lastPollMetricName);
+        metrics.removeSensor(timeBetweenPollSensor.name());
+        metrics.removeSensor(pollIdleSensor.name());
     }
 }

@@ -23,7 +23,7 @@ import java.util.Locale
 import org.apache.log4j.{Level, LogManager, Logger}
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 object Log4jController {

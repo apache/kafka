@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{Closeable, File, RandomAccessFile}
+import java.io.{File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
@@ -27,9 +27,7 @@ import kafka.common.IndexOffsetOverflowException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
-
-import scala.math.ceil
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem}
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -38,7 +36,7 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
+abstract class AbstractIndex[K, V](var _file: File, val baseOffset: Long,
                                    val maxIndexSize: Int = -1, val writable: Boolean) extends CleanableIndex(_file) {
   import AbstractIndex._
 
@@ -144,11 +142,11 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
    * The maximum number of entries this index can hold
    */
   @volatile
-  private[this] var _maxEntries = mmap.limit() / entrySize
+  private[this] var _maxEntries: Int = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position() / entrySize
+  protected var _entries: Int = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
@@ -160,6 +158,8 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
   def entries: Int = _entries
 
   def length: Long = _length
+
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
@@ -234,7 +234,7 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
   /**
    * The number of bytes actually used by this index
    */
-  def sizeInBytes = entrySize * _entries
+  def sizeInBytes: Int = entrySize * _entries
 
   /** Close the index */
   def close(): Unit = {
@@ -309,7 +309,7 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap(): Unit = {
-    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+    try ByteBufferUnmapper.unmap(file.getAbsolutePath, mmap)
     finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
@@ -367,7 +367,7 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
       var lo = begin
       var hi = end
       while(lo < hi) {
-        val mid = ceil(hi/2.0 + lo/2.0).toInt
+        val mid = (lo + hi + 1) >>> 1
         val found = parseEntry(idx, mid)
         val compareResult = compareIndexEntry(found, target, searchEntity)
         if(compareResult > 0)

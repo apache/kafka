@@ -16,22 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashSet;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 
-public class RocksDBSessionStoreTest extends SessionBytesStoreTest {
+
+public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB session store";
 
@@ -50,11 +51,6 @@ public class RocksDBSessionStoreTest extends SessionBytesStoreTest {
     @Override
     String getMetricsScope() {
         return new RocksDbSessionBytesStoreSupplier(null, 0).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
     }
 
     @Test

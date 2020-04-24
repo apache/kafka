@@ -19,10 +19,10 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
 
 /**
  * {@code KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
@@ -112,7 +112,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * String queryableStoreName = "storeName"; // the store name should be the name of the store as defined by the Materialized instance
@@ -157,7 +157,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * String queryableStoreName = "storeName"; // the store name should be the name of the store as defined by the Materialized instance
@@ -259,7 +259,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -322,7 +322,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -425,7 +425,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -483,7 +483,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(StoreQueryParameters)}  KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
@@ -534,5 +534,23 @@ public interface KGroupedStream<K, V> {
      * @return an instance of {@link TimeWindowedKStream}
      */
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
+
+    /**
+     * Create a new {@link CogroupedKStream} from the this grouped KStream to allow cogrouping other
+     * {@code KGroupedStream} to it.
+     * {@link CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
+     * It is an intermediate representation after a grouping of {@link KStream}s, before the
+     * aggregations are applied to the new partitions resulting in a {@link KTable}.
+     * <p>
+     * The specified {@link Aggregator} is applied in the actual {@link CogroupedKStream#aggregate(Initializer)
+     * aggregation} step for each input record and computes a new aggregate using the current aggregate (or for the very
+     * first record per key using the initial intermediate aggregation result provided via the {@link Initializer} that
+     * is passed into {@link CogroupedKStream#aggregate(Initializer)}) and the record's value.
+     *
+     * @param aggregator an {@link Aggregator} that computes a new aggregate result
+     * @param <Vout> the type of the output values
+     * @return a {@link CogroupedKStream}
+     */
+    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
 
 }

@@ -39,10 +39,11 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -58,6 +59,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
@@ -75,11 +78,11 @@ class WorkerSourceTask extends WorkerTask {
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
-    private final OffsetStorageReader offsetReader;
+    private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
-    private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
+    private final boolean isTopicTrackingEnabled;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -105,16 +108,18 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
+                            CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             ClusterConfigState configState,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            RetryWithToleranceOperator retryWithToleranceOperator) {
+                            RetryWithToleranceOperator retryWithToleranceOperator,
+                            StatusBackingStore statusBackingStore) {
 
-        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
+        super(id, statusListener, initialState, loader, connectMetrics,
+                retryWithToleranceOperator, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -126,7 +131,6 @@ class WorkerSourceTask extends WorkerTask {
         this.producer = producer;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
-        this.time = time;
 
         this.toSend = null;
         this.lastSendFailed = false;
@@ -136,6 +140,7 @@ class WorkerSourceTask extends WorkerTask {
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.producerSendException = new AtomicReference<>();
+        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
     }
 
     @Override
@@ -170,6 +175,12 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     protected void releaseResources() {
         sourceTaskMetricsGroup.close();
+    }
+
+    @Override
+    public void cancel() {
+        super.cancel();
+        offsetReader.close();
     }
 
     @Override
@@ -349,6 +360,9 @@ class WorkerSourceTask extends WorkerTask {
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord, recordMetadata);
+                                    if (isTopicTrackingEnabled) {
+                                        recordActiveTopic(producerRecord.topic());
+                                    }
                                 }
                             }
                         });

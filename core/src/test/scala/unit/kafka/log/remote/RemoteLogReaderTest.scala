@@ -28,14 +28,13 @@ import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, LogOffsetMetada
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.SystemTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatest.Assertions.assertThrows
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class RemoteLogReaderTest {
 

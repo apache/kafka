@@ -60,7 +60,7 @@
     { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
       "about": "The fetch session ID." },
     { "name": "Epoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": false,
-      "about": "The fetch session ID." },
+      "about": "The epoch of the partition leader as known to the follower replica or a consumer." },
     { "name": "Topics", "type": "[]FetchableTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",

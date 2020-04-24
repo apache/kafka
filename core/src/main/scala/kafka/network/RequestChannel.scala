@@ -22,18 +22,25 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 
 import com.typesafe.scalalogging.Logger
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.Meter
+import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
+import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 
+import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
@@ -49,7 +56,7 @@ object RequestChannel extends Logging {
   case object ShutdownRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
-    val sanitizedUser = Sanitizer.sanitize(principal.getName)
+    val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
   class Metrics {
@@ -98,9 +105,9 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
+    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
 
-    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
       bodyAndSize.request match {
         case r: T => r
         case r =>
@@ -108,9 +115,55 @@ object RequestChannel extends Logging {
       }
     }
 
+    def loggableRequest: AbstractRequest = {
+
+      def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
+        val maybeSensitive = resourceType match {
+          case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
+          case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name))
+          case ConfigResource.Type.BROKER_LOGGER => false
+          case _ => true
+        }
+        if (maybeSensitive) Password.HIDDEN else value
+      }
+
+      bodyAndSize.request match {
+        case alterConfigs: AlterConfigsRequest =>
+          val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
+            val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
+                new AlterConfigsRequest.ConfigEntry(entry.name, loggableValue(resource.`type`, entry.name, entry.value))
+            }.asJavaCollection)
+            (resource, loggableEntries)
+          }.asJava
+          new AlterConfigsRequest.Builder(loggableConfigs, alterConfigs.validateOnly).build(alterConfigs.version())
+
+        case alterConfigs: IncrementalAlterConfigsRequest =>
+          val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
+          alterConfigs.data().resources().asScala.foreach { resource =>
+            val newResource = new AlterConfigsResource()
+              .setResourceName(resource.resourceName)
+              .setResourceType(resource.resourceType)
+            resource.configs.asScala.foreach { config =>
+              newResource.configs.add(new AlterableConfig()
+                .setName(config.name)
+                .setValue(loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
+                .setConfigOperation(config.configOperation))
+            }
+            resources.add(newResource)
+          }
+          val data = new IncrementalAlterConfigsRequestData()
+            .setValidateOnly(alterConfigs.data().validateOnly())
+            .setResources(resources)
+          new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
+
+        case _ =>
+          bodyAndSize.request
+      }
+    }
+
     trace(s"Processor $processor received request: ${requestDesc(true)}")
 
-    def requestThreadTimeNanos = {
+    def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
@@ -197,6 +250,7 @@ object RequestChannel extends Logging {
           .append(",securityProtocol:").append(context.securityProtocol)
           .append(",principal:").append(session.principal)
           .append(",listener:").append(context.listenerName.value)
+          .append(",clientInformation:").append(context.clientInformation)
         if (temporaryMemoryBytes > 0)
           builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
         if (messageConversionsTimeMs > 0)
@@ -280,12 +334,10 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
-  newGauge(requestQueueSizeMetricName, new Gauge[Int] {
-      def value = requestQueue.size
-  })
+  newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
-  newGauge(responseQueueSizeMetricName, new Gauge[Int]{
-    def value = processors.values.asScala.foldLeft(0) {(total, processor) =>
+  newGauge(responseQueueSizeMetricName, () => {
+    processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
   })
@@ -294,12 +346,8 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    newGauge(responseQueueSizeMetricName,
-      new Gauge[Int] {
-        def value = processor.responseQueueSize
-      },
-      Map(ProcessorMetricTag -> processor.id.toString)
-    )
+    newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
+      Map(ProcessorMetricTag -> processor.id.toString))
   }
 
   def removeProcessor(processorId: Int): Unit = {

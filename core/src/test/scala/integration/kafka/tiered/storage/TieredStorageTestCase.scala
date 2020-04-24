@@ -67,7 +67,7 @@ final class TieredStorageTestCase(val recordsToProduce: Map[TopicPartition, Seq[
   }
 
   def verify(): Unit = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     val snapshot = LocalTieredStorageSnapshot.takeSnapshot(tieredStorage)
 
@@ -85,7 +85,7 @@ final class TieredStorageTestCase(val recordsToProduce: Map[TopicPartition, Seq[
   }
 
   private def compareRecords(fileset: RemoteLogSegmentFileset, spec: OffloadedSegmentSpec): Unit = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     // Records found in the local tiered storage.
     val discoveredRecords = fileset.getRecords.asScala
@@ -216,7 +216,7 @@ final class TieredStorageTestCaseBuilder(private val kafkaServers: Seq[KafkaServ
 
   def create(): TieredStorageTestCase = {
     // Creates the map of records to produce. Order of records is preserved at partition level.
-    val recordsToProduce = Map() ++ producables.mapValues(Seq() ++ _)
+    val recordsToProduce = Map() ++ producables.view.mapValues(Seq() ++ _)
 
     /**
       * Builds a specification of an offloaded segment.

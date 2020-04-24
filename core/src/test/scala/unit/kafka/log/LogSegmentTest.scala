@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 
 class LogSegmentTest {
@@ -145,6 +145,9 @@ class LogSegmentTest {
     val maxSegmentMs = 300000
     val time = new MockTime
     val seg = createSegment(0, time = time)
+    // Force load indexes before closing the segment
+    seg.timeIndex
+    seg.offsetIndex
     seg.close()
 
     val reopened = createSegment(0, time = time)
@@ -262,11 +265,25 @@ class LogSegmentTest {
     val seg = createSegment(40)
     val logFile = seg.log.file
     val indexFile = seg.lazyOffsetIndex.file
+    val timeIndexFile = seg.lazyTimeIndex.file
+    // Ensure that files for offset and time indices have not been created eagerly.
+    assertFalse(seg.lazyOffsetIndex.file.exists)
+    assertFalse(seg.lazyTimeIndex.file.exists)
     seg.changeFileSuffixes("", ".deleted")
+    // Ensure that attempt to change suffixes for non-existing offset and time indices does not create new files.
+    assertFalse(seg.lazyOffsetIndex.file.exists)
+    assertFalse(seg.lazyTimeIndex.file.exists)
+    // Ensure that file names are updated accordingly.
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
     assertEquals(indexFile.getAbsolutePath + ".deleted", seg.lazyOffsetIndex.file.getAbsolutePath)
+    assertEquals(timeIndexFile.getAbsolutePath + ".deleted", seg.lazyTimeIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)
+    // Ensure lazy creation of offset index file upon accessing it.
+    seg.lazyOffsetIndex.get
     assertTrue(seg.lazyOffsetIndex.file.exists)
+    // Ensure lazy creation of time index file upon accessing it.
+    seg.lazyTimeIndex.get
+    assertTrue(seg.lazyTimeIndex.file.exists)
   }
 
   /**
@@ -336,7 +353,8 @@ class LogSegmentTest {
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     stateManager = new ProducerStateManager(topicPartition, logDir)
     stateManager.loadProducerEntry(new ProducerStateEntry(pid2,
-      mutable.Queue[BatchMetadata](BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), producerEpoch, 0, Some(75L)))
+      mutable.Queue[BatchMetadata](BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), producerEpoch,
+      0, RecordBatch.NO_TIMESTAMP, Some(75L)))
     segment.recover(stateManager)
     assertEquals(108L, stateManager.mapEndOffset)
 

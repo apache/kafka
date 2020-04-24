@@ -23,7 +23,6 @@ import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.record.Records
 
 import scala.collection._
 
@@ -84,7 +83,7 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
       false
   }
 
-  override def onExpiration() {
+  override def onExpiration():Unit = {
     DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
 
@@ -95,7 +94,7 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
   /**
    * Upon completion, read whatever data is available and pass to the complete callback
    */
-  override def onComplete() {
+  override def onComplete():Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
       if (tp.equals(remoteFetchInfo.topicPartition) && remoteFetchResult.isDone
         && result.exception.isEmpty && result.info.delayedRemoteStorageFetch.isDefined) {

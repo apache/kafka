@@ -20,19 +20,19 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.Properties
 
-import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Subclasses of `BaseProduceSendRequestTest` exercise the producer and produce request/response. This class
@@ -40,7 +40,7 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
-  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+  val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Test
   def testSimpleProduceRequest(): Unit = {
@@ -78,9 +78,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 
-    def createRecords(magicValue: Byte,
-                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                      codec: CompressionType): MemoryRecords = {
+    def createRecords(magicValue: Byte, timestamp: Long, codec: CompressionType): MemoryRecords = {
       val buf = ByteBuffer.allocate(512)
       val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
       builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
@@ -96,10 +94,15 @@ class ProduceRequestTest extends BaseRequestTest {
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
-    assertEquals(1, partitionResponse.recordErrors.size())
+    // there are 3 records with InvalidTimestampException created from inner function createRecords
+    assertEquals(3, partitionResponse.recordErrors.size())
     assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
-    assertNull(partitionResponse.recordErrors.get(0).message)
-    assertNotNull(partitionResponse.errorMessage)
+    assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
+    assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
+    for (recordError <- partitionResponse.recordErrors.asScala) {
+      assertNotNull(recordError.message)
+    }
+    assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
   }
 
   @Test
@@ -190,8 +193,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
-    ProduceResponse.parse(response, request.version)
+    connectAndReceive[ProduceResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

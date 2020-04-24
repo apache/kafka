@@ -17,9 +17,69 @@
  * under the License.
  */
 
-defaultTasks 'downloadWrapper'
+// This file contains tasks for the gradle wrapper generation.
 
-task downloadWrapper(type: Wrapper) {
-    description = "Download the gradle wrapper and requisite files. Overwrites existing wrapper files."
+// Ensure the wrapper script is generated based on the version defined in the project
+// and not the version installed on the machine running the task.
+// Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
+wrapper {
     gradleVersion = project.gradleVersion
+    distributionType = Wrapper.DistributionType.ALL
 }
+
+// Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
+// This allows us to avoid checking in the jar to our repository.
+// Additionally adds a license header to the wrapper while editing the file contents.
+task bootstrapWrapper() {
+    // In the doLast block so this runs when the task is called and not during project configuration.
+    doLast {
+        def wrapperBasePath = "\$APP_HOME/gradle/wrapper"
+        def wrapperJarPath = wrapperBasePath + "/gradle-wrapper.jar"
+
+        // Add a trailing zero to the version if needed.
+        def fullVersion = project.gradleVersion.count(".") == 1 ? "${project.gradleVersion}.0" : versions.gradle
+        // Leverages the wrapper jar checked into the gradle project on github because the jar isn't
+        // available elsewhere. Using raw.githubusercontent.com instead of github.com because
+        // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
+        // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
+        // fetch the jar.
+        def wrapperBaseUrl = "https://raw.githubusercontent.com/gradle/gradle/v$fullVersion/gradle/wrapper"
+        def wrapperJarUrl = wrapperBaseUrl + "/gradle-wrapper.jar"
+
+        def bootstrapString = """
+      # Loop in case we encounter an error.
+      for attempt in 1 2 3; do
+        if [ ! -e $wrapperJarPath ]; then
+          if ! curl -s -S --retry 3 -L -o "$wrapperJarPath" "$wrapperJarUrl"; then
+            rm -f "$wrapperJarPath"
+            # Pause for a bit before looping in case the server throttled us.
+            sleep 5
+            continue
+          fi
+        fi
+      done
+      """.stripIndent()
+
+        def wrapperScript = wrapper.scriptFile
+        def wrapperLines = wrapperScript.readLines()
+        wrapperScript.withPrintWriter { out ->
+            def bootstrapWritten = false
+            wrapperLines.each { line ->
+                // Print the wrapper bootstrap before the first usage of the wrapper jar.
+                if (!bootstrapWritten && line.contains("gradle-wrapper.jar")) {
+                    out.println(bootstrapString)
+                    bootstrapWritten = true
+                }
+                out.print(line)
+                out.println()
+            }
+        }
+    }
+}
+wrapper.finalizedBy bootstrapWrapper
+
+// Remove the generated batch file since we don't test building in the Windows environment.
+task removeWindowsScript(type: Delete) {
+    delete "$rootDir/gradlew.bat"
+}
+wrapper.finalizedBy removeWindowsScript

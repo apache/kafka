@@ -21,9 +21,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -40,7 +41,6 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -49,9 +49,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -64,7 +62,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
-@SuppressWarnings("unchecked")
 public class KGroupedStreamImplTest {
 
     private static final String TOPIC = "topic";
@@ -78,6 +75,11 @@ public class KGroupedStreamImplTest {
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullAggregatorOnCogroup() {
+        groupedStream.cogroup(null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -99,7 +101,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsWithWindowedReduce() {
-        groupedStream.windowedBy((Windows) null);
+        groupedStream.windowedBy((Windows<?>) null);
     }
 
     @Test(expected = TopologyException.class)
@@ -143,7 +145,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() {
-        groupedStream.windowedBy((Windows) null);
+        groupedStream.windowedBy((Windows<?>) null);
     }
 
     @Test(expected = TopologyException.class)
@@ -391,22 +393,19 @@ public class KGroupedStreamImplTest {
                 Materialized.as(INVALID_STORE_NAME));
     }
 
-    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnReduceWhenMaterializedIsNull() {
-        groupedStream.reduce(MockReducer.STRING_ADDER, (Materialized) null);
+        groupedStream.reduce(MockReducer.STRING_ADDER, null);
     }
 
-    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateWhenMaterializedIsNull() {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Materialized) null);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null);
     }
 
-    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnCountWhenMaterializedIsNull() {
-        groupedStream.count((Materialized) null);
+        groupedStream.count((Materialized<String, Long, KeyValueStore<Bytes, byte[]>>) null);
     }
 
     @Test
@@ -434,22 +433,43 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInAggregate() {
-        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            processData(driver);
-            LogCaptureAppender.unregister(appender);
+    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_0100_TO_24);
+    }
 
-            final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
+    @Test
+    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeasureSkipsInAggregate(final String builtInMetricsVersion) {
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamAggregate.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+            processData(driver);
+
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
+                assertEquals(
+                    1.0,
+                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
+                );
+                assertNotEquals(
+                    0.0,
+                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                    + "offset=[6]")
+            );
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         groupedStream.reduce(
@@ -479,28 +499,48 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInReduce() {
+    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeasureSkipsInReduce(final String builtInMetricsVersion) {
         groupedStream.reduce(
             MockReducer.STRING_ADDER,
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())
         );
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamReduce.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             processData(driver);
-            LogCaptureAppender.unregister(appender);
 
-            final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
+                assertEquals(
+                    1.0,
+                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
+                );
+                assertNotEquals(
+                    0.0,
+                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                    + "offset=[6]")
+            );
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         groupedStream.aggregate(
@@ -530,7 +570,6 @@ public class KGroupedStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateWithDefaultSerdes() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
@@ -614,7 +653,6 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountWindowedWithInternalStoreName() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
-        final List<KeyValue<Windowed<String>, KeyValue<Long, Long>>> results = new ArrayList<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count()
