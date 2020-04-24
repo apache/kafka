@@ -165,6 +165,8 @@ class StreamsBrokerBounceTest(Test):
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads)
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        self.processor1.set_config("internal.task.assignor.class", "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor")
 
         self.driver.start()
 
