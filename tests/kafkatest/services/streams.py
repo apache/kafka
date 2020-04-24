@@ -482,6 +482,10 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
                                                                  "")
         self.UPGRADE_FROM = None
         self.UPGRADE_TO = None
+        self.extra_properties = {}
+
+    def set_config(self, key, value):
+        self.extra_properties[key] = value
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
@@ -493,8 +497,10 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         self.UPGRADE_TO = upgrade_to
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+        properties = self.extra_properties.copy()
+        properties[streams_property.STATE_DIR] = self.PERSISTENT_ROOT
+        properties[streams_property.KAFKA_SERVERS] = self.kafka.bootstrap_servers()
+
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
         if self.UPGRADE_TO == "future_version":
