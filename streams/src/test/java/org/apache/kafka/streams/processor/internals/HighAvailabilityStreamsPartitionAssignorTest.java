@@ -125,7 +125,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
         configurationMap.put(InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
         configurationMap.put(InternalConfig.TIME, time);
-        configurationMap.put(AssignorConfiguration.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName());
+        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName());
         return configurationMap;
     }
 

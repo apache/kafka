@@ -151,7 +151,7 @@ public class LagFetchIntegrationTest {
             final Properties props = (Properties) streamsConfiguration.clone();
             // this test relies on the second instance getting the standby, so we specify
             // an assignor with this contract.
-            props.put(AssignorConfiguration.INTERNAL_TASK_ASSIGNOR_CLASS, PriorTaskAssignor.class.getName());
+            props.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, PriorTaskAssignor.class.getName());
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization);
