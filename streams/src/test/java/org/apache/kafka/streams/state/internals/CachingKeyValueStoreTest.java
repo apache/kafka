@@ -87,7 +87,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext<Object, Object> context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore("cache-store"),
                 (Serde<K>) context.keySerde(),
@@ -285,7 +285,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldIterateOverRange() {
         final int items = addItemsToCache();
-        final KeyValueIterator<Bytes, byte[]> range = store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
+        final KeyValueIterator<Bytes, byte[]> range =
+            store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
         while (range.hasNext()) {
             results.add(range.next().key);

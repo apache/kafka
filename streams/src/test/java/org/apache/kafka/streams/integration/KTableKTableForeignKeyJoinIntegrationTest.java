@@ -34,7 +34,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -62,24 +65,34 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
     private static final String REJOIN_OUTPUT = "rejoin-output-topic";
-    private final Properties streamsConfig;
     private final boolean leftJoin;
     private final boolean materialized;
+    private final String optimization;
     private final boolean rejoin;
+
+    private Properties streamsConfig;
 
     public KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin,
                                                      final String optimization,
                                                      final boolean materialized,
                                                      final boolean rejoin) {
+        this.rejoin = rejoin;
         this.leftJoin = leftJoin;
+        this.materialized = materialized;
+        this.optimization = optimization;
+    }
+
+    @Rule
+    public TestName testName = new TestName();
+
+    @Before
+    public void before() {
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey-" + testName.getMethodName()),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
             mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization)
         ));
-        this.materialized = materialized;
-        this.rejoin = rejoin;
     }
 
     @Parameterized.Parameters(name = "leftJoin={0}, optimization={1}, materialized={2}, rejoin={3}")

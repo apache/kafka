@@ -302,13 +302,23 @@ class SocketServerTest {
     testProps.put("inter.broker.listener.name", "INTERNAL")
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup(startupProcessors = false)
+    testableServer.startup(startProcessingRequests = false)
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
+
+    def controlPlaneListenerStarted() = {
+      try {
+        val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
+        sendAndReceiveControllerRequest(socket, testableServer)
+        true
+      } catch {
+        case _: Throwable => false
+      }
+    }
 
     def listenerStarted(listenerName: ListenerName) = {
       try {
@@ -321,14 +331,11 @@ class SocketServerTest {
     }
 
     try {
-      testableServer.startControlPlaneProcessor()
-      val socket1 = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
-      sendAndReceiveControllerRequest(socket1, testableServer)
-
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
-      val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
+      val futures = Map(externalEndpoint -> externalReadyFuture)
+      val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
+      TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 
@@ -340,6 +347,27 @@ class SocketServerTest {
       executor.shutdownNow()
       shutdownServerAndMetrics(testableServer)
     }
+  }
+
+  @Test
+  def testStagedListenerShutdownWhenConnectionQueueIsFull(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    val connectionQueueSize = 1
+    val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.startup(startProcessingRequests = false)
+
+    val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket1, producerRequestBytes())
+    val socket2 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket2, producerRequestBytes())
+
+    testableServer.shutdown()
   }
 
   @Test

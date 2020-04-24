@@ -237,7 +237,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
-        builder.addInternalTopic("topic-3");
+        builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
         builder.initializeSubscription();
 
         assertFalse(builder.usesPatternSubscription());
@@ -254,7 +254,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addSource(null, "source-4", null, null, null, sourcePattern);
 
-        builder.addInternalTopic("topic-3");
+        builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
@@ -398,7 +398,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testTopicGroups() {
         builder.setApplicationId("X");
-        builder.addInternalTopic("topic-1x");
+        builder.addInternalTopic("topic-1x", InternalTopicProperties.empty());
         builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
@@ -596,7 +596,12 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() {
-        builder.addInternalTopic(null);
+        builder.addInternalTopic(null, InternalTopicProperties.empty());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullInternalTopicProperties() {
+        builder.addInternalTopic("topic", null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -640,7 +645,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldCorrectlyMapStateStoreToInternalTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("internal-topic");
+        builder.addInternalTopic("internal-topic", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
@@ -707,7 +712,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddInternalTopicConfigForRepartitionTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("foo");
+        builder.addInternalTopic("foo", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "foo");
         builder.buildTopology();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
@@ -908,5 +913,62 @@ public class InternalTopologyBuilderTest {
 
         assertThat(base, not(equalTo(differentPattern)));
         assertThat(base, not(equalTo(overlappingPattern)));
+    }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesArePresent() {
+        final int numberOfPartitions = 10;
+        builder.setApplicationId("Z");
+        builder.addInternalTopic("topic-1z", new InternalTopicProperties(numberOfPartitions));
+        builder.addSource(null, "source-1", null, null, null, "topic-1z");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Z-topic-1z"),
+            new RepartitionTopicConfig(
+                "Z-topic-1z",
+                Collections.emptyMap(),
+                numberOfPartitions,
+                true
+            )
+        );
+    }
+
+    @Test
+    public void shouldHandleWhenTopicPropertiesNumberOfPartitionsIsNull() {
+        builder.setApplicationId("T");
+        builder.addInternalTopic("topic-1t", InternalTopicProperties.empty());
+        builder.addSource(null, "source-1", null, null, null, "topic-1t");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("T-topic-1t"),
+            new RepartitionTopicConfig(
+                "T-topic-1t",
+                Collections.emptyMap()
+            )
+        );
+    }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesAreNotPresent() {
+        builder.setApplicationId("Y");
+        builder.addInternalTopic("topic-1y", InternalTopicProperties.empty());
+        builder.addSource(null, "source-1", null, null, null, "topic-1y");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Y-topic-1y"),
+            new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
+        );
     }
 }

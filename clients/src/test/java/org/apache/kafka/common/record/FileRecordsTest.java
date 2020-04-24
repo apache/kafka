@@ -36,6 +36,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -116,6 +119,36 @@ public class FileRecordsTest {
         testPartialWrite(4, fileRecords);
         testPartialWrite(5, fileRecords);
         testPartialWrite(6, fileRecords);
+    }
+
+    @Test
+    public void testSliceSizeLimitWithConcurrentWrite() throws Exception {
+        FileRecords log = FileRecords.open(tempFile());
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int maxSizeInBytes = 16384;
+
+        try {
+            Future<Object> readerCompletion = executor.submit(() -> {
+                while (log.sizeInBytes() < maxSizeInBytes) {
+                    int currentSize = log.sizeInBytes();
+                    FileRecords slice = log.slice(0, currentSize);
+                    assertEquals(currentSize, slice.sizeInBytes());
+                }
+                return null;
+            });
+
+            Future<Object> writerCompletion = executor.submit(() -> {
+                while (log.sizeInBytes() < maxSizeInBytes) {
+                    append(log, values);
+                }
+                return null;
+            });
+
+            writerCompletion.get();
+            readerCompletion.get();
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     private void testPartialWrite(int size, FileRecords fileRecords) throws IOException {

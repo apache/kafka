@@ -79,9 +79,12 @@ public class TaskMetrics {
     private static final String PROCESS_DESCRIPTION = "calls to process";
     private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
-
     private static final String PROCESS_RATIO_DESCRIPTION = "The fraction of time the thread spent " +
         "on processing this task among all assigned active tasks";
+
+    private static final String BUFFER_COUNT = "buffer-count";
+    private static final String NUM_BUFFERED_RECORDS_DESCRIPTION = "The count of buffered records that are polled " +
+        "from consumer and not yet processed for this active task";
 
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
@@ -111,6 +114,21 @@ public class TaskMetrics {
             streamsMetrics.taskLevelTagMap(threadId, taskId),
             name,
             PROCESS_RATIO_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor activeBufferedRecordsSensor(final String threadId,
+                                                     final String taskId,
+                                                     final StreamsMetricsImpl streamsMetrics) {
+        final String name = ACTIVE_TASK_PREFIX + BUFFER_COUNT;
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.DEBUG);
+        addValueMetricToSensor(
+            sensor,
+            TASK_LEVEL_GROUP,
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
+            name,
+            NUM_BUFFERED_RECORDS_DESCRIPTION
         );
         return sensor;
     }

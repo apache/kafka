@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -35,6 +26,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class ClientUtils {
 
@@ -77,7 +78,7 @@ public class ClientUtils {
     public static Map<MetricName, Metric> producerMetrics(final Collection<StreamsProducer> producers) {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
         for (final StreamsProducer producer : producers) {
-            final Map<MetricName, ? extends Metric> producerMetrics = producer.kafkaProducer().metrics();
+            final Map<MetricName, ? extends Metric> producerMetrics = producer.metrics();
             if (producerMetrics != null) {
                 result.putAll(producerMetrics);
             }

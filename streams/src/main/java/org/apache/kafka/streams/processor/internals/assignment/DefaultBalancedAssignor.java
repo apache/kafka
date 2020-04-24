@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.TaskId;
-
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -25,27 +24,28 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
+import org.apache.kafka.streams.processor.TaskId;
 
-public class DefaultBalancedAssignor<ID extends Comparable<? super ID>> implements BalancedAssignor<ID> {
+public class DefaultBalancedAssignor implements BalancedAssignor {
 
     @Override
-    public Map<ID, List<TaskId>> assign(final SortedSet<ID> clients,
-                                        final SortedSet<TaskId> tasks,
-                                        final Map<ID, Integer> clientsToNumberOfStreamThreads,
-                                        final int balanceFactor) {
-        final Map<ID, List<TaskId>> assignment = new HashMap<>();
+    public Map<UUID, List<TaskId>> assign(final SortedSet<UUID> clients,
+                                          final SortedSet<TaskId> tasks,
+                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads,
+                                          final int balanceFactor) {
+        final Map<UUID, List<TaskId>> assignment = new HashMap<>();
         clients.forEach(client -> assignment.put(client, new ArrayList<>()));
         distributeTasksEvenlyOverClients(assignment, clients, tasks);
         balanceTasksOverStreamThreads(assignment, clients, clientsToNumberOfStreamThreads, balanceFactor);
         return assignment;
     }
 
-    private void distributeTasksEvenlyOverClients(final Map<ID, List<TaskId>> assignment,
-                                                  final SortedSet<ID> clients,
+    private void distributeTasksEvenlyOverClients(final Map<UUID, List<TaskId>> assignment,
+                                                  final SortedSet<UUID> clients,
                                                   final SortedSet<TaskId> tasks) {
         final LinkedList<TaskId> tasksToAssign = new LinkedList<>(tasks);
         while (!tasksToAssign.isEmpty()) {
-            for (final ID client : clients) {
+            for (final UUID client : clients) {
                 final TaskId task = tasksToAssign.poll();
 
                 if (task == null) {
@@ -56,16 +56,16 @@ public class DefaultBalancedAssignor<ID extends Comparable<? super ID>> implemen
         }
     }
 
-    private void balanceTasksOverStreamThreads(final Map<ID, List<TaskId>> assignment,
-                                               final SortedSet<ID> clients,
-                                               final Map<ID, Integer> clientsToNumberOfStreamThreads,
+    private void balanceTasksOverStreamThreads(final Map<UUID, List<TaskId>> assignment,
+                                               final SortedSet<UUID> clients,
+                                               final Map<UUID, Integer> clientsToNumberOfStreamThreads,
                                                final int balanceFactor) {
         boolean stop = false;
         while (!stop) {
             stop = true;
-            for (final ID sourceClient : clients) {
+            for (final UUID sourceClient : clients) {
                 final List<TaskId> sourceTasks = assignment.get(sourceClient);
-                for (final ID destinationClient : clients) {
+                for (final UUID destinationClient : clients) {
                     if (sourceClient.equals(destinationClient)) {
                         continue;
                     }

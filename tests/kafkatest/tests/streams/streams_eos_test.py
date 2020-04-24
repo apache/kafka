@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
@@ -37,17 +38,21 @@ class StreamsEosTest(KafkaTest):
         self.test_context = test_context
 
     @cluster(num_nodes=9)
-    def test_rebalance_simple(self):
-        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+    @parametrize(processing_guarantee="exactly_once")
+    @parametrize(processing_guarantee="exactly_once_beta")
+    def test_rebalance_simple(self, processing_guarantee):
+        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
-    def test_rebalance_complex(self):
-        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+    @parametrize(processing_guarantee="exactly_once")
+    @parametrize(processing_guarantee="exactly_once_beta")
+    def test_rebalance_complex(self, processing_guarantee):
+        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_rebalance(self, processor1, processor2, processor3, verifier):
@@ -77,17 +82,21 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=9)
-    def test_failure_and_recovery(self):
-        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+    @parametrize(processing_guarantee="exactly_once")
+    @parametrize(processing_guarantee="exactly_once_beta")
+    def test_failure_and_recovery(self, processing_guarantee):
+        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
-    def test_failure_and_recovery_complex(self):
-        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+    @parametrize(processing_guarantee="exactly_once")
+    @parametrize(processing_guarantee="exactly_once_beta")
+    def test_failure_and_recovery_complex(self, processing_guarantee):
+        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_failure_and_recovery(self, processor1, processor2, processor3, verifier):

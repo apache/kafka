@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -92,16 +93,21 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -188,7 +194,7 @@ public class StreamThreadTest {
             clientSupplier.setApplicationIdForProducer(APPLICATION_ID);
         }
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -325,6 +331,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "commit-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -332,6 +340,12 @@ public class StreamThreadTest {
             "poll-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "poll-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -341,6 +355,12 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "process-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-records-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -349,6 +369,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "punctuate-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-created-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
@@ -356,14 +378,6 @@ public class StreamThreadTest {
             "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "process-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "punctuate-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "commit-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(
-            "poll-ratio", defaultGroupName, descriptionIsNotVerified, defaultTags)));
 
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -447,7 +461,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -455,7 +470,78 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
+    }
+
+    @Test
+    public void shouldEnforceRebalanceAfterNextScheduledProbingRebalanceTime() throws InterruptedException {
+        final StreamsConfig config = new StreamsConfig(configProps(false));
+        internalTopologyBuilder.buildTopology();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
+        
+        final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
+        final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
+
+        mockClientSupplier.setCluster(createCluster());
+        final StreamThread thread = StreamThread.create(
+            internalTopologyBuilder,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            threadIdx
+        );
+
+        mockConsumer.enforceRebalance();
+        EasyMock.replay(mockConsumer);
+        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
+
+        thread.start();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.STARTING,
+            10 * 1000,
+            "Thread never started.");
+
+        TestUtils.retryOnExceptionWithTimeout(
+            () -> verify(mockConsumer)
+        );
+
+        thread.shutdown();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+
+    }
+
+    private static class EasyMockConsumerClientSupplier extends MockClientSupplier {
+        final Consumer<byte[], byte[]> mockConsumer;
+        final Map<String, Object> consumerConfigs = new HashMap<>();
+
+        EasyMockConsumerClientSupplier(final Consumer<byte[], byte[]> mockConsumer) {
+            this.mockConsumer = mockConsumer;
+        }
+
+        @Override
+        public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+            consumerConfigs.putAll(config);
+            return mockConsumer;
+        }
+
+        AtomicLong nextRebalanceMs() {
+            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        }
     }
 
     @Test
@@ -601,7 +687,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -609,7 +696,7 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -637,7 +724,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
 
         thread.setNow(mockTime.milliseconds());
@@ -646,7 +734,7 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -827,7 +915,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.setStateListener(
             (t, newState, oldState) -> {
@@ -836,7 +925,7 @@ public class StreamThreadTest {
                 }
             });
         thread.run();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -845,7 +934,7 @@ public class StreamThreadTest {
 
         internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
 
-        EasyMock.expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
+        expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
@@ -855,7 +944,6 @@ public class StreamThreadTest {
         consumer.seekToEnd(Collections.singletonList(t1p1));
 
         final ChangelogReader changelogReader = new MockChangelogReader() {
-
             @Override
             public void restore() {
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
@@ -886,13 +974,14 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class, thread::run);
 
-        EasyMock.verify(taskManager);
+        verify(taskManager);
 
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
         assertEquals("No current assignment for partition topic1-1", thrown.getMessage());
@@ -922,10 +1011,11 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -951,12 +1041,13 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
-        EasyMock.verify(taskManager);
+        verify(taskManager);
     }
 
     @Test
@@ -1174,7 +1265,7 @@ public class StreamThreadTest {
     public void shouldReturnActiveTaskMetadataWhileRunningState() {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        clientSupplier.setClusterForAdminClient(createCluster());
+        clientSupplier.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -1390,7 +1481,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object> punctuateProcessor = () -> new Processor<Object, Object>() {
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final ProcessorContext<Object, Object> context) {
                 context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
                 context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
             }
@@ -1651,8 +1742,6 @@ public class StreamThreadTest {
     }
 
     private void shouldLogAndRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties config = configProps(false);
@@ -1720,16 +1809,16 @@ public class StreamThreadTest {
             -1,
             new byte[0],
             "I am not an integer.".getBytes()));
-        thread.runOnce();
 
-        verifyLogMessagesSkippedRecordsForDeserializationException(appender);
-    }
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordDeserializer.class)) {
+            thread.runOnce();
 
-    private void verifyLogMessagesSkippedRecordsForDeserializationException(final LogCaptureAppender appender) {
-        LogCaptureAppender.unregister(appender);
-        final List<String> strings = appender.getMessages();
-        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
-        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+            final List<String> strings = appender.getMessages();
+            assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1]" +
+                " Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
+            assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1]" +
+                " Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+        }
     }
 
     @Test
@@ -1762,7 +1851,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -1804,7 +1894,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -1814,6 +1905,60 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         assertThrows(TaskMigratedException.class, thread::runOnce);
+    }
+
+    @Test
+    public void shouldCommitNonCorruptedTasksOnTaskCorruptedException() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final TaskId taskId1 = new TaskId(0, 0);
+        final TaskId taskId2 = new TaskId(0, 2);
+
+        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
+            mkEntry(taskId1, emptySet())
+        );
+
+        expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task2.id()).andReturn(taskId2).anyTimes();
+
+        expect(taskManager.tasks()).andReturn(mkMap(
+            mkEntry(taskId1, task1),
+            mkEntry(taskId2, task2)
+        )).anyTimes();
+        expect(taskManager.commit(singleton(task2))).andReturn(0);
+
+        EasyMock.replay(task1, task2, taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
+        ) {
+            @Override
+            void runOnce() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+            }
+        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.runLoop();
+
+        verify(taskManager);
     }
 
     @Test
@@ -1827,8 +1972,6 @@ public class StreamThreadTest {
     }
 
     private void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties config = configProps(false);
@@ -1872,73 +2015,71 @@ public class StreamThreadTest {
             assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
         }
 
-        long offset = -1;
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        thread.runOnce();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordQueue.class)) {
+            long offset = -1;
+            addRecord(mockConsumer, ++offset);
+            addRecord(mockConsumer, ++offset);
+            thread.runOnce();
 
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
+                assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+            }
+
+            addRecord(mockConsumer, ++offset);
+            addRecord(mockConsumer, ++offset);
+            addRecord(mockConsumer, ++offset);
+            addRecord(mockConsumer, ++offset);
+            thread.runOnce();
+
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+                assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+            }
+
+            addRecord(mockConsumer, ++offset, 1L);
+            addRecord(mockConsumer, ++offset, 1L);
+            thread.runOnce();
+
+            final List<String> strings = appender.getMessages();
+
+            final String threadTaskPrefix = "stream-thread [" + Thread.currentThread().getName() + "] task [0_1] ";
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[0] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[1] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[2] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[3] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[4] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
+            assertTrue(strings.contains(
+                threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
+                    "topic=[topic1] partition=[1] offset=[5] extractedTimestamp=[-1] " +
+                    "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
+            ));
         }
-
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        thread.runOnce();
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
             assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
         }
-
-        addRecord(mockConsumer, ++offset, 1L);
-        addRecord(mockConsumer, ++offset, 1L);
-        thread.runOnce();
-
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-        }
-        verifyLogMessagesForSkippedRecordsForInvalidTimestamps(appender);
-    }
-
-    private void verifyLogMessagesForSkippedRecordsForInvalidTimestamps(final LogCaptureAppender appender) {
-        LogCaptureAppender.unregister(appender);
-        final List<String> strings = appender.getMessages();
-
-        final String threadTaskPrefix = "stream-thread [" + Thread.currentThread().getName() + "] task [0_1] ";
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[0] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[1] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[2] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[3] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[4] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
-        assertTrue(strings.contains(
-            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
-                "topic=[topic1] partition=[1] offset=[5] extractedTimestamp=[-1] " +
-                "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
-        ));
     }
 
     @Test
@@ -1956,7 +2097,7 @@ public class StreamThreadTest {
             new MockTime());
         final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
 
-        EasyMock.expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
+        expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
         EasyMock.replay(taskManager, consumer);
 
         final StreamsMetricsImpl streamsMetrics =
@@ -1974,7 +2115,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
 
         assertThat(dummyProducerMetrics, is(thread.producerMetrics()));
@@ -2006,7 +2148,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             CLIENT_ID,
             new LogContext(""),
-            new AtomicInteger()
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
         );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
@@ -2027,7 +2170,7 @@ public class StreamThreadTest {
                                               final int numberOfCommits,
                                               final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
+        expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }

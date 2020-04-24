@@ -121,6 +121,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
+    public static final String RECORDS_SUFFIX = "-records";
     public static final String AVG_SUFFIX = "-avg";
     public static final String MAX_SUFFIX = "-max";
     public static final String MIN_SUFFIX = "-min";

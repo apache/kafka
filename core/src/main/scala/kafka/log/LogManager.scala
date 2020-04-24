@@ -518,7 +518,7 @@ class LogManager(logDirs: Seq[File],
         } finally {
           if (needToStopCleaner && !isFuture) {
             cleaner.resumeCleaning(Seq(topicPartition))
-            info(s"Compaction for partition $topicPartition is resumed")
+            info(s"Cleaning for partition $topicPartition is resumed")
           }
         }
       }
@@ -707,7 +707,7 @@ class LogManager(logDirs: Seq[File],
    * @param topicPartition The partition whose log needs to be returned or created
    * @param config The configuration of the log that should be applied for log creation
    * @param isNew Whether the replica should have existed on the broker or not
-   * @param isFuture True iff the future log of the specified partition should be returned or created
+   * @param isFuture True if the future log of the specified partition should be returned or created
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    */
   def getOrCreateLog(topicPartition: TopicPartition, config: LogConfig, isNew: Boolean = false, isFuture: Boolean = false): Log = {

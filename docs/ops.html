@@ -94,7 +94,7 @@
   </pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
   <pre class="brush: bash;">
-  &gt; bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
+  &gt; bin/kafka-preferred-replica-election.sh --bootstrap-server broker_host:port
   </pre>
 
   <h4><a id="basic_ops_racks" href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
@@ -308,7 +308,7 @@
   </pre>
   Once the json file is ready, use the partition reassignment tool to generate a candidate assignment:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --topics-to-move-json-file topics-to-move.json --broker-list "5,6" --generate
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --topics-to-move-json-file topics-to-move.json --broker-list "5,6" --generate
   Current partition replica assignment
 
   {"version":1,
@@ -334,7 +334,7 @@
   <p>
   The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --execute
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --execute
   Current partition replica assignment
 
   {"version":1,
@@ -360,7 +360,7 @@
   <p>
   Finally, the --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --verify
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo1,0] completed successfully
   Reassignment of partition [foo1,1] is in progress
@@ -382,7 +382,7 @@
   </pre>
   Then, use the json file with the --execute option to start the reassignment process:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --execute
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file custom-reassignment.json --execute
   Current partition replica assignment
 
   {"version":1,
@@ -400,7 +400,7 @@
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same custom-reassignment.json (used with the --execute option) should be used with the --verify option:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --verify
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file custom-reassignment.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo1,0] completed successfully
   Reassignment of partition [foo2,1] completed successfully
@@ -422,7 +422,7 @@
   </pre>
   Then, use the json file with the --execute option to start the reassignment process:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file increase-replication-factor.json --execute
   Current partition replica assignment
 
   {"version":1,
@@ -436,7 +436,7 @@
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option:
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file increase-replication-factor.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo,0] completed successfully
   </pre>
@@ -453,13 +453,13 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</pre>
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
   <pre class="brush: bash;">
   The throttle limit was set to 50000000 B/s
   Successfully started reassignment of partitions.</pre>
   <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
-  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
   There is an existing assignment running.
   The throttle limit was set to 700000000 B/s</pre>
 
@@ -470,7 +470,7 @@
   <p>When the --verify option is executed, and the reassignment has completed, the script will confirm that the throttle was removed:</p>
 
   <pre class="brush: bash;">
-  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --verify --reassignment-json-file bigger-cluster.json
+  > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --verify --reassignment-json-file bigger-cluster.json
   Status of partition reassignment:
   Reassignment of partition [my-topic,1] completed successfully
   Reassignment of partition [mytopic,0] completed successfully
@@ -493,7 +493,7 @@
   <p>To view the throttle limit configuration:</p>
 
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
+  > bin/kafka-configs.sh --describe --bootstrap-server localhost:9092 --entity-type brokers
   Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
   Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</pre>
 
@@ -503,7 +503,7 @@
   <p>To view the list of throttled replicas:</p>
 
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type topics
+  > bin/kafka-configs.sh --describe --bootstrap-server localhost:9092 --entity-type topics
   Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:101,
       follower.replication.throttled.replicas=1:101,0:102</pre>
 
@@ -552,19 +552,19 @@
   <p>
   Configure custom quota for (user=user1, client-id=clientA):
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
   Updated config for entity: user-principal 'user1', client-id 'clientA'.
   </pre>
 
   Configure custom quota for user=user1:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1
   Updated config for entity: user-principal 'user1'.
   </pre>
 
   Configure custom quota for client-id=clientA:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-name clientA
   Updated config for entity: client-id 'clientA'.
   </pre>
 
@@ -572,46 +572,46 @@
   <p>
   Configure default client-id quota for user=userA:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
   Updated config for entity: user-principal 'user1', default client-id.
   </pre>
 
   Configure default quota for user:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-default
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-default
   Updated config for entity: default user-principal.
   </pre>
 
   Configure default quota for client-id:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-default
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-default
   Updated config for entity: default client-id.
   </pre>
 
   Here's how to describe the quota for a given (user, client-id):
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
   Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given user:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type users --entity-name user1
   Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given client-id:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type clients --entity-name clientA
   Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   If entity name is not specified, all entities of the specified type are described. For example, describe all users:
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type users
   Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Similarly for (user, client):
   <pre class="brush: bash;">
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-type clients
+  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type users --entity-type clients
   Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>

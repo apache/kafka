@@ -56,6 +56,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
@@ -255,11 +257,14 @@ public class StreamThread extends Thread {
     private final String originalReset;
     private final TaskManager taskManager;
     private final AtomicInteger assignmentErrorCode;
+    private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
     private final Sensor pollSensor;
+    private final Sensor pollRecordsSensor;
     private final Sensor punctuateSensor;
+    private final Sensor processRecordsSensor;
     private final Sensor processLatencySensor;
     private final Sensor processRateSensor;
     private final Sensor pollRatioSensor;
@@ -317,19 +322,9 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final ProcessingMode processingMode;
-        if (StreamThread.eosAlphaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(config)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             builder,
             config,
-            processingMode,
             streamsMetrics,
             stateDirectory,
             changelogReader,
@@ -359,17 +354,20 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            processingMode
+            StreamThread.processingMode(config)
         );
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
+        consumerConfigs.put(StreamsConfig.InternalConfig.TIME, time);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
+        final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -393,13 +391,14 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode
+            assignmentErrorCode,
+            nextProbingRebalanceMs
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    enum ProcessingMode {
+    public enum ProcessingMode {
         AT_LEAST_ONCE("AT_LEAST_ONCE"),
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
@@ -413,16 +412,20 @@ public class StreamThread extends Thread {
         }
     }
 
-    public static boolean eosAlphaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-    }
-
-    public static boolean eosBetaEnabled(final StreamsConfig config) {
-        return EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    public static ProcessingMode processingMode(final StreamsConfig config) {
+        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else {
+            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
     }
 
     public static boolean eosEnabled(final StreamsConfig config) {
-        return eosAlphaEnabled(config) || eosBetaEnabled(config);
+        final ProcessingMode processingMode = processingMode(config);
+        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
+            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
     }
 
     public StreamThread(final Time time,
@@ -437,7 +440,8 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadId,
                         final LogContext logContext,
-                        final AtomicInteger assignmentErrorCode) {
+                        final AtomicInteger assignmentErrorCode,
+                        final AtomicLong nextProbingRebalanceMs) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -445,12 +449,14 @@ public class StreamThread extends Thread {
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
         this.pollSensor = ThreadMetrics.pollSensor(threadId, streamsMetrics);
-        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
-        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
-        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
-        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
-        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
+        this.pollRecordsSensor = ThreadMetrics.pollRecordsSensor(threadId, streamsMetrics);
         this.pollRatioSensor = ThreadMetrics.pollRatioSensor(threadId, streamsMetrics);
+        this.processLatencySensor = ThreadMetrics.processLatencySensor(threadId, streamsMetrics);
+        this.processRecordsSensor = ThreadMetrics.processRecordsSensor(threadId, streamsMetrics);
+        this.processRateSensor = ThreadMetrics.processRateSensor(threadId, streamsMetrics);
+        this.processRatioSensor = ThreadMetrics.processRatioSensor(threadId, streamsMetrics);
+        this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
+        this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
@@ -476,6 +482,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
+        this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -541,7 +548,7 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    private void runLoop() {
+    void runLoop() {
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -554,11 +561,22 @@ public class StreamThread extends Thread {
                                  "trigger a new rebalance.");
                     assignmentErrorCode.set(AssignorError.NONE.code());
                     mainConsumer.enforceRebalance();
+                } else if (nextProbingRebalanceMs.get() < time.milliseconds()) {
+                    log.info("The probing rebalance interval has elapsed since the last rebalance, triggering a " +
+                                "rebalance to probe for newly caught-up clients");
+                    mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
 
+                taskManager.commit(
+                    taskManager.tasks()
+                        .values()
+                        .stream()
+                        .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
+                        .collect(Collectors.toSet())
+                );
                 taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
             } catch (final TaskMigratedException e) {
                 log.warn("Detected that the thread is being fenced. " +
@@ -630,6 +648,7 @@ public class StreamThread extends Thread {
 
         if (records != null && !records.isEmpty()) {
             pollSensor.record(pollLatency, now);
+            pollRecordsSensor.record(records.count());
             addRecordsToTasks(records);
         }
 
@@ -663,6 +682,7 @@ public class StreamThread extends Thread {
         //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
 
+        int totalProcessed = 0;
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
@@ -690,6 +710,8 @@ public class StreamThread extends Thread {
                     // as well as total time ratio spent on processing compared with polling / committing etc
                     // are reported on other metrics.
                     processLatencySensor.record(processLatency / (double) processed, now);
+
+                    totalProcessed += processed;
                 }
 
                 final int punctuated = taskManager.punctuate();
@@ -731,6 +753,7 @@ public class StreamThread extends Thread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
+        processRecordsSensor.record(totalProcessed);
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
         pollRatioSensor.record((double) pollLatency / runOnceLatency);

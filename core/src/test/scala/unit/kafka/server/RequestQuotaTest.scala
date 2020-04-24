@@ -16,19 +16,22 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, LinkedHashMap, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
+import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -60,7 +63,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val smallQuotaProducerClientId = "small-quota-producer-client"
   private val smallQuotaConsumerClientId = "small-quota-consumer-client"
   private val brokerId: Integer = 0
-  private var leaderNode: KafkaServer = null
+  private var leaderNode: KafkaServer = _
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
   case class Task(apiKey: ApiKeys, future: Future[_])
@@ -82,7 +85,7 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    createTopic(topic, numPartitions, 1)
+    createTopic(topic, numPartitions)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
@@ -213,7 +216,7 @@ class RequestQuotaTest extends BaseRequestTest {
             collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
 
         case ApiKeys.FETCH =>
-          val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+          val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
           partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
           FetchRequest.Builder.forConsumer(0, 0, partitionMap)
 
@@ -240,7 +243,16 @@ class RequestQuotaTest extends BaseRequestTest {
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>
-          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
+          val topicStates = Seq(
+            new StopReplicaTopicState()
+              .setTopicName(tp.topic())
+              .setPartitionStates(Seq(new StopReplicaPartitionState()
+                .setPartitionIndex(tp.partition())
+                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setDeletePartition(true)).asJava)
+          ).asJava
+          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
+            Int.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
@@ -358,13 +370,12 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.API_VERSIONS =>
           new ApiVersionsRequest.Builder()
 
-        case ApiKeys.CREATE_TOPICS => {
+        case ApiKeys.CREATE_TOPICS =>
           new CreateTopicsRequest.Builder(
             new CreateTopicsRequestData().setTopics(
               new CreatableTopicCollection(Collections.singleton(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
                   setReplicationFactor(1.toShort)).iterator())))
-        }
 
         case ApiKeys.DELETE_TOPICS =>
           new DeleteTopicsRequest.Builder(
@@ -396,7 +407,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
-          new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
+          new AddOffsetsToTxnRequest.Builder(new AddOffsetsToTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setGroupId("test-txn-group")
+          )
 
         case ApiKeys.END_TXN =>
           new EndTxnRequest.Builder(new EndTxnRequestData()
@@ -415,7 +431,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
+            false)
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -581,10 +598,9 @@ class RequestQuotaTest extends BaseRequestTest {
       try {
         task.future.get(15, TimeUnit.SECONDS)
       } catch {
-        case e: Throwable => {
+        case e: Throwable =>
           error(s"Test failed for api-key ${task.apiKey} with exception $e")
           throw e
-        }
       }
     }
   }

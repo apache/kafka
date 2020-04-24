@@ -123,6 +123,7 @@
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="record">
@@ -241,6 +242,10 @@
     <subpackage name="examples">
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.connect.json" />
+    </subpackage>
+
+    <subpackage name="internals">
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="perf">
