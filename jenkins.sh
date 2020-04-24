@@ -32,7 +32,7 @@
 # Verify that at least one JMH benchmark is able to compile and be run
 # runs this benchmark with 0 warmup forks, 0 warmup iterations
 ./jmh-benchmarks/jmh.sh -wf 0 -f 1 -wi 0 -i 1 org.apache.kafka.jmh.cache.LRUCacheBenchmark.testCachePerformance \
-    || { echo 'Benchmark steps failed'; exit 1; }
+    || { echo 'Benchmark smoke test step failed'; exit 1; }
 
 if [ $JAVA_HOME = "/home/jenkins/tools/java/latest11" ] ; then
   echo "Skipping Kafka Streams archetype test for Java 11"
