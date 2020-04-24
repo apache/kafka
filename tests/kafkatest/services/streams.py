@@ -562,6 +562,8 @@ class StaticMemberTestService(StreamsTestBaseService):
                       consumer_property.SESSION_TIMEOUT_MS: 60000}
 
         properties['input.topic'] = self.INPUT_TOPIC
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        properties['internal.task.assignor.class'] = "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
