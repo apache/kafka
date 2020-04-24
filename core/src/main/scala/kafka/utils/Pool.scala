@@ -18,7 +18,6 @@
 package kafka.utils
 
 import java.util.concurrent._
-import java.util.function.BiConsumer
 
 import org.apache.kafka.common.KafkaException
 
