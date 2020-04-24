@@ -29,6 +29,9 @@
     --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
     || { echo 'Test steps failed'; exit 1; }
 
+# Verify that at least one JMH benchmark is able to compile and be run
+./jmh-benchmarks/jmh.sh -wf 0 -f 1 -wi 0 -i 1 org.apache.kafka.jmh.cache.LRUCacheBenchmark.testCachePerformance 
+
 if [ $JAVA_HOME = "/home/jenkins/tools/java/latest11" ] ; then
   echo "Skipping Kafka Streams archetype test for Java 11"
   exit 0
