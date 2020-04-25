@@ -281,9 +281,18 @@ public class KafkaBasedLog<K, V> {
             Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<TopicPartition, Long> entry = it.next();
-                if (consumer.position(entry.getKey()) >= entry.getValue())
+                TopicPartition topicPartition = entry.getKey();
+                Long endOffset = entry.getValue();
+                long lastConsumedOffset = consumer.position(topicPartition);
+                if (lastConsumedOffset >= endOffset) {
+                    log.trace("Reached end offset {} for {}", endOffset, topicPartition);
                     it.remove();
-                else {
+                } else {
+                    log.trace(
+                        "Behind end offset {} for {}; last-consumed offset is {}",
+                        endOffset,
+                        topicPartition,
+                        lastConsumedOffset);
                     poll(Integer.MAX_VALUE);
                     break;
                 }
