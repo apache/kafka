@@ -188,7 +188,7 @@ class ConnectDistributedTest(Test):
             connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
-
+            
         connector.start()
 
         task_id = 0

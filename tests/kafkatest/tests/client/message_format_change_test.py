@@ -33,7 +33,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
     def setUp(self):
         self.topic = "test_topic"
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
-
+            
         self.zk.start()
 
         # Producer and consumer
@@ -82,7 +82,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}})
-
+       
         self.kafka.start()
         self.logger.info("First format change to 0.9.0")
         self.kafka.alter_message_format(self.topic, str(LATEST_0_9))

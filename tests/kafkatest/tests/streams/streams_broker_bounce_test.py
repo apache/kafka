@@ -169,7 +169,7 @@ class StreamsBrokerBounceTest(Test):
         self.driver.start()
 
         if (start_processor):
-            self.processor1.start()
+           self.processor1.start()
 
     def collect_results(self, sleep_time_secs):
         data = {}

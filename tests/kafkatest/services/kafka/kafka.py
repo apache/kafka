@@ -361,7 +361,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, self.bootstrap_servers(self.security_protocol), broker=True)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
@@ -374,7 +374,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of
         # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
-        self.security_config.setup_credentials(node, self.path, self.bootstrap_servers(self.security_protocol), broker=False)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=False)
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -543,8 +543,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, msg_format_version)
+
+        if node.version.config_command_supports_bootstrap_server():
+            cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+                   (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, msg_format_version)
+        else:
+            cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+                  (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
+
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -557,8 +563,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Disabling unclean leader election for topic %s", topic)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, str(value).lower())
+
+        if node.version.config_command_supports_bootstrap_server():
+            cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+                   (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, str(value).lower())
+        else:
+            cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+                  (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -607,7 +618,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
-        cmd += "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+        cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--verify "
         cmd += "&& sleep 1 && rm -f %s" % json_file
@@ -647,7 +658,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
-        cmd += "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+        cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
         if throttle is not None:

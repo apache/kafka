@@ -259,18 +259,18 @@ class SecurityConfig(TemplateRenderer):
         if self.has_sasl:
             self.setup_sasl(node)
 
-    def setup_credentials(self, node, path, bootstrap_server, broker):
+    def setup_credentials(self, node, path, zk_connect, broker):
         if broker:
-            self.maybe_create_scram_credentials(node, bootstrap_server, path, self.interbroker_sasl_mechanism,
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.interbroker_sasl_mechanism,
                  SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
         else:
-            self.maybe_create_scram_credentials(node, bootstrap_server, path, self.client_sasl_mechanism,
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.client_sasl_mechanism,
                  SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD)
 
-    def maybe_create_scram_credentials(self, node, bootstrap_server, path, mechanism, user_name, password):
+    def maybe_create_scram_credentials(self, node, zk_connect, path, mechanism, user_name, password):
         if self.has_sasl and self.is_sasl_scram(mechanism):
-            cmd = "%s --bootstrap-server %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
-                  (path.script("kafka-configs.sh", node), bootstrap_server,
+            cmd = "%s --zookeeper %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
+                  (path.script("kafka-configs.sh", node), zk_connect,
                   user_name, mechanism, password)
             node.account.ssh(cmd)
 

@@ -78,7 +78,7 @@ class QuotaConfig(object):
 
     def configure_quota(self, kafka, producer_byte_rate, consumer_byte_rate, entity_args):
         node = kafka.nodes[0]
-        if node.version.topic_command_supports_bootstrap_server:
+        if node.version.config_command_supports_bootstrap_server():
             cmd = "%s --bootstrap-server %s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
                   (kafka.path.script("kafka-configs.sh", node), kafka.bootstrap_servers(kafka.security_protocol), producer_byte_rate, consumer_byte_rate)
         else:

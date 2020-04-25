@@ -34,7 +34,7 @@ class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
     def setUp(self):
         self.topic = "test_topic"
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
-
+            
         self.zk.start()
 
         # Producer and consumer

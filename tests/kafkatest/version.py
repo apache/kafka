@@ -55,6 +55,9 @@ class KafkaVersion(LooseVersion):
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
 
+    def config_command_supports_bootstrap_server(self):
+        return self >= V_2_5_0
+
     def supports_tls_to_zookeeper(self):
         # indicate if KIP-515 is available
         return self > LATEST_2_4
