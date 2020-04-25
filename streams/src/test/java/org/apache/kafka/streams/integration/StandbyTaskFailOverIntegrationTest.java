@@ -35,51 +35,60 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.fail;
 
-public class EOSStandbyTaskFailOverIntegrationTest {
+/**
+ * Test the standby task fail over scenario. Never call commit but process a poison key that causes primary task failed.
+ * For at least once, the poison record will be replicated to the standby task state.
+ * In EOS, we should not hit the duplicate processing exception on the poison key, as the
+ * restore consumer is also read committed.
+ */
+@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
+public class StandbyTaskFailOverIntegrationTest {
 
-    private final Logger log = LoggerFactory.getLogger(EOSStandbyTaskFailOverIntegrationTest.class);
+    private final Logger log = LoggerFactory.getLogger(StandbyTaskFailOverIntegrationTest.class);
 
     private static final int NUM_BROKERS = 3;
-    private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
-    private static final int MAX_WAIT_TIME_MS = 60 * 1000;
     private static final Duration RETENTION = Duration.ofMillis(100_000);
     private static final Duration WINDOW_SIZE = Duration.ofMillis(100);
     private static final String STORE_NAME = "dedup-store";
 
-    private final String appId = "eos-test-app";
+    private final String appId = "test-app";
     private final String inputTopic = "input";
-    private final String duplicateKey = "duplicate_key";
-    private final String exceptionValue = "exception_value";
     private final String keyOne = "key_one";
     private final String poisonKey = "poison_key";
     private final int numThreads = 2;
     private KafkaStreams streamInstanceOne;
     private KafkaStreams streamInstanceTwo;
-
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -87,8 +96,20 @@ public class EOSStandbyTaskFailOverIntegrationTest {
         Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false"))
     );
 
+    @Parameterized.Parameter
+    public String eosConfig;
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<String[]> data() {
+        return Arrays.asList(new String[][] {
+            {StreamsConfig.AT_LEAST_ONCE},
+            {StreamsConfig.EXACTLY_ONCE}
+        });
+    }
+
     @Before
     public void createTopics() throws Exception {
+        cleanStateBeforeTest(CLUSTER);
         CLUSTER.createTopic(inputTopic, 1, 1);
     }
 
@@ -100,9 +121,19 @@ public class EOSStandbyTaskFailOverIntegrationTest {
         streamInstanceOne = getStreamInstance(1, waitPoisonRecordReplication);
         streamInstanceTwo = getStreamInstance(2, null);
 
-        CountDownLatch threadDeaths = new CountDownLatch(numThreads + 1);
-        streamInstanceOne.setUncaughtExceptionHandler((t, e) -> threadDeaths.countDown());
-        streamInstanceTwo.setUncaughtExceptionHandler((t, e) -> threadDeaths.countDown());
+        CountDownLatch threadDeaths = new CountDownLatch(3);
+        streamInstanceOne.setUncaughtExceptionHandler((t, e) -> {
+            if (e.getMessage().startsWith("Caught a duplicate key") && eosConfig.equals(StreamsConfig.EXACTLY_ONCE)) {
+                fail("Should not hit duplicate key in EOS");
+            }
+            threadDeaths.countDown();
+        });
+        streamInstanceTwo.setUncaughtExceptionHandler((t, e) ->{
+            if (e.getMessage().startsWith("Caught a duplicate key") && eosConfig.equals(StreamsConfig.EXACTLY_ONCE)) {
+                fail("Should not hit duplicate key in EOS");
+            }
+            threadDeaths.countDown();
+        });
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
@@ -120,13 +151,13 @@ public class EOSStandbyTaskFailOverIntegrationTest {
         waitForCondition(() -> streamInstanceOne.state().equals(KafkaStreams.State.RUNNING),
             "Stream instance one should be up and running by now");
 
+        log.info("Stream instance one starts up");
+
         streamInstanceTwo.start();
         waitForCondition(() -> streamInstanceTwo.state().equals(KafkaStreams.State.RUNNING),
             "Stream instance two should be up and running by now");
 
-//        log.info("Produce the poison record");
-
-        System.out.println("Produce the poison record");
+        log.info("Stream instance two starts up, producing the poison record");
         // Produce the poison record
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
@@ -139,26 +170,28 @@ public class EOSStandbyTaskFailOverIntegrationTest {
                 new Properties()),
             20L);
 
-        final QueryableStoreType<ReadOnlyWindowStore<String, String>> queryableStoreType = QueryableStoreTypes.windowStore();
-        waitForCondition(() -> {
-            ReadOnlyWindowStore<String, String> instanceTwoWindowStore =
-                streamInstanceTwo.store(StoreQueryParameters.fromNameAndType(STORE_NAME, queryableStoreType).enableStaleStores());
+        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) {
+            final QueryableStoreType<ReadOnlyWindowStore<String, String>> queryableStoreType = QueryableStoreTypes.windowStore();
+            waitForCondition(() -> {
+                ReadOnlyWindowStore<String, String> instanceTwoWindowStore =
+                    streamInstanceTwo.store(StoreQueryParameters.fromNameAndType(STORE_NAME, queryableStoreType).enableStaleStores());
 
-            final KeyValueIterator<Windowed<String>, String> iterator = instanceTwoWindowStore.all();
-            while (iterator.hasNext()) {
-                String key = iterator.next().key.key();
-                if (key.equals(poisonKey)) {
-                    System.out.println("Found the poison record on instance 2");
-                    waitPoisonRecordReplication.countDown();
-                    return true;
-                } else {
-                    System.out.println("Found key " + key);
+                final KeyValueIterator<Windowed<String>, String> iterator = instanceTwoWindowStore.all();
+                while (iterator.hasNext()) {
+                    String key = iterator.next().key.key();
+                    if (key.equals(poisonKey)) {
+                        waitPoisonRecordReplication.countDown();
+                        return true;
+                    }
                 }
-            }
-            return false;
-        }, "Did not see poison key replicated to instance two");
+                return false;
+            }, "Did not see poison key replicated to instance two");
+        } else {
+            // Wait sufficient time to make sure the data is not replicated.
+            Thread.sleep(3000);
+        }
 
-        threadDeaths.await(15_000L, TimeUnit.MILLISECONDS);
+        threadDeaths.await(15, TimeUnit.SECONDS);
     }
 
     private KafkaStreams getStreamInstance(final int instanceId, CountDownLatch waitPoisonRecordReplication) {
@@ -206,8 +239,7 @@ public class EOSStandbyTaskFailOverIntegrationTest {
                     if (waitPoisonRecordReplication != null) {
                         waitPoisonRecordReplication.await(15_000L, TimeUnit.MILLISECONDS);
                     }
-                } catch (InterruptedException e) {
-//                    throw new IllegalStateException("Did not see record gets replicated on other machine");
+                } catch (InterruptedException ignored) {
                 }
                 throw new IllegalStateException("Throw on key_two to trigger rebalance");
             }
@@ -238,7 +270,7 @@ public class EOSStandbyTaskFailOverIntegrationTest {
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         // Set commit interval long to avoid actually committing the record.
