@@ -1069,14 +1069,14 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
           controllerContext.allTopics.contains(tp.topic) &&
-          isPreferredLeaderInSync(tp)
+          canPreferredReplicaBeLeader(tp)
        )
         onReplicaElection(candidatePartitions.toSet, ElectionType.PREFERRED, AutoTriggered)
       }
     }
   }
 
-  private def isPreferredLeaderInSync(tp: TopicPartition): Boolean = {
+  private def canPreferredReplicaBeLeader(tp: TopicPartition): Boolean = {
     val assignment = controllerContext.partitionReplicaAssignment(tp)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, tp))
     val isr = controllerContext.partitionLeadershipInfo(tp).leaderAndIsr.isr
