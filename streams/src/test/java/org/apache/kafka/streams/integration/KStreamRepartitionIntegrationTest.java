@@ -150,50 +150,6 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() throws InterruptedException {
-        final String topicBRepartitionedName = "topic-b-scale-up";
-        final String inputTopicRepartitionedName = "input-topic-scale-up";
-        final int topicBNumberOfPartitions = 2;
-        final int inputTopicNumberOfPartitions = 4;
-        final AtomicReference<Throwable> throwable = new AtomicReference<>();
-
-        CLUSTER.createTopic(topicB, 1, 1);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-            .<Integer, String>as(inputTopicRepartitionedName)
-            .withNumberOfPartitions(inputTopicNumberOfPartitions);
-
-        final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
-            .<Integer, String>as(topicBRepartitionedName)
-            .withNumberOfPartitions(topicBNumberOfPartitions);
-
-        final KStream<Integer, String> topicBStream = builder
-            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(topicBRepartitioned);
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition(inputTopicRepartitioned)
-               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-               .to(outputTopic);
-
-        startStreams(builder, REBALANCING, ERROR, (t, e) -> throwable.set(e));
-
-        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-            Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-            Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
-        );
-
-        final String expectedErrorMessage = String.format("Following topics do not have the same " +
-                                                          "number of partitions: [%s]",
-                                                          new TreeMap<>(repartitionTopicsWithNumOfPartitions));
-
-        assertNotNull(throwable.get());
-        assertTrue(throwable.get().getMessage().contains(expectedErrorMessage));
-    }
-
-    @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";

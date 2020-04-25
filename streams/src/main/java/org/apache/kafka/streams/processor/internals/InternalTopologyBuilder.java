@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -631,6 +632,45 @@ public class InternalTopologyBuilder {
 
     public final void copartitionSources(final Collection<String> sourceNodes) {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+    }
+
+    public void validateCoPartition() {
+        final List<Set<String>> copartitionGroups =
+                copartitionSourceGroups
+                        .stream()
+                        .map(sourceGroup -> sourceGroup
+                                .stream()
+                                .flatMap(node -> nodeToSourceTopics.get(node).stream())
+                                .collect(Collectors.toSet())
+                        ).collect(Collectors.toList());
+        for (final Set<String> coPartition : copartitionGroups) {
+            final Map<String, InternalTopicProperties> coPartitionProperties = new HashMap<>();
+            internalTopicNamesWithProperties.forEach((topic, prop) -> {
+                if (coPartition.contains(topic) && prop.getNumberOfPartitions().isPresent()) {
+                    coPartitionProperties.put(topic, prop);
+                }
+            });
+            if (coPartition.size() == coPartitionProperties.size()) {
+                final Collection<InternalTopicProperties> properties = coPartitionProperties.values();
+                final InternalTopicProperties first = properties.iterator().next();
+                final int firstPartitionNum = first.getNumberOfPartitions().get();
+                for (final InternalTopicProperties prop : properties) {
+                    final int partitionNum = prop.getNumberOfPartitions().get();
+                    if (partitionNum != firstPartitionNum) {
+                        final Map<Object, Integer> repartitionTopics = coPartitionProperties
+                                .entrySet()
+                                .stream()
+                                .collect(Collectors.toMap(entry -> entry.getKey(),
+                                    entry -> entry.getValue().getNumberOfPartitions().get()));
+                        final String msg = String.format("Following topics do not have the same number of " +
+                                        "partitions: [%s]",
+                                new TreeMap<>(repartitionTopics));
+                        throw new TopologyException(msg);
+
+                    }
+                }
+            }
+        }
     }
 
     private void validateGlobalStoreArguments(final String sourceName,
