@@ -19,7 +19,6 @@ package kafka.api
 
 import java.io.File
 import java.util.Properties
-
 import javax.security.auth.login.Configuration
 
 import scala.collection.Seq

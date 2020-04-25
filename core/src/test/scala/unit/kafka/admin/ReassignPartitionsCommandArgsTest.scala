@@ -19,7 +19,7 @@ package kafka.admin
 import kafka.utils.Exit
 import org.junit.Assert._
 import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Before, Ignore, Rule, Test}
 
 class ReassignPartitionsCommandArgsTest {
   @Rule
@@ -56,9 +56,29 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
+  @Ignore
+  def shouldCorrectlyParseValidMinimumLegacyExecuteOptions(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--execute",
+      "--reassignment-json-file", "myfile.json")
+    ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
+  @Test
   def shouldCorrectlyParseValidMinimumVerifyOptions(): Unit = {
     val args = Array(
       "--bootstrap-server", "localhost:1234",
+      "--verify",
+      "--reassignment-json-file", "myfile.json")
+    ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
+  @Test
+  @Ignore
+  def shouldCorrectlyParseValidMinimumLegacyVerifyOptions(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
       "--verify",
       "--reassignment-json-file", "myfile.json")
     ReassignPartitionsCommand.validateAndParseArgs(args)
@@ -213,6 +233,19 @@ class ReassignPartitionsCommandArgsTest {
     shouldFailWith("Option \"[reassignment-json-file]\" can't be used with action \"[generate]\"", args)
   }
 
+  @Test
+  @Ignore
+  def testInvalidCommandConfigArgumentForLegacyGenerate(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--generate",
+      "--broker-list", "101,102",
+      "--topics-to-move-json-file", "myfile.json",
+      "--command-config", "/tmp/command-config.properties"
+    )
+    shouldFailWith("You must specify --bootstrap-server when using \"[command-config]\"", args)
+  }
+
   ///// Test --verify
   @Test
   def shouldNotAllowVerifyWithoutReassignmentOption(): Unit = {
@@ -276,5 +309,15 @@ class ReassignPartitionsCommandArgsTest {
       "--bootstrap-server", "localhost:1234",
       "--preserve-throttles")
     shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args)
+  }
+
+  ///// Test --list
+  @Test
+  @Ignore
+  def shouldNotAllowZooKeeperWithListOption(): Unit = {
+    val args = Array(
+      "--list",
+      "--zookeeper", "localhost:1234")
+    shouldFailWith("Option \"[zookeeper]\" can't be used with action \"[list]\"", args)
   }
 }

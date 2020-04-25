@@ -1416,8 +1416,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val entityName = kafkaConfig.brokerId.toString
 
     val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
-    val passwordEncoderConfigs = new Properties
-    passwordEncoderConfigs ++= sslStoreProps.asScala.filter { case (key, _) => key.startsWith("password.encoder.") }
     val passwordEncoder = createPasswordEncoder(kafkaConfig, kafkaConfig.passwordEncoderSecret)
 
     if (passwordConfigs.nonEmpty) {

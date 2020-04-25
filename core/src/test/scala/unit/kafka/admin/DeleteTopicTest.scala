@@ -33,7 +33,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionRea
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.scalatest.Assertions.fail
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -230,8 +230,11 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val props = new Properties()
     props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     val adminClient = Admin.create(props)
-    adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava)
-
+    try {
+      adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+    } catch {
+      case _: ExecutionException =>
+    }
     // trigger a controller switch now
     val previousControllerId = controllerId
 
