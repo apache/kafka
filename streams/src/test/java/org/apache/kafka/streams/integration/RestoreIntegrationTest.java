@@ -143,7 +143,7 @@ public class RestoreIntegrationTest {
         builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
-                    if (numReceived.incrementAndGet() == numberOfKeys) {
+                    if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
                         shutdownLatch.countDown();
                     }
                 });
