@@ -312,7 +312,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 graphNodePriorityQueue.offer(graphNode);
             }
         }
-        internalTopologyBuilder.validateCoPartition();
+        internalTopologyBuilder.validateCopartition();
     }
 
     private void maybePerformOptimizations(final Properties props) {

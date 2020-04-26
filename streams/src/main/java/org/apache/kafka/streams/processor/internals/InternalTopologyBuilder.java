@@ -634,7 +634,7 @@ public class InternalTopologyBuilder {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
 
-    public void validateCoPartition() {
+    public void validateCopartition() {
         final List<Set<String>> copartitionGroups =
                 copartitionSourceGroups
                         .stream()
@@ -643,21 +643,21 @@ public class InternalTopologyBuilder {
                                 .flatMap(node -> nodeToSourceTopics.get(node).stream())
                                 .collect(Collectors.toSet())
                         ).collect(Collectors.toList());
-        for (final Set<String> coPartition : copartitionGroups) {
-            final Map<String, InternalTopicProperties> coPartitionProperties = new HashMap<>();
+        for (final Set<String> copartition : copartitionGroups) {
+            final Map<String, InternalTopicProperties> copartitionProperties = new HashMap<>();
             internalTopicNamesWithProperties.forEach((topic, prop) -> {
-                if (coPartition.contains(topic) && prop.getNumberOfPartitions().isPresent()) {
-                    coPartitionProperties.put(topic, prop);
+                if (copartition.contains(topic) && prop.getNumberOfPartitions().isPresent()) {
+                    copartitionProperties.put(topic, prop);
                 }
             });
-            if (coPartition.size() == coPartitionProperties.size()) {
-                final Collection<InternalTopicProperties> properties = coPartitionProperties.values();
+            if (copartition.size() == copartitionProperties.size()) {
+                final Collection<InternalTopicProperties> properties = copartitionProperties.values();
                 final InternalTopicProperties first = properties.iterator().next();
                 final int firstPartitionNum = first.getNumberOfPartitions().get();
                 for (final InternalTopicProperties prop : properties) {
                     final int partitionNum = prop.getNumberOfPartitions().get();
                     if (partitionNum != firstPartitionNum) {
-                        final Map<Object, Integer> repartitionTopics = coPartitionProperties
+                        final Map<Object, Integer> repartitionTopics = copartitionProperties
                                 .entrySet()
                                 .stream()
                                 .collect(Collectors.toMap(entry -> entry.getKey(),
