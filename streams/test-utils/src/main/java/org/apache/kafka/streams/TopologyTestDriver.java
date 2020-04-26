@@ -857,16 +857,16 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get all the names of all the topics to which records have been output.
+     * Get all the names of all the topics to which records have been produced during the test run.
      * <p>
-     * Call this method after piping the input into the test driver to retrieve the full set of topics the topology
+     * Call this method after piping the input into the test driver to retrieve the full set of topic names the topology
      * produced records to.
      * <p>
-     * The returned set of topic names includes changelog, repartition and sink topic names.
+     * The returned set of topic names includes changelog, repartition and output topic names.
      *
-     * @return the set of output topic names.
+     * @return the set of topic names the topology has produced to.
      */
-    public final Set<String> getOutputTopicNames() {
+    public final Set<String> producedTopicNames() {
         return Collections.unmodifiableSet(outputRecordsByTopic.keySet());
     }
 

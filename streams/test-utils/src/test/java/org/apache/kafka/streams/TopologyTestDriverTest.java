@@ -458,7 +458,7 @@ public class TopologyTestDriverTest {
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
-        assertThat(testDriver.getOutputTopicNames(), hasItem(SINK_TOPIC_1));
+        assertThat(testDriver.producedTopicNames(), hasItem(SINK_TOPIC_1));
     }
 
     @Test
@@ -467,7 +467,7 @@ public class TopologyTestDriverTest {
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
-        assertThat(testDriver.getOutputTopicNames(), hasItems(SINK_TOPIC_1, SINK_TOPIC_2));
+        assertThat(testDriver.producedTopicNames(), hasItems(SINK_TOPIC_1, SINK_TOPIC_2));
     }
 
     @Test
@@ -1664,7 +1664,7 @@ public class TopologyTestDriverTest {
                 ))
             );
 
-            assertThat(topologyTestDriver.getOutputTopicNames(), hasItem("globule-topic"));
+            assertThat(topologyTestDriver.producedTopicNames(), hasItem("globule-topic"));
         }
     }
 
