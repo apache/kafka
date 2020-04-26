@@ -31,7 +31,7 @@ import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 
-class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   private var topicService: ZookeeperTopicService = _
   private var testTopicName: String = _
