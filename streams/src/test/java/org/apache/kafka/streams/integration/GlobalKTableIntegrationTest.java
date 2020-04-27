@@ -298,7 +298,7 @@ public class GlobalKTableIntegrationTest {
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
     
-    private void startStreams() throws InterruptedException {
+    private void startStreams() {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
