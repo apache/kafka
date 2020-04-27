@@ -18,7 +18,9 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
 
+import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -26,9 +28,11 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Before, Test}
+import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 
@@ -235,14 +239,24 @@ abstract class QuotaTestClients(topic: String,
     numConsumed
   }
 
+  def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, clientId: String, expectThrottle: Boolean): Unit = {
+    val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey)
+    if (expectThrottle)
+      assertTrue(s"Client with id=$clientId should have been throttled", throttleTimeMs > 0)
+    else
+      assertEquals(s"Client with id=$clientId should not have been throttled", 0.0, throttleTimeMs, 0.0)
+  }
+
   def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Produce, producerClientId, expectThrottle)
+    verifyThrottleTimeRequestChannelMetric(ApiKeys.PRODUCE, producerClientId, expectThrottle)
     if (verifyClientMetric)
       verifyProducerClientThrottleTimeMetric(expectThrottle)
   }
 
   def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Fetch, consumerClientId, expectThrottle)
+    verifyThrottleTimeRequestChannelMetric(ApiKeys.FETCH, consumerClientId, expectThrottle)
     if (verifyClientMetric)
       verifyConsumerClientThrottleTimeMetric(expectThrottle)
   }
@@ -264,6 +278,21 @@ abstract class QuotaTestClients(topic: String,
 
   def throttleMetric(quotaType: QuotaType, clientId: String): KafkaMetric = {
     leaderNode.metrics.metrics.get(throttleMetricName(quotaType, clientId))
+  }
+
+  private def brokerRequestMetricsThrottleTimeMs(apiKey: ApiKeys): Double = {
+    def yammerMetricValue(name: String): Double = {
+      val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+        .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+      metric match {
+        case m: Meter => m.count.toDouble
+        case m: Histogram => m.max
+        case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+      }
+    }
+
+    yammerMetricValue(s"kafka.network:type=RequestMetrics,name=ThrottleTimeMs,request=${apiKey.name}")
   }
 
   def exemptRequestMetric: KafkaMetric = {
