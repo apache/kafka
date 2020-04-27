@@ -371,7 +371,7 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Ti
         request.responseCompleteTimeNanos = timeNanos
         if (request.apiLocalCompleteTimeNanos == -1L)
           request.apiLocalCompleteTimeNanos = timeNanos
-      // These happen in addition to one in the previous section, we skip updating the metrics
+      // For a given request, these may happen in addition to one in the previous section, skip updating the metrics
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }
 
