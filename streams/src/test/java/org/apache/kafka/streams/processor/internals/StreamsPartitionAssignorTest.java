@@ -50,7 +50,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.PriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -293,7 +293,7 @@ public class StreamsPartitionAssignorTest {
         return asList(
             new Object[]{HighAvailabilityTaskAssignor.class},
             new Object[]{StickyTaskAssignor.class},
-            new Object[]{PriorTaskAssignor.class}
+            new Object[]{FallbackPriorTaskAssignor.class}
             );
     }
 

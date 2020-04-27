@@ -39,7 +39,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
-import org.apache.kafka.streams.processor.internals.assignment.PriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
@@ -171,7 +171,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
 
-    private Supplier<TaskAssignor> taskAssignor;
+    private Supplier<TaskAssignor> taskAssignorSupplier;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -201,7 +201,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
-        taskAssignor = assignorConfiguration::getTaskAssignor;
+        taskAssignorSupplier = assignorConfiguration::getTaskAssignor;
     }
 
     @Override
@@ -712,15 +712,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final TaskAssignor taskAssignor;
-        if (!lagComputationSuccessful) {
-            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
-                         + "trigger another rebalance to retry.");
-            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
-            taskAssignor = new PriorTaskAssignor();
-        } else {
-            taskAssignor = this.taskAssignor.get();
-        }
+        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+
         final boolean followupRebalanceNeeded = taskAssignor.assign(clientStates,
                                                                     allTasks,
                                                                     statefulTasks,
@@ -730,6 +723,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
 
         return followupRebalanceNeeded;
+    }
+
+    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+        final TaskAssignor taskAssignor;
+        if (lagComputationSuccessful) {
+            taskAssignor = taskAssignorSupplier.get();
+        } else {
+            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
+                         + "trigger another rebalance to retry.");
+            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
+            taskAssignor = new FallbackPriorTaskAssignor();
+        }
+        return taskAssignor;
     }
 
     /**

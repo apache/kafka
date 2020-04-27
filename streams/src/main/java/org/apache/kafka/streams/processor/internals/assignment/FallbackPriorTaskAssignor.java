@@ -23,10 +23,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public class PriorTaskAssignor implements TaskAssignor {
+/**
+ * A special task assignor implementation to be used as a fallback in case the
+ * configured assignor couldn't be invoked.
+ *
+ * Specifically, this assignor must:
+ * 1. ignore the task lags in the ClientState map
+ * 2. always return true, indicating that a follow-up rebalance is needed
+ */
+public class FallbackPriorTaskAssignor implements TaskAssignor {
     private final StickyTaskAssignor delegate;
 
-    public PriorTaskAssignor() {
+    public FallbackPriorTaskAssignor() {
         delegate = new StickyTaskAssignor(true);
     }
 
@@ -35,6 +43,7 @@ public class PriorTaskAssignor implements TaskAssignor {
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> standbyTaskIds,
                           final AssignmentConfigs configs) {
-        return delegate.assign(clients, allTaskIds, standbyTaskIds, configs);
+        delegate.assign(clients, allTaskIds, standbyTaskIds, configs);
+        return true;
     }
 }

@@ -16,22 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Map;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_3;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -40,6 +44,33 @@ public class ClientStateTest {
 
     private final ClientState client = new ClientState(1);
     private final ClientState zeroCapacityClient = new ClientState(0);
+
+    @Test
+    public void previousStateConstructorShouldCreateAValidObject() {
+        final ClientState clientState = new ClientState(
+            mkSet(TASK_0_0, TASK_0_1),
+            mkSet(TASK_0_2, TASK_0_3),
+            mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
+            4
+        );
+
+        // all the "next assignment" fields should be empty
+        assertThat(clientState.activeTaskCount(), is(0));
+        assertThat(clientState.activeTaskLoad(), is(0.0));
+        assertThat(clientState.activeTasks(), is(empty()));
+        assertThat(clientState.standbyTaskCount(), is(0));
+        assertThat(clientState.standbyTasks(), is(empty()));
+        assertThat(clientState.assignedTaskCount(), is(0));
+        assertThat(clientState.assignedTasks(), is(empty()));
+
+        // and the "previous assignment" fields should match the constructor args
+        assertThat(clientState.prevActiveTasks(), is(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(clientState.prevStandbyTasks(), is(mkSet(TASK_0_2, TASK_0_3)));
+        assertThat(clientState.previousAssignedTasks(), is(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(clientState.capacity(), is(4));
+        assertThat(clientState.lagFor(TASK_0_0), is(5L));
+        assertThat(clientState.lagFor(TASK_0_2), is(-1L));
+    }
 
     @Test
     public void shouldHaveNotReachedCapacityWhenAssignedTasksLessThanCapacity() {

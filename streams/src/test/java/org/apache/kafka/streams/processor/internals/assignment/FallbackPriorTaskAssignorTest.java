@@ -38,7 +38,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
-public class PriorTaskAssignorTest {
+public class FallbackPriorTaskAssignorTest {
 
     private final Map<UUID, ClientState> clients = new TreeMap<>();
 
@@ -49,13 +49,13 @@ public class PriorTaskAssignorTest {
 
         final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2);
         Collections.shuffle(taskIds);
-        final boolean followupRebalanceNeeded = new PriorTaskAssignor().assign(
+        final boolean followupRebalanceNeeded = new FallbackPriorTaskAssignor().assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
             new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, 0, 0L)
         );
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(followupRebalanceNeeded, is(true));
 
         assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(c2.activeTasks(), empty());
