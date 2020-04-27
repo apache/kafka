@@ -3084,10 +3084,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     // if the controller hasn't been upgraded to use KIP-380
     if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
     else {
-      val curBrokerEpoch = controller.brokerEpoch
-      if (brokerEpochInRequest < curBrokerEpoch) true
-      else if (brokerEpochInRequest == curBrokerEpoch) false
-      else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
+      // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified
+      // about the new broker epoch and sends a control request with this epoch before the broker learns about it
+      brokerEpochInRequest < controller.brokerEpoch
     }
   }
 
