@@ -1743,7 +1743,7 @@ class KafkaApisTest {
       .asInstanceOf[AlterReplicaLogDirsResponse]
     assertEquals(partitionResults, response.data.results.asScala.flatMap { tr =>
       tr.partitions().asScala.map { pr =>
-        new TopicPartition(tr.topicName(), pr.partitionIndex()) -> Errors.forCode(pr.errorCode())
+        new TopicPartition(tr.topicName, pr.partitionIndex) -> Errors.forCode(pr.errorCode)
       }
     }.toMap)
     assertEquals(Map(Errors.NONE -> 1,
