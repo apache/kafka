@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -890,11 +891,11 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionOnEmptyTopology() {
+    public void shouldThrowTopologyExceptionOnEmptyTopology() {
         try {
             new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-            fail("Should have thrown IllegalArgumentException");
-        } catch (final IllegalArgumentException e) {
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException e) {
             assertThat(e.getMessage(), equalTo("Topology has no stream threads and no global threads"));
         }
     }

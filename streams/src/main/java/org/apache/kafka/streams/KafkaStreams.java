@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
@@ -719,7 +720,7 @@ public class KafkaStreams implements AutoCloseable {
 
         if (numStreamThreads == 0 && !hasGlobalTopology) {
             log.error("Must subscribe to at least one source topic or global table");
-            throw new IllegalArgumentException("Topology has no stream threads and no global threads");
+            throw new TopologyException("Topology has no stream threads and no global threads");
         }
 
         long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
