@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
+import scala.language.postfixOps
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}

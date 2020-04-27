@@ -641,6 +641,16 @@ public class QueryableStateIntegrationTest {
             windowStoreName,
             streamsConfiguration);
 
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamConcurrent,
+            Collections.singleton(new KeyValue<>(null, "first")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
         startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         producerThread.start();
