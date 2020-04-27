@@ -117,19 +117,20 @@ public class WindowStoreBuilderTest {
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldDisableCachingWithRetainDuplicates() {
         supplier = Stores.persistentWindowStore("name", Duration.ofMillis(10L), Duration.ofMillis(10L), true);
-        StoreBuilder<WindowStore<String, String>> builder = new WindowStoreBuilder<>(
+        final StoreBuilder<WindowStore<String, String>> builder = new WindowStoreBuilder<>(
             supplier,
             Serdes.String(),
             Serdes.String(),
-            new MockTime())
-        .withCachingEnabled();
+            new MockTime()
+        ).withCachingEnabled();
         
         builder.build();
 
-        assertFalse(((AbstractStoreBuilder<String, String, WindowStore<String, String>>)builder).enableCaching);
+        assertFalse(((AbstractStoreBuilder<String, String, WindowStore<String, String>>) builder).enableCaching);
     }
 
     @SuppressWarnings("all")
