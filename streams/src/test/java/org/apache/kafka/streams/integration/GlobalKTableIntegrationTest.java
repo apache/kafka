@@ -120,7 +120,7 @@ public class GlobalKTableIntegrationTest {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
-        startStreamsAndWaitUntilRunning();
+        startStreams();
         long firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
@@ -188,7 +188,7 @@ public class GlobalKTableIntegrationTest {
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
-        startStreamsAndWaitUntilRunning();
+        startStreams();
         long firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
@@ -260,7 +260,7 @@ public class GlobalKTableIntegrationTest {
 
         produceInitialGlobalTableValues();
 
-        startStreamsAndWaitUntilRunning();
+        startStreams();
 
         ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
         assertThat(store.approximateNumEntries(), equalTo(4L));
@@ -269,12 +269,26 @@ public class GlobalKTableIntegrationTest {
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
         kafkaStreams.close();
 
-        startStreamsAndWaitUntilRunning();
+        startStreams();
 
         store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
         assertThat(store.approximateNumEntries(), equalTo(4L));
         timestampedStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
+    }
+
+    @Test
+    public void shouldGetToRunningWithOnlyGlobalTopology() throws Exception {
+        builder = new StreamsBuilder();
+        globalTable = builder.globalTable(
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore(globalStore)));
+
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+
+        kafkaStreams.close();
     }
 
     private void createTopics() throws Exception {
@@ -284,10 +298,9 @@ public class GlobalKTableIntegrationTest {
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
     
-    private void startStreamsAndWaitUntilRunning() throws InterruptedException {
+    private void startStreams() throws InterruptedException {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
-        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
     }
 
     private void produceTopicValues(final String topic) throws Exception {
