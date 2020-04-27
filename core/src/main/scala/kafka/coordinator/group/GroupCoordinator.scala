@@ -126,7 +126,7 @@ class GroupCoordinator(val brokerId: Int,
 
   /**
    * Verify if the group has space to accept the joining member. The various
-   * criteria are explained bellow.
+   * criteria are explained below.
    */
   private def acceptJoiningMember(group: GroupMetadata, member: String): Boolean = {
     group.currentState match {
@@ -145,7 +145,7 @@ class GroupCoordinator(val brokerId: Int,
         (group.has(member) && group.get(member).isAwaitingJoin) ||
           group.numAwaiting < groupConfig.groupMaxSize
 
-      // A existing member is accepted. New members are accepted up to the max group size.
+      // An existing member is accepted. New members are accepted up to the max group size.
       // Note that the group size is used here. When the group transitions to CompletingRebalance,
       // members which haven't rejoined are removed.
       case CompletingRebalance | Stable =>
