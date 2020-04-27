@@ -350,18 +350,20 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 2);
         createClient(UUID_1, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0,
-                                                       TASK_0_1,
-                                                       TASK_0_2,
-                                                       new TaskId(1, 0),
-                                                       new TaskId(1, 1),
-                                                       new TaskId(1, 2),
-                                                       new TaskId(2, 0),
-                                                       new TaskId(2, 1),
-                                                       new TaskId(2, 2),
-                                                       new TaskId(3, 0),
-                                                       new TaskId(3, 1),
-                                                       new TaskId(3, 2));
+        final boolean followupRebalanceNeeded = assign(
+            TASK_0_0,
+            TASK_0_1,
+            TASK_0_2,
+            new TaskId(1, 0),
+            new TaskId(1, 1),
+            new TaskId(1, 2),
+            new TaskId(2, 0),
+            new TaskId(2, 1),
+            new TaskId(2, 2),
+            new TaskId(3, 0),
+            new TaskId(3, 1),
+            new TaskId(3, 2)
+        );
 
         assertThat(followupRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(8));
