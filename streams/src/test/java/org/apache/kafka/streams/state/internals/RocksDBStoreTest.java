@@ -47,8 +47,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
-import org.rocksdb.Filter;
 import org.rocksdb.Cache;
+import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.Statistics;
@@ -61,8 +61,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
@@ -143,7 +143,7 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsDebug() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
         reset(metricsRecorder);
         metricsRecorder.addStatistics(
@@ -152,9 +152,10 @@ public class RocksDBStoreTest {
         );
         replay(metricsRecorder);
 
-        store.openDB(context);
+        rocksDBStore.openDB(context);
 
         verify(metricsRecorder);
+        reset(metricsRecorder);
     }
 
     @Test
@@ -172,13 +173,15 @@ public class RocksDBStoreTest {
     @Test
     public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsDebug() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.DEBUG);
-        rocksDBStore.openDB(context);
-        reset(metricsRecorder);
-        metricsRecorder.removeStatistics(DB_NAME);
-        replay(metricsRecorder);
-
-        rocksDBStore.close();
+        try {
+            context = getProcessorContext(RecordingLevel.DEBUG);
+            rocksDBStore.openDB(context);
+            reset(metricsRecorder);
+            metricsRecorder.removeStatistics(DB_NAME);
+            replay(metricsRecorder);
+        } finally {
+            rocksDBStore.close();
+        }
 
         verify(metricsRecorder);
     }
@@ -186,12 +189,14 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.INFO);
-        rocksDBStore.openDB(context);
-        reset(metricsRecorder);
-        replay(metricsRecorder);
-
-        rocksDBStore.close();
+        try {
+            context = getProcessorContext(RecordingLevel.INFO);
+            rocksDBStore.openDB(context);
+            reset(metricsRecorder);
+            replay(metricsRecorder);
+        } finally {
+            rocksDBStore.close();
+        }
 
         verify(metricsRecorder);
     }

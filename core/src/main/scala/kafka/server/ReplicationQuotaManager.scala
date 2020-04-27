@@ -133,7 +133,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long): Unit = {
-    sensor().record(value, time.milliseconds(), false)
+    sensor().record(value.toDouble, time.milliseconds(), false)
   }
 
   /**

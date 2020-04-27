@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorC
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -45,6 +45,7 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -102,12 +103,19 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed);
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(
+                    topic,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
             inputTopic.pipeInput(null, "value");
-            LogCaptureAppender.unregister(appender);
 
             if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 assertEquals(
@@ -115,7 +123,11 @@ public class KTableSourceTest {
                     getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
                 );
             }
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
+            );
         }
     }
 
@@ -126,15 +138,29 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed);
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            inputTopic.pipeInput(null, "value");
-            LogCaptureAppender.unregister(appender);
 
-            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    topic,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
+            inputTopic.pipeInput(null, "value");
+
+            assertThat(
+                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue(),
+                equalTo(1.0)
+            );
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
+            );
         }
     }
 
@@ -155,7 +181,13 @@ public class KTableSourceTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(
+                    topic1,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table1.name)));
 
@@ -180,8 +212,8 @@ public class KTableSourceTest {
             assertEquals(ValueAndTimestamp.make("02", 5L), getter1.get("B"));
             assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
 
-            inputTopic1.pipeInput("A", (String) null, 50L);
-            inputTopic1.pipeInput("B", (String) null, 3L);
+            inputTopic1.pipeInput("A", null, 50L);
+            inputTopic1.pipeInput("B", null, 3L);
 
             assertNull(getter1.get("A"));
             assertNull(getter1.get("B"));
@@ -195,35 +227,50 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         @SuppressWarnings("unchecked")
-        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(
+                    topic1,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
             final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);
             inputTopic1.pipeInput("C", "01", 15L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
                 new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
-                new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
+                new KeyValueTimestamp<>("C", new Change<>("01", null), 15)
+            );
 
             inputTopic1.pipeInput("A", "02", 8L);
             inputTopic1.pipeInput("B", "02", 22L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", null), 8),
-                new KeyValueTimestamp<>("B", new Change<>("02", null), 22));
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("02", null), 8),
+                new KeyValueTimestamp<>("B", new Change<>("02", null), 22)
+            );
 
             inputTopic1.pipeInput("A", "03", 12L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", null), 12));
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("03", null), 12)
+            );
 
-            inputTopic1.pipeInput("A", (String) null, 15L);
-            inputTopic1.pipeInput("B", (String) null, 20L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 15),
-                new KeyValueTimestamp<>("B", new Change<>(null, null), 20));
+            inputTopic1.pipeInput("A", null, 15L);
+            inputTopic1.pipeInput("B", null, 20L);
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(null, null), 20)
+            );
         }
     }
 
@@ -233,7 +280,8 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         @SuppressWarnings("unchecked")
-        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
         table1.enableSendingOldValues();
         assertTrue(table1.sendingOldValueEnabled());
 
@@ -242,28 +290,42 @@ public class KTableSourceTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(
+                    topic1,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
             final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);
             inputTopic1.pipeInput("C", "01", 15L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
                 new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
-                new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
+                new KeyValueTimestamp<>("C", new Change<>("01", null), 15)
+            );
 
             inputTopic1.pipeInput("A", "02", 8L);
             inputTopic1.pipeInput("B", "02", 22L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", "01"), 8),
-                new KeyValueTimestamp<>("B", new Change<>("02", "01"), 22));
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("02", "01"), 8),
+                new KeyValueTimestamp<>("B", new Change<>("02", "01"), 22)
+            );
 
             inputTopic1.pipeInput("A", "03", 12L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", "02"), 12));
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>("03", "02"), 12)
+            );
 
-            inputTopic1.pipeInput("A", (String) null, 15L);
-            inputTopic1.pipeInput("B", (String) null, 20L);
-            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, "03"), 15),
-                new KeyValueTimestamp<>("B", new Change<>(null, "02"), 20));
+            inputTopic1.pipeInput("A", null, 15L);
+            inputTopic1.pipeInput("B", null, 20L);
+            proc1.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, "03"), 15),
+                new KeyValueTimestamp<>("B", new Change<>(null, "02"), 20)
+            );
         }
     }
 }

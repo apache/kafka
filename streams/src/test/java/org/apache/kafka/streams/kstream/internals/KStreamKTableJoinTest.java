@@ -52,7 +52,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
+    private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
@@ -205,24 +205,25 @@ public class KStreamKTableJoinTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullLeftKey(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        driver = new TopologyTestDriver(builder.build(), props);
-        final TestInputTopic<Integer, String> inputTopic =
-            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(null, "A");
-        LogCaptureAppender.unregister(appender);
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-            );
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            driver = new TopologyTestDriver(builder.build(), props);
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(null, "A");
+
+            if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+                assertEquals(
+                    1.0,
+                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
+                    + "offset=[0]"));
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
-                + "offset=[0]"));
     }
 
     @Test
@@ -236,13 +237,21 @@ public class KStreamKTableJoinTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
+
         driver = new TopologyTestDriver(builder.build(), props);
         final TestInputTopic<Integer, String> inputTopic =
             driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(1, null);
-        LogCaptureAppender.unregister(appender);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            inputTopic.pipeInput(1, null);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
+                    + "offset=[0]")
+            );
+        }
 
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertEquals(
@@ -250,10 +259,5 @@ public class KStreamKTableJoinTest {
                 getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
-                + "offset=[0]")
-        );
     }
 }

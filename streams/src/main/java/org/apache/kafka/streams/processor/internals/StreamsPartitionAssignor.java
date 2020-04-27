@@ -861,7 +861,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final int minSupportedMetadataVersion,
                                                          final boolean shouldTriggerProbingRebalance) {
         // keep track of whether a 2nd rebalance is unavoidable so we can skip trying to get a completely sticky assignment
-        boolean rebalanceRequired = false;
+        boolean rebalanceRequired = shouldTriggerProbingRebalance;
         final Map<String, Assignment> assignment = new HashMap<>();
 
         // within the client, distribute tasks to its owned consumers

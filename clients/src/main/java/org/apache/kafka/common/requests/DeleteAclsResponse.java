@@ -69,7 +69,7 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(filterResults().stream().map(r -> Errors.forCode(r.errorCode())).collect(Collectors.toList()));
+        return errorCounts(filterResults().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
     public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {

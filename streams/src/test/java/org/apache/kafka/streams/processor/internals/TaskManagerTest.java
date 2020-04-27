@@ -58,7 +58,6 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -210,7 +209,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldTryToLockValidTaskDirsAtRebalanceStart() throws IOException {
+    public void shouldTryToLockValidTaskDirsAtRebalanceStart() throws Exception {
         expectLockObtainedFor(taskId01);
         expectLockFailedFor(taskId10);
 
@@ -227,7 +226,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws IOException {
+    public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
         expectUnlockFor(taskId02);
 
@@ -252,7 +251,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws IOException {
+    public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         expectLockObtainedFor(taskId00);
@@ -266,7 +265,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForNonRunningActiveTask() throws IOException {
+    public void shouldComputeOffsetSumForNonRunningActiveTask() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), 5L),
             mkEntry(new TopicPartition("changelog", 1), 10L)
@@ -289,7 +288,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForStandbyTask() throws IOException {
+    public void shouldComputeOffsetSumForStandbyTask() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), 5L),
             mkEntry(new TopicPartition("changelog", 1), 10L)
@@ -312,7 +311,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws IOException {
+    public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), 5L),
             mkEntry(new TopicPartition("changelog", 1), 10L)
@@ -330,7 +329,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotReportOffsetSumsForTaskWeCantLock() throws IOException {
+    public void shouldNotReportOffsetSumsForTaskWeCantLock() throws Exception {
         expectLockFailedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
@@ -341,7 +340,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws IOException {
+    public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
@@ -353,7 +352,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws IOException {
+    public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws Exception {
         final long largeOffset = Long.MAX_VALUE / 2;
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 1), largeOffset),
@@ -439,7 +438,10 @@ public class TaskManagerTest {
         );
 
         assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(thrown.getMessage(), is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows."));
+        assertThat(
+            thrown.getMessage(),
+            is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows.")
+        );
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
     }
 
@@ -479,7 +481,8 @@ public class TaskManagerTest {
         expectLastCall();
         replay(activeTaskCreator);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST);
         taskManager = new TaskManager(
             changeLogReader,
             UUID.randomUUID(),
@@ -529,7 +532,10 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
-        assertThat(thrown.getMessage(), is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows."));
+        assertThat(
+            thrown.getMessage(),
+            is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows.")
+        );
         assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
     }
@@ -1659,7 +1665,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws IOException {
+    public void shouldNotCommitActiveAndStandbyTasksWhileRebalanceInProgress() throws Exception {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
@@ -2196,8 +2202,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldHaveRemainingPartitionsUncleared() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets);
@@ -2208,18 +2212,24 @@ public class TaskManagerTest {
         expectLastCall();
 
         replay(activeTaskCreator, consumer, changeLogReader);
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
 
-        taskManager.handleRevocation(mkSet(t1p0, new TopicPartition("unknown", 0)));
-        assertThat(task00.state(), is(Task.State.SUSPENDED));
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            taskManager.handleAssignment(taskId00Assignment, emptyMap());
+            assertThat(taskManager.tryToCompleteRestoration(), is(true));
+            assertThat(task00.state(), is(Task.State.RUNNING));
 
-        final List<String> messages = appender.getMessages();
-        assertThat(messages, hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
-                                         "from the task partitions. It could potentially due to race " +
-                                         "condition of consumer detecting the heartbeat failure, or the " +
-                                         "tasks have been cleaned up by the handleAssignment callback."));
+            taskManager.handleRevocation(mkSet(t1p0, new TopicPartition("unknown", 0)));
+            assertThat(task00.state(), is(Task.State.SUSPENDED));
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
+                    "from the task partitions. It could potentially due to race " +
+                    "condition of consumer detecting the heartbeat failure, or the " +
+                    "tasks have been cleaned up by the handleAssignment callback.")
+            );
+        }
     }
 
     @Test
@@ -2246,7 +2256,10 @@ public class TaskManagerTest {
         );
         // The task map orders tasks based on topic group id and partition, so here
         // t1 should always be the first.
-        assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated.")
+        );
     }
 
     @Test
@@ -2373,19 +2386,19 @@ public class TaskManagerTest {
         return allTasks;
     }
 
-    private void expectLockObtainedFor(final TaskId... tasks) throws IOException {
+    private void expectLockObtainedFor(final TaskId... tasks) throws Exception {
         for (final TaskId task : tasks) {
             expect(stateDirectory.lock(task)).andReturn(true).once();
         }
     }
 
-    private void expectLockFailedFor(final TaskId... tasks) throws IOException {
+    private void expectLockFailedFor(final TaskId... tasks) throws Exception {
         for (final TaskId task : tasks) {
             expect(stateDirectory.lock(task)).andReturn(false).once();
         }
     }
 
-    private void expectUnlockFor(final TaskId... tasks) throws IOException {
+    private void expectUnlockFor(final TaskId... tasks) throws Exception {
         for (final TaskId task : tasks) {
             stateDirectory.unlock(task);
             expectLastCall();
@@ -2416,7 +2429,11 @@ public class TaskManagerTest {
         );
 
         assertThat(thrown.getCause(), instanceOf(CommitFailedException.class));
-        assertThat(thrown.getMessage(), equalTo("Consumer committing offsets failed, indicating the corresponding thread is no longer part of the group; it means all tasks belonging to this thread should be migrated."));
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Consumer committing offsets failed, indicating the corresponding thread is no longer part of the group;" +
+                " it means all tasks belonging to this thread should be migrated.")
+        );
         assertThat(task01.state(), is(Task.State.CREATED));
     }
 
@@ -2533,7 +2550,7 @@ public class TaskManagerTest {
         return futureDeletedRecords;
     }
 
-    private void makeTaskFolders(final String... names) throws IOException {
+    private void makeTaskFolders(final String... names) throws Exception {
         final File[] taskFolders = new File[names.length];
         for (int i = 0; i < names.length; ++i) {
             taskFolders[i] = testFolder.newFolder(names[i]);
@@ -2541,7 +2558,7 @@ public class TaskManagerTest {
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
     }
 
-    private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws IOException {
+    private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
         assertThat(checkpointFile.createNewFile(), is(true));
         new OffsetCheckpoint(checkpointFile).write(offsets);
@@ -2564,7 +2581,7 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
-        private Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
+        private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
                          final Set<TopicPartition> partitions,

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.hamcrest.MatcherAssert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Map;
@@ -266,7 +265,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void droppingNodesShouldConverge() {
         final int numStatelessTasks = 15;
@@ -290,7 +288,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void randomClusterPerturbationsShouldConverge() {
         // do as many tests as we can in 10 seconds
