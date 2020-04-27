@@ -908,10 +908,6 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  private def nowNanosSupplier = new Supplier[java.lang.Long] {
-    override def get(): java.lang.Long = time.nanoseconds()
-  }
-
   private def poll(): Unit = {
     val pollTimeout = if (newConnections.isEmpty) 300 else 0
     try selector.poll(pollTimeout)
@@ -929,7 +925,8 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
+            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
+              () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")
             else {
               val nowNanos = time.nanoseconds()
