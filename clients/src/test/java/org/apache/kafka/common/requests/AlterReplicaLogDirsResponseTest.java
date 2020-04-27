@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 public class AlterReplicaLogDirsResponseTest {
 
     @Test
-    public void testErrorResponse() {
+    public void testErrorCounts() {
         AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData()
                 .setResults(asList(
                         new AlterReplicaLogDirTopicResult()

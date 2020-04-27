@@ -3398,11 +3398,11 @@ public class KafkaAdminClientTest {
             TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
 
             Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
-            assertNull(logDirs.put(tpr0, "/data0"));
-            assertNull(logDirs.put(tpr1, "/data1"));
+            logDirs.put(tpr0, "/data0");
+            logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
-            result.values().get(tpr0).get();
-            result.values().get(tpr1).get();
+            assertNull(result.values().get(tpr0).get());
+            assertNull(result.values().get(tpr1).get());
         }
     }
 
@@ -3427,17 +3427,14 @@ public class KafkaAdminClientTest {
     @Test
     public void testAlterReplicaLogDirsUnrequested() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
-            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.NONE, 1, 2);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 1, 2);
 
-            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 1, 0);
 
             Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
             logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
-            // alterReplicaLogDirs() error handling fails all futures, but some of them may already be completed
-            // so we can't make a reliable assertion about result.values().get(tpr0)
-            TestUtils.assertFutureError(result.values().get(tpr1), IllegalStateException.class);
+            assertNull(result.values().get(tpr1).get());
         }
     }
 
