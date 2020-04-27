@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import java.io.{File, FileInputStream, FileNotFoundException}
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 
@@ -250,15 +249,7 @@ object ConfigCommand extends Config {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
-      val inputStream = try new FileInputStream(file) catch {
-        case _: FileNotFoundException =>
-          throw new IllegalArgumentException(s"No such file: $file")
-      }
-      try {
-        props.load(inputStream)
-      } finally {
-        inputStream.close()
-      }
+      props.putAll(Utils.loadProps(file))
     }
     if (opts.options.has(opts.addConfig)) {
       // Split list by commas, but avoid those in [], then into KV pairs
@@ -660,7 +651,7 @@ object ConfigCommand extends Config {
             .ofType(classOf[String])
     val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
             .withRequiredArg
-            .ofType(classOf[File])
+            .ofType(classOf[String])
     val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
             .withRequiredArg
             .ofType(classOf[String])

@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import java.io.{File, FileWriter}
 import java.util
 import java.util.Properties
 
@@ -36,13 +35,14 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.test.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
 import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -262,11 +262,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         |nested = [[1, 2], [3, 4]]
         |""".stripMargin
 
-    val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
-    file.deleteOnExit()
-    val writer = new FileWriter(file)
-    writer.write(fileContents)
-    writer.close()
+    val file = TestUtils.tempFile(fileContents)
 
     val addConfigFileArgs = Array("--add-config-file", file.getPath)
 
@@ -495,11 +491,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     var filePath = ""
     val addedConfigs = Seq("delete.retention.ms=1000000", "min.insync.replicas=2")
     if (file) {
-      val file = File.createTempFile("testParseConfigsToBeAddedForAddConfigFile", ".properties")
-      file.deleteOnExit()
-      val writer = new FileWriter(file)
-      writer.write(addedConfigs.mkString("\n"))
-      writer.close()
+      val file = TestUtils.tempFile(addedConfigs.mkString("\n"))
       filePath = file.getPath
     }
 
