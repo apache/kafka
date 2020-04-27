@@ -237,6 +237,206 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def testDynamicMembersJoinGroupWithMaxSizeAndRequiredKnownMember(): Unit = {
+    val requiredKnownMemberId = true
+    val nbMembers = GroupMaxSize + 1
+
+    // First JoinRequests
+    var futures = 1.to(nbMembers).map { _ =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Get back the assigned member ids
+    val memberIds = futures.map(await(_, 1).memberId)
+
+    // Second JoinRequests
+    futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    // advance clock by GroupInitialRebalanceDelay to complete second InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+
+    // Awaiting results
+    val errors = futures.map(await(_, DefaultRebalanceTimeout + 1).error)
+
+    assertEquals(GroupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(nbMembers-GroupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
+
+    // Members which were accepted can rejoin, others are rejected, while
+    // completing rebalance
+    futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Awaiting results
+    val rejoinErrors = futures.map(await(_, 1).error)
+
+    assertEquals(errors, rejoinErrors)
+  }
+
+  @Test
+  def testDynamicMembersJoinGroupWithMaxSize(): Unit = {
+    val requiredKnownMemberId = false
+    val nbMembers = GroupMaxSize + 1
+
+    // JoinRequests
+    var futures = 1.to(nbMembers).map { _ =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    // advance clock by GroupInitialRebalanceDelay to complete second InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+
+    // Awaiting results
+    val joinGroupResults = futures.map(await(_, DefaultRebalanceTimeout + 1))
+    val errors = joinGroupResults.map(_.error)
+
+    assertEquals(GroupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(nbMembers-GroupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
+
+    // Members which were accepted can rejoin, others are rejected, while
+    // completing rebalance
+    val memberIds = joinGroupResults.map(_.memberId)
+    futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Awaiting results
+    val rejoinErrors = futures.map(await(_, 1).error)
+
+    assertEquals(errors, rejoinErrors)
+  }
+
+  @Test
+  def testStaticMembersJoinGroupWithMaxSize(): Unit = {
+    val nbMembers = GroupMaxSize + 1
+    val instanceIds = 1.to(nbMembers).map(i => Some(s"instance-id-$i"))
+
+    // JoinRequests
+    var futures = instanceIds.map { instanceId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        instanceId, DefaultSessionTimeout, DefaultRebalanceTimeout)
+    }
+
+    // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    // advance clock by GroupInitialRebalanceDelay to complete second InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+
+    // Awaiting results
+    val joinGroupResults = futures.map(await(_, DefaultRebalanceTimeout + 1))
+    val errors = joinGroupResults.map(_.error)
+
+    assertEquals(GroupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(nbMembers-GroupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
+
+    // Members which were accepted can rejoin, others are rejected, while
+    // completing rebalance
+    val memberIds = joinGroupResults.map(_.memberId)
+    futures = instanceIds.zip(memberIds).map { case (instanceId, memberId) =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        instanceId, DefaultSessionTimeout, DefaultRebalanceTimeout)
+    }
+
+    // Awaiting results
+    val rejoinErrors = futures.map(await(_, 1).error)
+
+    assertEquals(errors, rejoinErrors)
+  }
+
+  @Test
+  def testDynamicMembersCanReJoinGroupWithMaxSizeWhileRebalancing(): Unit = {
+    val requiredKnownMemberId = true
+    val nbMembers = GroupMaxSize + 1
+
+    // First JoinRequests
+    var futures = 1.to(nbMembers).map { _ =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Get back the assigned member ids
+    val memberIds = futures.map(await(_, 1).memberId)
+
+    // Second JoinRequests
+    memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Members can rejoin while rebalancing
+    futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    // advance clock by GroupInitialRebalanceDelay to complete second InitialDelayedJoin
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+
+    // Awaiting results
+    val errors = futures.map(await(_, DefaultRebalanceTimeout + 1).error)
+
+    assertEquals(GroupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(nbMembers-GroupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
+  }
+
+  @Test
+  def testLastJoiningMembersAreKickedOutWhenReJoiningGroupWithMaxSize(): Unit = {
+    val nbMembers = GroupMaxSize + 2
+    val group = new GroupMetadata(groupId, Stable, new MockTime())
+    val memberIds = 1.to(nbMembers).map(_ => group.generateMemberId(ClientId, None))
+
+    memberIds.foreach { memberId =>
+      group.add(new MemberMetadata(memberId, groupId, None, ClientId, ClientHost,
+        DefaultRebalanceTimeout, GroupMaxSessionTimeout, protocolType, protocols))
+    }
+    groupCoordinator.groupManager.addGroup(group)
+
+    groupCoordinator.prepareRebalance(group, "")
+
+    val futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, GroupMaxSessionTimeout, DefaultRebalanceTimeout)
+    }
+
+    // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+
+    // Awaiting results
+    val errors = futures.map(await(_, DefaultRebalanceTimeout + 1).error)
+
+    assertEquals(Set(Errors.NONE), errors.take(GroupMaxSize).toSet)
+    assertEquals(Set(Errors.GROUP_MAX_SIZE_REACHED), errors.drop(GroupMaxSize).toSet)
+
+    memberIds.drop(GroupMaxSize).foreach { memberId =>
+      assertFalse(group.has(memberId))
+    }
+  }
+
+  @Test
   def testJoinGroupSessionTimeoutTooSmall(): Unit = {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
