@@ -30,17 +30,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import static java.lang.String.format;
-import static java.nio.ByteBuffer.wrap;
-import static java.util.Arrays.asList;
-import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -61,6 +50,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import static java.lang.String.format;
+import static java.nio.ByteBuffer.wrap;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public final class LocalTieredStorageTest {
     @Rule
@@ -91,7 +91,7 @@ public final class LocalTieredStorageTest {
 
     @After
     public void after() {
-        tieredStorage.close();
+        tieredStorage.clear();
         localLogSegments.deleteAll();
     }
 

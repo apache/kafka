@@ -19,8 +19,6 @@ package org.apache.kafka.common.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType;
 
-import static java.lang.String.format;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static java.lang.String.format;
 
 /**
  * A capture of the content of the local tiered storage at a point in time.

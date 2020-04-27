@@ -19,6 +19,13 @@ package org.apache.kafka.common.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
@@ -27,13 +34,6 @@ import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.deleteFilesOnly;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.deleteQuietly;
 import static org.slf4j.LoggerFactory.getLogger;
-
-import java.io.File;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Represents a topic-partition directory in the local tiered storage under which filesets for

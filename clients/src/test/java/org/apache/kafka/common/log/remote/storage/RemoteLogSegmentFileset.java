@@ -20,6 +20,18 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
@@ -33,18 +45,6 @@ import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.getFileType;
 import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openTopicPartitionDirectory;
 import static org.slf4j.LoggerFactory.getLogger;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Represents the set of files offloaded to the local tiered storage for a single log segment.
@@ -94,8 +94,8 @@ public final class RemoteLogSegmentFileset {
             try {
                 return RemoteLogSegmentFileType.valueOf(filename.substring(1 + separatorIndex).toUpperCase());
 
-            } catch (final EnumConstantNotPresentException e) {
-                throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename));
+            } catch (final RuntimeException e) {
+                throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename), e);
             }
         }
 
@@ -115,6 +115,10 @@ public final class RemoteLogSegmentFileset {
     }
 
     private static final Logger LOGGER = getLogger(RemoteLogSegmentFileset.class);
+
+    private final RemoteTopicPartitionDirectory partitionDirectory;
+    private final RemoteLogSegmentId remoteLogSegmentId;
+    private final Map<RemoteLogSegmentFileType, File> files;
 
     /**
      * Creates a new fileset located under the given storage directory for the provided remote log segment id.
@@ -162,18 +166,6 @@ public final class RemoteLogSegmentFileset {
         return new RemoteLogSegmentFileset(tpDirectory, id, files);
     }
 
-    private final RemoteTopicPartitionDirectory partitionDirectory;
-    private final RemoteLogSegmentId remoteLogSegmentId;
-    private final Map<RemoteLogSegmentFileType, File> files;
-
-    RemoteLogSegmentFileset(final RemoteTopicPartitionDirectory topicPartitionDirectory,
-                            final RemoteLogSegmentId remoteLogSegmentId,
-                            final Map<RemoteLogSegmentFileType, File> files) {
-
-        this.partitionDirectory = requireNonNull(topicPartitionDirectory);
-        this.remoteLogSegmentId = requireNonNull(remoteLogSegmentId);
-        this.files = unmodifiableMap(files);
-    }
 
     public RemoteTopicPartitionDirectory getPartitionDirectory() {
         return partitionDirectory;
@@ -224,5 +216,14 @@ public final class RemoteLogSegmentFileset {
         }
 
         return false;
+    }
+
+    RemoteLogSegmentFileset(final RemoteTopicPartitionDirectory topicPartitionDirectory,
+                            final RemoteLogSegmentId remoteLogSegmentId,
+                            final Map<RemoteLogSegmentFileType, File> files) {
+
+        this.partitionDirectory = requireNonNull(topicPartitionDirectory);
+        this.remoteLogSegmentId = requireNonNull(remoteLogSegmentId);
+        this.files = unmodifiableMap(files);
     }
 }

@@ -669,6 +669,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
 
+        // Close remote log manager before stopping processing requests, to give a change to any
+        // of its underlying clients (especially in the remote metadata manager) to close gracefully.
+        remoteLogManager.foreach(x => CoreUtils.swallow(x.close(), this))
+
         // Stop socket server to stop accepting any more connections and requests.
         // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
@@ -695,8 +699,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (tokenManager != null)
           CoreUtils.swallow(tokenManager.shutdown(), this)
-
-        remoteLogManager.foreach(x => CoreUtils.swallow(x.close(), this))
 
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)

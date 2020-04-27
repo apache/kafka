@@ -135,6 +135,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     rlmConfig.remoteStorageConfig.foreach { case (k, v) => rsmProps.put(k, v) }
     rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
     rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
+    rsmProps.put(KafkaConfig.BrokerIdProp, brokerId)
     rsmWrapper.configure(rsmProps)
     rsmWrapper
   }
@@ -276,7 +277,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
-    this.logIdent = s"[RLMTask partition:$tp ] "
+    this.logIdent = s"[RemoteLogManager=$brokerId partition=$tp ] "
     @volatile private var leaderEpoch: Int = -1
 
     private def isLeader(): Boolean = leaderEpoch >= 0
