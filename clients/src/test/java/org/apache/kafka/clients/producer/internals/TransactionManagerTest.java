@@ -1539,19 +1539,32 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testProducerFencedException() throws InterruptedException {
-        doInitTransactions();
+    public void testProducerFencedExceptionInInitProducerId() {
+        verifyProducerFencedForInitProducerId(Errors.PRODUCER_FENCED);
+    }
 
-        transactionManager.beginTransaction();
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(tp0);
+    @Test
+    public void testInvalidProducerEpochConvertToProducerFencedInInitProducerId() {
+        verifyProducerFencedForInitProducerId(Errors.INVALID_PRODUCER_EPOCH);
+    }
 
-        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+    private void verifyProducerFencedForInitProducerId(Errors error) {
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxnResponse(Errors.PRODUCER_FENCED, tp0, epoch, producerId);
+        prepareInitPidResponse(error, false, producerId, epoch);
 
-        verifyProducerFenced(responseFuture);
+        runUntil(transactionManager::hasError);
+
+        assertEquals(ProducerFencedException.class, result.error().getClass());
+
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
+            Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
     }
 
     @Test
