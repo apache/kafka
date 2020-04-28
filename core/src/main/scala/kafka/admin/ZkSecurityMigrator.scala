@@ -31,7 +31,6 @@ import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._

@@ -22,7 +22,6 @@ import java.io.File
 import scala.collection.Seq
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.language.postfixOps
 import ExecutionContext.Implicits._
 
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
