@@ -76,8 +76,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 1);
         createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         for (final ClientState clientState : clients.values()) {
             assertThat(clientState.activeTaskCount(), equalTo(1));
@@ -90,8 +90,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 2);
         createClient(UUID_3, 2);
 
-        final boolean followupRebalanceNeeded = assign(TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
@@ -102,8 +102,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 2);
         createClient(UUID_3, 2);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
@@ -138,9 +138,9 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
         createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
         assertThat(clients.get(UUID_1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(UUID_3).activeTasks().size(), equalTo(1));
@@ -151,9 +151,9 @@ public class StickyTaskAssignorTest {
     public void shouldAssignBasedOnCapacity() {
         createClient(UUID_1, 1);
         createClient(UUID_2, 2);
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(UUID_2).activeTasks().size(), equalTo(2));
     }
@@ -212,9 +212,9 @@ public class StickyTaskAssignorTest {
         final ClientState client3 = createClient(UUID_3, 1);
         client3.addPreviousStandbyTasks(mkSet(TASK_0_0));
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).activeTasks(), equalTo(singleton(TASK_0_2)));
         assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
@@ -228,9 +228,9 @@ public class StickyTaskAssignorTest {
         final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 2, TASK_0_2);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1));
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
         assertThat(clients.get(UUID_2).activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_1)));
@@ -243,8 +243,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(UUID_4, 1, TASK_0_3);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
 
         assertThat(clients.get(UUID_1).standbyTasks(), not(hasItems(TASK_0_0)));
@@ -271,8 +271,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_2);
 
-        final boolean followupRebalanceNeeded = assign(2, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(2, TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertThat(clients.get(UUID_2).standbyTasks(), equalTo(mkSet(TASK_0_2, TASK_0_0)));
@@ -282,8 +282,8 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
         createClient(UUID_1, 1);
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0);
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_1).standbyTasks().size(), equalTo(0));
     }
 
@@ -293,8 +293,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 1);
         createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
@@ -306,8 +306,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 1);
         createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(1));
@@ -322,8 +322,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_5, 1);
         createClient(UUID_6, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
@@ -337,8 +337,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_5, 1);
         createClient(UUID_6, 1);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
+        assertThat(probingRebalanceNeeded, is(false));
 
         for (final ClientState clientState : clients.values()) {
             assertThat(clientState.assignedTaskCount(), equalTo(1));
@@ -350,7 +350,7 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 2);
         createClient(UUID_1, 1);
 
-        final boolean followupRebalanceNeeded = assign(
+        final boolean probingRebalanceNeeded = assign(
             TASK_0_0,
             TASK_0_1,
             TASK_0_2,
@@ -365,7 +365,7 @@ public class StickyTaskAssignorTest {
             new TaskId(3, 2)
         );
 
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(8));
         assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(4));
     }
@@ -389,8 +389,8 @@ public class StickyTaskAssignorTest {
         Collections.shuffle(taskIds);
         taskIds.toArray(taskIdArray);
 
-        final boolean followupRebalanceNeeded = assign(taskIdArray);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(taskIdArray);
+        assertThat(probingRebalanceNeeded, is(false));
 
         Collections.sort(taskIds);
         final Set<TaskId> expectedClientOneAssignment = getExpectedTaskIdAssignment(taskIds, 0, 4, 8, 12);
@@ -414,8 +414,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_3, 1);
         createClient(UUID_4, 1);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         for (final UUID uuid : allUUIDs) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
@@ -437,8 +437,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_0);
         createClient(UUID_4, 1);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         for (final UUID uuid : allUUIDs) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
@@ -464,8 +464,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_3, 1);
         createClient(UUID_4, 1);
 
-        final boolean followupRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         for (final UUID uuid : allUUIDs) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
@@ -486,8 +486,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_2, 1);
         createClient(UUID_4, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
@@ -501,8 +501,8 @@ public class StickyTaskAssignorTest {
         createClient(UUID_1, 1);
         createClient(UUID_2, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(2));
         assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
@@ -513,8 +513,8 @@ public class StickyTaskAssignorTest {
     public void shouldRebalanceTasksToClientsBasedOnCapacity() {
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
         createClient(UUID_3, 2);
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(2));
     }
@@ -528,8 +528,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1, TASK_0_3);
         createClientWithPreviousActiveTasks(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         final Set<TaskId> p3ActiveTasks = clients.get(UUID_3).activeTasks();
         assertThat(p3ActiveTasks.size(), equalTo(1));
@@ -545,8 +545,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1);
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_2, TASK_0_3);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_0, TASK_0_1));
         assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_2, TASK_0_3));
@@ -559,8 +559,8 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_0_3);
         createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_2, TASK_0_1));
         assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_0, TASK_0_3));
@@ -579,8 +579,8 @@ public class StickyTaskAssignorTest {
         final ClientState newClient = createClient(UUID_4, 1);
         newClient.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
         assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
@@ -601,8 +601,8 @@ public class StickyTaskAssignorTest {
         final ClientState bounce2 = createClient(UUID_4, 1);
         bounce2.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_0_3, TASK_1_0));
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
         assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
@@ -624,8 +624,8 @@ public class StickyTaskAssignorTest {
         final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3, TASK_0_4, TASK_0_5);
         final ClientState newClient = createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_5)));
@@ -644,8 +644,8 @@ public class StickyTaskAssignorTest {
         c2.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_4, TASK_0_5));
         final ClientState newClient = createClient(UUID_3, 1);
 
-        final boolean followupRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
-        assertThat(followupRebalanceNeeded, is(false));
+        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_5)));
@@ -664,13 +664,13 @@ public class StickyTaskAssignorTest {
 
         final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2);
         Collections.shuffle(taskIds);
-        final boolean followupRebalanceNeeded = new StickyTaskAssignor(true).assign(
+        final boolean probingRebalanceNeeded = new StickyTaskAssignor(true).assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
             new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, 0, 0L)
         );
-        assertThat(followupRebalanceNeeded, is(false));
+        assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(c2.activeTasks(), empty());

@@ -362,7 +362,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, Set<TopicPartition>> partitionsForTask =
             partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
 
-        final boolean followupRebalanceNeeded =
+        final boolean probingRebalanceNeeded =
             assignTasksToClients(allSourceTopics, partitionsForTask, topicGroups, clientMetadataMap, fullMetadata);
 
         // ---------------- Step Three ---------------- //
@@ -400,7 +400,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
-                followupRebalanceNeeded
+                probingRebalanceNeeded
             );
         }
 
@@ -689,7 +689,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * Assigns a set of tasks to each client (Streams instance) using the configured task assignor
-     * @return true if a followup rebalance should be triggered
+     * @return true if a probing rebalance should be triggered
      */
     private boolean assignTasksToClients(final Set<String> allSourceTopics,
                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
@@ -715,15 +715,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
-        final boolean followupRebalanceNeeded = taskAssignor.assign(clientStates,
-                                                                    allTasks,
-                                                                    statefulTasks,
-                                                                    assignmentConfigs);
+        final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
+                                                                   allTasks,
+                                                                   statefulTasks,
+                                                                   assignmentConfigs);
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
 
-        return followupRebalanceNeeded;
+        return probingRebalanceNeeded;
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
@@ -972,9 +972,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                       final int minUserMetadataVersion,
                                       final int minSupportedMetadataVersion,
                                       final boolean versionProbing,
-                                      final boolean followupRebalanceNeeded) {
-        boolean encodeNextRebalanceTime = followupRebalanceNeeded;
-        boolean stableAssignment = !followupRebalanceNeeded && !versionProbing;
+                                      final boolean probingRebalanceNeeded) {
+        boolean encodeNextRebalanceTime = probingRebalanceNeeded;
+        boolean stableAssignment = !probingRebalanceNeeded && !versionProbing;
 
         // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
@@ -1029,7 +1029,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         if (stableAssignment) {
             log.info("Finished stable assignment of tasks, no followup rebalances required.");
         } else {
-            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
+            log.info("Finished unstable assignment of tasks, a followup probing rebalance will be triggered.");
         }
     }
 

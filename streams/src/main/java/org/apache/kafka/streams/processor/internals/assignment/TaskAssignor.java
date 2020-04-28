@@ -24,7 +24,7 @@ import java.util.UUID;
 
 public interface TaskAssignor {
     /**
-     * @return whether the generated assignment requires a followup rebalance to satisfy all conditions
+     * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
     boolean assign(Map<UUID, ClientState> clients,
                    Set<TaskId> allTaskIds,

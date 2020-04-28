@@ -229,7 +229,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         // The tasks were returned to their prior owner
         assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
         assertThat(newConsumerActiveTasks, empty());
-        
+
         // There is a rebalance scheduled
         assertThat(
             time.milliseconds() + rebalanceInterval,

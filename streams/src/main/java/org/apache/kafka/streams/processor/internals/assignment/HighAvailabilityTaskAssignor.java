@@ -88,7 +88,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
 
-        final boolean followupRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
+        final boolean probingRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
 
         assignStandbyReplicaTasks(tasksToRemainingStandbys);
 
@@ -97,9 +97,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         log.info("Decided on assignment: " +
                      clientStates +
                      " with " +
-                     (followupRebalanceNeeded ? "" : "no") +
-                     " followup rebalance.");
-        return followupRebalanceNeeded;
+                     (probingRebalanceNeeded ? "" : "no") +
+                     " followup probing rebalance.");
+        return probingRebalanceNeeded;
     }
 
     private boolean assignStatefulActiveTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
