@@ -892,7 +892,10 @@ public class KafkaStreamsTest {
             new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
             fail("Should have thrown TopologyException");
         } catch (final TopologyException e) {
-            assertThat(e.getMessage(), equalTo("Topology has no stream threads and no global threads"));
+            assertThat(
+                e.getMessage(),
+                equalTo("Invalid topology: Topology has no stream threads and no global threads, " +
+                            "must subscribe to at least one source topic or global table."));
         }
     }
 

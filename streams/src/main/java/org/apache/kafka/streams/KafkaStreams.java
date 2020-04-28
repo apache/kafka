@@ -719,8 +719,9 @@ public class KafkaStreams implements AutoCloseable {
         final boolean hasGlobalTopology = globalTaskTopology != null;
 
         if (numStreamThreads == 0 && !hasGlobalTopology) {
-            log.error("Must subscribe to at least one source topic or global table");
-            throw new TopologyException("Topology has no stream threads and no global threads");
+            log.error("Topology with no input topics will create no stream threads and no global thread.");
+            throw new TopologyException("Topology has no stream threads and no global threads, " +
+                "must subscribe to at least one source topic or global table.");
         }
 
         long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
