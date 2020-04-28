@@ -113,11 +113,13 @@ public class GlobalKTableEOSIntegrationTest {
             .replace(']', '_');
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
+        streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
         globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
                                           Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
                                                   .withKeySerde(Serdes.Long())
@@ -128,7 +130,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @After
-    public void whenShuttingDown() throws Exception {
+    public void after() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
@@ -294,6 +296,7 @@ public class GlobalKTableEOSIntegrationTest {
             .replace(']', '_');
         streamTopic = "stream-" + suffix;
         globalTableTopic = "globalTable-" + suffix;
+        CLUSTER.deleteAllTopicsAndWait(300_000L);
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
@@ -303,7 +306,7 @@ public class GlobalKTableEOSIntegrationTest {
         kafkaStreams.start();
     }
 
-    private void produceTopicValues(final String topic) throws Exception {
+    private void produceTopicValues(final String topic) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic,
                 Arrays.asList(
@@ -339,7 +342,7 @@ public class GlobalKTableEOSIntegrationTest {
                 mockTime.milliseconds());
     }
 
-    private void produceInitialGlobalTableValues() throws Exception {
+    private void produceInitialGlobalTableValues() {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
         properties.put(ProducerConfig.RETRIES_CONFIG, 1);
@@ -360,7 +363,7 @@ public class GlobalKTableEOSIntegrationTest {
                 true);
     }
 
-    private void produceGlobalTableValues() throws Exception {
+    private void produceGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalTableTopic,
                 Arrays.asList(

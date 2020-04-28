@@ -849,7 +849,7 @@ public class EosIntegrationTest {
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent) throws InterruptedException {
         final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
-            .getStore(300000L, storeName, streams, QueryableStoreTypes.keyValueStore());
+            .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();

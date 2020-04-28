@@ -338,8 +338,9 @@ public class StoreUpgradeIntegrationTest {
                 try {
                     final ReadOnlyKeyValueStore<K, V> store = IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
-                    if (store == null)
+                    if (store == null) {
                         return false;
+                    }
 
                     try (final KeyValueIterator<K, V> all = store.all()) {
                         final List<KeyValue<K, V>> storeContent = new LinkedList<>();
