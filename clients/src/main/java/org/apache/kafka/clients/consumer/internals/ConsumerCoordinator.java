@@ -1202,7 +1202,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
                             log.info("OffsetCommit failed with {} due to group instance id {} fenced", sentGeneration, rebalanceConfig.groupInstanceId);
 
-                            // if the generation has changed, do not raise the fatal error but rebalance-in-progress
+                            // if the generation has changed or we are not in rebalancing, do not raise the fatal error but rebalance-in-progress
                             if (generationUnchanged()) {
                                 future.raise(error);
                             } else {
@@ -1233,7 +1233,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                 || error == Errors.ILLEGAL_GENERATION) {
                             log.info("OffsetCommit failed with {}: {}", sentGeneration, error.message());
 
-                            // only need to reset generation and re-join group if generation has not changed;
+                            // only need to reset generation and re-join group if generation has not changed or we are not in rebalancing;
                             // otherwise only raise rebalance-in-progress error
                             if (!generationUnchanged() && ConsumerCoordinator.this.state == MemberState.REBALANCING) {
                                 future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
