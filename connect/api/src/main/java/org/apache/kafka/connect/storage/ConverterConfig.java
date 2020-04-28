@@ -33,6 +33,9 @@ public abstract class ConverterConfig extends AbstractConfig {
     public static final String TYPE_CONFIG = "converter.type";
     private static final String TYPE_DOC = "How this converter will be used.";
 
+    public static final String ACCEPT_OPTIONAL_NULL_CONFIG = "accept.optional.null";
+    private static final String ACCEPT_OPTIONAL_NULL_DOC = "Treat optional null (an optional field which has default value is null) as null or default value.";
+
     /**
      * Create a new {@link ConfigDef} instance containing the configurations defined by ConverterConfig. This can be called by subclasses.
      *
@@ -41,7 +44,9 @@ public abstract class ConverterConfig extends AbstractConfig {
     public static ConfigDef newConfigDef() {
         return new ConfigDef().define(TYPE_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
                                       in(ConverterType.KEY.getName(), ConverterType.VALUE.getName(), ConverterType.HEADER.getName()),
-                                      Importance.LOW, TYPE_DOC);
+                                      Importance.LOW, TYPE_DOC)
+                              .define(ACCEPT_OPTIONAL_NULL_CONFIG, Type.BOOLEAN, false,
+                                      Importance.MEDIUM, ACCEPT_OPTIONAL_NULL_DOC);
     }
 
     protected ConverterConfig(ConfigDef configDef, Map<String, ?> props) {
@@ -54,5 +59,14 @@ public abstract class ConverterConfig extends AbstractConfig {
      */
     public ConverterType type() {
         return ConverterType.withName(getString(TYPE_CONFIG));
+    }
+
+    /**
+     * Get how to treat optional null by the {@link #ACCEPT_OPTIONAL_NULL_CONFIG} configuration.
+     * @return false treat optional null as default value;
+     *         true  treat optional null as null.
+     */
+    public boolean acceptOptionalNull() {
+        return getBoolean(ACCEPT_OPTIONAL_NULL_CONFIG);
     }
 }
