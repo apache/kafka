@@ -3010,15 +3010,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                         createResponse: Int => AbstractResponse,
                                         onComplete: Option[Send => Unit] = None): Unit = {
-    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
     sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete)
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
-    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
+  }
+
+  private def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
+    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
+    println(s"api throttle ms $throttleTimeMs ${request.header} ${request.header.clientId}")
+    request.apiThrottleTimeMs = throttleTimeMs
+    throttleTimeMs
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request,
