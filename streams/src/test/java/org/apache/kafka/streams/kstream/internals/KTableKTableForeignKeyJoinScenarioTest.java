@@ -41,6 +41,7 @@ import org.junit.rules.TestName;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TreeSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -179,8 +180,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
     @Test
     public void shouldUseExpectedTopicsWithSerde() {
+        final String applicationId = "ktable-ktable-joinOnForeignKey";
         final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
@@ -191,12 +193,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         final KTable<String, String> left = builder.table(
             LEFT_TABLE,
             Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
-                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
         final KTable<String, String> right = builder.table(
             RIGHT_TABLE,
             Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
-                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
 
         left.join(
@@ -218,19 +220,19 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
         // verifying primarily that no extra pseudo-topics were used, but it's nice to also verify the rest of the
         // topics our serdes serialize data for
-        assertThat(serdeScope.registeredTopics(), CoreMatchers.is(mkSet(
+        assertThat(serdeScope.registeredTopics(), is(mkSet(
             // expected pseudo-topics
-            "KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
-            "KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
-            "KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-vh--value",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-vh--value",
             // internal topics
-            "ktable-ktable-joinOnForeignKey-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic--key",
-            "ktable-ktable-joinOnForeignKey-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--key",
-            "ktable-ktable-joinOnForeignKey-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--value",
-            "ktable-ktable-joinOnForeignKey-left_table-STATE-STORE-0000000000-changelog--key",
-            "ktable-ktable-joinOnForeignKey-left_table-STATE-STORE-0000000000-changelog--value",
-            "ktable-ktable-joinOnForeignKey-right_table-STATE-STORE-0000000003-changelog--key",
-            "ktable-ktable-joinOnForeignKey-right_table-STATE-STORE-0000000003-changelog--value",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--value",
+            applicationId + "-left_table-STATE-STORE-0000000000-changelog--key",
+            applicationId + "-left_table-STATE-STORE-0000000000-changelog--value",
+            applicationId + "-right_table-STATE-STORE-0000000003-changelog--key",
+            applicationId + "-right_table-STATE-STORE-0000000003-changelog--value",
             // output topics
             "output-topic--key",
             "output-topic--value"
