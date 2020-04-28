@@ -31,14 +31,22 @@ fi
 
 EXTRA_ARGS=${EXTRA_ARGS-'-name kafkaServer -loggc'}
 
+CONFDIR="${base_dir}/../config"
+
 COMMAND=$1
 case $COMMAND in
   -daemon)
     EXTRA_ARGS="-daemon "$EXTRA_ARGS
+    CONFPATH=$CONFDIR"/"$2
+    shift
+    shift
+    ;;
+  server.properties)
+    CONFPATH=$CONFDIR"/"$1
     shift
     ;;
   *)
     ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
+exce  $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka $CONFPATH  "$@"
