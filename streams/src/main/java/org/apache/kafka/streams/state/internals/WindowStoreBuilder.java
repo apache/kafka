@@ -39,7 +39,7 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
 
     @Override
     public WindowStore<K, V> build() {
-        if (storeSupplier.retainDuplicates()) {
+        if (storeSupplier.retainDuplicates() && enableCaching) {
             log.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
             enableCaching = false;
         }
