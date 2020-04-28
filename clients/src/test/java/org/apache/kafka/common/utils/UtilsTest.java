@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -47,7 +48,11 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -581,5 +586,15 @@ public class UtilsTest {
             fail("Expected exception not thrown");
         } catch (IllegalArgumentException e) {
         }
+    }
+
+    @Test
+    public void testUnion() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> union = union(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
     }
 }

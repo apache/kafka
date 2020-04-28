@@ -416,11 +416,12 @@ public class TaskAssignorConvergenceTest {
             iteration++;
             harness.prepareForNextRebalance();
             harness.recordBefore(iteration);
-            rebalancePending = new HighAvailabilityTaskAssignor(
-                harness.clientStates, allTasks,
+            rebalancePending = new HighAvailabilityTaskAssignor().assign(
+                harness.clientStates,
+                allTasks,
                 harness.statefulTaskEndOffsetSums.keySet(),
                 configs
-            ).assign();
+            );
             harness.recordAfter(iteration, rebalancePending);
         }
 

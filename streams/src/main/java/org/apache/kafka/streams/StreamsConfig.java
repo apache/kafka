@@ -868,6 +868,11 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
+        // This is settable in the main Streams config, but it's a private API for now
+        public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
+
+        // These are not settable in the main Streams config; they are set by the StreamThread to pass internal
+        // state into the assignor.
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
         public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
         public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";

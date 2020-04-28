@@ -39,7 +39,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -64,6 +64,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.UUID.randomUUID;
@@ -171,7 +172,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
 
-    private boolean highAvailabilityEnabled;
+    private Supplier<TaskAssignor> taskAssignorSupplier;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -201,7 +202,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
-        highAvailabilityEnabled = assignorConfiguration.isHighAvailabilityEnabled();
+        taskAssignorSupplier = assignorConfiguration::getTaskAssignor;
     }
 
     @Override
@@ -361,7 +362,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, Set<TopicPartition>> partitionsForTask =
             partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
 
-        final boolean followupRebalanceNeeded =
+        final boolean probingRebalanceNeeded =
             assignTasksToClients(allSourceTopics, partitionsForTask, topicGroups, clientMetadataMap, fullMetadata);
 
         // ---------------- Step Three ---------------- //
@@ -399,7 +400,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
-                followupRebalanceNeeded
+                probingRebalanceNeeded
             );
         }
 
@@ -688,7 +689,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * Assigns a set of tasks to each client (Streams instance) using the configured task assignor
-     * @return true if a followup rebalance should be triggered
+     * @return true if a probing rebalance should be triggered
      */
     private boolean assignTasksToClients(final Set<String> allSourceTopics,
                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
@@ -712,29 +713,32 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final TaskAssignor taskAssignor;
-        if (highAvailabilityEnabled) {
-            if (lagComputationSuccessful) {
-                taskAssignor = new HighAvailabilityTaskAssignor(
-                    clientStates,
-                    allTasks,
-                    statefulTasks,
-                    assignmentConfigs);
-            } else {
-                log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
-                             + "trigger another rebalance to retry.");
-                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
-                taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, true);
-            }
-        } else {
-            taskAssignor = new StickyTaskAssignor(clientStates, allTasks, statefulTasks, assignmentConfigs, false);
-        }
-        final boolean followupRebalanceNeeded = taskAssignor.assign();
+        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+
+        final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
+                                                                   allTasks,
+                                                                   statefulTasks,
+                                                                   assignmentConfigs);
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
 
-        return followupRebalanceNeeded;
+        return probingRebalanceNeeded;
+    }
+
+    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+        final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+        if (taskAssignor instanceof StickyTaskAssignor) {
+            // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
+            // whether or not lag computation failed.
+            return taskAssignor;
+        } else if (lagComputationSuccessful) {
+            return taskAssignor;
+        } else {
+            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
+                         + "trigger another rebalance to retry.");
+            return new FallbackPriorTaskAssignor();
+        }
     }
 
     /**
@@ -968,9 +972,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                       final int minUserMetadataVersion,
                                       final int minSupportedMetadataVersion,
                                       final boolean versionProbing,
-                                      final boolean followupRebalanceNeeded) {
-        boolean encodeNextRebalanceTime = followupRebalanceNeeded;
-        boolean stableAssignment = !followupRebalanceNeeded && !versionProbing;
+                                      final boolean probingRebalanceNeeded) {
+        boolean encodeNextRebalanceTime = probingRebalanceNeeded;
+        boolean stableAssignment = !probingRebalanceNeeded && !versionProbing;
 
         // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
@@ -1025,7 +1029,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         if (stableAssignment) {
             log.info("Finished stable assignment of tasks, no followup rebalances required.");
         } else {
-            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
+            log.info("Finished unstable assignment of tasks, a followup probing rebalance will be triggered.");
         }
     }
 

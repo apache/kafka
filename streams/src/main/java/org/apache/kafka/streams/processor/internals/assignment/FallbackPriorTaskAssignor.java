@@ -17,17 +17,33 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public interface TaskAssignor {
-    /**
-     * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
-     */
-    boolean assign(Map<UUID, ClientState> clients,
-                   Set<TaskId> allTaskIds,
-                   Set<TaskId> standbyTaskIds,
-                   AssignorConfiguration.AssignmentConfigs configs);
+/**
+ * A special task assignor implementation to be used as a fallback in case the
+ * configured assignor couldn't be invoked.
+ *
+ * Specifically, this assignor must:
+ * 1. ignore the task lags in the ClientState map
+ * 2. always return true, indicating that a follow-up rebalance is needed
+ */
+public class FallbackPriorTaskAssignor implements TaskAssignor {
+    private final StickyTaskAssignor delegate;
+
+    public FallbackPriorTaskAssignor() {
+        delegate = new StickyTaskAssignor(true);
+    }
+
+    @Override
+    public boolean assign(final Map<UUID, ClientState> clients,
+                          final Set<TaskId> allTaskIds,
+                          final Set<TaskId> standbyTaskIds,
+                          final AssignmentConfigs configs) {
+        delegate.assign(clients, allTaskIds, standbyTaskIds, configs);
+        return true;
+    }
 }
