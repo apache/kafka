@@ -102,7 +102,7 @@ public class StandbyTaskFailOverIntegrationTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
-            {StreamsConfig.AT_LEAST_ONCE},
+//            {StreamsConfig.AT_LEAST_ONCE},
             {StreamsConfig.EXACTLY_ONCE}
         });
     }
@@ -118,8 +118,8 @@ public class StandbyTaskFailOverIntegrationTest {
 
         CountDownLatch waitPoisonRecordReplication = new CountDownLatch(1);
 
-        streamInstanceOne = getStreamInstance(1, waitPoisonRecordReplication);
-        streamInstanceTwo = getStreamInstance(2, null);
+        streamInstanceOne = getStreamInstance(2, waitPoisonRecordReplication);
+        streamInstanceTwo = getStreamInstance(1, null);
 
         CountDownLatch threadDeaths = new CountDownLatch(3);
         streamInstanceOne.setUncaughtExceptionHandler((t, e) -> {
@@ -187,11 +187,11 @@ public class StandbyTaskFailOverIntegrationTest {
                 return false;
             }, "Did not see poison key replicated to instance two");
         } else {
-            // Wait sufficient time to make sure the data is not replicated.
-            Thread.sleep(3000);
+//             Wait sufficient time to make sure the data is not replicated.
+//            Thread.sleep(3000);
         }
 
-        threadDeaths.await(15, TimeUnit.SECONDS);
+        threadDeaths.await(100, TimeUnit.SECONDS);
     }
 
     private KafkaStreams getStreamInstance(final int instanceId, CountDownLatch waitPoisonRecordReplication) {
@@ -251,15 +251,15 @@ public class StandbyTaskFailOverIntegrationTest {
 
     @After
     public void shutdown() {
-        if (streamInstanceOne != null) {
-            streamInstanceOne.close(Duration.ofSeconds(30L));
-            streamInstanceOne.cleanUp();
-        }
-
-        if (streamInstanceTwo != null) {
-            streamInstanceTwo.close(Duration.ofSeconds(30L));
-            streamInstanceTwo.cleanUp();
-        }
+//        if (streamInstanceOne != null) {
+//            streamInstanceOne.close(Duration.ofSeconds(30L));
+//            streamInstanceOne.cleanUp();
+//        }
+//
+//        if (streamInstanceTwo != null) {
+//            streamInstanceTwo.close(Duration.ofSeconds(30L));
+//            streamInstanceTwo.cleanUp();
+//        }
     }
 
     private Properties props(final int numThreads, final String stateDirPath) {
