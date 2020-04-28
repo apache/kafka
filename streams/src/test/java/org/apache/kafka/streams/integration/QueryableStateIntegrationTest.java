@@ -35,7 +35,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -49,7 +48,6 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -60,7 +58,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -305,9 +302,8 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
-                    final QueryableStoreType<ReadOnlyKeyValueStore<String, Long>> queryableStoreType = QueryableStoreTypes.keyValueStore();
                     final ReadOnlyKeyValueStore<String, Long> store =
-                        streamsWithKey.store(StoreQueryParameters.fromNameAndType(storeName, queryableStoreType).enableStaleStores());
+                        IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.keyValueStore());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -365,9 +361,8 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
-                    final QueryableStoreType<ReadOnlyWindowStore<String, Long>> queryableWindowStoreType = QueryableStoreTypes.windowStore();
                     final ReadOnlyWindowStore<String, Long> store =
-                        streamsWithKey.store(StoreQueryParameters.fromNameAndType(storeName, queryableWindowStoreType).enableStaleStores());
+                        IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.windowStore());
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -649,10 +644,10 @@ public class QueryableStateIntegrationTest {
             waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
             
             final ReadOnlyKeyValueStore<String, Long> keyValueStore =
-                kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore()));
+                IntegrationTestUtils.getStore(storeName + "-" + streamConcurrent, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
             final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store(StoreQueryParameters.fromNameAndType(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.windowStore()));
+                IntegrationTestUtils.getStore(windowStoreName + "-" + streamConcurrent, kafkaStreams, QueryableStoreTypes.windowStore());
 
             final Map<String, Long> expectedWindowState = new HashMap<>();
             final Map<String, Long> expectedCount = new HashMap<>();
@@ -714,10 +709,11 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myFilterStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryFilter", QueryableStoreTypes.keyValueStore()));
-        final ReadOnlyKeyValueStore<String, Long>
-            myFilterNotStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryFilterNot", QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<String, Long> myFilterStore =
+            IntegrationTestUtils.getStore("queryFilter", kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+        final ReadOnlyKeyValueStore<String, Long> myFilterNotStore =
+            IntegrationTestUtils.getStore("queryFilterNot", kafkaStreams, QueryableStoreTypes.keyValueStore());
 
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
             TestUtils.waitForCondition(() -> expectedEntry.value.equals(myFilterStore.get(expectedEntry.key)),
@@ -781,7 +777,8 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
         final ReadOnlyKeyValueStore<String, Long> myMapStore =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryMapValues", QueryableStoreTypes.keyValueStore()));
+            IntegrationTestUtils.getStore("queryMapValues", kafkaStreams, QueryableStoreTypes.keyValueStore());
+
         for (final KeyValue<String, String> batchEntry : batch1) {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
@@ -828,9 +825,9 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myMapStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType("queryMapValues",
-            QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<String, Long> myMapStore =
+            IntegrationTestUtils.getStore("queryMapValues", kafkaStreams, QueryableStoreTypes.keyValueStore());
+
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
             assertEquals(expectedEntry.value, myMapStore.get(expectedEntry.key));
         }
@@ -889,11 +886,12 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<String, Long> myCount =
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
         final ReadOnlyWindowStore<String, Long> windowStore =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(windowStoreName, QueryableStoreTypes.windowStore()));
+            IntegrationTestUtils.getStore(windowStoreName, kafkaStreams, QueryableStoreTypes.windowStore());
+
         verifyCanGetByKey(keys,
             expectedCount,
             expectedCount,
@@ -926,13 +924,8 @@ public class QueryableStateIntegrationTest {
 
         final int maxWaitMs = 30000;
 
-        TestUtils.waitForCondition(
-            new WaitForStore(storeName),
-            maxWaitMs,
-            "waiting for store " + storeName);
-
         final ReadOnlyKeyValueStore<String, Long> store =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
             () -> Long.valueOf(8).equals(store.get("hello")),
@@ -950,9 +943,7 @@ public class QueryableStateIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    assertEquals(
-                        Long.valueOf(8L),
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.<String, Long>keyValueStore())).get("hello"));
+                    assertEquals(8L, IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.keyValueStore()).get("hello"));
                     return true;
                 } catch (final InvalidStateStoreException ise) {
                     return false;
@@ -961,24 +952,6 @@ public class QueryableStateIntegrationTest {
             maxWaitMs,
             "waiting for store " + storeName);
 
-    }
-
-    private class WaitForStore implements TestCondition {
-        private final String storeName;
-
-        WaitForStore(final String storeName) {
-            this.storeName = storeName;
-        }
-
-        @Override
-        public boolean conditionMet() {
-            try {
-                kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.<String, Long>keyValueStore()));
-                return true;
-            } catch (final InvalidStateStoreException ise) {
-                return false;
-            }
-        }
     }
 
     @Test
@@ -1025,13 +998,8 @@ public class QueryableStateIntegrationTest {
 
         final int maxWaitMs = 30000;
 
-        TestUtils.waitForCondition(
-            new WaitForStore(storeName),
-            maxWaitMs,
-            "waiting for store " + storeName);
-
         final ReadOnlyKeyValueStore<String, String> store =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
             () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
@@ -1052,13 +1020,9 @@ public class QueryableStateIntegrationTest {
             failed::get,
             maxWaitMs,
             "wait for thread to fail");
-        TestUtils.waitForCondition(
-            new WaitForStore(storeName),
-            maxWaitMs,
-            "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, String> store2 =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
         try {
             TestUtils.waitForCondition(

@@ -23,7 +23,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -337,8 +336,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, V> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.keyValueStore()));
+                    final ReadOnlyKeyValueStore<K, V> store = IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+                    if (store == null) {
+                        return false;
+                    }
+
                     try (final KeyValueIterator<K, V> all = store.all()) {
                         final List<KeyValue<K, V>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -362,8 +365,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore()));
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.get(key);
                     return count.value() == value && count.timestamp() == timestamp;
                 } catch (final Exception swallow) {
@@ -381,8 +388,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore()));
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.get(key);
                     return count.value() == value && count.timestamp() == -1L;
                 } catch (final Exception swallow) {
@@ -411,8 +422,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore()));
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<K, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<K, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -446,8 +461,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore()));
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<K, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<K, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -812,8 +831,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, V> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.windowStore()));
+                    final ReadOnlyWindowStore<K, V> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<Windowed<K>, V> all = store.all()) {
                         final List<KeyValue<Windowed<K>, V>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -836,8 +859,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedWindowStore()));
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.fetch(key.key(), key.window().start());
                     return count.value() == value && count.timestamp() == -1L;
                 } catch (final Exception swallow) {
@@ -856,8 +883,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedWindowStore()));
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.fetch(key.key(), key.window().start());
                     return count.value() == value && count.timestamp() == timestamp;
                 } catch (final Exception swallow) {
@@ -886,8 +917,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.timestampedWindowStore()));
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<Windowed<K>, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {

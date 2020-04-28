@@ -41,10 +41,13 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import scala.Option;
@@ -160,8 +163,7 @@ public class IntegrationTestUtils {
      * @param <V>            Value type of the data records
      */
     public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time)
-        throws ExecutionException, InterruptedException {
+        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time) {
         produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
@@ -175,8 +177,7 @@ public class IntegrationTestUtils {
      * @param <V>                 Value type of the data records
      */
     public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Headers headers, final Time time)
-        throws ExecutionException, InterruptedException {
+        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Headers headers, final Time time) {
         produceKeyValuesSynchronously(topic, records, producerConfig, headers, time, false);
     }
 
@@ -190,8 +191,7 @@ public class IntegrationTestUtils {
      * @param <V>                 Value type of the data records
      */
     public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
-        throws ExecutionException, InterruptedException {
+        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions) {
         produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions);
     }
 
@@ -210,16 +210,21 @@ public class IntegrationTestUtils {
                                                             final Properties producerConfig,
                                                             final Headers headers,
                                                             final Time time,
-                                                            final boolean enableTransactions)
-        throws ExecutionException, InterruptedException {
-        for (final KeyValue<K, V> record : records) {
-            produceKeyValuesSynchronouslyWithTimestamp(topic,
-                Collections.singleton(record),
-                producerConfig,
-                headers,
-                time.milliseconds(),
-                enableTransactions);
-            time.sleep(1L);
+                                                            final boolean enableTransactions) {
+
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            if (enableTransactions) {
+                producer.initTransactions();
+                producer.beginTransaction();
+            }
+            for (final KeyValue<K, V> record : records) {
+                producer.send(new ProducerRecord<>(topic, null, time.milliseconds(), record.key, record.value, headers));
+                time.sleep(1L);
+            }
+            if (enableTransactions) {
+                producer.commitTransaction();
+            }
+            producer.flush();
         }
     }
 
@@ -234,8 +239,7 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
-                                                                         final Long timestamp)
-        throws ExecutionException, InterruptedException {
+                                                                         final Long timestamp) {
         produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, timestamp, false);
     }
 
@@ -248,13 +252,11 @@ public class IntegrationTestUtils {
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
-    @SuppressWarnings("WeakerAccess")
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
                                                                          final Long timestamp,
-                                                                         final boolean enableTransactions)
-            throws ExecutionException, InterruptedException {
+                                                                         final boolean enableTransactions) {
 
         produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
     }
@@ -269,14 +271,12 @@ public class IntegrationTestUtils {
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
-    @SuppressWarnings("WeakerAccess")
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
                                                                          final Headers headers,
                                                                          final Long timestamp,
-                                                                         final boolean enableTransactions)
-            throws ExecutionException, InterruptedException {
+                                                                         final boolean enableTransactions) {
 
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             if (enableTransactions) {
@@ -284,9 +284,7 @@ public class IntegrationTestUtils {
                 producer.beginTransaction();
             }
             for (final KeyValue<K, V> record : records) {
-                final Future<RecordMetadata> f = producer.send(
-                    new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
-                f.get();
+                producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
             }
             if (enableTransactions) {
                 producer.commitTransaction();
@@ -367,8 +365,7 @@ public class IntegrationTestUtils {
     public static <V> void produceValuesSynchronously(final String topic,
                                                       final Collection<V> records,
                                                       final Properties producerConfig,
-                                                      final Time time)
-        throws ExecutionException, InterruptedException {
+                                                      final Time time) {
         produceValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
@@ -385,8 +382,7 @@ public class IntegrationTestUtils {
                                                       final Collection<V> records,
                                                       final Properties producerConfig,
                                                       final Time time,
-                                                      final boolean enableTransactions)
-            throws ExecutionException, InterruptedException {
+                                                      final boolean enableTransactions) {
         final Collection<KeyValue<Object, V>> keyedRecords = new ArrayList<>();
         for (final V value : records) {
             final KeyValue<Object, V> kv = new KeyValue<>(null, value);
@@ -599,13 +595,6 @@ public class IntegrationTestUtils {
         return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, waitTime, false);
     }
 
-    public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilFinalKeyValueTimestampRecordsReceived(final Properties consumerConfig,
-                                                                                                      final String topic,
-                                                                                                      final List<KeyValueTimestamp<K, V>> expectedRecords,
-                                                                                                      final long waitTime) throws InterruptedException {
-        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, waitTime, true);
-    }
-
     @SuppressWarnings("unchecked")
     private static <K, V, T> List<T> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
                                                                            final String topic,
@@ -708,7 +697,7 @@ public class IntegrationTestUtils {
         }
     }
 
-    public static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
+    private static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
                                                      final String topic,
                                                      final int partition,
                                                      final long timeout) throws InterruptedException {
@@ -732,7 +721,6 @@ public class IntegrationTestUtils {
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
                 if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
                     invalidBrokerIds.add(server);
-                    continue;
                 }
             }
 
@@ -973,52 +961,6 @@ public class IntegrationTestUtils {
      * Returns up to `maxMessages` message-values from the topic.
      *
      * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer config
-     * @param waitTime       Maximum wait time in milliseconds
-     * @param maxMessages    Maximum number of messages to read via the consumer.
-     * @return The values retrieved via the consumer.
-     */
-    public static <V> List<V> readValues(final String topic, final Properties consumerConfig,
-        final long waitTime, final int maxMessages) {
-        final List<V> returnList;
-        try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
-            returnList = readValues(topic, consumer, waitTime, maxMessages);
-        }
-        return returnList;
-    }
-
-    /**
-     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
-     * are already configured in the consumer).
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer config
-     * @param waitTime       Maximum wait time in milliseconds
-     * @param maxMessages    Maximum number of messages to read via the consumer
-     * @return The KeyValue elements retrieved via the consumer
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
-        final Properties consumerConfig, final long waitTime, final int maxMessages) {
-        final List<KeyValue<K, V>> consumedValues;
-        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);
-        }
-        return consumedValues;
-    }
-
-    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
-        if (clean) {
-            driver.cleanUp();
-        }
-        driver.start();
-        return driver;
-    }
-
-    /**
-     * Returns up to `maxMessages` message-values from the topic.
-     *
-     * @param topic          Kafka topic to read messages from
      * @param consumer       Kafka consumer
      * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer.
@@ -1118,5 +1060,71 @@ public class IntegrationTestUtils {
         filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         return new KafkaConsumer<>(filtered);
+    }
+
+    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
+        driver.start();
+        return driver;
+    }
+
+    public static <S> S getStore(final String storeName,
+                                 final KafkaStreams streams,
+                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+        return getStore(DEFAULT_TIMEOUT, storeName, streams, storeType);
+    }
+
+    public static <S> S getStore(final String storeName,
+                                 final KafkaStreams streams,
+                                 final boolean enableStaleQuery,
+                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+        return getStore(DEFAULT_TIMEOUT, storeName, streams, enableStaleQuery, storeType);
+    }
+
+    public static <S> S getStore(final long waitTime,
+                                 final String storeName,
+                                 final KafkaStreams streams,
+                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+        return getStore(waitTime, storeName, streams, false, storeType);
+    }
+
+    public static <S> S getStore(final long waitTime,
+                                 final String storeName,
+                                 final KafkaStreams streams,
+                                 final boolean enableStaleQuery,
+                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+        final StoreQueryParameters<S> param = enableStaleQuery ?
+            StoreQueryParameters.fromNameAndType(storeName, storeType).enableStaleStores() :
+            StoreQueryParameters.fromNameAndType(storeName, storeType);
+        return getStore(waitTime, streams, param);
+    }
+
+    public static <S> S getStore(final KafkaStreams streams,
+                                 final StoreQueryParameters<S> param) throws InterruptedException {
+        return getStore(DEFAULT_TIMEOUT, streams, param);
+    }
+
+    public static <S> S getStore(final long waitTime,
+                                 final KafkaStreams streams,
+                                 final StoreQueryParameters<S> param) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + waitTime;
+
+        while (true) {
+            try {
+                return streams.store(param);
+            } catch (final InvalidStateStoreException e) {
+                if (System.currentTimeMillis() > expectedEnd) {
+                    throw e;
+                }
+            } catch (final Exception e) {
+                if (System.currentTimeMillis() > expectedEnd) {
+                    throw new AssertionError(e);
+                }
+            }
+            Thread.sleep(Math.min(100L, waitTime));
+        }
     }
 }
