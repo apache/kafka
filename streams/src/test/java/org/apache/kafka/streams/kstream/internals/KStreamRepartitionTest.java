@@ -39,9 +39,7 @@ import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 
 import java.time.Duration;
@@ -49,7 +47,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyString;
@@ -125,7 +122,6 @@ public class KStreamRepartitionTest {
         final String inputTopicRepartitionedName = "input-topic-scale-up";
         final int topicBNumberOfPartitions = 2;
         final int inputTopicNumberOfPartitions = 4;
-        final AtomicReference<Throwable> throwable = new AtomicReference<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
