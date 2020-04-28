@@ -433,8 +433,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    servers(1).shutdown()
-    servers(1).awaitShutdown()
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&

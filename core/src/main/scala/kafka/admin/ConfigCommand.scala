@@ -247,6 +247,10 @@ object ConfigCommand extends Config {
 
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
+    if (opts.options.has(opts.addConfigFile)) {
+      val file = opts.options.valueOf(opts.addConfigFile)
+      props.putAll(Utils.loadProps(file))
+    }
     if (opts.options.has(opts.addConfig)) {
       // Split list by commas, but avoid those in [], then into KV pairs
       // Each KV pair is of format key=value, split them into key and value, using -1 as the limit for split() to
@@ -258,10 +262,10 @@ object ConfigCommand extends Config {
       require(configsToBeAdded.forall(config => config.length == 2), "Invalid entity config: all configs to be added must be in the format \"key=val\".")
       //Create properties, parsing square brackets from values if necessary
       configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))
-      if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
-        println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
-          s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
-      }
+    }
+    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
+      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+        s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
     }
     props
   }
@@ -645,6 +649,9 @@ object ConfigCommand extends Config {
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
+    val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
+            .withRequiredArg
+            .ofType(classOf[String])
     val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
             .withRequiredArg
             .ofType(classOf[String])
@@ -764,10 +771,15 @@ object ConfigCommand extends Config {
         } else if (!hasEntityName)
           throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
-        val isAddConfigPresent: Boolean = options.has(addConfig)
-        val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if (!isAddConfigPresent && !isDeleteConfigPresent)
-          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
+        val isAddConfigPresent = options.has(addConfig)
+        val isAddConfigFilePresent = options.has(addConfigFile)
+        val isDeleteConfigPresent = options.has(deleteConfig)
+
+        if(isAddConfigPresent && isAddConfigFilePresent)
+          throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified")
+
+        if(!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
+          throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
       }
     }
   }
