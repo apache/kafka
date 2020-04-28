@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class AlterConfigsResponse extends AbstractResponse {
+public class AlterConfigsResponse extends LegacyAbstractResponse {
 
     private static final String RESOURCES_KEY_NAME = "resources";
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";

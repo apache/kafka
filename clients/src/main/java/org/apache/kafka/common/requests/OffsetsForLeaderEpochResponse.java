@@ -51,7 +51,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
-public class OffsetsForLeaderEpochResponse extends AbstractResponse {
+public class OffsetsForLeaderEpochResponse extends LegacyAbstractResponse {
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "An array of topics for which we have leader offsets for some requested partition leader epoch");
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",

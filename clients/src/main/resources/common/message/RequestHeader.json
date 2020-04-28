@@ -30,7 +30,13 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
+
+    // The ClientId string must be serialized with the old-style two-byte length prefix.
+    // The reason is that older brokers must be able to read the request header for any
+    // ApiVersionsRequest, even if it is from a newer version.
+    // Since the client is sending the ApiVersionsRequest in order to discover what
+    // versions are supported, the client does not know the best version to use.
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
-      "about": "The client ID string." }
+      "flexibleVersions": "none", "about": "The client ID string." }
   ]
 }

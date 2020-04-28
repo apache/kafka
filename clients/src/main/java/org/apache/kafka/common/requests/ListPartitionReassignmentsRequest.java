@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.On
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -66,14 +65,6 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
 
     public ListPartitionReassignmentsRequestData data() {
         return data;
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

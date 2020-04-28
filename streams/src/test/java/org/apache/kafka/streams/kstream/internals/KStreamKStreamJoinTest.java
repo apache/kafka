@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -67,7 +68,16 @@ public class KStreamKStreamJoinTest {
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
-    public void shouldLogAndMeterOnSkippedRecordsWithNullValue() {
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeterOnSkippedRecordsWithNullValue(final String builtInMetricsVersion) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -81,15 +91,28 @@ public class KStreamKStreamJoinTest {
         );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", null);
             LogCaptureAppender.unregister(appender);
 
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] offset=[0]"));
-
-            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
+                    + "offset=[0]")
+            );
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertEquals(
+                    1.0,
+                    getMetricByName(
+                        driver.metrics(),
+                        "skipped-records-total",
+                        "stream-metrics"
+                    ).metricValue()
+                );
+            }
         }
     }
 

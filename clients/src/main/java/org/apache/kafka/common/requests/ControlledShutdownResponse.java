@@ -62,11 +62,6 @@ public class ControlledShutdownResponse extends AbstractResponse {
         return new ControlledShutdownResponse(new ControlledShutdownResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public ControlledShutdownResponseData data() {
         return data;
     }

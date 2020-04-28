@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 
-public class AlterReplicaLogDirsResponse extends AbstractResponse {
+public class AlterReplicaLogDirsResponse extends LegacyAbstractResponse {
 
     // request level key names
     private static final String TOPICS_KEY_NAME = "topics";

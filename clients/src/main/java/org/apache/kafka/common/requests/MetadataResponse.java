@@ -19,14 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -56,19 +57,20 @@ import java.util.stream.Collectors;
  */
 public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
-
+    public static final int NO_LEADER_ID = -1;
     public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
     private final MetadataResponseData data;
     private volatile Holder holder;
+    private final boolean hasReliableLeaderEpochs;
 
-    public MetadataResponse(MetadataResponseData data) {
-        this.data = data;
+    public MetadataResponse(MetadataResponseData data, short version) {
+        this(data, hasReliableLeaderEpochs(version));
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        this.data = data;
+        this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
 
     @Override
@@ -121,17 +123,36 @@ public class MetadataResponse extends AbstractResponse {
     public Cluster cluster() {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
+
         for (TopicMetadata metadata : topicMetadata()) {
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    partitions.add(partitionMetaToInfo(metadata.topic, partitionMetadata));
+                    partitions.add(toPartitionInfo(partitionMetadata, holder().brokers));
                 }
             }
         }
         return new Cluster(data.clusterId(), brokers(), partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller());
+    }
+
+    public static PartitionInfo toPartitionInfo(PartitionMetadata metadata, Map<Integer, Node> nodesById) {
+        return new PartitionInfo(metadata.topic(),
+                metadata.partition(),
+                metadata.leaderId.map(nodesById::get).orElse(null),
+                convertToNodeArray(metadata.replicaIds, nodesById),
+                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
+                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+    }
+
+    private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
+        return replicaIds.stream().map(replicaId -> {
+            Node node = nodesById.get(replicaId);
+            if (node == null)
+                return new Node(replicaId, "", -1);
+            return node;
+        }).toArray(Node[]::new);
     }
 
     /**
@@ -152,19 +173,6 @@ public class MetadataResponse extends AbstractResponse {
         return data.clusterAuthorizedOperations();
     }
 
-    /**
-     * Transform a topic and PartitionMetadata into PartitionInfo.
-     */
-    public static PartitionInfo partitionMetaToInfo(String topic, PartitionMetadata partitionMetadata) {
-        return new PartitionInfo(
-                topic,
-                partitionMetadata.partition(),
-                partitionMetadata.leader(),
-                partitionMetadata.replicas().toArray(new Node[0]),
-                partitionMetadata.isr().toArray(new Node[0]),
-                partitionMetadata.offlineReplicas().toArray(new Node[0]));
-    }
-
     private Holder holder() {
         if (holder == null) {
             synchronized (data) {
@@ -180,6 +188,10 @@ public class MetadataResponse extends AbstractResponse {
      * @return the brokers
      */
     public Collection<Node> brokers() {
+        return holder().brokers.values();
+    }
+
+    public Map<Integer, Node> brokersById() {
         return holder().brokers;
     }
 
@@ -207,8 +219,31 @@ public class MetadataResponse extends AbstractResponse {
         return this.data.clusterId();
     }
 
+    /**
+     * Check whether the leader epochs returned from the response can be relied on
+     * for epoch validation in Fetch, ListOffsets, and OffsetsForLeaderEpoch requests.
+     * If not, then the client will not retain the leader epochs and hence will not
+     * forward them in requests.
+     *
+     * @return true if the epoch can be used for validation
+     */
+    public boolean hasReliableLeaderEpochs() {
+        return hasReliableLeaderEpochs;
+    }
+
+    // Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker
+    // does not propagate leader epoch information accurately while a reassignment is in
+    // progress. Relying on a stale epoch can lead to FENCED_LEADER_EPOCH errors which
+    // can prevent consumption throughout the course of a reassignment. It is safer in
+    // this case to revert to the behavior in previous protocol versions which checks
+    // leader status only.
+    private static boolean hasReliableLeaderEpochs(short version) {
+        return version >= 9;
+    }
+
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(new MetadataResponseData(new ByteBufferAccessor(buffer), version));
+        return new MetadataResponse(new MetadataResponseData(new ByteBufferAccessor(buffer), version),
+            hasReliableLeaderEpochs(version));
     }
 
     public static class TopicMetadata {
@@ -234,7 +269,7 @@ public class MetadataResponse extends AbstractResponse {
                              String topic,
                              boolean isInternal,
                              List<PartitionMetadata> partitionMetadata) {
-            this(error, topic, isInternal, partitionMetadata, 0);
+            this(error, topic, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
         public Errors error() {
@@ -292,93 +327,78 @@ public class MetadataResponse extends AbstractResponse {
 
     // This is used to describe per-partition state in the MetadataResponse
     public static class PartitionMetadata {
-        private final Errors error;
-        private final int partition;
-        private final Node leader;
-        private final Optional<Integer> leaderEpoch;
-        private final List<Node> replicas;
-        private final List<Node> isr;
-        private final List<Node> offlineReplicas;
+        public final TopicPartition topicPartition;
+        public final Errors error;
+        public final Optional<Integer> leaderId;
+        public final Optional<Integer> leaderEpoch;
+        public final List<Integer> replicaIds;
+        public final List<Integer> inSyncReplicaIds;
+        public final List<Integer> offlineReplicaIds;
 
         public PartitionMetadata(Errors error,
-                                 int partition,
-                                 Node leader,
+                                 TopicPartition topicPartition,
+                                 Optional<Integer> leaderId,
                                  Optional<Integer> leaderEpoch,
-                                 List<Node> replicas,
-                                 List<Node> isr,
-                                 List<Node> offlineReplicas) {
+                                 List<Integer> replicaIds,
+                                 List<Integer> inSyncReplicaIds,
+                                 List<Integer> offlineReplicaIds) {
             this.error = error;
-            this.partition = partition;
-            this.leader = leader;
+            this.topicPartition = topicPartition;
+            this.leaderId = leaderId;
             this.leaderEpoch = leaderEpoch;
-            this.replicas = replicas;
-            this.isr = isr;
-            this.offlineReplicas = offlineReplicas;
-        }
-
-        public Errors error() {
-            return error;
+            this.replicaIds = replicaIds;
+            this.inSyncReplicaIds = inSyncReplicaIds;
+            this.offlineReplicaIds = offlineReplicaIds;
         }
 
         public int partition() {
-            return partition;
+            return topicPartition.partition();
         }
 
-        public int leaderId() {
-            return leader == null ? -1 : leader.id();
+        public String topic() {
+            return topicPartition.topic();
         }
 
-        public Optional<Integer> leaderEpoch() {
-            return leaderEpoch;
-        }
-
-        public Node leader() {
-            return leader;
-        }
-
-        public List<Node> replicas() {
-            return replicas;
-        }
-
-        public List<Node> isr() {
-            return isr;
-        }
-
-        public List<Node> offlineReplicas() {
-            return offlineReplicas;
+        public PartitionMetadata withoutLeaderEpoch() {
+            return new PartitionMetadata(error,
+                    topicPartition,
+                    leaderId,
+                    Optional.empty(),
+                    replicaIds,
+                    inSyncReplicaIds,
+                    offlineReplicaIds);
         }
 
         @Override
         public String toString() {
-            return "(type=PartitionMetadata" +
+            return "PartitionMetadata(" +
                     ", error=" + error +
-                    ", partition=" + partition +
-                    ", leader=" + leader +
+                    ", partition=" + topicPartition +
+                    ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicas, ",") +
-                    ", isr=" + Utils.join(isr, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicas, ",") + ')';
+                    ", replicas=" + Utils.join(replicaIds, ",") +
+                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
+                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
         }
     }
 
     private static class Holder {
-        private final Collection<Node> brokers;
+        private final Map<Integer, Node> brokers;
         private final Node controller;
         private final Collection<TopicMetadata> topicMetadata;
 
         Holder(MetadataResponseData data) {
-            this.brokers = Collections.unmodifiableCollection(createBrokers(data));
-            Map<Integer, Node> brokerMap = brokers.stream().collect(Collectors.toMap(Node::id, b -> b));
-            this.topicMetadata = createTopicMetadata(data, brokerMap);
-            this.controller = brokerMap.get(data.controllerId());
+            this.brokers = Collections.unmodifiableMap(createBrokers(data));
+            this.topicMetadata = createTopicMetadata(data);
+            this.controller = brokers.get(data.controllerId());
         }
 
-        private Collection<Node> createBrokers(MetadataResponseData data) {
-            return data.brokers().valuesList().stream().map(b ->
-                    new Node(b.nodeId(), b.host(), b.port(), b.rack())).collect(Collectors.toList());
+        private Map<Integer, Node> createBrokers(MetadataResponseData data) {
+            return data.brokers().valuesList().stream().map(b -> new Node(b.nodeId(), b.host(), b.port(), b.rack()))
+                    .collect(Collectors.toMap(Node::id, Function.identity()));
         }
 
-        private Collection<TopicMetadata> createTopicMetadata(MetadataResponseData data, Map<Integer, Node> brokerMap) {
+        private Collection<TopicMetadata> createTopicMetadata(MetadataResponseData data) {
             List<TopicMetadata> topicMetadataList = new ArrayList<>();
             for (MetadataResponseTopic topicMetadata : data.topics()) {
                 Errors topicError = Errors.forCode(topicMetadata.errorCode());
@@ -389,14 +409,15 @@ public class MetadataResponse extends AbstractResponse {
                 for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
                     Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
                     int partitionIndex = partitionMetadata.partitionIndex();
-                    int leader = partitionMetadata.leaderId();
+
+                    int leaderId = partitionMetadata.leaderId();
+                    Optional<Integer> leaderIdOpt = leaderId < 0 ? Optional.empty() : Optional.of(leaderId);
+
                     Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
-                    Node leaderNode = leader == -1 ? null : brokerMap.get(leader);
-                    List<Node> replicaNodes = convertToNodes(brokerMap, partitionMetadata.replicaNodes());
-                    List<Node> isrNodes = convertToNodes(brokerMap, partitionMetadata.isrNodes());
-                    List<Node> offlineNodes = convertToNodes(brokerMap, partitionMetadata.offlineReplicas());
-                    partitionMetadataList.add(new PartitionMetadata(partitionError, partitionIndex, leaderNode, leaderEpoch,
-                            replicaNodes, isrNodes, offlineNodes));
+                    TopicPartition topicPartition = new TopicPartition(topic, partitionIndex);
+                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leaderIdOpt,
+                            leaderEpoch, partitionMetadata.replicaNodes(), partitionMetadata.isrNodes(),
+                            partitionMetadata.offlineReplicas()));
                 }
 
                 topicMetadataList.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadataList,
@@ -405,22 +426,20 @@ public class MetadataResponse extends AbstractResponse {
             return topicMetadataList;
         }
 
-        private List<Node> convertToNodes(Map<Integer, Node> brokers, List<Integer> brokerIds) {
-            List<Node> nodes = new ArrayList<>(brokerIds.size());
-            for (Integer brokerId : brokerIds) {
-                Node node = brokers.get(brokerId);
-                if (node == null)
-                    nodes.add(new Node(brokerId, "", -1));
-                else
-                    nodes.add(node);
-            }
-            return nodes;
-        }
-
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
-                                                   int controllerId, List<TopicMetadata> topicMetadataList,
+    public static MetadataResponse prepareResponse(short version, int throttleTimeMs,
+                                                   Collection<Node> brokers, String clusterId, int controllerId,
+                                                   List<TopicMetadata> topicMetadataList,
+                                                   int clusterAuthorizedOperations) {
+        return prepareResponse(hasReliableLeaderEpochs(version), throttleTimeMs, brokers, clusterId, controllerId,
+            topicMetadataList, clusterAuthorizedOperations);
+    }
+
+    // Visible for testing
+    public static MetadataResponse prepareResponse(boolean hasReliableLeaderEpochs, int throttleTimeMs,
+                                                   Collection<Node> brokers, String clusterId, int controllerId,
+                                                   List<TopicMetadata> topicMetadataList,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
@@ -447,27 +466,16 @@ public class MetadataResponse extends AbstractResponse {
             for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
                 metadataResponseTopic.partitions().add(new MetadataResponsePartition()
                     .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition)
-                    .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
-                    .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    .setReplicaNodes(partitionMetadata.replicas.stream().map(Node::id).collect(Collectors.toList()))
-                    .setIsrNodes(partitionMetadata.isr.stream().map(Node::id).collect(Collectors.toList()))
-                    .setOfflineReplicas(partitionMetadata.offlineReplicas.stream().map(Node::id).collect(Collectors.toList())));
+                    .setPartitionIndex(partitionMetadata.partition())
+                    .setLeaderId(partitionMetadata.leaderId.orElse(NO_LEADER_ID))
+                    .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setReplicaNodes(partitionMetadata.replicaIds)
+                    .setIsrNodes(partitionMetadata.inSyncReplicaIds)
+                    .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
             }
             responseData.topics().add(metadataResponseTopic);
         });
-        return new MetadataResponse(responseData);
-    }
-
-    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
-                                                   int controllerId, List<TopicMetadata> topicMetadataList) {
-        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
-                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
-    }
-
-    public static MetadataResponse prepareResponse(Collection<Node> brokers, String clusterId, int controllerId,
-                                                   List<TopicMetadata> topicMetadata) {
-        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
+        return new MetadataResponse(responseData, hasReliableLeaderEpochs);
     }
 
     @Override

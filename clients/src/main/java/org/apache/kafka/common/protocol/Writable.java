@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import java.nio.ByteBuffer;
 import java.util.UUID;
 
 public interface Writable {
@@ -24,8 +25,10 @@ public interface Writable {
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
+    void writeDouble(double val);
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
+    void writeByteBuffer(ByteBuffer buf);
 
     default void writeUUID(UUID uuid) {
         writeLong(uuid.getMostSignificantBits());

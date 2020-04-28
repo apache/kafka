@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
+import org.apache.kafka.common.record.RecordsSend;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -69,7 +70,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     not supported by the fetch request version
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
-public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
+public class FetchResponse<T extends BaseRecords> extends LegacyAbstractResponse {
 
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -427,7 +428,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     @Override
     protected Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
-        Struct responseHeaderStruct = responseHeader.toStruct();
+        Struct responseHeaderStruct = responseHeader.data().toStruct(apiVersion);
         Struct responseBodyStruct = toStruct(apiVersion);
 
         // write the total size and the response header
@@ -526,7 +527,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         sends.add(new ByteBufferSend(dest, buffer));
 
         // finally the send for the record set itself
-        sends.add(records.toSend(dest));
+        RecordsSend recordsSend = records.toSend(dest);
+        if (recordsSend.size() > 0)
+            sends.add(recordsSend);
     }
 
     private static <T extends BaseRecords> Struct toStruct(short version, int throttleTimeMs, Errors error,

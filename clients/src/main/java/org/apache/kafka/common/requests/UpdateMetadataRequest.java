@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
@@ -200,11 +199,6 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public List<UpdateMetadataBroker> liveBrokers() {
         return data.liveBrokers();
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

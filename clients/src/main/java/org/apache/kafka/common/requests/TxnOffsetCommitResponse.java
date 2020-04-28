@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -42,6 +41,9 @@ import java.util.Map;
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#REQUEST_TIMED_OUT}
+ *   - {@link Errors#UNKNOWN_MEMBER_ID}
+ *   - {@link Errors#FENCED_INSTANCE_ID}
+ *   - {@link Errors#ILLEGAL_GENERATION}
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
@@ -71,11 +73,6 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         data = new TxnOffsetCommitResponseData()
                    .setTopics(new ArrayList<>(responseTopicDataMap.values()))
                    .setThrottleTimeMs(requestThrottleMs);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

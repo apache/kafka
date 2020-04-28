@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class ExpireDelegationTokenRequest extends AbstractRequest {
 
@@ -38,11 +37,6 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     public static ExpireDelegationTokenRequest parse(ByteBuffer buffer, short version) {
         return new ExpireDelegationTokenRequest(
             new ExpireDelegationTokenRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

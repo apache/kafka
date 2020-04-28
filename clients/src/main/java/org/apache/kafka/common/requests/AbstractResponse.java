@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -31,8 +30,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
+
+    private final ApiKeys apiKey;
+
+    protected AbstractResponse(ApiKeys apiKey) {
+        this.apiKey = apiKey;
+    }
 
     protected Send toSend(String destination, ResponseHeader header, short version) {
         return new NetworkSend(destination, serializeWithHeader(header, version));
@@ -41,23 +46,17 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serializeWithHeader(ApiKeys apiKey, short version, int correlationId) {
+    public ByteBuffer serializeWithHeader(short version, int correlationId) {
         return serializeWithHeader(new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version)), version);
     }
 
-    private ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
+    protected ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
         Message data = data();
-        if (data == null) {
-            Struct headerStruct = header.toStruct();
-            return serialize(headerStruct, toStruct(version));
-        }
-
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(header.data().size(serializationCache, version) +
+        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache, version) +
             data.size(serializationCache, version));
-        ByteBufferAccessor bufferAccessor = new ByteBufferAccessor(buffer);
-        header.data().write(bufferAccessor, serializationCache, version);
-        data.write(bufferAccessor, serializationCache, version);
+        header.write(buffer, serializationCache, version);
+        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
         buffer.rewind();
         return buffer;
     }
@@ -87,7 +86,12 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         errorCounts.put(error, count == null ? 1 : count + 1);
     }
 
-    protected abstract Struct toStruct(short version);
+    /**
+     * Return the auto-generated `Message` instance if this request/response relies on one for
+     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
+     * classes, return `null`.
+     */
+    protected abstract Message data();
 
     public static AbstractResponse parseResponse(ApiKeys apiKey, ByteBuffer responseBuffer, short version) {
         switch (apiKey) {
@@ -205,6 +209,6 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     public abstract int throttleTimeMs();
 
     public String toString(short version) {
-        return toStruct(version).toString();
+        return data().toString();
     }
 }

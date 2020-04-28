@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -37,7 +36,11 @@ public class LeaveGroupRequest extends AbstractRequest {
         private final List<MemberIdentity> members;
 
         public Builder(String groupId, List<MemberIdentity> members) {
-            super(ApiKeys.LEAVE_GROUP);
+            this(groupId, members, ApiKeys.LEAVE_GROUP.oldestVersion(), ApiKeys.LEAVE_GROUP.latestVersion());
+        }
+
+        Builder(String groupId, List<MemberIdentity> members, short oldestVersion, short latestVersion) {
+            super(ApiKeys.LEAVE_GROUP, oldestVersion, latestVersion);
             this.groupId = groupId;
             this.members = members;
             if (members.isEmpty()) {
@@ -108,10 +111,5 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, short version) {
         return new LeaveGroupRequest(new LeaveGroupRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 }

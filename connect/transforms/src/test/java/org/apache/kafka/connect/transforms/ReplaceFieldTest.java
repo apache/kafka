@@ -87,7 +87,7 @@ public class ReplaceFieldTest {
         final Struct updatedValue = (Struct) transformedRecord.value();
 
         assertEquals(2, updatedValue.schema().fields().size());
-        assertEquals(new Integer(42), updatedValue.getInt32("xyz"));
+        assertEquals(Integer.valueOf(42), updatedValue.getInt32("xyz"));
         assertEquals(true, updatedValue.getBoolean("bar"));
     }
 

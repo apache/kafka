@@ -26,26 +26,34 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.easymock.EasyMockRunner;
+import org.easymock.EasyMockRule;
 import org.easymock.Mock;
 import org.easymock.MockType;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.aryEq;
 import static org.easymock.EasyMock.eq;
@@ -60,26 +68,44 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(Parameterized.class)
 public class MeteredSessionStoreTest {
+
+    @Rule
+    public EasyMockRule rule = new EasyMockRule(this);
+
+    private static final String STORE_TYPE = "scope";
+    private static final String STORE_LEVEL_GROUP_FROM_0100_TO_24 = "stream-" + STORE_TYPE + "-state-metrics";
+    private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
+    private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
+    private static final String THREAD_ID_TAG_KEY = "thread-id";
 
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<String, String> tags = mkMap(
-        mkEntry("thread-id", threadId),
-        mkEntry("task-id", taskId.toString()),
-        mkEntry("scope-state-id", "metered")
-    );
     private final Metrics metrics = new Metrics();
     private MeteredSessionStore<String, String> metered;
     @Mock(type = MockType.NICE)
     private SessionStore<Bytes, byte[]> inner;
     @Mock(type = MockType.NICE)
-    private ProcessorContext context;
+    private InternalProcessorContext context;
 
     private final String key = "a";
     private final byte[] keyBytes = key.getBytes();
     private final Windowed<Bytes> windowedKeyBytes = new Windowed<>(Bytes.wrap(keyBytes), new SessionWindow(0, 0));
+    private String storeLevelGroup;
+    private String threadIdTagKey;
+    private Map<String, String> tags;
+
+    @Parameters(name = "{0}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {
+            {StreamsConfig.METRICS_LATEST},
+            {StreamsConfig.METRICS_0100_TO_24}
+        });
+    }
+
+    @Parameter
+    public String builtInMetricsVersion;
 
     @Before
     public void before() {
@@ -90,9 +116,19 @@ public class MeteredSessionStoreTest {
             Serdes.String(),
             new MockTime());
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
-        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
-        expect(context.taskId()).andReturn(taskId);
+        expect(context.metrics())
+            .andReturn(new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion)).anyTimes();
+        expect(context.taskId()).andReturn(taskId).anyTimes();
         expect(inner.name()).andReturn("metered").anyTimes();
+        storeLevelGroup =
+            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
+        threadIdTagKey =
+            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
+        tags = mkMap(
+            mkEntry(threadIdTagKey, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", "metered")
+        );
     }
 
     private void init() {
@@ -105,10 +141,26 @@ public class MeteredSessionStoreTest {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", threadId, taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", threadId, taskId.toString(), "scope", "all")));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+            storeLevelGroup,
+            threadIdTagKey,
+            threadId,
+            taskId.toString(),
+            STORE_TYPE,
+            "metered"
+        )));
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertTrue(reporter.containsMbean(String.format(
+                "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+                storeLevelGroup,
+                threadIdTagKey,
+                threadId,
+                taskId.toString(),
+                STORE_TYPE,
+                ROLLUP_VALUE
+            )));
+        }
     }
 
     @Test
@@ -273,7 +325,7 @@ public class MeteredSessionStoreTest {
 
         metered = new MeteredSessionStore<>(
             cachedSessionStore,
-            "scope",
+            STORE_TYPE,
             Serdes.String(),
             Serdes.String(),
             new MockTime());
@@ -288,7 +340,7 @@ public class MeteredSessionStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, "stream-scope-state-metrics", "", this.tags));
+        return this.metrics.metric(new MetricName(name, storeLevelGroup, "", this.tags));
     }
 
 }

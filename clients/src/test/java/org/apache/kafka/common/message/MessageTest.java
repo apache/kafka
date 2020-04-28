@@ -331,7 +331,6 @@ public final class MessageTest {
 
             if (version < 6) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-
             }
 
             if (version < 7) {
@@ -382,6 +381,9 @@ public final class MessageTest {
         String txnId = "transactionalId";
         int producerId = 25;
         short producerEpoch = 10;
+        String instanceId = "instance";
+        String memberId = "member";
+        int generationId = 1;
 
         int partition = 2;
         int offset = 100;
@@ -407,6 +409,9 @@ public final class MessageTest {
                       .setTransactionalId(txnId)
                       .setProducerId(producerId)
                       .setProducerEpoch(producerEpoch)
+                      .setGroupInstanceId(instanceId)
+                      .setMemberId(memberId)
+                      .setGenerationId(generationId)
                       .setTopics(Collections.singletonList(
                           new TxnOffsetCommitRequestTopic()
                               .setName(topicName)
@@ -420,8 +425,18 @@ public final class MessageTest {
 
         for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
             TxnOffsetCommitRequestData requestData = request.get();
-            if (version < 6) {
+            if (version < 2) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+            }
+
+            if (version < 3) {
+                final short finalVersion = version;
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setGroupInstanceId(null);
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setMemberId("");
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setGenerationId(-1);
             }
 
             testAllMessageRoundTripsFromVersion(version, requestData);
@@ -451,27 +466,39 @@ public final class MessageTest {
         String groupId = "groupId";
         String topicName = "topic";
 
+        List<OffsetFetchRequestTopic> topics = Collections.singletonList(
+            new OffsetFetchRequestTopic()
+                .setName(topicName)
+                .setPartitionIndexes(Collections.singletonList(5)));
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setTopics(new ArrayList<>())
                                      .setGroupId(groupId));
 
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetFetchRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitionIndexes(Collections.singletonList(5))))
-        );
+                                     .setTopics(topics));
 
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
+
+        OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
+                                                       .setGroupId(groupId)
+                                                       .setTopics(topics)
+                                                       .setRequireStable(true);
+
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            final short finalVersion = version;
             if (version < 2) {
-                final short finalVersion = version;
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
+
+            if (version < 7) {
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
+            } else {
+                testAllMessageRoundTripsFromVersion(finalVersion, requireStableData);
             }
         }
 
@@ -516,8 +543,8 @@ public final class MessageTest {
         int throttleTimeMs = 1234;
         long logAppendTimeMs = 1234L;
         long logStartOffset = 1234L;
-        int relativeOffset = 0;
-        String relativeOffsetErrorMessage = "error message";
+        int batchIndex = 0;
+        String batchIndexErrorMessage = "error message";
         String errorMessage = "global error message";
 
         testAllMessageRoundTrips(new ProduceResponseData()
@@ -542,10 +569,10 @@ public final class MessageTest {
                                          .setBaseOffset(baseOffset)
                                          .setLogAppendTimeMs(logAppendTimeMs)
                                          .setLogStartOffset(logStartOffset)
-                                         .setErrorRecords(singletonList(
-                                             new ProduceResponseData.RelativeOffsetAndErrorMessage()
-                                                 .setRelativeOffset(relativeOffset)
-                                                 .setRelativeOffsetErrorMessage(relativeOffsetErrorMessage)))
+                                         .setRecordErrors(singletonList(
+                                             new ProduceResponseData.BatchIndexAndErrorMessage()
+                                                 .setBatchIndex(batchIndex)
+                                                 .setBatchIndexErrorMessage(batchIndexErrorMessage)))
                                          .setErrorMessage(errorMessage)))))
                       .setThrottleTimeMs(throttleTimeMs);
 
@@ -553,7 +580,7 @@ public final class MessageTest {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
-                responseData.responses().get(0).partitions().get(0).setErrorRecords(Collections.emptyList());
+                responseData.responses().get(0).partitions().get(0).setRecordErrors(Collections.emptyList());
                 responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
             }
 
@@ -598,7 +625,7 @@ public final class MessageTest {
     }
 
     private void testAllMessageRoundTripsFromVersion(short fromVersion, Message message) throws Exception {
-        for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
+        for (short version = fromVersion; version <= message.highestSupportedVersion(); version++) {
             testEquivalentMessageRoundTrip(version, message);
         }
     }
@@ -646,7 +673,7 @@ public final class MessageTest {
      * schemas accessible through the ApiKey class.
      */
     @Test
-    public void testMessageVersions() throws Exception {
+    public void testMessageVersions() {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Message message = null;
             try {

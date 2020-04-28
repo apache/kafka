@@ -24,12 +24,11 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public abstract class AbstractRequest extends AbstractRequestResponse {
+public abstract class AbstractRequest implements AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
@@ -79,13 +78,13 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     private final short version;
-    public final ApiKeys api;
+    public final ApiKeys apiKey;
 
-    public AbstractRequest(ApiKeys api, short version) {
-        if (!api.isVersionSupported(version))
-            throw new UnsupportedVersionException("The " + api + " protocol does not support version " + version);
+    public AbstractRequest(ApiKeys apiKey, short version) {
+        if (!apiKey.isVersionSupported(version))
+            throw new UnsupportedVersionException("The " + apiKey + " protocol does not support version " + version);
         this.version = version;
-        this.api = api;
+        this.apiKey = apiKey;
     }
 
     /**
@@ -102,36 +101,29 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     /**
      * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
      */
-    public final ByteBuffer serializeWithHeader(RequestHeader header) {
+    public ByteBuffer serializeWithHeader(RequestHeader header) {
         Message data = data();
-        if (data == null) {
-            Struct headerStruct = header.toStruct();
-            return serialize(headerStruct, toStruct());
-        }
-
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(header.data().size(serializationCache, version) +
-            data.size(serializationCache, version));
-        ByteBufferAccessor bufferAccessor = new ByteBufferAccessor(buffer);
-        header.data().write(bufferAccessor, serializationCache, version);
-        data.write(bufferAccessor, serializationCache, version);
+        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache) + data.size(serializationCache, version));
+        header.write(buffer, serializationCache);
+        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
         buffer.rewind();
         return buffer;
     }
 
+    /**
+     * Return the auto-generated `Message` instance if this request/response relies on one for
+     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
+     * classes, return `null`.
+     */
+    protected abstract Message data();
+
     // Visible for testing
     ByteBuffer serializeBody() {
         Message data = data();
-        ByteBuffer buffer;
-        if (data == null) {
-            Struct bodyStruct = toStruct();
-            buffer = ByteBuffer.allocate(bodyStruct.sizeOf());
-            bodyStruct.writeTo(buffer);
-        } else {
-            ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-            buffer = ByteBuffer.allocate(data.size(serializationCache, version));
-            data.write(new ByteBufferAccessor(buffer), serializationCache, version);
-        }
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(data.size(serializationCache, version));
+        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
         buffer.rewind();
         return buffer;
     }
@@ -141,10 +133,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         return data().size(new ObjectSerializationCache(), version);
     }
 
-    protected abstract Struct toStruct();
-
     public String toString(boolean verbose) {
-        return toStruct().toString();
+        return data().toString();
     }
 
     @Override

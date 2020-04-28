@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -64,27 +63,10 @@ public class SyncGroupRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-                return new SyncGroupResponse(
-                        new SyncGroupResponseData()
-                            .setErrorCode(Errors.forException(e).code())
-                            .setAssignment(new byte[0])
-                       );
-            case 1:
-            case 2:
-            case 3:
-                return new SyncGroupResponse(
-                        new SyncGroupResponseData()
-                            .setErrorCode(Errors.forException(e).code())
-                            .setAssignment(new byte[0])
-                            .setThrottleTimeMs(throttleTimeMs)
-                );
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.SYNC_GROUP.latestVersion()));
-        }
+        return new SyncGroupResponse(new SyncGroupResponseData()
+                .setErrorCode(Errors.forException(e).code())
+                .setAssignment(new byte[0])
+                .setThrottleTimeMs(throttleTimeMs));
     }
 
     public Map<String, ByteBuffer> groupAssignments() {
@@ -95,13 +77,19 @@ public class SyncGroupRequest extends AbstractRequest {
         return groupAssignments;
     }
 
-    public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
-        return new SyncGroupRequest(new SyncGroupRequestData(new ByteBufferAccessor(buffer), version), version);
+    /**
+     * ProtocolType and ProtocolName are mandatory since version 5. This methods verifies that
+     * they are defined for version 5 or higher, or returns true otherwise for older versions.
+     */
+    public boolean areMandatoryProtocolTypeAndNamePresent() {
+        if (version() >= 5)
+            return data.protocolType() != null && data.protocolName() != null;
+        else
+            return true;
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
+        return new SyncGroupRequest(new SyncGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

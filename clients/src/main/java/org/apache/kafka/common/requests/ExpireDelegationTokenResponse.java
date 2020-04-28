@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class ExpireDelegationTokenResponse extends AbstractResponse {
 
@@ -53,13 +52,8 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     protected Message data() {
-        return null;
+        return data;
     }
 
     @Override

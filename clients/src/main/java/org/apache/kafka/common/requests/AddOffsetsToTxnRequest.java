@@ -29,7 +29,7 @@ import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
 
-public class AddOffsetsToTxnRequest extends AbstractRequest {
+public class AddOffsetsToTxnRequest extends LegacyAbstractRequest {
     private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
             TRANSACTIONAL_ID,
             PRODUCER_ID,

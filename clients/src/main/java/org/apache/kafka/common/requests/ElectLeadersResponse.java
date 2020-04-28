@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class ElectLeadersResponse extends AbstractResponse {
 
@@ -52,11 +51,6 @@ public class ElectLeadersResponse extends AbstractResponse {
 
     public ElectLeadersResponseData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

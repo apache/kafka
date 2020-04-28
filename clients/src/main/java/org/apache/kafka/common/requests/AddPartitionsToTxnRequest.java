@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 
-public class AddPartitionsToTxnRequest extends AbstractRequest {
+public class AddPartitionsToTxnRequest extends LegacyAbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 

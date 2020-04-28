@@ -54,8 +54,8 @@ import scala.math._
  */
 @nonthreadsafe
 class LogSegment private[log] (val log: FileRecords,
-                               val lazyOffsetIndex: LazyOffsetIndex,
-                               val lazyTimeIndex: LazyTimeIndex,
+                               val lazyOffsetIndex: LazyIndex[OffsetIndex],
+                               val lazyTimeIndex: LazyIndex[TimeIndex],
                                val txnIndex: TransactionIndex,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
@@ -245,7 +245,7 @@ class LogSegment private[log] (val log: FileRecords,
   private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
     if (batch.hasProducerId) {
       val producerId = batch.producerId
-      val appendInfo = producerStateManager.prepareUpdate(producerId, isFromClient = false)
+      val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.Replication)
       val maybeCompletedTxn = appendInfo.append(batch, firstOffsetMetadataOpt = None)
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>
@@ -655,8 +655,8 @@ object LogSegment {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
       FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      new LazyOffsetIndex(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new LazyTimeIndex(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
       new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,

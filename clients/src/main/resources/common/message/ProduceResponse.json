@@ -28,7 +28,7 @@
   // Version 5 added LogStartOffset to filter out spurious
   // OutOfOrderSequenceExceptions on the client.
   //
-  // Version 8 added ErrorRecords and ErrorMessage to include information about
+  // Version 8 added RecordErrors and ErrorMessage to include information about
   // records that cause the whole batch to be dropped.  See KIP-467 for details.
   "validVersions": "0-8",
   "flexibleVersions": "none",
@@ -49,11 +49,11 @@
           "about": "The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1.  If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended." },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The log start offset." },
-        { "name": "ErrorRecords", "type": "[]RelativeOffsetAndErrorMessage", "versions": "8+", "ignorable": true,
-          "about": "The relative offsets of records that caused the batch to be dropped", "fields": [
-          { "name":  "RelativeOffset", "type": "int32", "versions":  "8+",
-            "about":  "The relative offset of the record that cause the batch to be dropped" },
-          { "name": "RelativeOffsetErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+",
+        { "name": "RecordErrors", "type": "[]BatchIndexAndErrorMessage", "versions": "8+", "ignorable": true,
+          "about": "The batch indices of records that caused the batch to be dropped", "fields": [
+          { "name":  "BatchIndex", "type": "int32", "versions":  "8+",
+            "about":  "The batch index of the record that cause the batch to be dropped" },
+          { "name": "BatchIndexErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+",
             "about":  "The error message of the record that caused the batch to be dropped"}
         ]},
         { "name":  "ErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+", "ignorable":  true,

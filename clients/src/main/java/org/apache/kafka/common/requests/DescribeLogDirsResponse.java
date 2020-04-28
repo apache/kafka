@@ -42,7 +42,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 
-public class DescribeLogDirsResponse extends AbstractResponse {
+public class DescribeLogDirsResponse extends LegacyAbstractResponse {
 
     public static final long INVALID_OFFSET_LAG = -1L;
 

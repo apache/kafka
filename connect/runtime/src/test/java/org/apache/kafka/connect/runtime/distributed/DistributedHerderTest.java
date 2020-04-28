@@ -67,6 +67,7 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.powermock.reflect.Whitebox;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -76,6 +77,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -161,6 +163,8 @@ public class DistributedHerderTest {
 
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+    private static final Runnable EMPTY_RUNNABLE = () -> {
+    };
 
     @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
@@ -186,6 +190,7 @@ public class DistributedHerderTest {
     private short connectProtocolVersion;
     private final ConnectorClientConfigOverridePolicy
         noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
+
 
     @Before
     public void setUp() throws Exception {
@@ -1763,6 +1768,18 @@ public class DistributedHerderTest {
         // This requires inter-worker communication, so needs the REST API
     }
 
+
+    @Test
+    public void testThreadNames() {
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "herderExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith(DistributedHerder.class.getSimpleName()));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "forwardRequestExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("ForwardRequestExecutor"));
+
+        assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
+                getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("StartAndStopExecutor"));
+    }
 
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,

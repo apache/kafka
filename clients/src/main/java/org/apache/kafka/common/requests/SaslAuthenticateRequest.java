@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -50,9 +49,7 @@ public class SaslAuthenticateRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=SaslAuthenticateRequest)");
-            return bld.toString();
+            return data.toString();
         }
     }
 
@@ -78,11 +75,6 @@ public class SaslAuthenticateRequest extends AbstractRequest {
     public static SaslAuthenticateRequest parse(ByteBuffer buffer, short version) {
         return new SaslAuthenticateRequest(new SaslAuthenticateRequestData(new ByteBufferAccessor(buffer), version),
             version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 }
 

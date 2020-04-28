@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.easymock.EasyMock._
-import org.easymock.{Capture, CaptureType, EasyMock, IAnswer, IExpectationSetters}
+import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -396,12 +396,8 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
-      EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])
-        }
-      }).anyTimes()
+      EasyMock.anyObject())
+    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])).anyTimes()
 
     replay(replicaManager, logManager, quotaManager, partition, log, futureLog)
 
@@ -520,11 +516,11 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
 
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-      t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
-      t1p1 -> PartitionFetchState(160, leaderEpoch, state = Fetching)))
+      t1p0 -> PartitionFetchState(150, None, leaderEpoch, None, state = Fetching),
+      t1p1 -> PartitionFetchState(160, None, leaderEpoch, None, state = Fetching)))
 
     assertTrue(fetchRequestOpt.isDefined)
-    val fetchRequest = fetchRequestOpt.get
+    val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
     val request = fetchRequest.build()
@@ -572,36 +568,36 @@ class ReplicaAlterLogDirsThreadTest {
 
     // one partition is ready and one is truncating
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, state = Truncating)))
+        t1p0 -> PartitionFetchState(150, None, leaderEpoch, state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, state = Truncating)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
-    assertFalse(fetchRequest.fetchData.isEmpty)
+    assertFalse(fetchRequest.partitionData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
-    val fetchInfos = fetchRequest.build().fetchData.asScala.toSeq
+    val fetchInfos = fetchRequest.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals("Expected fetch request for non-truncating partition", t1p0, fetchInfos.head._1)
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, leaderEpoch, state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = new DelayedItem(5000), state = Fetching)))
+        t1p0 -> PartitionFetchState(140, None, leaderEpoch, state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
-    assertFalse(fetchRequest2.fetchData.isEmpty)
+    assertFalse(fetchRequest2.partitionData.isEmpty)
     assertFalse(partitionsWithError2.nonEmpty)
-    val fetchInfos2 = fetchRequest2.build().fetchData.asScala.toSeq
+    val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals("Expected fetch request for non-delayed partition", t1p0, fetchInfos2.head._1)
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, leaderEpoch, delay = new DelayedItem(5000), state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = new DelayedItem(5000), state = Fetching)))
+        t1p0 -> PartitionFetchState(140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
     assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3Opt.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }
@@ -631,11 +627,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
-      EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])
-        }
-      }).anyTimes()
+      EasyMock.anyObject())
+    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])).anyTimes()
   }
 }

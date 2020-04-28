@@ -18,53 +18,57 @@ package org.apache.kafka.streams.errors;
 
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.TaskId;
 
 /**
- * Indicates that a task got migrated to another thread.
- * Thus, the task raising this exception can be cleaned up and closed as "zombie".
+ * Indicates that one or more tasks got migrated to another thread.
+ *
+ * 1) if the task field is specified, then that single task should be cleaned up and closed as "zombie" while the
+ *    thread can continue as normal;
+ * 2) if no tasks are specified (i.e. taskId == null), it means that the hosted thread has been fenced and all
+ *    tasks are migrated, in which case the thread should rejoin the group
  */
 public class TaskMigratedException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
-    private final Task task;
+    private final TaskId taskId;
 
-    // this is for unit test only
-    public TaskMigratedException() {
-        super("A task has been migrated unexpectedly", null);
-
-        this.task = null;
-    }
-
-    public TaskMigratedException(final Task task,
+    public TaskMigratedException(final TaskId taskId,
                                  final TopicPartition topicPartition,
                                  final long endOffset,
                                  final long pos) {
-        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
-                            topicPartition,
-                            endOffset,
-                            pos),
-            null);
-
-        this.task = task;
+        this(taskId, String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
+            topicPartition,
+            endOffset,
+            pos), null);
     }
 
-    public TaskMigratedException(final Task task) {
-        super(String.format("Task %s is unexpectedly closed during processing", task.id()), null);
-
-        this.task = task;
+    public TaskMigratedException(final TaskId taskId) {
+        this(taskId, String.format("Task %s is unexpectedly closed during processing", taskId), null);
     }
 
-    public TaskMigratedException(final Task task,
+    public TaskMigratedException(final TaskId taskId,
                                  final Throwable throwable) {
-        super(String.format("Client request for task %s has been fenced due to a rebalance", task.id()), throwable);
-
-        this.task = task;
+        this(taskId, String.format("Client request for task %s has been fenced due to a rebalance", taskId), throwable);
     }
 
-    public Task migratedTask() {
-        return task;
+    public TaskMigratedException(final TaskId taskId,
+                                 final String message,
+                                 final Throwable throwable) {
+        super(message, throwable);
+        this.taskId = taskId;
     }
 
+    public TaskMigratedException(final String message, final Throwable throwable) {
+        this(null, message + " It means all tasks belonging to this thread have been migrated", throwable);
+    }
+
+    public TaskId migratedTaskId() {
+        return taskId;
+    }
+
+    public TaskMigratedException() {
+        this(null, "A task has been migrated unexpectedly", null);
+    }
 }

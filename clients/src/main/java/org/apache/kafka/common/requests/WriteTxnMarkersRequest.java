@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class WriteTxnMarkersRequest extends AbstractRequest {
+public class WriteTxnMarkersRequest extends LegacyAbstractRequest {
     private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
     private static final String TXN_MARKERS_KEY_NAME = "transaction_markers";
 

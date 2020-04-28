@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.R
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -66,14 +65,6 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
 
     public AlterPartitionReassignmentsRequestData data() {
         return data;
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

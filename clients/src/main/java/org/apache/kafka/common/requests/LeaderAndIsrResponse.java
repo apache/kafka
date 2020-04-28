@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPart
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -67,11 +66,6 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
         return new LeaderAndIsrResponse(new LeaderAndIsrResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

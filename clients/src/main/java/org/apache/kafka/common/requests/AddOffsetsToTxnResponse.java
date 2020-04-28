@@ -28,7 +28,7 @@ import java.util.Map;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
-public class AddOffsetsToTxnResponse extends AbstractResponse {
+public class AddOffsetsToTxnResponse extends LegacyAbstractResponse {
     private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE);

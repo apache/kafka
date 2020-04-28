@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class DeleteRecordsRequest extends AbstractRequest {
+public class DeleteRecordsRequest extends LegacyAbstractRequest {
 
     public static final long HIGH_WATERMARK = -1L;
 
@@ -125,6 +125,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         this.timeout = timeout;
         this.partitionOffsets = partitionOffsets;
     }
+
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DELETE_RECORDS.requestSchema(version()));
@@ -161,15 +162,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             responseMap.put(entry.getKey(), new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.forException(e)));
         }
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new DeleteRecordsResponse(throttleTimeMs, responseMap);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.DELETE_RECORDS.latestVersion()));
-        }
+        return new DeleteRecordsResponse(throttleTimeMs, responseMap);
     }
 
     public int timeout() {

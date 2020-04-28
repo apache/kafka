@@ -30,7 +30,7 @@ import java.util.Objects;
 public class WindowedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
     static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE);
         WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
@@ -48,6 +48,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
+    @Override
     public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
         // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
         final Map<String, String> topicConfig = new HashMap<>(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);

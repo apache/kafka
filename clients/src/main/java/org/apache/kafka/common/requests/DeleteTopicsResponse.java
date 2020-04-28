@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -43,11 +42,6 @@ public class DeleteTopicsResponse extends AbstractResponse {
 
     public DeleteTopicsResponse(DeleteTopicsResponseData data) {
         this.data = data;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

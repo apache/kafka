@@ -32,9 +32,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -46,6 +43,11 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -218,6 +220,17 @@ public class TopologyTestDriver implements Closeable {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final boolean eosEnabled;
 
+    private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
+
+        @Override
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
+    };
+
     /**
      * Create a new test diver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
@@ -225,10 +238,9 @@ public class TopologyTestDriver implements Closeable {
      * @param topology the topology to be tested
      * @param config   the configuration for the topology
      */
-    @SuppressWarnings("WeakerAccess")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
-        this(topology, config, (Instant) null);
+        this(topology, config, null);
     }
 
     /**
@@ -240,7 +252,6 @@ public class TopologyTestDriver implements Closeable {
      * @param config                 the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
@@ -255,11 +266,13 @@ public class TopologyTestDriver implements Closeable {
      * @param config                 the configuration for the topology
      * @param initialWallClockTime   the initial value of internally mocked wall-clock time
      */
-    @SuppressWarnings("WeakerAccess")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final Instant initialWallClockTime) {
-        this(topology.internalTopologyBuilder, config, initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
+        this(
+            topology.internalTopologyBuilder,
+            config,
+            initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
     }
 
 
@@ -279,7 +292,7 @@ public class TopologyTestDriver implements Closeable {
         internalTopologyBuilder = builder;
         internalTopologyBuilder.rewriteTopology(streamsConfig);
 
-        processorTopology = internalTopologyBuilder.build(null);
+        processorTopology = internalTopologyBuilder.build();
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
             (globalTopology != null && globalTopology.hasPersistentGlobalStore());
@@ -306,36 +319,14 @@ public class TopologyTestDriver implements Closeable {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             "test-client",
-            StreamsConfig.METRICS_LATEST
+            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
         );
         streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
-        final Sensor skippedRecordsSensor =
-            streamsMetrics.threadLevelSensor(threadId, "skipped-records", Sensor.RecordingLevel.INFO);
-        final String threadLevelGroup = "stream-metrics";
-        skippedRecordsSensor.add(new MetricName("skipped-records-rate",
-                                                threadLevelGroup,
-                                                "The average per-second number of skipped records",
-                                                streamsMetrics.threadLevelTagMap(threadId)),
-                                 new Rate(TimeUnit.SECONDS, new WindowedCount()));
-        skippedRecordsSensor.add(new MetricName("skipped-records-total",
-                                                threadLevelGroup,
-                                                "The total number of skipped records",
-                                                streamsMetrics.threadLevelTagMap(threadId)),
-                                 new CumulativeSum());
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
             streamsMetrics);
-        final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
-        };
 
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
@@ -379,31 +370,53 @@ public class TopologyTestDriver implements Closeable {
                 new LogContext()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(
+                0L,
+                -1L,
+                -1,
+                ProcessorContextImpl.NONEXIST_TOPIC,
+                new RecordHeaders()));
         } else {
             globalStateManager = null;
             globalStateTask = null;
         }
 
         if (!partitionsByTopic.isEmpty()) {
+            final LogContext logContext = new LogContext("topology-test-driver ");
+            final ProcessorStateManager stateManager = new ProcessorStateManager(
+                TASK_ID,
+                new HashSet<>(partitionsByTopic.values()),
+                Task.TaskType.ACTIVE,
+                stateDirectory,
+                processorTopology.storeToChangelogTopic(),
+                new StoreChangelogReader(
+                    mockWallClockTime,
+                    streamsConfig,
+                    logContext,
+                    createRestoreConsumer(processorTopology.storeToChangelogTopic()),
+                    stateRestoreListener),
+                logContext);
+            final RecordCollector recordCollector = new RecordCollectorImpl(
+                TASK_ID,
+                streamsConfig,
+                logContext,
+                streamsMetrics,
+                consumer,
+                taskId -> producer);
             task = new StreamTask(
                 TASK_ID,
-                partitionsByTopic.values(),
+                new HashSet<>(partitionsByTopic.values()),
                 processorTopology,
                 consumer,
-                new StoreChangelogReader(
-                    createRestoreConsumer(processorTopology.storeToChangelogTopic()),
-                    Duration.ZERO,
-                    stateRestoreListener,
-                    new LogContext("topology-test-driver ")),
                 streamsConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                () -> producer);
-            task.initializeStateStores();
-            task.initializeTopology();
+                stateManager,
+                recordCollector);
+            task.initializeIfNeeded();
+            task.completeRestoration();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,
@@ -421,7 +434,6 @@ public class TopologyTestDriver implements Closeable {
      *
      * @return Map of all metrics.
      */
-    @SuppressWarnings("WeakerAccess")
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(metrics.metrics());
     }
@@ -434,21 +446,28 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param consumerRecord the record to be processed
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        pipeRecord(consumerRecord.topic(), consumerRecord.timestamp(), consumerRecord.key(), consumerRecord.value(), consumerRecord.headers());
+        pipeRecord(
+            consumerRecord.topic(),
+            consumerRecord.timestamp(),
+            consumerRecord.key(),
+            consumerRecord.value(),
+            consumerRecord.headers());
     }
 
     private void pipeRecord(final ProducerRecord<byte[], byte[]> record) {
         pipeRecord(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
     }
 
-    private void pipeRecord(final String topic, final Long timestamp, final byte[] key, final byte[] value, final Headers headers) {
-        final String topicName = topic;
+    private void pipeRecord(final String topicName,
+                            final Long timestamp,
+                            final byte[] key,
+                            final byte[] value,
+                            final Headers headers) {
 
-        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(topic);
+        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(topicName);
         }
         final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
@@ -467,7 +486,7 @@ public class TopologyTestDriver implements Closeable {
                     headers)));
 
             // Process the record ...
-            task.process();
+            task.process(mockWallClockTime.milliseconds());
             task.maybePunctuateStreamTime();
             task.commit();
             captureOutputRecords();
@@ -495,7 +514,7 @@ public class TopologyTestDriver implements Closeable {
 
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+        for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                         " cannot contain regex pattern for input record topic: " + inputRecordTopic +
@@ -543,7 +562,6 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param records a list of records to be processed
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -560,7 +578,6 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void advanceWallClockTime(final long advanceMs) {
         advanceWallClockTime(Duration.ofMillis(advanceMs));
@@ -573,7 +590,6 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param advance the amount of time to advance wall-clock time
      */
-    @SuppressWarnings("WeakerAccess")
     public void advanceWallClockTime(final Duration advance) {
         Objects.requireNonNull(advance, "advance cannot be null");
         mockWallClockTime.sleep(advance.toMillis());
@@ -593,7 +609,6 @@ public class TopologyTestDriver implements Closeable {
      * @param topic the name of the topic
      * @return the next record on that topic, or {@code null} if there is no record available
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
@@ -614,7 +629,6 @@ public class TopologyTestDriver implements Closeable {
      * @param valueDeserializer the deserializer for the value type
      * @return the next record on that topic, or {@code null} if there is no record available
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public <K, V> ProducerRecord<K, V> readOutput(final String topic,
                                                   final Deserializer<K> keyDeserializer,
@@ -628,8 +642,7 @@ public class TopologyTestDriver implements Closeable {
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
-
-    private final Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
+    private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
         if (outputRecords == null) {
             if (!processorTopology.sinkTopics().contains(topicName)) {
@@ -654,7 +667,7 @@ public class TopologyTestDriver implements Closeable {
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
                                                               final Serializer<K> keySerializer,
                                                               final Serializer<V> valueSerializer) {
-        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
+        return new TestInputTopic<>(this, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
     }
 
     /**
@@ -675,7 +688,7 @@ public class TopologyTestDriver implements Closeable {
                                                               final Serializer<V> valueSerializer,
                                                               final Instant startTimestamp,
                                                               final Duration autoAdvance) {
-        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer, startTimestamp, autoAdvance);
+        return new TestInputTopic<>(this, topicName, keySerializer, valueSerializer, startTimestamp, autoAdvance);
     }
 
     /**
@@ -691,10 +704,9 @@ public class TopologyTestDriver implements Closeable {
     public final <K, V> TestOutputTopic<K, V> createOutputTopic(final String topicName,
                                                                 final Deserializer<K> keyDeserializer,
                                                                 final Deserializer<V> valueDeserializer) {
-        return new TestOutputTopic<K, V>(this, topicName, keyDeserializer, valueDeserializer);
+        return new TestOutputTopic<>(this, topicName, keyDeserializer, valueDeserializer);
     }
 
-    @SuppressWarnings("WeakerAccess")
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {
         final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
@@ -703,10 +715,9 @@ public class TopologyTestDriver implements Closeable {
         return outputRecords.poll();
     }
 
-    @SuppressWarnings("WeakerAccess")
     <K, V> TestRecord<K, V> readRecord(final String topic,
-                                         final Deserializer<K> keyDeserializer,
-                                         final Deserializer<V> valueDeserializer) {
+                                       final Deserializer<K> keyDeserializer,
+                                       final Deserializer<V> valueDeserializer) {
         final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
             throw new NoSuchElementException("Uninitialized topic: " + topic);
@@ -720,7 +731,6 @@ public class TopologyTestDriver implements Closeable {
         return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
-    @SuppressWarnings("WeakerAccess")
     <K, V> void pipeRecord(final String topic,
                            final TestRecord<K, V> record,
                            final Serializer<K> keySerializer,
@@ -740,12 +750,6 @@ public class TopologyTestDriver implements Closeable {
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
-    /**
-     * Get size of unread record in the topic queue.
-     *
-     * @param topic
-     * @return size of topic queue
-     */
     final long getQueueSize(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> queue = getRecordsQueue(topic);
         if (queue == null) {
@@ -755,16 +759,9 @@ public class TopologyTestDriver implements Closeable {
         return queue.size();
     }
 
-    /**
-     * Verify if the topic queue is empty.
-     *
-     * @param topic
-     * @return true if no more record in the topic queue
-     */
     final boolean isEmpty(final String topic) {
         return getQueueSize(topic) == 0;
     }
-
 
     /**
      * Get all {@link StateStore StateStores} from the topology.
@@ -817,7 +814,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) throws IllegalArgumentException {
         return getStateStore(name, true);
     }
@@ -835,7 +831,7 @@ public class TopologyTestDriver implements Closeable {
         }
 
         if (globalStateManager != null) {
-            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            final StateStore stateStore = globalStateManager.getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);
@@ -892,7 +888,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedKeyValueStore) {
@@ -918,7 +914,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
         return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
@@ -945,7 +941,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedWindowStore) {
@@ -971,7 +967,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
         return store instanceof TimestampedWindowStore ? (TimestampedWindowStore<K, V>) store : null;
@@ -993,7 +989,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name, false);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
@@ -1002,10 +998,9 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Close the driver, its topology, and all processors.
      */
-    @SuppressWarnings("WeakerAccess")
     public void close() {
         if (task != null) {
-            task.close(true, false);
+            task.closeClean();
         }
         if (globalStateTask != null) {
             try {

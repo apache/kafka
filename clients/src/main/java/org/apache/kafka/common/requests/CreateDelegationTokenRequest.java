@@ -39,11 +39,6 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
             version);
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public CreateDelegationTokenRequestData data() {
         return data;
     }

@@ -18,20 +18,16 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
 
 /**
  * A response header in the kafka protocol.
  */
-public class ResponseHeader extends AbstractRequestResponse {
+public class ResponseHeader implements AbstractRequestResponse {
     private final ResponseHeaderData data;
     private final short headerVersion;
-
-    public ResponseHeader(Struct struct, short headerVersion) {
-        this(new ResponseHeaderData(struct, headerVersion), headerVersion);
-    }
 
     public ResponseHeader(int correlationId, short headerVersion) {
         this(new ResponseHeaderData().setCorrelationId(correlationId), headerVersion);
@@ -42,12 +38,8 @@ public class ResponseHeader extends AbstractRequestResponse {
         this.headerVersion = headerVersion;
     }
 
-    public int sizeOf() {
-        return toStruct().sizeOf();
-    }
-
-    public Struct toStruct() {
-        return data.toStruct(headerVersion);
+    public int size(ObjectSerializationCache serializationCache, short apiVersion) {
+        return data().size(serializationCache, apiVersion);
     }
 
     public int correlationId() {
@@ -60,6 +52,10 @@ public class ResponseHeader extends AbstractRequestResponse {
 
     public ResponseHeaderData data() {
         return data;
+    }
+
+    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache, short apiVersion) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, apiVersion);
     }
 
     @Override

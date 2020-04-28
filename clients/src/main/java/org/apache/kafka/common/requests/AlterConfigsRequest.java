@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class AlterConfigsRequest extends AbstractRequest {
+public class AlterConfigsRequest extends LegacyAbstractRequest {
 
     private static final String RESOURCES_KEY_NAME = "resources";
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";
@@ -103,7 +103,7 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     }
 
-    public static class Builder extends AbstractRequest.Builder {
+    public static class Builder extends AbstractRequest.Builder<AlterConfigsRequest> {
 
         private final Map<ConfigResource, Config> configs;
         private final boolean validateOnly;
@@ -197,19 +197,11 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        switch (version) {
-            case 0:
-            case 1:
-                ApiError error = ApiError.fromThrowable(e);
-                Map<ConfigResource, ApiError> errors = new HashMap<>(configs.size());
-                for (ConfigResource resource : configs.keySet())
-                    errors.put(resource, error);
-                return new AlterConfigsResponse(throttleTimeMs, errors);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.ALTER_CONFIGS.latestVersion()));
-        }
+        ApiError error = ApiError.fromThrowable(e);
+        Map<ConfigResource, ApiError> errors = new HashMap<>(configs.size());
+        for (ConfigResource resource : configs.keySet())
+            errors.put(resource, error);
+        return new AlterConfigsResponse(throttleTimeMs, errors);
     }
 
     public static AlterConfigsRequest parse(ByteBuffer buffer, short version) {

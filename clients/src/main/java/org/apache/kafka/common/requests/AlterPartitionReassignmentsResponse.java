@@ -69,9 +69,4 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         }
         return counts;
     }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
 }

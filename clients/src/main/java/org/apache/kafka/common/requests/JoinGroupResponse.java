@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -28,10 +27,6 @@ import java.util.Map;
 public class JoinGroupResponse extends AbstractResponse {
 
     private final JoinGroupResponseData data;
-
-    public static final String UNKNOWN_PROTOCOL = "";
-    public static final int UNKNOWN_GENERATION_ID = -1;
-    public static final String UNKNOWN_MEMBER_ID = "";
 
     public JoinGroupResponse(JoinGroupResponseData data) {
         this.data = data;
@@ -61,11 +56,6 @@ public class JoinGroupResponse extends AbstractResponse {
 
     public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
         return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

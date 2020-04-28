@@ -16,8 +16,8 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper_host:port[/path] [args...]"
+	echo "USAGE: $0 zookeeper_host:port[/path] [-zk-tls-config-file file] [args...]"
 	exit 1
 fi
 
-exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"
+exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMainWithTlsSupportForKafka -server "$@"

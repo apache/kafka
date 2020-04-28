@@ -75,7 +75,7 @@ public class ConsumerMetadataTest {
         topics.add(topicMetadata("__matching_topic", false));
         topics.add(topicMetadata("non_matching_topic", false));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
+        MetadataResponse response = TestUtils.metadataResponse(singletonList(node),
             "clusterId", node.id(), topics);
         metadata.update(response, time.milliseconds());
 
@@ -102,8 +102,11 @@ public class ConsumerMetadataTest {
     @Test
     public void testNormalSubscription() {
         subscription.subscribe(Utils.mkSet("foo", "bar", "__consumer_offsets"), new NoOpConsumerRebalanceListener());
-        subscription.groupSubscribe(Utils.mkSet("baz"));
+        subscription.groupSubscribe(Utils.mkSet("baz", "foo", "bar", "__consumer_offsets"));
         testBasicSubscription(Utils.mkSet("foo", "bar", "baz"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.resetGroupSubscription();
+        testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test
@@ -148,7 +151,7 @@ public class ConsumerMetadataTest {
         for (String expectedInternalTopic : expectedInternalTopics)
             topics.add(topicMetadata(expectedInternalTopic, true));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
+        MetadataResponse response = TestUtils.metadataResponse(singletonList(node),
             "clusterId", node.id(), topics);
         metadata.update(response, time.milliseconds());
 
@@ -157,7 +160,8 @@ public class ConsumerMetadataTest {
 
     private MetadataResponse.TopicMetadata topicMetadata(String topic, boolean isInternal) {
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE,
-                0, node, Optional.of(5), singletonList(node), singletonList(node), singletonList(node));
+                new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
+                singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
         return new MetadataResponse.TopicMetadata(Errors.NONE, topic, isInternal, singletonList(partitionMetadata));
     }
 

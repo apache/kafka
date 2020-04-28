@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -75,11 +74,6 @@ public class SaslHandshakeRequest extends AbstractRequest {
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer, short version) {
         return new SaslHandshakeRequest(new SaslHandshakeRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 }
 

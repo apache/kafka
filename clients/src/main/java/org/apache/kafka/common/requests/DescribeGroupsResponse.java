@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -32,6 +31,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class DescribeGroupsResponse extends AbstractResponse {
+
+    public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
     /**
      * Possible per-group error codes:
@@ -107,11 +108,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
@@ -123,15 +119,14 @@ public class DescribeGroupsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.groups().forEach(describedGroup -> {
-            updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode()));
-        });
+        data.groups().forEach(describedGroup ->
+            updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode())));
         return errorCounts;
     }
 
     public static DescribedGroup forError(String groupId, Errors error) {
         return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptySet());
+                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     public static DescribeGroupsResponse fromError(int throttleTimeMs, Errors error, List<String> groupIds) {

@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.server.KafkaServer
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
@@ -71,7 +71,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testAllTopicPartition(): Unit = {
-    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -80,12 +80,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -96,13 +96,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
   @Test
   def testTopicPartition(): Unit = {
-    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -111,12 +111,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -128,13 +128,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
   @Test
   def testPathToJsonFile(): Unit = {
-    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -143,12 +143,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
@@ -161,13 +161,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
   @Test
   def testPreferredReplicaElection(): Unit = {
-    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -176,10 +176,10 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Some(broker3))
+      TestUtils.assertLeader(client, topicPartition, broker3)
       servers(broker2).startup()
       TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker2))
 
@@ -191,7 +191,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker2), TestUtils.currentLeader(client, topicPartition))
+      TestUtils.assertLeader(client, topicPartition, broker2)
     }
   }
 
@@ -273,7 +273,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       LeaderElectionCommand.main(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
-          "--election-type", "preferrred"
+          "--election-type", "preferred"
         )
       )
       fail()
@@ -309,15 +309,13 @@ object LeaderElectionCommandTest {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),
-      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "20000"
+      AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG -> "20000",
+      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "10000"
     )
   }
 
   def bootstrapServers(servers: Seq[KafkaServer]): String = {
-    servers.map { server =>
-      val port = server.socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
-      s"localhost:$port"
-    }.headOption.mkString(",")
+    TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {

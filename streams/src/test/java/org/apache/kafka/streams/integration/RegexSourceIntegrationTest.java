@@ -143,7 +143,11 @@ public class RegexSourceIntegrationTest {
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
+
         final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
+        // we compare lists of subscribed topics and hence requiring the order as well; this is guaranteed
+        // with KIP-429 since we would NOT revoke TEST-TOPIC-1 but only add TEST-TOPIC-2 so the list is always
+        // in the order of "TEST-TOPIC-1, TEST-TOPIC-2". Note if KIP-429 behavior ever changed it may become a flaky test
         final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
 
         CLUSTER.createTopic("TEST-TOPIC-1");

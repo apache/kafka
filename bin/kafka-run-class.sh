@@ -74,11 +74,11 @@ done
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   clients_lib_dir=$(dirname $0)/../clients/build/libs
   streams_lib_dir=$(dirname $0)/../streams/build/libs
-  rocksdb_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+  streams_dependant_clients_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
 else
   clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
   streams_lib_dir=$clients_lib_dir
-  rocksdb_lib_dir=$streams_lib_dir
+  streams_dependant_clients_lib_dir=$streams_lib_dir
 fi
 
 
@@ -122,7 +122,12 @@ else
   fi
 fi
 
-for file in "$rocksdb_lib_dir"/rocksdb*.jar;
+for file in "$streams_dependant_clients_lib_dir"/rocksdb*.jar;
+do
+  CLASSPATH="$CLASSPATH":"$file"
+done
+
+for file in "$streams_dependant_clients_lib_dir"/*hamcrest*.jar;
 do
   CLASSPATH="$CLASSPATH":"$file"
 done
@@ -244,8 +249,9 @@ if [ -z "$KAFKA_HEAP_OPTS" ]; then
 fi
 
 # JVM performance options
+# MaxInlineLevel=15 is the default since JDK 14 and can be removed once older JDKs are no longer supported
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
 fi
 
 while [ $# -gt 0 ]; do

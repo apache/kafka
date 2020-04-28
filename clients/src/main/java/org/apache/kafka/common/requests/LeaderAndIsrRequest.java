@@ -27,7 +27,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
 
@@ -123,15 +122,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 }
             }
         }
-    }
-
-    public LeaderAndIsrRequest(Struct struct, short version) {
-        this(new LeaderAndIsrRequestData(struct, version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -37,9 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertThrows;
 
 public class ProducerMetadataTest {
 
@@ -56,10 +55,10 @@ public class ProducerMetadataTest {
 
     @Test
     public void testMetadata() throws Exception {
-        String topic = "my-topic";
-        metadata.add(topic);
-
         long time = Time.SYSTEM.milliseconds();
+        String topic = "my-topic";
+        metadata.add(topic, time);
+
         metadata.update(responseWithTopics(Collections.emptySet()), time);
         assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
         metadata.requestUpdate();
@@ -139,17 +138,17 @@ public class ProducerMetadataTest {
 
         // New topic added to fetch set and update requested. It should allow immediate update.
         metadata.update(responseWithCurrentTopics(), now);
-        metadata.add("new-topic");
+        metadata.add("new-topic", now);
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // Even though add is called, immediate update isn't necessary if the new topic set isn't
         // containing a new topic,
         metadata.update(responseWithCurrentTopics(), now);
-        metadata.add("new-topic");
+        metadata.add("new-topic", now);
         assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
 
         // If the new set of topics containing a new topic then it should allow immediate update.
-        metadata.add("another-new-topic");
+        metadata.add("another-new-topic", now);
         assertEquals(0, metadata.timeToNextUpdate(now));
     }
 
@@ -158,7 +157,7 @@ public class ProducerMetadataTest {
         // Test that topic is expired if not used within the expiry interval
         long time = 0;
         String topic1 = "topic1";
-        metadata.add(topic1);
+        metadata.add(topic1, time);
         metadata.update(responseWithCurrentTopics(), time);
         assertTrue(metadata.containsTopic(topic1));
 
@@ -167,20 +166,19 @@ public class ProducerMetadataTest {
         assertFalse("Unused topic not expired", metadata.containsTopic(topic1));
 
         // Test that topic is not expired if used within the expiry interval
-        metadata.add("topic2");
+        metadata.add("topic2", time);
         metadata.update(responseWithCurrentTopics(), time);
         for (int i = 0; i < 3; i++) {
             time += ProducerMetadata.TOPIC_EXPIRY_MS / 2;
             metadata.update(responseWithCurrentTopics(), time);
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
-            metadata.add("topic2");
+            metadata.add("topic2", time);
         }
     }
 
     @Test
-    public void testMetadataWaitAbortedOnFatalException() throws Exception {
-        Time time = new MockTime();
-        metadata.failedUpdate(time.milliseconds(), new AuthenticationException("Fatal exception from test"));
+    public void testMetadataWaitAbortedOnFatalException() {
+        metadata.fatalError(new AuthenticationException("Fatal exception from test"));
         assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, 1000));
     }
 

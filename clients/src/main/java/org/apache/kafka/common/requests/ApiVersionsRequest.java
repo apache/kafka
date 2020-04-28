@@ -97,13 +97,8 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
-    @Override
     protected Message data() {
-        return null;
+        return data;
     }
 
     @Override

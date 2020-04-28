@@ -148,7 +148,9 @@ public class StreamsBuilder {
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -167,7 +169,9 @@ public class StreamsBuilder {
      * are defined by the options in {@link Consumed} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation

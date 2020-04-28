@@ -32,7 +32,6 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 public class ElectLeadersRequest extends AbstractRequest {
@@ -121,10 +120,5 @@ public class ElectLeadersRequest extends AbstractRequest {
 
     public static ElectLeadersRequest parse(ByteBuffer buffer, short version) {
         return new ElectLeadersRequest(new ElectLeadersRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 }

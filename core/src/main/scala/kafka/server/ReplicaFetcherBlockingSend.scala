@@ -59,7 +59,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
       time,
-      brokerConfig.saslInterBrokerHandshakeRequestEnable
+      brokerConfig.saslInterBrokerHandshakeRequestEnable,
+      logContext
     )
     val reconfigurableChannelBuilder = channelBuilder match {
       case reconfigurable: Reconfigurable =>

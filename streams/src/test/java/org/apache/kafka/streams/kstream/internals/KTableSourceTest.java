@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -85,11 +86,45 @@ public class KTableSourceTest {
     }
 
     @Test
+    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetrics0100To24() {
+        kTableShouldLogAndMeterOnSkippedRecords(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetricsLatest() {
+        kTableShouldLogAndMeterOnSkippedRecords(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void kTableShouldLogAndMeterOnSkippedRecords(final String builtInMetricsVersion) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+        builder.table(topic, stringConsumed);
+
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic.pipeInput(null, "value");
+            LogCaptureAppender.unregister(appender);
+
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertEquals(
+                    1.0,
+                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
+        }
+    }
+
+    @Test
     public void kTableShouldLogAndMeterOnSkippedRecords() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =

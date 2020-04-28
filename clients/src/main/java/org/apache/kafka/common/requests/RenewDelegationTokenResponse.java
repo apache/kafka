@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class RenewDelegationTokenResponse extends AbstractResponse {
 
@@ -42,11 +41,6 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(error(), 1);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

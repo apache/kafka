@@ -32,7 +32,9 @@ import org.apache.kafka.common.utils.Time
 import scala.collection.{Seq, immutable, mutable}
 import scala.collection.JavaConverters._
 
-private[group] sealed trait GroupState
+private[group] sealed trait GroupState {
+  val validPreviousStates: Set[GroupState]
+}
 
 /**
  * Group is preparing to rebalance
@@ -47,7 +49,9 @@ private[group] sealed trait GroupState
  *             all members have left the group => Empty
  *             group is removed by partition emigration => Dead
  */
-private[group] case object PreparingRebalance extends GroupState
+private[group] case object PreparingRebalance extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(Stable, CompletingRebalance, Empty)
+}
 
 /**
  * Group is awaiting state assignment from the leader
@@ -62,7 +66,9 @@ private[group] case object PreparingRebalance extends GroupState
  *             member failure detected => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object CompletingRebalance extends GroupState
+private[group] case object CompletingRebalance extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(PreparingRebalance)
+}
 
 /**
  * Group is stable
@@ -78,7 +84,9 @@ private[group] case object CompletingRebalance extends GroupState
  *             follower join-group with new metadata => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object Stable extends GroupState
+private[group] case object Stable extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(CompletingRebalance)
+}
 
 /**
  * Group has no more members and its metadata is being removed
@@ -91,7 +99,9 @@ private[group] case object Stable extends GroupState
  *         allow offset fetch requests
  * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
  */
-private[group] case object Dead extends GroupState
+private[group] case object Dead extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead)
+}
 
 /**
   * Group has no more members, but lingers until all offsets have expired. This state
@@ -108,22 +118,18 @@ private[group] case object Dead extends GroupState
   *             group is removed by partition emigration => Dead
   *             group is removed by expiration => Dead
   */
-private[group] case object Empty extends GroupState
+private[group] case object Empty extends GroupState {
+  val validPreviousStates: Set[GroupState] = Set(PreparingRebalance)
+}
 
 
 private object GroupMetadata {
-  private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead),
-      CompletingRebalance -> Set(PreparingRebalance),
-      Stable -> Set(CompletingRebalance),
-      PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
-      Empty -> Set(PreparingRebalance))
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
                 generationId: Int,
                 protocolType: String,
-                protocol: String,
+                protocolName: String,
                 leaderId: String,
                 currentStateTimestamp: Option[Long],
                 members: Iterable[MemberMetadata],
@@ -131,7 +137,7 @@ private object GroupMetadata {
     val group = new GroupMetadata(groupId, initialState, time)
     group.generationId = generationId
     group.protocolType = if (protocolType == null || protocolType.isEmpty) None else Some(protocolType)
-    group.protocol = Option(protocol)
+    group.protocolName = Option(protocolName)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
     members.foreach(member => {
@@ -164,7 +170,7 @@ case class GroupSummary(state: String,
 /**
   * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
   * commit is always materialized when we have a mix of transactional and regular offset commits. Without preserving
-  * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
+  * information of the commit record offset, compaction of the offsets topic itself may result in the wrong offset commit
   * being materialized.
   */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
@@ -193,9 +199,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var state: GroupState = initialState
   var currentStateTimestamp: Option[Long] = Some(time.milliseconds())
   var protocolType: Option[String] = None
+  var protocolName: Option[String] = None
   var generationId = 0
   private var leaderId: Option[String] = None
-  private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
   // Static membership mapping [key: group.instance.id, value: member.id]
@@ -225,7 +231,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def isLeader(memberId: String): Boolean = leaderId.contains(memberId)
   def leaderOrNull: String = leaderId.orNull
-  def protocolOrNull: String = protocol.orNull
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
 
   def isConsumerGroup: Boolean = protocolType.contains(ConsumerProtocol.PROTOCOL_TYPE)
@@ -303,17 +308,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
     // Fence potential duplicate member immediately if someone awaits join/sync callback.
-    maybeInvokeJoinCallback(oldMember, JoinGroupResult(
-      members = List.empty,
-      memberId = oldMemberId,
-      generationId = GroupCoordinator.NoGeneration,
-      subProtocol = GroupCoordinator.NoProtocol,
-      leaderId = GroupCoordinator.NoLeader,
-      error = Errors.FENCED_INSTANCE_ID))
+    maybeInvokeJoinCallback(oldMember, JoinGroupResult(oldMemberId, Errors.FENCED_INSTANCE_ID))
 
-    maybeInvokeSyncCallback(oldMember, SyncGroupResult(
-      Array.empty, Errors.FENCED_INSTANCE_ID
-    ))
+    maybeInvokeSyncCallback(oldMember, SyncGroupResult(Errors.FENCED_INSTANCE_ID))
 
     oldMember.memberId = newMemberId
     members.put(newMemberId, oldMember)
@@ -396,7 +393,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       false
   }
 
-  def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
+  def canRebalance = PreparingRebalance.validPreviousStates.contains(state)
 
   def transitionTo(groupState: GroupState): Unit = {
     assertValidTransition(groupState)
@@ -455,21 +452,21 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    */
   private[group] def computeSubscribedTopics(): Option[Set[String]] = {
     protocolType match {
-      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.nonEmpty && protocol.isDefined =>
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.nonEmpty && protocolName.isDefined =>
         try {
           Some(
             members.map { case (_, member) =>
               // The consumer protocol is parsed with V0 which is the based prefix of all versions.
               // This way the consumer group manager does not depend on any specific existing or
               // future versions of the consumer protocol. VO must prefix all new versions.
-              val buffer = ByteBuffer.wrap(member.metadata(protocol.get))
+              val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
               ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
             }.reduceLeft(_ ++ _)
           )
         } catch {
           case e: SchemaException => {
-            warn(s"Failed to parse Consumer Protocol ${ConsumerProtocol.PROTOCOL_TYPE}:${protocol.get} " +
+            warn(s"Failed to parse Consumer Protocol ${ConsumerProtocol.PROTOCOL_TYPE}:${protocolName.get} " +
               s"of group $groupId. Consumer group coordinator is not aware of the subscribed topics.", e)
             None
           }
@@ -523,12 +520,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def initNextGeneration() = {
     if (members.nonEmpty) {
       generationId += 1
-      protocol = Some(selectProtocol)
+      protocolName = Some(selectProtocol)
       subscribedTopics = computeSubscribedTopics()
       transitionTo(CompletingRebalance)
     } else {
       generationId += 1
-      protocol = None
+      protocolName = None
       subscribedTopics = computeSubscribedTopics()
       transitionTo(Empty)
     }
@@ -542,13 +539,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
         .setMemberId(memberId)
         .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
-        .setMetadata(memberMetadata.metadata(protocol.get))
+        .setMetadata(memberMetadata.metadata(protocolName.get))
     }.toList
   }
 
   def summary: GroupSummary = {
     if (is(Stable)) {
-      val protocol = protocolOrNull
+      val protocol = protocolName.orNull
       if (protocol == null)
         throw new IllegalStateException("Invalid null group protocol for stable group")
 
@@ -671,10 +668,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def activeProducers = pendingTransactionalOffsetCommits.keySet
+  def activeProducers: collection.Set[Long] = pendingTransactionalOffsetCommits.keySet
 
-  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+  def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
+
+  def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
+    pendingOffsetCommits.contains(topicPartition) ||
+      pendingTransactionalOffsetCommits.exists(
+        _._2.contains(topicPartition)
+      )
+  }
 
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 
@@ -764,9 +768,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
 
   private def assertValidTransition(targetState: GroupState): Unit = {
-    if (!GroupMetadata.validPreviousStates(targetState).contains(state))
+    if (!targetState.validPreviousStates.contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
-        .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
+        .format(groupId, targetState.validPreviousStates.mkString(","), targetState, state))
   }
 
   override def toString: String = {

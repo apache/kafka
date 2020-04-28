@@ -50,7 +50,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
-public class ProduceRequest extends AbstractRequest {
+public class ProduceRequest extends LegacyAbstractRequest {
     private static final String ACKS_KEY_NAME = "acks";
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
@@ -122,7 +122,7 @@ public class ProduceRequest extends AbstractRequest {
     private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
 
     /**
-     * V8 bumped up to add two new fields error_records offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
+     * V8 bumped up to add two new fields record_errors offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
      * (See KIP-467)
      */
     private static final Schema PRODUCE_REQUEST_V8 = PRODUCE_REQUEST_V7;
@@ -339,22 +339,7 @@ public class ProduceRequest extends AbstractRequest {
         for (TopicPartition tp : partitions())
             responseMap.put(tp, partitionResponse);
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                return new ProduceResponse(responseMap, throttleTimeMs);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
-        }
+        return new ProduceResponse(responseMap, throttleTimeMs);
     }
 
     @Override

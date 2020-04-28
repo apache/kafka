@@ -20,12 +20,10 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
-
 
 /**
  * Response from SASL server which for a SASL challenge as defined by the SASL protocol
@@ -62,11 +60,6 @@ public class SaslAuthenticateResponse extends AbstractResponse {
 
     public byte[] saslAuthBytes() {
         return data.authBytes();
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

@@ -29,7 +29,7 @@ import org.junit.{After, Test}
 
 import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.controller.{OfflineReplica, PartitionAndReplica, PartitionReplicaAssignment, ReplicaDeletionSuccessful}
+import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.scalatest.Assertions.fail
@@ -39,7 +39,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   var servers: Seq[KafkaServer] = Seq()
 
   val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
-  val expectedReplicaFullAssignment = expectedReplicaAssignment.mapValues(PartitionReplicaAssignment(_, List(), List())).toMap
+  val expectedReplicaFullAssignment = expectedReplicaAssignment.mapValues(ReplicaAssignment(_, List(), List())).toMap
 
   @After
   override def tearDown(): Unit = {

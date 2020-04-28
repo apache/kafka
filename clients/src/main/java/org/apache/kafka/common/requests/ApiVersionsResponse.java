@@ -56,12 +56,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     @Override
     protected Message data() {
-        return null;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return this.data.toStruct(version);
+        return data;
     }
 
     public ApiVersionsResponseKey apiVersion(short apiKey) {

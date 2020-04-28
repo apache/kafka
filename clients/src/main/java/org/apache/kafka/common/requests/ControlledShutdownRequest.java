@@ -66,11 +66,6 @@ public class ControlledShutdownRequest extends AbstractRequest {
             version);
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public ControlledShutdownRequestData data() {
         return data;
     }

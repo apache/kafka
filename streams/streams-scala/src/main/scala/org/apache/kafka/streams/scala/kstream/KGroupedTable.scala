@@ -21,8 +21,11 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.{KGroupedTable => KGroupedTableJ}
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
+  AggregatorFromFunction,
+  InitializerFromFunction,
+  ReducerFromFunction
+}
 
 /**
  * Wraps the Java class KGroupedTable and delegates method calls to the underlying Java object.
@@ -46,7 +49,7 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    */
   def count()(implicit materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = {
     val c: KTable[K, java.lang.Long] =
-      inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]])
+      new KTable(inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]]))
     c.mapValues[Long](Long2long _)
   }
 
@@ -63,9 +66,7 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    */
   def reduce(adder: (V, V) => V,
              subtractor: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
-    // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
-    // works perfectly with Scala 2.12 though
-    inner.reduce(adder.asReducer, subtractor.asReducer, materialized)
+    new KTable(inner.reduce(adder.asReducer, subtractor.asReducer, materialized))
 
   /**
    * Aggregate the value of records of the original [[KTable]] that got [[KTable#groupBy]]
@@ -82,5 +83,7 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
   def aggregate[VR](initializer: => VR)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
-    inner.aggregate((() => initializer).asInitializer, adder.asAggregator, subtractor.asAggregator, materialized)
+    new KTable(
+      inner.aggregate((() => initializer).asInitializer, adder.asAggregator, subtractor.asAggregator, materialized)
+    )
 }

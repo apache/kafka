@@ -37,7 +37,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class AlterReplicaLogDirsRequest extends AbstractRequest {
+public class AlterReplicaLogDirsRequest extends LegacyAbstractRequest {
 
     // request level key names
     private static final String LOG_DIRS_KEY_NAME = "log_dirs";
@@ -150,21 +150,10 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<TopicPartition, Errors> responseMap = new HashMap<>();
-
         for (Map.Entry<TopicPartition, String> entry : partitionDirs.entrySet()) {
             responseMap.put(entry.getKey(), Errors.forException(e));
         }
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
-            default:
-                throw new IllegalArgumentException(
-                    String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,
-                        this.getClass().getSimpleName(), ApiKeys.ALTER_REPLICA_LOG_DIRS.latestVersion()));
-        }
+        return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
     }
 
     public Map<TopicPartition, String> partitionDirs() {

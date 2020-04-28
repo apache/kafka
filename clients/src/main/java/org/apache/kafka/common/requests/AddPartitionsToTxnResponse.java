@@ -37,7 +37,7 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
-public class AddPartitionsToTxnResponse extends AbstractResponse {
+public class AddPartitionsToTxnResponse extends LegacyAbstractResponse {
     private static final String ERRORS_KEY_NAME = "errors";
     private static final String PARTITION_ERRORS = "partition_errors";
 

@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class CreateTopicsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
@@ -100,13 +99,5 @@ public class CreateTopicsRequest extends AbstractRequest {
 
     public static CreateTopicsRequest parse(ByteBuffer buffer, short version) {
         return new CreateTopicsRequest(new CreateTopicsRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version());
     }
 }

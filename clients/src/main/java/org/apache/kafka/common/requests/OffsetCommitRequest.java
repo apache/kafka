@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -115,39 +114,12 @@ public class OffsetCommitRequest extends AbstractRequest {
     public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<OffsetCommitResponseTopic>
                 responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new OffsetCommitResponse(
-                        new OffsetCommitResponseData()
-                                .setTopics(responseTopicData)
-                );
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-                return new OffsetCommitResponse(
-                        new OffsetCommitResponseData()
-                                .setTopics(responseTopicData)
-                                .setThrottleTimeMs(throttleTimeMs)
-
-                );
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_COMMIT.latestVersion()));
-        }
+        return new OffsetCommitResponse(new OffsetCommitResponseData()
+                .setTopics(responseTopicData)
+                .setThrottleTimeMs(throttleTimeMs));
     }
 
     public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -55,18 +56,22 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
-  // `Iterable[Integer]` instead of `Iterable[Int]` to avoid a collection copy.
+  // `List[Integer]` instead of `List[Int]` to avoid a collection copy.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
-  private def getEndpoints(snapshot: MetadataSnapshot, brokers: Iterable[java.lang.Integer], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
-    val result = new mutable.ArrayBuffer[Node](math.min(snapshot.aliveBrokers.size, brokers.size))
-    brokers.foreach { brokerId =>
-      val endpoint = getAliveEndpoint(snapshot, brokerId, listenerName) match {
-        case None => if (!filterUnavailableEndpoints) Some(new Node(brokerId, "", -1)) else None
-        case Some(node) => Some(node)
+  private def maybeFilterAliveReplicas(snapshot: MetadataSnapshot,
+                                       brokers: java.util.List[Integer],
+                                       listenerName: ListenerName,
+                                       filterUnavailableEndpoints: Boolean): java.util.List[Integer] = {
+    if (!filterUnavailableEndpoints) {
+      brokers
+    } else {
+      val res = new util.ArrayList[Integer](math.min(snapshot.aliveBrokers.size, brokers.size))
+      for (brokerId <- brokers.asScala) {
+        if (hasAliveEndpoint(snapshot, brokerId, listenerName))
+          res.add(brokerId)
       }
-      endpoint.foreach(result +=)
+      res
     }
-    result
   }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
@@ -80,53 +85,71 @@ class MetadataCache(brokerId: Int) extends Logging {
         val leaderBrokerId = partitionState.leader
         val leaderEpoch = partitionState.leaderEpoch
         val maybeLeader = getAliveEndpoint(snapshot, leaderBrokerId, listenerName)
-        val replicas = partitionState.replicas.asScala
-        val replicaInfo = getEndpoints(snapshot, replicas, listenerName, errorUnavailableEndpoints)
-        val offlineReplicaInfo = getEndpoints(snapshot, partitionState.offlineReplicas.asScala, listenerName, errorUnavailableEndpoints)
 
-        val isr = partitionState.isr.asScala
-        val isrInfo = getEndpoints(snapshot, isr, listenerName, errorUnavailableEndpoints)
+        val replicas = partitionState.replicas
+        val filteredReplicas = maybeFilterAliveReplicas(snapshot, replicas, listenerName, errorUnavailableEndpoints)
+
+        val isr = partitionState.isr
+        val filteredIsr = maybeFilterAliveReplicas(snapshot, isr, listenerName, errorUnavailableEndpoints)
+
+        val offlineReplicas = partitionState.offlineReplicas
+
         maybeLeader match {
           case None =>
             val error = if (!snapshot.aliveBrokers.contains(brokerId)) { // we are already holding the read lock
               debug(s"Error while fetching metadata for $topicPartition: leader not available")
               Errors.LEADER_NOT_AVAILABLE
             } else {
-              debug(s"Error while fetching metadata for $topicPartition: listener $listenerName not found on leader $leaderBrokerId")
+              debug(s"Error while fetching metadata for $topicPartition: listener $listenerName " +
+                s"not found on leader $leaderBrokerId")
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
-            new MetadataResponse.PartitionMetadata(error, partitionId.toInt, Node.noNode(),
-              Optional.empty(), replicaInfo.asJava, isrInfo.asJava,
-              offlineReplicaInfo.asJava)
+            new MetadataResponse.PartitionMetadata(error, topicPartition, Optional.empty(),
+              Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
 
           case Some(leader) =>
-            if (replicaInfo.size < replicas.size) {
+            if (filteredReplicas.size < replicas.size) {
               debug(s"Error while fetching metadata for $topicPartition: replica information not available for " +
-                s"following brokers ${replicas.filterNot(replicaInfo.map(_.id).contains).mkString(",")}")
-
-              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                Optional.empty(), replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
-            } else if (isrInfo.size < isr.size) {
+                s"following brokers ${replicas.asScala.filterNot(filteredReplicas.contains).mkString(",")}")
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
+            } else if (filteredIsr.size < isr.size) {
               debug(s"Error while fetching metadata for $topicPartition: in sync replica information not available for " +
-                s"following brokers ${isr.filterNot(isrInfo.map(_.id).contains).mkString(",")}")
-              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                Optional.empty(), replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+                s"following brokers ${isr.asScala.filterNot(filteredIsr.contains).mkString(",")}")
+              new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             } else {
-              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId.toInt, leader, Optional.of(leaderEpoch),
-                replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+              new MetadataResponse.PartitionMetadata(Errors.NONE, topicPartition,
+                Optional.of(leader.id), Optional.of(leaderEpoch), filteredReplicas, filteredIsr, offlineReplicas)
             }
         }
       }
     }
   }
 
-  private def getAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Option[Node] =
-    // Returns None if broker is not alive or if the broker does not have a listener named `listenerName`.
-    // Since listeners can be added dynamically, a broker with a missing listener could be a transient error.
+  /**
+   * Check whether a broker is alive and has a registered listener matching the provided name.
+   * This method was added to avoid unnecessary allocations in [[maybeFilterAliveReplicas]], which is
+   * a hotspot in metadata handling.
+   */
+  private def hasAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Boolean = {
+    snapshot.aliveNodes.get(brokerId).exists(_.contains(listenerName))
+  }
+
+  /**
+   * Get the endpoint matching the provided listener if the broker is alive. Note that listeners can
+   * be added dynamically, so a broker with a missing listener could be a transient error.
+   *
+   * @return None if broker is not alive or if the broker does not have a listener named `listenerName`.
+   */
+  private def getAliveEndpoint(snapshot: MetadataSnapshot, brokerId: Int, listenerName: ListenerName): Option[Node] = {
     snapshot.aliveNodes.get(brokerId).flatMap(_.get(listenerName))
+  }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false,
+  def getTopicMetadata(topics: Set[String],
+                       listenerName: ListenerName,
+                       errorUnavailableEndpoints: Boolean = false,
                        errorUnavailableListeners: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
     val snapshot = metadataSnapshot
     topics.toSeq.flatMap { topic =>

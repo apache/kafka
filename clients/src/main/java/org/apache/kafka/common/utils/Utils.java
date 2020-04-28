@@ -31,9 +31,7 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -555,8 +553,19 @@ public final class Utils {
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
+     * @return the loaded properties
      */
     public static Properties loadProps(String filename) throws IOException {
+        return loadProps(filename, null);
+    }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     * @param onlyIncludeKeys When non-null, only return values associated with these keys and ignore all others
+     * @return the loaded properties
+     */
+    public static Properties loadProps(String filename, List<String> onlyIncludeKeys) throws IOException {
         Properties props = new Properties();
 
         if (filename != null) {
@@ -567,7 +576,15 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
-        return props;
+        if (onlyIncludeKeys == null || onlyIncludeKeys.isEmpty())
+            return props;
+        Properties requestedProps = new Properties();
+        onlyIncludeKeys.forEach(key -> {
+            String value = props.getProperty(key);
+            if (value != null)
+                requestedProps.setProperty(key, value);
+        });
+        return requestedProps;
     }
 
     /**
@@ -601,7 +618,7 @@ public final class Utils {
         } else {
             buffer.mark();
             buffer.position(offset);
-            buffer.get(dest, 0, length);
+            buffer.get(dest);
             buffer.reset();
         }
         return dest;
@@ -615,21 +632,16 @@ public final class Utils {
     }
 
     /**
-     * Attempt to read a file as a string
-     * @throws IOException
+     * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
+     * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
-    public static String readFileAsString(String path, Charset charset) throws IOException {
-        if (charset == null) charset = Charset.defaultCharset();
-
-        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
-            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-            return charset.decode(bb).toString();
-        }
-
-    }
-
     public static String readFileAsString(String path) throws IOException {
-        return Utils.readFileAsString(path, Charset.defaultCharset());
+        try {
+            byte[] allBytes = Files.readAllBytes(Paths.get(path));
+            return new String(allBytes, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IOException("Unable to read file " + path, ex);
+        }
     }
 
     /**

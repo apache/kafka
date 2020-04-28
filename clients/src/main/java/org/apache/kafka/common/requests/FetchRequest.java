@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -44,7 +45,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.requests.FetchMetadata.FINAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
-public class FetchRequest extends AbstractRequest {
+public class FetchRequest extends LegacyAbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
 
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",

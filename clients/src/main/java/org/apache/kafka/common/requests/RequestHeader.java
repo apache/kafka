@@ -21,20 +21,16 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
 
 /**
  * The header for a request in the Kafka protocol
  */
-public class RequestHeader extends AbstractRequestResponse {
+public class RequestHeader implements AbstractRequestResponse {
     private final RequestHeaderData data;
     private final short headerVersion;
-
-    public RequestHeader(Struct struct, short headerVersion) {
-        this(new RequestHeaderData(struct, headerVersion), headerVersion);
-    }
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
         this(new RequestHeaderData().
@@ -48,10 +44,6 @@ public class RequestHeader extends AbstractRequestResponse {
     public RequestHeader(RequestHeaderData data, short headerVersion) {
         this.data = data;
         this.headerVersion = headerVersion;
-    }
-
-    public Struct toStruct() {
-        return this.data.toStruct(headerVersion);
     }
 
     public ApiKeys apiKey() {
@@ -78,9 +70,16 @@ public class RequestHeader extends AbstractRequestResponse {
         return data;
     }
 
+    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, apiVersion());
+    }
+
+    public int size(ObjectSerializationCache serializationCache) {
+        return data.size(serializationCache, apiVersion());
+    }
+
     public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(data.correlationId(),
-            apiKey().responseHeaderVersion(apiVersion()));
+        return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {

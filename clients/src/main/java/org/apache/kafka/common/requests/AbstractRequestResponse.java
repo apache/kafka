@@ -16,28 +16,4 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
-
-import java.nio.ByteBuffer;
-
-public abstract class AbstractRequestResponse {
-
-    /**
-     * Return the auto-generated `Message` instance if this request/response relies on one for
-     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
-     * classes, return `null`.
-     */
-    protected abstract Message data();
-
-    /**
-     * Visible for testing.
-     */
-    public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {
-        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + bodyStruct.sizeOf());
-        headerStruct.writeTo(buffer);
-        bodyStruct.writeTo(buffer);
-        buffer.rewind();
-        return buffer;
-    }
-}
+public interface AbstractRequestResponse {}

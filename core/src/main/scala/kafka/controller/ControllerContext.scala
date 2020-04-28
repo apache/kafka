@@ -22,43 +22,53 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq, Set, mutable}
 
-object PartitionReplicaAssignment {
-  def fromOldAndNewReplicas(oldReplicas: Seq[Int], newReplicas: Seq[Int]): PartitionReplicaAssignment = {
-    val fullReplicaSet = (newReplicas ++ oldReplicas).distinct
-    PartitionReplicaAssignment(
-      fullReplicaSet,
-      fullReplicaSet.filterNot(oldReplicas.contains(_)),
-      fullReplicaSet.filterNot(newReplicas.contains(_))
-    )
+object ReplicaAssignment {
+  def apply(replicas: Seq[Int]): ReplicaAssignment = {
+    apply(replicas, Seq.empty, Seq.empty)
   }
+
+  val empty: ReplicaAssignment = apply(Seq.empty)
 }
 
-case class PartitionReplicaAssignment(replicas: Seq[Int], addingReplicas: Seq[Int], removingReplicas: Seq[Int]) {
+
+/**
+ * @param replicas the sequence of brokers assigned to the partition. It includes the set of brokers
+ *                 that were added (`addingReplicas`) and removed (`removingReplicas`).
+ * @param addingReplicas the replicas that are being added if there is a pending reassignment
+ * @param removingReplicas the replicas that are being removed if there is a pending reassignment
+ */
+case class ReplicaAssignment private (replicas: Seq[Int],
+                                      addingReplicas: Seq[Int],
+                                      removingReplicas: Seq[Int]) {
+
+  lazy val originReplicas: Seq[Int] = replicas.diff(addingReplicas)
+  lazy val targetReplicas: Seq[Int] = replicas.diff(removingReplicas)
+
   def isBeingReassigned: Boolean = {
     addingReplicas.nonEmpty || removingReplicas.nonEmpty
   }
 
-  /**
-    * Returns the partition replica assignment previous to this one.
-    * It is different than this one only when the partition is undergoing reassignment
-    * Note that this will not preserve the original ordering
-    */
-  def previousAssignment: PartitionReplicaAssignment = {
-    PartitionReplicaAssignment(
-      replicas.filterNot(addingReplicas.contains(_)),
-      Seq(),
-      Seq()
+  def reassignTo(target: Seq[Int]): ReplicaAssignment = {
+    val fullReplicaSet = (target ++ originReplicas).distinct
+    ReplicaAssignment(
+      fullReplicaSet,
+      fullReplicaSet.diff(originReplicas),
+      fullReplicaSet.diff(target)
     )
   }
 
-  /**
-    * Returns the target replica assignment for this partition.
-    * This is different than the `replicas` variable only when there is a reassignment going on
-    */
-  def targetReplicas: Seq[Int] = replicas.filterNot(removingReplicas.contains(_))
+  def removeReplica(replica: Int): ReplicaAssignment = {
+    ReplicaAssignment(
+      replicas.filterNot(_ == replica),
+      addingReplicas.filterNot(_ == replica),
+      removingReplicas.filterNot(_ == replica)
+    )
+  }
 
-  override def toString: String = s"PartitionReplicaAssignment(replicas: ${replicas.mkString(",")}, " +
-    s"addingReplicas: ${addingReplicas.mkString(",")}, removingReplicas: ${removingReplicas.mkString(",")})"
+  override def toString: String = s"ReplicaAssignment(" +
+    s"replicas=${replicas.mkString(",")}, " +
+    s"addingReplicas=${addingReplicas.mkString(",")}, " +
+    s"removingReplicas=${removingReplicas.mkString(",")})"
 }
 
 class ControllerContext {
@@ -71,9 +81,9 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   var allTopics: Set[String] = Set.empty
-  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, PartitionReplicaAssignment]]
+  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
   val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-  val partitionsBeingReassigned = mutable.Map.empty[TopicPartition, ReassignedPartitionsContext]
+  val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
@@ -121,34 +131,12 @@ class ControllerContext {
       }
   }
 
-  def partitionFullReplicaAssignment(topicPartition: TopicPartition): PartitionReplicaAssignment = {
+  def partitionFullReplicaAssignment(topicPartition: TopicPartition): ReplicaAssignment = {
     partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty)
-      .get(topicPartition.partition) match {
-      case Some(partitionAssignment) => partitionAssignment
-      case None => PartitionReplicaAssignment(Seq(), Seq(), Seq())
-    }
+      .getOrElse(topicPartition.partition, ReplicaAssignment.empty)
   }
 
-  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
-    val assignments = partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
-    val newAssignment = assignments.get(topicPartition.partition) match {
-      case Some(partitionAssignment) =>
-        PartitionReplicaAssignment(
-          newReplicas,
-          partitionAssignment.addingReplicas,
-          partitionAssignment.removingReplicas
-        )
-      case None =>
-        PartitionReplicaAssignment(
-          newReplicas,
-          Seq.empty,
-          Seq.empty
-        )
-    }
-    updatePartitionFullReplicaAssignment(topicPartition, newAssignment)
-  }
-
-  def updatePartitionFullReplicaAssignment(topicPartition: TopicPartition, newAssignment: PartitionReplicaAssignment): Unit = {
+  def updatePartitionFullReplicaAssignment(topicPartition: TopicPartition, newAssignment: ReplicaAssignment): Unit = {
     val assignments = partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
     assignments.put(topicPartition.partition, newAssignment)
   }
@@ -159,7 +147,7 @@ class ControllerContext {
     }.toMap
   }
 
-  def partitionFullReplicaAssignmentForTopic(topic : String): Map[TopicPartition, PartitionReplicaAssignment] = {
+  def partitionFullReplicaAssignmentForTopic(topic : String): Map[TopicPartition, ReplicaAssignment] = {
     partitionAssignments.getOrElse(topic, Map.empty).map {
       case (partition, assignment) => (new TopicPartition(topic, partition), assignment)
     }.toMap

@@ -35,7 +35,7 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class WriteTxnMarkersResponse extends AbstractResponse {
+public class WriteTxnMarkersResponse extends LegacyAbstractResponse {
     private static final String TXN_MARKERS_KEY_NAME = "transaction_markers";
 
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";

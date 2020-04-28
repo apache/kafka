@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchRespon
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -42,6 +41,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  * - Partition errors:
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNSTABLE_OFFSET_COMMIT}
  *
  * - Group or coordinator errors:
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
@@ -212,13 +212,8 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     protected Message data() {
-        return null;
+        return data;
     }
 
     @Override

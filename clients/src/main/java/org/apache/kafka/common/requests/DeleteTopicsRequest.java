@@ -53,11 +53,6 @@ public class DeleteTopicsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public DeleteTopicsRequestData data() {
         return data;
     }

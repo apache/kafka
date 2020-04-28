@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -49,11 +48,6 @@ public class UpdateMetadataResponse extends AbstractResponse {
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataResponse(new UpdateMetadataResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

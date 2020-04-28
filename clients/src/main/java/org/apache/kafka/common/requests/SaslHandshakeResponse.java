@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -51,11 +50,6 @@ public class SaslHandshakeResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

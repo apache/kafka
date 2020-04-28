@@ -202,7 +202,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         """
         session = requests.Session()
         session.mount('http://',
-                      HTTPAdapter(max_retries=Retry(total=4, backoff_factor=0.3)))
+                      HTTPAdapter(max_retries=Retry(total=5, backoff_factor=0.3)))
         return session
 
     def _coordinator_post(self, path, message):
@@ -300,6 +300,16 @@ class TrogdorTask(object):
         self.id = id
         self.trogdor = trogdor
 
+    def task_state_or_error(self):
+        task_state = self.trogdor.tasks()["tasks"][self.id]
+        if task_state is None:
+            raise RuntimeError("Coordinator did not know about %s." % self.id)
+        error = task_state.get("error")
+        if error is None or error == "":
+            return task_state["state"], None
+        else:
+            return None, error
+
     def done(self):
         """
         Check if this task is done.
@@ -308,13 +318,25 @@ class TrogdorTask(object):
         :returns:                   True if the task is in DONE_STATE;
                                     False if it is in a different state.
         """
-        task_state = self.trogdor.tasks()["tasks"][self.id]
-        if task_state is None:
-            raise RuntimeError("Coordinator did not know about %s." % self.id)
-        error = task_state.get("error")
-        if error is None or error == "":
-            return task_state["state"] == TrogdorTask.DONE_STATE
-        raise RuntimeError("Failed to gracefully stop %s: got task error: %s" % (self.id, error))
+        (task_state, error) = self.task_state_or_error()
+        if task_state is not None:
+            return task_state == TrogdorTask.DONE_STATE
+        else:
+            raise RuntimeError("Failed to gracefully stop %s: got task error: %s" % (self.id, error))
+
+    def running(self):
+        """
+        Check if this task is running.
+
+        :raises RuntimeError:       If the task encountered an error.
+        :returns:                   True if the task is in RUNNING_STATE;
+                                    False if it is in a different state.
+        """
+        (task_state, error) = self.task_state_or_error()
+        if task_state is not None:
+            return task_state == TrogdorTask.RUNNING_STATE
+        else:
+            raise RuntimeError("Failed to start %s: got task error: %s" % (self.id, error))
 
     def stop(self):
         """

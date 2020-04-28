@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class DeleteRecordsResponse extends AbstractResponse {
+public class DeleteRecordsResponse extends LegacyAbstractResponse {
 
     public static final long INVALID_LOW_WATERMARK = -1L;
 

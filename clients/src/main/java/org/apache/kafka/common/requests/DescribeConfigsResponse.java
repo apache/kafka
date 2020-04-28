@@ -43,7 +43,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class DescribeConfigsResponse extends AbstractResponse {
+public class DescribeConfigsResponse extends LegacyAbstractResponse {
 
     private static final String RESOURCES_KEY_NAME = "resources";
 

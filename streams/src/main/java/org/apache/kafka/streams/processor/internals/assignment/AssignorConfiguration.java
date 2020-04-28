@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
@@ -33,8 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_ONE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
 
 public final class AssignorConfiguration {
     private final String logPrefix;
@@ -44,6 +44,7 @@ public final class AssignorConfiguration {
     private final org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private final String userEndPoint;
     private final TaskManager taskManager;
+    private final StreamsMetadataState streamsMetadataState;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
@@ -89,24 +90,63 @@ public final class AssignorConfiguration {
             userEndPoint = null;
         }
 
-        final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
-        if (o == null) {
-            final KafkaException fatalException = new KafkaException("TaskManager is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("TaskManager is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof TaskManager)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            taskManager = (TaskManager) o;
         }
 
-        if (!(o instanceof TaskManager)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof StreamsMetadataState)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), StreamsMetadataState.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            streamsMetadataState = (StreamsMetadataState) o;
         }
 
-        taskManager = (TaskManager) o;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("Admin is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
 
-        internalTopicManager = new InternalTopicManager(taskManager.adminClient(), streamsConfig);
+            if (!(o instanceof Admin)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), Admin.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            internalTopicManager = new InternalTopicManager((Admin) o, streamsConfig);
+        }
+
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
     }
@@ -133,6 +173,10 @@ public final class AssignorConfiguration {
         return taskManager;
     }
 
+    public StreamsMetadataState getStreamsMetadataState() {
+        return streamsMetadataState;
+    }
+
     public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
@@ -147,13 +191,13 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Turning off cooperative rebalancing for upgrade from {}.x", upgradeFrom);
+                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-
+        log.info("Cooperative rebalancing enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 
@@ -170,7 +214,7 @@ public final class AssignorConfiguration {
                         "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
-                    return VERSION_ONE;
+                    return 1;
                 case StreamsConfig.UPGRADE_FROM_0101:
                 case StreamsConfig.UPGRADE_FROM_0102:
                 case StreamsConfig.UPGRADE_FROM_0110:
@@ -181,7 +225,7 @@ public final class AssignorConfiguration {
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );
-                    return VERSION_TWO;
+                    return 2;
                 case StreamsConfig.UPGRADE_FROM_20:
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:

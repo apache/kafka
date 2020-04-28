@@ -27,7 +27,7 @@ import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions}
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -52,7 +52,7 @@ object ReassignPartitionsCommand extends Logging {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
     val time = Time.SYSTEM
-    val zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
+    val zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSaslEnabled, 30000, 30000, Int.MaxValue, time)
 
     val adminClientOpt = createAdminClient(opts)
 
@@ -78,7 +78,7 @@ object ReassignPartitionsCommand extends Logging {
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
       props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
-      Some(JAdminClient.create(props))
+      Some(Admin.create(props))
     } else {
       None
     }
@@ -649,7 +649,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
       }
     } catch {
       case _: NodeExistsException =>
-        val partitionsBeingReassigned = zkClient.getPartitionReassignment
+        val partitionsBeingReassigned = zkClient.getPartitionReassignment()
         throw new AdminCommandFailedException("Partition reassignment currently in " +
           "progress for %s. Aborting operation".format(partitionsBeingReassigned))
     }

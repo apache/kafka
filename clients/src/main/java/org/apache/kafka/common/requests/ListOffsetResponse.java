@@ -56,7 +56,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
  * - {@link Errors#LEADER_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v4 protocol)
  * - {@link Errors#OFFSET_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v5+ protocol)
  */
-public class ListOffsetResponse extends AbstractResponse {
+public class ListOffsetResponse extends LegacyAbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
 
@@ -171,7 +171,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData(").
-                    append("errorCode: ").append((int) error.code());
+                    append("errorCode: ").append(error.code());
 
             if (offsets == null) {
                 bld.append(", timestamp: ").append(timestamp).

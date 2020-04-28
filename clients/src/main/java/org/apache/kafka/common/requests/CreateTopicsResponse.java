@@ -55,11 +55,6 @@ public class CreateTopicsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

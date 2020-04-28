@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -74,11 +73,6 @@ public class DeleteGroupsRequest extends AbstractRequest {
 
     public static DeleteGroupsRequest parse(ByteBuffer buffer, short version) {
         return new DeleteGroupsRequest(new DeleteGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

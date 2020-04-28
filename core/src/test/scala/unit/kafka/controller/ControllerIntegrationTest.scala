@@ -250,8 +250,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp1 = new TopicPartition("t", 1)
     val assignment = Map(tp0.partition -> Seq(0))
     val expandedAssignment = Map(
-      tp0 -> PartitionReplicaAssignment(Seq(0), Seq(), Seq()),
-      tp1 -> PartitionReplicaAssignment(Seq(0), Seq(), Seq()))
+      tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.setTopicAssignment(tp0.topic, expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
@@ -268,8 +268,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp1 = new TopicPartition("t", 1)
     val assignment = Map(tp0.partition -> Seq(otherBrokerId, controllerId))
     val expandedAssignment = Map(
-      tp0 -> PartitionReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()),
-      tp1 -> PartitionReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()))
+      tp0 -> ReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
@@ -290,7 +290,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
-    val reassignment = Map(tp -> PartitionReplicaAssignment(Seq(otherBrokerId), List(), List()))
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment.mapValues(_.replicas).toMap)
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
@@ -330,7 +330,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
-    val reassignment = Map(tp -> PartitionReplicaAssignment(Seq(otherBrokerId), List(), List()))
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
@@ -628,8 +628,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
-      println(appender.getMessages.find(e => e.getLevel == Level.INFO
-        && e.getThrowableInformation != null))
       val event = appender.getMessages.find(e => e.getLevel == Level.INFO
         && e.getThrowableInformation != null
         && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))

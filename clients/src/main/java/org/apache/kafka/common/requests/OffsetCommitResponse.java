@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -97,11 +96,6 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
         return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

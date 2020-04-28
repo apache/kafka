@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -53,17 +52,8 @@ public class DescribeGroupsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public DescribeGroupsRequest(Struct struct, short version) {
-        this(new DescribeGroupsRequestData(struct, version), version);
-    }
-
     public DescribeGroupsRequestData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

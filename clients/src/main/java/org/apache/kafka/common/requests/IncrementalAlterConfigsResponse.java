@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -71,11 +70,6 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
             counts.put(error, counts.getOrDefault(error, 0) + 1);
         }
         return counts;
-    }
-
-    @Override
-    protected Struct toStruct(final short version) {
-        return data.toStruct(version);
     }
 
     @Override

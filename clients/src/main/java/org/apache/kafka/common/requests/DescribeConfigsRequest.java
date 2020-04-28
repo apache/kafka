@@ -37,7 +37,7 @@ import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class DescribeConfigsRequest extends AbstractRequest {
+public class DescribeConfigsRequest extends LegacyAbstractRequest {
 
     private static final String RESOURCES_KEY_NAME = "resources";
     private static final String INCLUDE_SYNONYMS = "include_synonyms";
@@ -66,7 +66,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1, DESCRIBE_CONFIGS_REQUEST_V2};
     }
 
-    public static class Builder extends AbstractRequest.Builder {
+    public static class Builder extends AbstractRequest.Builder<DescribeConfigsRequest> {
         private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
         private boolean includeSynonyms;
 
@@ -170,22 +170,13 @@ public class DescribeConfigsRequest extends AbstractRequest {
 
     @Override
     public DescribeConfigsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        switch (version) {
-            case 0:
-            case 1:
-            case 2:
-                ApiError error = ApiError.fromThrowable(e);
-                Map<ConfigResource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
-                DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,
-                        Collections.emptyList());
-                for (ConfigResource resource : resources())
-                    errors.put(resource, config);
-                return new DescribeConfigsResponse(throttleTimeMs, errors);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_CONFIGS.latestVersion()));
-        }
+        ApiError error = ApiError.fromThrowable(e);
+        Map<ConfigResource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
+        DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,
+                Collections.emptyList());
+        for (ConfigResource resource : resources())
+            errors.put(resource, config);
+        return new DescribeConfigsResponse(throttleTimeMs, errors);
     }
 
     public static DescribeConfigsRequest parse(ByteBuffer buffer, short version) {

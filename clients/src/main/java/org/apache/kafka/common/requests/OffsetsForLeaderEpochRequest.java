@@ -37,7 +37,7 @@ import static org.apache.kafka.common.protocol.CommonFields.CURRENT_LEADER_EPOCH
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
-public class OffsetsForLeaderEpochRequest extends AbstractRequest {
+public class OffsetsForLeaderEpochRequest extends LegacyAbstractRequest {
     private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
             "Broker id of the follower. For normal consumers, use -1.");
 

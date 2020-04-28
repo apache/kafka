@@ -129,10 +129,11 @@ public class RestoreIntegrationTest {
         setCommittedOffset(INPUT_STREAM, offsetLimitDelta);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 0), (long) offsetCheckpointed));
+                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 1), (long) offsetCheckpointed));
+                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -191,10 +192,11 @@ public class RestoreIntegrationTest {
         createStateForRestoration(INPUT_STREAM);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 0), (long) offsetCheckpointed));
+                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 1), (long) offsetCheckpointed));
+                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);

@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -124,11 +123,6 @@ public class LeaveGroupResponse extends AbstractResponse {
             }
         }
         return combinedErrorCounts;
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

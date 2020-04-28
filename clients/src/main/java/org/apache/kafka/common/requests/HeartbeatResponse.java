@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -56,11 +55,6 @@ public class HeartbeatResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(error(), 1);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

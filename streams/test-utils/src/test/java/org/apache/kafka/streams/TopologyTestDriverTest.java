@@ -99,15 +99,17 @@ public class TopologyTestDriverTest {
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
     private final long timestamp2 = 43L;
-    private final TestRecord<byte[], byte[]> testRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
 
     //Factory and records for testing already deprecated methods
     @SuppressWarnings("deprecation")
-    private final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+    private final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory =
+        new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
             new ByteArraySerializer(),
             new ByteArraySerializer());
-    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
-    private final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord1 =
+        consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord2 =
+        consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
 
     private TopologyTestDriver testDriver;
     private final Properties config = mkProperties(mkMap(
@@ -220,7 +222,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    private final class MockPunctuator implements Punctuator {
+    private final static class MockPunctuator implements Punctuator {
         private final List<Long> punctuatedAt = new LinkedList<>();
 
         @Override
@@ -229,7 +231,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    private final class MockProcessor implements Processor {
+    private final static class MockProcessor implements Processor {
         private final Collection<Punctuation> punctuations;
         private ProcessorContext context;
 
@@ -365,7 +367,12 @@ public class TopologyTestDriverTest {
 
         for (final String sourceTopicName : sourceTopicNames) {
             topology.addGlobalStore(
-                Stores.<Bytes, byte[]>keyValueStoreBuilder(Stores.inMemoryKeyValueStore(sourceTopicName + "-globalStore"), null, null).withLoggingDisabled(),
+                Stores.<Bytes, byte[]>keyValueStoreBuilder(
+                    Stores.inMemoryKeyValueStore(
+                        sourceTopicName + "-globalStore"),
+                    null,
+                    null)
+                    .withLoggingDisabled(),
                 sourceTopicName,
                 null,
                 null,
@@ -396,28 +403,37 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldThrowForUnknownTopic() {
-        final String unknownTopic = "unknownTopic";
-        final byte[] nullValue = null;
-
         testDriver = new TopologyTestDriver(new Topology(), config);
-        assertThrows(IllegalArgumentException.class, () -> {
-            testDriver.pipeRecord(unknownTopic, new TestRecord<byte[], byte[]>(nullValue), new ByteArraySerializer(), new ByteArraySerializer(), Instant.now());
-        });
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> testDriver.pipeRecord(
+                "unknownTopic",
+                new TestRecord<>((byte[]) null),
+                new ByteArraySerializer(),
+                new ByteArraySerializer(),
+                Instant.now())
+        );
     }
 
     @Test
     public void shouldThrowForMissingTime() {
         testDriver = new TopologyTestDriver(new Topology(), config);
-        assertThrows(IllegalStateException.class, () -> {
-            testDriver.pipeRecord(SINK_TOPIC_1, new TestRecord<String, String>("value"), new StringSerializer(), new StringSerializer(), null);
-        });
+        assertThrows(
+            IllegalStateException.class,
+            () -> testDriver.pipeRecord(
+                SINK_TOPIC_1,
+                new TestRecord<>("value"),
+                new StringSerializer(),
+                new StringSerializer(),
+                null));
     }
 
     @Deprecated
     @Test
     public void shouldThrowForUnknownTopicDeprecated() {
         final String unknownTopic = "unknownTopic";
-        final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory =
+            new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
                 "unknownTopic",
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
@@ -522,14 +538,16 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(topology, config);
 
-        final org.apache.kafka.streams.test.ConsumerRecordFactory<Long, String> source1Factory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
-            SOURCE_TOPIC_1,
-            Serdes.Long().serializer(),
-            Serdes.String().serializer());
-        final org.apache.kafka.streams.test.ConsumerRecordFactory<Integer, Double> source2Factory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
-            SOURCE_TOPIC_2,
-            Serdes.Integer().serializer(),
-            Serdes.Double().serializer());
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<Long, String> source1Factory =
+            new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+                SOURCE_TOPIC_1,
+                Serdes.Long().serializer(),
+                Serdes.String().serializer());
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<Integer, Double> source2Factory =
+            new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+                SOURCE_TOPIC_2,
+                Serdes.Integer().serializer(),
+                Serdes.Double().serializer());
 
         final Long source1Key = 42L;
         final String source1Value = "anyString";
@@ -540,12 +558,14 @@ public class TopologyTestDriverTest {
         final ConsumerRecord<byte[], byte[]> consumerRecord2 = source2Factory.create(source2Key, source2Value);
 
         testDriver.pipeInput(consumerRecord1);
-        final ProducerRecord<Long, String> record1 = testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
+        final ProducerRecord<Long, String> record1 =
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
         assertThat(record1.key(), equalTo(source1Key));
         assertThat(record1.value(), equalTo(source1Value));
 
         testDriver.pipeInput(consumerRecord2);
-        final ProducerRecord<Integer, Double> record2 = testDriver.readOutput(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
+        final ProducerRecord<Integer, Double> record2 =
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(record2.key(), equalTo(source2Key));
         assertThat(record2.value(), equalTo(source2Value));
     }
@@ -724,42 +744,42 @@ public class TopologyTestDriverTest {
         final List<Long> expectedPunctuations = new LinkedList<>();
 
         expectedPunctuations.add(42L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 42L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 42L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 42L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 42L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(51L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 51L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 51L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 52L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 52L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(61L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 61L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 61L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 65L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 65L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(71L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 71L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 71L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 72L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 72L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(95L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 95L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 95L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(101L);
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 101L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 101L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 102L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 102L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
@@ -1186,7 +1206,7 @@ public class TopologyTestDriverTest {
     }
 
     private void pipeInput(final String topic, final String key, final Long value, final Long time) {
-        testDriver.pipeRecord(topic, new TestRecord<String, Long>(key, value, null, time),
+        testDriver.pipeRecord(topic, new TestRecord<>(key, value, null, time),
                 new StringSerializer(), new LongSerializer(), null);
     }
     
@@ -1253,14 +1273,14 @@ public class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+    private static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
         @Override
         public Processor<String, Long> get() {
             return new CustomMaxAggregator();
         }
     }
 
-    private class CustomMaxAggregator implements Processor<String, Long> {
+    private static class CustomMaxAggregator implements Processor<String, Long> {
         ProcessorContext context;
         private KeyValueStore<String, Long> store;
 
@@ -1341,7 +1361,9 @@ public class TopologyTestDriverTest {
             },
             "sourceProcessor"
         );
-        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("storeProcessorStore"), Serdes.String(), Serdes.Long()), "storeProcessor");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("storeProcessorStore"), Serdes.String(), Serdes.Long()),
+            "storeProcessor");
 
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
@@ -1352,7 +1374,7 @@ public class TopologyTestDriverTest {
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
-            testDriver.pipeRecord("input-topic", new TestRecord<String, Long>("a", 1L),
+            testDriver.pipeRecord("input-topic", new TestRecord<>("a", 1L),
                     new StringSerializer(), new LongSerializer(), Instant.now());
             Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
         }
@@ -1377,7 +1399,12 @@ public class TopologyTestDriverTest {
             final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
             Assert.assertNotNull(globalStore);
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
-            testDriver.pipeRecord("topic", new TestRecord<String, String>("k1", "value1"), new StringSerializer(), new StringSerializer(), Instant.now());
+            testDriver.pipeRecord(
+                "topic",
+                new TestRecord<>("k1", "value1"),
+                new StringSerializer(),
+                new StringSerializer(),
+                Instant.now());
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             Assert.assertEquals("value1", globalStore.get("k1"));
         }
@@ -1406,7 +1433,7 @@ public class TopologyTestDriverTest {
         final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
         final  String consumerTopic2 = "source-topic-Z";
 
-        final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<byte[], byte[]>(key2, value2, null, timestamp2);
+        final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
 
         testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
 
