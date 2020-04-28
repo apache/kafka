@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
@@ -94,7 +95,7 @@ class LogConcurrencyTest {
           isolation = FetchHighWatermark,
           minOneMessage = true
         )
-        readInfo.records.batches().forEach { batch =>
+        readInfo.records.batches().asScala.foreach { batch =>
           consumedBatches += FetchedBatch(batch.baseOffset, batch.partitionLeaderEpoch)
           fetchOffset = batch.lastOffset + 1
         }
@@ -156,7 +157,7 @@ class LogConcurrencyTest {
   private def validateConsumedData(log: Log, consumedBatches: Iterable[FetchedBatch]): Unit = {
     val iter = consumedBatches.iterator
     log.logSegments.foreach { segment =>
-      segment.log.batches.forEach { batch =>
+      segment.log.batches.asScala.foreach { batch =>
         if (iter.hasNext) {
           val consumedBatch = iter.next()
           try {
