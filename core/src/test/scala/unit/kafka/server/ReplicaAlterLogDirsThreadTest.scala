@@ -245,9 +245,10 @@ class ReplicaAlterLogDirsThreadTest {
       responseCallback = callbackCaptor.capture(),
       isolationLevel = ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
       clientMetadata = ArgumentMatchers.eq(None)
-    )) thenAnswer new Answer[Unit] {
+    ))
+    .thenAnswer(new Answer[Unit] {
       override def answer(invocation: InvocationOnMock): Unit = callbackCaptor.getValue.apply(Seq((topicPartition, responseData)))
-    }
+    })
   }
 
   @Test
