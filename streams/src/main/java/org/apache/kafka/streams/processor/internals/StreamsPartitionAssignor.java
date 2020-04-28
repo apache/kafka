@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
@@ -726,16 +727,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor;
-        if (lagComputationSuccessful) {
-            taskAssignor = taskAssignorSupplier.get();
+        final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+        if (taskAssignor instanceof StickyTaskAssignor) {
+            // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
+            // whether or not lag computation failed.
+            return taskAssignor;
+        } else if (lagComputationSuccessful) {
+            return taskAssignor;
         } else {
             log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
                          + "trigger another rebalance to retry.");
-            setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
-            taskAssignor = new FallbackPriorTaskAssignor();
+            return new FallbackPriorTaskAssignor();
         }
-        return taskAssignor;
     }
 
     /**

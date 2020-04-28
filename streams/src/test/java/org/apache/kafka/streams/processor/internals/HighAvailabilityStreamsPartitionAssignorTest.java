@@ -57,7 +57,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -74,7 +73,9 @@ import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
 
 public class HighAvailabilityStreamsPartitionAssignorTest {
 
@@ -126,11 +127,6 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         configurationMap.put(InternalConfig.TIME, time);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName());
         return configurationMap;
-    }
-
-    // Make sure to complete setting up any mocks (such as TaskManager or AdminClient) before configuring the assignor
-    private void configureDefaultPartitionAssignor() {
-        configurePartitionAssignorWith(emptyMap());
     }
 
     // Make sure to complete setting up any mocks (such as TaskManager or AdminClient) before configuring the assignor
@@ -195,6 +191,8 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     @Test
     public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceAndTriggerRebalanceIfEndOffsetFetchFailsAndHighAvailabilityEnabled() {
+        final long rebalanceInterval = 5 * 60 * 1000L;
+
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
@@ -203,7 +201,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         createMockTaskManager(allTasks);
         adminClient = EasyMock.createMock(AdminClient.class);
         expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
-        configureDefaultPartitionAssignor();
+        configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
         final String firstConsumer = "consumer1";
         final String newConsumer = "consumer2";
@@ -223,14 +221,23 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
             .assign(metadata, new GroupSubscription(subscriptions))
             .groupAssignment();
 
-        final List<TaskId> firstConsumerActiveTasks =
-            AssignmentInfo.decode(assignments.get(firstConsumer).userData()).activeTasks();
-        final List<TaskId> newConsumerActiveTasks =
-            AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
+        final AssignmentInfo firstConsumerUserData = AssignmentInfo.decode(assignments.get(firstConsumer).userData());
+        final List<TaskId> firstConsumerActiveTasks = firstConsumerUserData.activeTasks();
+        final AssignmentInfo newConsumerUserData = AssignmentInfo.decode(assignments.get(newConsumer).userData());
+        final List<TaskId> newConsumerActiveTasks = newConsumerUserData.activeTasks();
 
+        // The tasks were returned to their prior owner
         assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
-        assertTrue(newConsumerActiveTasks.isEmpty());
-        assertThat(assignmentError.get(), equalTo(AssignorError.REBALANCE_NEEDED.code()));
+        assertThat(newConsumerActiveTasks, empty());
+        
+        // There is a rebalance scheduled
+        assertThat(
+            time.milliseconds() + rebalanceInterval,
+            anyOf(
+                is(firstConsumerUserData.nextRebalanceMs()),
+                is(newConsumerUserData.nextRebalanceMs())
+            )
+        );
     }
 
     @Test
@@ -272,7 +279,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
             AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
 
         assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
-        assertTrue(newConsumerActiveTasks.isEmpty());
+        assertThat(newConsumerActiveTasks, empty());
 
         assertThat(assignmentError.get(), equalTo(AssignorError.NONE.code()));
 
