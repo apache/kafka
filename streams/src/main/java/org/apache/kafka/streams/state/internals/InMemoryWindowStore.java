@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -63,7 +64,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final long windowSize;
     private final boolean retainDuplicates;
 
-    private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<Long, TreeMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
 
     private volatile boolean open = false;
@@ -101,9 +102,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         );
 
         if (root != null) {
-            context.register(root, (key, value) -> {
-                put(Bytes.wrap(extractStoreKeyBytes(key)), value, extractStoreTimestamp(key));
-            });
+            context.register(root, (key, value) ->
+                put(Bytes.wrap(extractStoreKeyBytes(key)), value, extractStoreTimestamp(key)));
         }
         open = true;
     }
@@ -127,7 +127,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {
-                segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
+                segmentMap.computeIfAbsent(windowStartTimestamp, t -> new TreeMap<>());
                 segmentMap.get(windowStartTimestamp).put(keyBytes, value);
             } else {
                 segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
@@ -152,7 +152,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return null;
         }
 
-        final ConcurrentNavigableMap<Bytes, byte[]> kvMap = segmentMap.get(windowStartTimestamp);
+        final TreeMap<Bytes, byte[]> kvMap = segmentMap.get(windowStartTimestamp);
         if (kvMap == null) {
             return null;
         } else {
@@ -292,7 +292,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     private WrappedInMemoryWindowStoreIterator registerNewWindowStoreIterator(final Bytes key,
-                                                                              final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator) {
+                                                                              final Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator) {
         final Bytes keyFrom = retainDuplicates ? wrapForDups(key, 0) : key;
         final Bytes keyTo = retainDuplicates ? wrapForDups(key, Integer.MAX_VALUE) : key;
 
@@ -305,7 +305,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private WrappedWindowedKeyValueIterator registerNewWindowedKeyValueIterator(final Bytes keyFrom,
                                                                                 final Bytes keyTo,
-                                                                                final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator) {
+                                                                                final Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator) {
         final Bytes from = (retainDuplicates && keyFrom != null) ? wrapForDups(keyFrom, 0) : keyFrom;
         final Bytes to = (retainDuplicates && keyTo != null) ? wrapForDups(keyTo, Integer.MAX_VALUE) : keyTo;
 
@@ -327,7 +327,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private static abstract class InMemoryWindowStoreIteratorWrapper {
 
-        private Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator;
+        private Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator;
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;
         private long currentTime;
@@ -340,7 +340,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         InMemoryWindowStoreIteratorWrapper(final Bytes keyFrom,
                                            final Bytes keyTo,
-                                           final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+                                           final Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator,
                                            final ClosingCallback callback,
                                            final boolean retainDuplicates) {
             this.keyFrom = keyFrom;
@@ -405,7 +405,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 return null;
             }
 
-            final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> currentSegment = segmentIterator.next();
+            final Map.Entry<Long, TreeMap<Bytes, byte[]>> currentSegment = segmentIterator.next();
             currentTime = currentSegment.getKey();
 
             if (allKeys) {
@@ -424,7 +424,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         WrappedInMemoryWindowStoreIterator(final Bytes keyFrom,
                                            final Bytes keyTo,
-                                           final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+                                           final Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator,
                                            final ClosingCallback callback,
                                            final boolean retainDuplicates)  {
             super(keyFrom, keyTo, segmentIterator, callback, retainDuplicates);
@@ -460,7 +460,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         WrappedWindowedKeyValueIterator(final Bytes keyFrom,
                                         final Bytes keyTo,
-                                        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+                                        final Iterator<Map.Entry<Long, TreeMap<Bytes, byte[]>>> segmentIterator,
                                         final ClosingCallback callback,
                                         final boolean retainDuplicates,
                                         final long windowSize) {
