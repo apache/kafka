@@ -363,6 +363,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def numPending = pendingMembers.size
 
+  def numAwaiting: Int = numMembersAwaitingJoin
+
   def allMemberMetadata = members.values.toList
 
   def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>

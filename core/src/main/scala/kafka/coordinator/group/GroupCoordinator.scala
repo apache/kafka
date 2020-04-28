@@ -124,6 +124,35 @@ class GroupCoordinator(val brokerId: Int,
     info("Shutdown complete.")
   }
 
+  /**
+   * Verify if the group has space to accept the joining member. The various
+   * criteria are explained below.
+   */
+  private def acceptJoiningMember(group: GroupMetadata, member: String): Boolean = {
+    group.currentState match {
+      // Always accept the request when the group is empty or dead
+      case Empty | Dead =>
+        true
+
+      // An existing member is accepted if it is already awaiting. New members are accepted
+      // up to the max group size. Note that the number of awaiting members is used here
+      // for two reasons:
+      // 1) the group size is not reliable as it could already be above the max group size
+      //    if the max group size was reduced.
+      // 2) using the number of awaiting members allows to kick out the last rejoining
+      //    members of the group.
+      case PreparingRebalance =>
+        (group.has(member) && group.get(member).isAwaitingJoin) ||
+          group.numAwaiting < groupConfig.groupMaxSize
+
+      // An existing member is accepted. New members are accepted up to the max group size.
+      // Note that the group size is used here. When the group transitions to CompletingRebalance,
+      // members which haven't rejoined are removed.
+      case CompletingRebalance | Stable =>
+        group.has(member) || group.size < groupConfig.groupMaxSize
+    }
+  }
+
   def handleJoinGroup(groupId: String,
                       memberId: String,
                       groupInstanceId: Option[String],
@@ -152,9 +181,7 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
         case Some(group) =>
           group.inLock {
-            if ((groupIsOverCapacity(group)
-                  && group.has(memberId) && !group.get(memberId).isAwaitingJoin) // oversized group, need to shed members that haven't joined yet
-                || (isUnknownMember && group.size >= groupConfig.groupMaxSize)) {
+            if (!acceptJoiningMember(group, memberId)) {
               group.remove(memberId)
               group.removeStaticMember(groupInstanceId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
@@ -1051,7 +1078,8 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def prepareRebalance(group: GroupMetadata, reason: String): Unit = {
+  // package private for testing
+  private[group] def prepareRebalance(group: GroupMetadata, reason: String): Unit = {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(CompletingRebalance))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
