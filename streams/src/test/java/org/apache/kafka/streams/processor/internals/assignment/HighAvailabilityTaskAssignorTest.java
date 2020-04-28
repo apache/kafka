@@ -16,6 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.easymock.EasyMock;
+import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -41,132 +54,107 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
-import org.easymock.EasyMock;
-import org.junit.Test;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 
 public class HighAvailabilityTaskAssignorTest {
-    private long acceptableRecoveryLag = 100L;
-    private int balanceFactor = 1;
-    private int maxWarmupReplicas = 2;
-    private int numStandbyReplicas = 0;
-    private long probingRebalanceInterval = 60 * 1000L;
+    private final AssignmentConfigs configWithoutStandbys = new AssignmentConfigs(
+        /*acceptableRecoveryLag*/ 100L,
+        /*balanceFactor*/ 1,
+        /*maxWarmupReplicas*/ 2,
+        /*numStandbyReplicas*/ 0,
+        /*probingRebalanceIntervalMs*/ 60 * 1000L
+    );
 
-    private Map<UUID, ClientState> clientStates = new HashMap<>();
-    private Set<TaskId> allTasks = new HashSet<>();
-    private Set<TaskId> statefulTasks = new HashSet<>();
+    private final AssignmentConfigs configWithStandbys = new AssignmentConfigs(
+        /*acceptableRecoveryLag*/ 100L,
+        /*balanceFactor*/ 1,
+        /*maxWarmupReplicas*/ 2,
+        /*numStandbyReplicas*/ 1,
+        /*probingRebalanceIntervalMs*/ 60 * 1000L
+    );
 
-    private ClientState client1;
-    private ClientState client2;
-    private ClientState client3;
-    
-    private HighAvailabilityTaskAssignor taskAssignor;
 
-    private void createTaskAssignor() {
-        final AssignmentConfigs configs = new AssignmentConfigs(
-            acceptableRecoveryLag,
-            balanceFactor,
-            maxWarmupReplicas,
-            numStandbyReplicas,
-            probingRebalanceInterval
-        );
-        taskAssignor = new HighAvailabilityTaskAssignor(
-            clientStates,
-            allTasks,
-            statefulTasks,
-            configs);
+    @Test
+    public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);
+        final Map<UUID, ClientState> clientStates = singletonMap(UUID_1, client1);
+
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
+                                                                                         allTasks,
+                                                                                         singleton(TASK_0_0),
+                                                                                         configWithoutStandbys);
+
+        assertThat(clientStates.get(UUID_1).activeTasks(), not(singleton(TASK_0_0)));
+        assertThat(clientStates.get(UUID_1).standbyTasks(), empty());
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
-    public void shouldDecidePreviousAssignmentIsInvalidIfThereAreUnassignedActiveTasks() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.prevActiveTasks()).andReturn(singleton(TASK_0_0));
-        expect(client1.prevStandbyTasks()).andStubReturn(EMPTY_TASKS);
-        replay(client1);
-        allTasks =  mkSet(TASK_0_0, TASK_0_1);
-        clientStates = singletonMap(UUID_1, client1);
-        createTaskAssignor();
+    public void shouldComputeNewAssignmentIfThereAreUnassignedStandbyTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 0L), 1);
+        final Map<UUID, ClientState> clientStates = mkMap(mkEntry(UUID_1, client1), mkEntry(UUID_2, client2));
 
-        assertFalse(taskAssignor.previousAssignmentIsValid());
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
+                                                                                         allTasks,
+                                                                                         statefulTasks,
+                                                                                         configWithStandbys);
+
+        assertThat(clientStates.get(UUID_2).standbyTasks(), not(empty()));
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
-    public void shouldDecidePreviousAssignmentIsInvalidIfThereAreUnassignedStandbyTasks() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.prevActiveTasks()).andStubReturn(singleton(TASK_0_0));
-        expect(client1.prevStandbyTasks()).andReturn(EMPTY_TASKS);
-        replay(client1);
-        allTasks =  mkSet(TASK_0_0);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = singletonMap(UUID_1, client1);
-        numStandbyReplicas = 1;
-        createTaskAssignor();
-
-        assertFalse(taskAssignor.previousAssignmentIsValid());
-    }
-
-    @Test
-    public void shouldDecidePreviousAssignmentIsInvalidIfActiveTasksWasNotOnCaughtUpClient() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.prevStandbyTasks()).andStubReturn(EMPTY_TASKS);
-        expect(client2.prevStandbyTasks()).andStubReturn(EMPTY_TASKS);
-
-        expect(client1.prevActiveTasks()).andReturn(singleton(TASK_0_0));
-        expect(client2.prevActiveTasks()).andReturn(singleton(TASK_0_1));
-        expect(client1.lagFor(TASK_0_0)).andReturn(500L);
-        expect(client2.lagFor(TASK_0_0)).andReturn(0L);
-        replay(client1, client2);
-
-        allTasks =  mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = mkMap(
+    public void shouldComputeNewAssignmentIfActiveTasksWasNotOnCaughtUpClient() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 500L), 1);
+        final ClientState client2 = new ClientState(singleton(TASK_0_1), emptySet(), singletonMap(TASK_0_0, 0L), 1);
+        final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, client1),
             mkEntry(UUID_2, client2)
         );
-        createTaskAssignor();
 
-        assertFalse(taskAssignor.previousAssignmentIsValid());
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+
+        assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_1)));
+        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_0)));
+        // we'll warm up task 0_0 on client1 because it's first in sorted order,
+        // although this isn't an optimal convergence
+        assertThat(probingRebalanceNeeded, is(true));
     }
 
     @Test
-    public void shouldDecidePreviousAssignmentIsValid() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        expect(client1.prevStandbyTasks()).andStubReturn(EMPTY_TASKS);
-        expect(client2.prevStandbyTasks()).andStubReturn(EMPTY_TASKS);
-
-        expect(client1.prevActiveTasks()).andReturn(singleton(TASK_0_0));
-        expect(client2.prevActiveTasks()).andReturn(singleton(TASK_0_1));
-        expect(client1.lagFor(TASK_0_0)).andReturn(0L);
-        expect(client2.lagFor(TASK_0_0)).andReturn(0L);
-        replay(client1, client2);
-
-        allTasks =  mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks =  mkSet(TASK_0_0);
-        clientStates = mkMap(
+    public void shouldReusePreviousAssignmentIfItIsAlreadyBalanced() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);
+        final ClientState client2 =
+            new ClientState(singleton(TASK_0_1), emptySet(), mkMap(mkEntry(TASK_0_0, 0L), mkEntry(TASK_0_1, 0L)), 1);
+        final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, client1),
             mkEntry(UUID_2, client2)
         );
-        createTaskAssignor();
 
-        assertTrue(taskAssignor.previousAssignmentIsValid());
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+
+        assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_0)));
+        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_1)));
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldComputeBalanceFactorAsDifferenceBetweenMostAndLeastLoadedClients() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        client3 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client1 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client2 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client3 = EasyMock.createNiceMock(ClientState.class);
         final Set<ClientState> states = mkSet(client1, client2, client3);
         final Set<TaskId> statefulTasks =
             mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3);
@@ -186,9 +174,9 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldComputeBalanceFactorWithDifferentClientCapacities() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        client3 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client1 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client2 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client3 = EasyMock.createNiceMock(ClientState.class);
         final Set<ClientState> states = mkSet(client1, client2, client3);
         final Set<TaskId> statefulTasks =
             mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3);
@@ -211,9 +199,9 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldComputeBalanceFactorBasedOnStatefulTasksOnly() {
-        client1 = EasyMock.createNiceMock(ClientState.class);
-        client2 = EasyMock.createNiceMock(ClientState.class);
-        client3 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client1 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client2 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client3 = EasyMock.createNiceMock(ClientState.class);
         final Set<ClientState> states = mkSet(client1, client2, client3);
 
         // 0_0 and 0_1 are stateless
@@ -238,7 +226,7 @@ public class HighAvailabilityTaskAssignorTest {
     @Test
     public void shouldComputeBalanceFactorOfZeroWithOnlyOneClient() {
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        client1 = EasyMock.createNiceMock(ClientState.class);
+        final ClientState client1 = EasyMock.createNiceMock(ClientState.class);
         expect(client1.capacity()).andReturn(1);
         expect(client1.prevActiveTasks()).andReturn(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
         replay(client1);
@@ -247,239 +235,268 @@ public class HighAvailabilityTaskAssignorTest {
 
     @Test
     public void shouldAssignStandbysForStatefulTasks() {
-        numStandbyReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
 
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0));
-        client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1));
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0), statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1), statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
+
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0)));
         assertThat(client2.activeTasks(), equalTo(mkSet(TASK_0_1)));
         assertThat(client1.standbyTasks(), equalTo(mkSet(TASK_0_1)));
         assertThat(client2.standbyTasks(), equalTo(mkSet(TASK_0_0)));
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldNotAssignStandbysForStatelessTasks() {
-        numStandbyReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = EMPTY_TASKS;
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
 
-        client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
+
 
         assertThat(client1.activeTaskCount(), equalTo(1));
         assertThat(client2.activeTaskCount(), equalTo(1));
         assertHasNoStandbyTasks(client1, client2);
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldAssignWarmupReplicasEvenIfNoStandbyReplicasConfigured() {
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1));
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
-        
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+
+
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertThat(client2.standbyTaskCount(), equalTo(1));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
+        assertThat(probingRebalanceNeeded, is(true));
     }
-
 
 
     @Test
     public void shouldNotAssignMoreThanMaxWarmupReplicas() {
-        maxWarmupReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(
+                /*acceptableRecoveryLag*/ 100L,
+                /*balanceFactor*/ 1,
+                /*maxWarmupReplicas*/ 1,
+                /*numStandbyReplicas*/ 0,
+                /*probingRebalanceIntervalMs*/ 60 * 1000L
+            )
+        );
+
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertThat(client2.standbyTaskCount(), equalTo(1));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
+        assertThat(probingRebalanceNeeded, is(true));
     }
 
     @Test
     public void shouldNotAssignWarmupAndStandbyToTheSameClient() {
-        numStandbyReplicas = 1;
-        maxWarmupReplicas = 1;
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
-
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(
+                /*acceptableRecoveryLag*/ 100L,
+                /*balanceFactor*/ 1,
+                /*maxWarmupReplicas*/ 1,
+                /*numStandbyReplicas*/ 1,
+                /*probingRebalanceIntervalMs*/ 60 * 1000L
+            )
+        );
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertThat(client2.standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
+        assertThat(probingRebalanceNeeded, is(true));
     }
 
     @Test
     public void shouldNotAssignAnyStandbysWithInsufficientCapacity() {
-        numStandbyReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1));
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks);
 
-        clientStates = getClientStatesMap(client1);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldAssignActiveTasksToNotCaughtUpClientIfNoneExist() {
-        numStandbyReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
 
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldNotAssignMoreThanMaxWarmupReplicasWithStandbys() {
-        numStandbyReplicas = 1;
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
+        final ClientState client3 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
-        client3 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
-        clientStates = getClientStatesMap(client1, client2, client3);
-        createTaskAssignor();
-        taskAssignor.assign();
-
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
         assertThat(client1.activeTaskCount(), equalTo(4));
         assertThat(client2.standbyTaskCount(), equalTo(3)); // 1
         assertThat(client3.standbyTaskCount(), equalTo(3));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2, client3);
+        assertThat(probingRebalanceNeeded, is(true));
     }
 
     @Test
     public void shouldDistributeStatelessTasksToBalanceTotalTaskLoad() {
-        numStandbyReplicas = 1;
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
 
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3));
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
 
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_2)));
         assertHasNoStandbyTasks(client1);
         assertThat(client2.activeTasks(), equalTo(mkSet(TASK_1_1)));
         assertThat(client2.standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(probingRebalanceNeeded, is(true));
     }
 
     @Test
     public void shouldDistributeStatefulActiveTasksToAllClients() {
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3, TASK_2_0); // 9 total
-        statefulTasks = new HashSet<>(allTasks);
-        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(100);
-        client2 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(50);
-        client3 = getMockClientWithPreviousCaughtUpTasks(allTasks).withCapacity(1);
+        final Set<TaskId> allTasks =
+            mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3, TASK_2_0); // 9 total
+        final Map<TaskId, Long> allTaskLags = allTasks.stream().collect(Collectors.toMap(t -> t, t -> 0L));
+        final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), allTaskLags, 100);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), allTaskLags, 50);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), allTaskLags, 1);
 
-        clientStates = getClientStatesMap(client1, client2, client3);
-        createTaskAssignor();
-        taskAssignor.assign();
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
-        assertFalse(client1.activeTasks().isEmpty());
-        assertFalse(client2.activeTasks().isEmpty());
-        assertFalse(client3.activeTasks().isEmpty());
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+
+        assertThat(client1.activeTasks(), not(empty()));
+        assertThat(client2.activeTasks(), not(empty()));
+        assertThat(client3.activeTasks(), not(empty()));
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
     public void shouldReturnFalseIfPreviousAssignmentIsReused() {
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        statefulTasks = new HashSet<>(allTasks);
-        client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_2));
-        client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1, TASK_0_3));
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_2), statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1, TASK_0_3), statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        assertFalse(taskAssignor.assign());
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
 
+        assertThat(probingRebalanceNeeded, is(false));
         assertThat(client1.activeTasks(), equalTo(client1.prevActiveTasks()));
         assertThat(client2.activeTasks(), equalTo(client2.prevActiveTasks()));
     }
 
     @Test
     public void shouldReturnFalseIfNoWarmupTasksAreAssigned() {
-        allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        statefulTasks = EMPTY_TASKS;
-        client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        assertFalse(taskAssignor.assign());
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+        assertThat(probingRebalanceNeeded, is(false));
         assertHasNoStandbyTasks(client1, client2);
     }
 
     @Test
     public void shouldReturnTrueIfWarmupTasksAreAssigned() {
-        allTasks = mkSet(TASK_0_0, TASK_0_1);
-        statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        client1 = getMockClientWithPreviousCaughtUpTasks(allTasks);
-        client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS);
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(allTasks, statefulTasks);
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks);
 
-        clientStates = getClientStatesMap(client1, client2);
-        createTaskAssignor();
-        assertTrue(taskAssignor.assign());
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final boolean probingRebalanceNeeded =
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
+        assertThat(probingRebalanceNeeded, is(true));
         assertThat(client2.standbyTaskCount(), equalTo(1));
     }
 
     private static void assertHasNoActiveTasks(final ClientState... clients) {
         for (final ClientState client : clients) {
-            assertTrue(client.activeTasks().isEmpty());
+            assertThat(client.activeTasks(), is(empty()));
         }
     }
 
     private static void assertHasNoStandbyTasks(final ClientState... clients) {
         for (final ClientState client : clients) {
-            assertTrue(client.standbyTasks().isEmpty());
+            assertThat(client.standbyTasks(), is(empty()));
         }
     }
 
-    private MockClientState getMockClientWithPreviousCaughtUpTasks(final Set<TaskId> statefulActiveTasks) {
+    private static ClientState getMockClientWithPreviousCaughtUpTasks(final Set<TaskId> statefulActiveTasks,
+                                                                      final Set<TaskId> statefulTasks) {
         if (!statefulTasks.containsAll(statefulActiveTasks)) {
             throw new IllegalArgumentException("Need to initialize stateful tasks set before creating mock clients");
         }
@@ -491,32 +508,6 @@ public class HighAvailabilityTaskAssignorTest {
                 taskLags.put(task, Long.MAX_VALUE);
             }
         }
-        final MockClientState client = new MockClientState(1, taskLags);
-        client.addPreviousActiveTasks(statefulActiveTasks);
-        return client;
-    }
-
-    static class MockClientState extends ClientState {
-        private final Map<TaskId, Long> taskLagTotals;
-
-        private MockClientState(final int capacity,
-                                final Map<TaskId, Long> taskLagTotals) {
-            super(capacity);
-            this.taskLagTotals = taskLagTotals;
-        }
-
-        @Override
-        long lagFor(final TaskId task) {
-            final Long totalLag = taskLagTotals.get(task);
-            if (totalLag == null) {
-                return Long.MAX_VALUE;
-            } else {
-                return totalLag;
-            }
-        }
-
-        MockClientState withCapacity(final int capacity) {
-            return new MockClientState(capacity, taskLagTotals);
-        }
+        return new ClientState(statefulActiveTasks, emptySet(), taskLags, 1);
     }
 }

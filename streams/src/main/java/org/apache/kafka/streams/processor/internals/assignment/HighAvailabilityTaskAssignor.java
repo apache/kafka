@@ -16,49 +16,50 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-import java.util.Set;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    private final Map<UUID, ClientState> clientStates;
-    private final Map<UUID, Integer> clientsToNumberOfThreads;
-    private final SortedSet<UUID> sortedClients;
+    private Map<UUID, ClientState> clientStates;
+    private Map<UUID, Integer> clientsToNumberOfThreads;
+    private SortedSet<UUID> sortedClients;
 
-    private final Set<TaskId> allTasks;
-    private final SortedSet<TaskId> statefulTasks;
-    private final SortedSet<TaskId> statelessTasks;
+    private Set<TaskId> allTasks;
+    private SortedSet<TaskId> statefulTasks;
+    private SortedSet<TaskId> statelessTasks;
 
-    private final AssignmentConfigs configs;
+    private AssignmentConfigs configs;
 
-    private final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
-    private final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
+    private SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
+    private Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
 
-    public HighAvailabilityTaskAssignor(final Map<UUID, ClientState> clientStates,
-                                        final Set<TaskId> allTasks,
-                                        final Set<TaskId> statefulTasks,
-                                        final AssignmentConfigs configs) {
+    @Override
+    public boolean assign(final Map<UUID, ClientState> clientStates,
+                          final Set<TaskId> allTasks,
+                          final Set<TaskId> statefulTasks,
+                          final AssignmentConfigs configs) {
         this.configs = configs;
         this.clientStates = clientStates;
         this.allTasks = allTasks;
@@ -77,10 +78,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         statefulTasksToRankedCandidates =
             buildClientRankingsByTask(statefulTasks, clientStates, configs.acceptableRecoveryLag);
         tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
-    }
 
-    @Override
-    public boolean assign() {
+
         if (shouldUsePreviousAssignment()) {
             assignPreviousTasksToClientStates();
             return false;
@@ -89,13 +88,18 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
 
-        final boolean followupRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
+        final boolean probingRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
 
         assignStandbyReplicaTasks(tasksToRemainingStandbys);
 
         assignStatelessActiveTasks();
 
-        return followupRebalanceNeeded;
+        log.info("Decided on assignment: " +
+                     clientStates +
+                     " with " +
+                     (probingRebalanceNeeded ? "" : "no") +
+                     " followup probing rebalance.");
+        return probingRebalanceNeeded;
     }
 
     private boolean assignStatefulActiveTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
