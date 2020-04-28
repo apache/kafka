@@ -31,10 +31,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -736,7 +734,7 @@ public class EosIntegrationTest {
         return streams;
     }
 
-    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
+    private void writeInputData(final List<KeyValue<Long, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
             records,
@@ -810,21 +808,9 @@ public class EosIntegrationTest {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent) {
-        ReadOnlyKeyValueStore<Long, Long> store = null;
-
-        final long maxWaitingTime = System.currentTimeMillis() + 300000L;
-        while (System.currentTimeMillis() < maxWaitingTime) {
-            try {
-                store = streams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
-                break;
-            } catch (final InvalidStateStoreException okJustRetry) {
-                try {
-                    Thread.sleep(5000L);
-                } catch (final Exception ignore) { }
-            }
-        }
-
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws InterruptedException {
+        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
+            .getStore(300000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();

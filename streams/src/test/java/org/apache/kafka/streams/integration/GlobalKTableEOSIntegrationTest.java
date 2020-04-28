@@ -27,8 +27,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StoreQueryParameters;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -59,6 +57,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.junit.Assert.assertNotNull;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -158,8 +158,9 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore = IntegrationTestUtils
+            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+        assertNotNull(replicatedStore);
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -202,8 +203,9 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore = IntegrationTestUtils
+            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+        assertNotNull(replicatedStore);
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -236,14 +238,12 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put(3L, "C");
         expected.put(4L, "D");
 
+        final ReadOnlyKeyValueStore<Long, String> store = IntegrationTestUtils
+            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+        assertNotNull(store);
+
         TestUtils.waitForCondition(
             () -> {
-                final ReadOnlyKeyValueStore<Long, String> store;
-                try {
-                    store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
-                } catch (final InvalidStateStoreException ex) {
-                    return false;
-                }
                 final Map<Long, String> result = new HashMap<>();
                 final Iterator<KeyValue<Long, String>> it = store.all();
                 while (it.hasNext()) {
@@ -270,14 +270,12 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put(3L, "C");
         expected.put(4L, "D");
 
+        final ReadOnlyKeyValueStore<Long, String> store = IntegrationTestUtils
+            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+        assertNotNull(store);
+
         TestUtils.waitForCondition(
             () -> {
-                final ReadOnlyKeyValueStore<Long, String> store;
-                try {
-                    store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
-                } catch (final InvalidStateStoreException ex) {
-                    return false;
-                }
                 final Map<Long, String> result = new HashMap<>();
                 final Iterator<KeyValue<Long, String>> it = store.all();
                 while (it.hasNext()) {
