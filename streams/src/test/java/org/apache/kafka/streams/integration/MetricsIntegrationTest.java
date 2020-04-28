@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -71,8 +72,6 @@ public class MetricsIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final long timeout = 60000;
-
-    private final static String APPLICATION_ID_VALUE = "stream-metrics-test";
 
     // Metric group
     private static final String STREAM_CLIENT_NODE_METRICS = "stream-metrics";
@@ -227,14 +226,15 @@ public class MetricsIntegrationTest {
     private String appId;
 
     @Rule
-    public TestName name = new TestName();
+    public TestName testName = new TestName();
 
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
 
-        appId = APPLICATION_ID_VALUE + "-" + name.getMethodName();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);

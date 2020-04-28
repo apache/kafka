@@ -84,6 +84,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
@@ -848,8 +849,9 @@ public class KafkaStreamsTest {
 
     @Test
     public void statelessTopologyShouldNotCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
@@ -866,22 +868,24 @@ public class KafkaStreamsTest {
 
     @Test
     public void inMemoryStatefulTopologyShouldNotCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = testName.getMethodName() + "-counts";
-        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
+        final String globalTopicName = safeTestName + "-global";
+        final String storeName = safeTestName + "-counts";
+        final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
         startStreamsAndCheckDirExists(topology, false);
     }
 
     @Test
     public void statefulTopologyShouldCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = testName.getMethodName() + "-counts";
-        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
+        final String globalTopicName = safeTestName + "-global";
+        final String storeName = safeTestName + "-counts";
+        final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
         startStreamsAndCheckDirExists(topology, true);
     }

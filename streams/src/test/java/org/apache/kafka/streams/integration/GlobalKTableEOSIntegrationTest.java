@@ -58,6 +58,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.Assert.assertNotNull;
 
 @RunWith(Parameterized.class)
@@ -108,10 +109,8 @@ public class GlobalKTableEOSIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTable-eos-test-" + testName.getMethodName()
-            .replace('[', '_')
-            .replace(']', '_');
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -291,12 +290,9 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void createTopics() throws Exception {
-        final String suffix = testName.getMethodName()
-            .replace('[', '_')
-            .replace(']', '_');
-        streamTopic = "stream-" + suffix;
-        globalTableTopic = "globalTable-" + suffix;
-        CLUSTER.deleteAllTopicsAndWait(300_000L);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamTopic = "stream-" + safeTestName;
+        globalTableTopic = "globalTable-" + safeTestName;
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
