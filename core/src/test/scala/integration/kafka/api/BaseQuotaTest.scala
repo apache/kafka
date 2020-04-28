@@ -34,6 +34,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
@@ -239,24 +240,29 @@ abstract class QuotaTestClients(topic: String,
     numConsumed
   }
 
-  def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, clientId: String, expectThrottle: Boolean): Unit = {
-    val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey)
+  def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, metricNameSuffix: String,
+                                             clientId: String, expectThrottle: Boolean): Unit = {
+    val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix)
     if (expectThrottle)
-      assertTrue(s"Client with id=$clientId should have been throttled", throttleTimeMs > 0)
+      assertTrue(s"Client with id=$clientId should have been throttled, $throttleTimeMs", throttleTimeMs > 0)
     else
       assertEquals(s"Client with id=$clientId should not have been throttled", 0.0, throttleTimeMs, 0.0)
   }
 
-  def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
+  def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
+                            verifyRequestChannelMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Produce, producerClientId, expectThrottle)
-    verifyThrottleTimeRequestChannelMetric(ApiKeys.PRODUCE, producerClientId, expectThrottle)
+    if (verifyRequestChannelMetric)
+      verifyThrottleTimeRequestChannelMetric(ApiKeys.PRODUCE, "", producerClientId, expectThrottle)
     if (verifyClientMetric)
       verifyProducerClientThrottleTimeMetric(expectThrottle)
   }
 
-  def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
+  def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
+                            verifyRequestChannelMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Fetch, consumerClientId, expectThrottle)
-    verifyThrottleTimeRequestChannelMetric(ApiKeys.FETCH, consumerClientId, expectThrottle)
+    if (verifyRequestChannelMetric)
+      verifyThrottleTimeRequestChannelMetric(ApiKeys.FETCH, "Consumer", consumerClientId, expectThrottle)
     if (verifyClientMetric)
       verifyConsumerClientThrottleTimeMetric(expectThrottle)
   }
@@ -280,11 +286,12 @@ abstract class QuotaTestClients(topic: String,
     leaderNode.metrics.metrics.get(throttleMetricName(quotaType, clientId))
   }
 
-  private def brokerRequestMetricsThrottleTimeMs(apiKey: ApiKeys): Double = {
+  private def brokerRequestMetricsThrottleTimeMs(apiKey: ApiKeys, metricNameSuffix: String): Double = {
     def yammerMetricValue(name: String): Double = {
       val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
-        .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+      val (_, metric) = allMetrics.find { case (metricName, _) =>
+        metricName.getMBeanName.startsWith(name)
+      }.getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
       metric match {
         case m: Meter => m.count.toDouble
         case m: Histogram => m.max
@@ -292,7 +299,7 @@ abstract class QuotaTestClients(topic: String,
       }
     }
 
-    yammerMetricValue(s"kafka.network:type=RequestMetrics,name=ThrottleTimeMs,request=${apiKey.name}")
+    yammerMetricValue(s"kafka.network:type=RequestMetrics,name=ThrottleTimeMs,request=${apiKey.name}$metricNameSuffix")
   }
 
   def exemptRequestMetric: KafkaMetric = {
