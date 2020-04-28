@@ -593,10 +593,10 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (value == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
+            if (schema.isOptional() && (config.acceptOptionalNull() || schema.defaultValue() == null)) // Treat optional null as null
+                return JsonNodeFactory.instance.nullNode();
             if (schema.defaultValue() != null)
                 return convertToJson(schema, schema.defaultValue());
-            if (schema.isOptional())
-                return JsonNodeFactory.instance.nullNode();
             throw new DataException("Conversion error: null value for field that is required and has no default value");
         }
 
