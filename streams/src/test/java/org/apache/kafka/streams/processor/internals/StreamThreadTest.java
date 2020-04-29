@@ -1920,7 +1920,9 @@ public class StreamThreadTest {
             mkEntry(taskId1, emptySet())
         );
 
+        expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
         expect(taskManager.tasks()).andReturn(mkMap(
@@ -1928,6 +1930,63 @@ public class StreamThreadTest {
             mkEntry(taskId2, task2)
         )).anyTimes();
         expect(taskManager.commit(singleton(task2))).andReturn(0);
+
+        EasyMock.replay(task1, task2, taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
+        ) {
+            @Override
+            void runOnce() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+            }
+        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.runLoop();
+
+        verify(taskManager);
+    }
+
+    @Test
+    public void shouldNotCommitNonRunningNonCorruptedTasksOnTaskCorruptedException() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final TaskId taskId1 = new TaskId(0, 0);
+        final TaskId taskId2 = new TaskId(0, 2);
+
+        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
+            mkEntry(taskId1, emptySet())
+        );
+
+        expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task2.state()).andReturn(Task.State.CREATED).anyTimes();
+        expect(task2.id()).andReturn(taskId2).anyTimes();
+
+        expect(taskManager.tasks()).andReturn(mkMap(
+            mkEntry(taskId1, task1),
+            mkEntry(taskId2, task2)
+        )).anyTimes();
+        // expect not to try and commit task2, even though it's not corrupted, because it's not running.
+        expect(taskManager.commit(emptySet())).andReturn(0);
 
         EasyMock.replay(task1, task2, taskManager);
 
