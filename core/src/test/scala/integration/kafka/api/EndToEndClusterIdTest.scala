@@ -32,7 +32,7 @@ import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 /** The test cases here verify the following conditions.

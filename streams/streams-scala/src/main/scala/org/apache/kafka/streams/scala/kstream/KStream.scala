@@ -45,7 +45,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   ValueTransformerSupplierWithKeyAsJava
 }
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream KStream]] and delegates method calls to the
@@ -298,6 +298,26 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def to(extractor: TopicNameExtractor[K, V])(implicit produced: Produced[K, V]): Unit =
     inner.to(extractor, produced)
+
+  /**
+   * Convert this stream to a [[KTable]].
+   *
+   * @return a [[KTable]] that contains the same records as this [[KStream]]
+   * @see `org.apache.kafka.streams.kstream.KStream#toTable`
+   */
+  def toTable: KTable[K, V] =
+    new KTable(inner.toTable)
+
+  /**
+   * Convert this stream to a [[KTable]].
+   *
+   * @param materialized  a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
+   *                      should be materialized.
+   * @return a [[KTable]] that contains the same records as this [[KStream]]
+   * @see `org.apache.kafka.streams.kstream.KStream#toTable`
+   */
+  def toTable(materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+    new KTable(inner.toTable(materialized))
 
   /**
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type

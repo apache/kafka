@@ -60,6 +60,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
+
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
  */
@@ -80,6 +82,7 @@ class WorkerSourceTask extends WorkerTask {
     private final OffsetStorageWriter offsetWriter;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
+    private final boolean isTopicTrackingEnabled;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -137,6 +140,7 @@ class WorkerSourceTask extends WorkerTask {
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.producerSendException = new AtomicReference<>();
+        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
     }
 
     @Override
@@ -356,7 +360,9 @@ class WorkerSourceTask extends WorkerTask {
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord, recordMetadata);
-                                    recordActiveTopic(producerRecord.topic());
+                                    if (isTopicTrackingEnabled) {
+                                        recordActiveTopic(producerRecord.topic());
+                                    }
                                 }
                             }
                         });

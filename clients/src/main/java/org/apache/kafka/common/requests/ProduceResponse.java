@@ -319,8 +319,9 @@ public class ProduceResponse extends LegacyAbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (PartitionResponse response : responses.values())
-            updateErrorCounts(errorCounts, response.error);
+        responses.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error)
+        );
         return errorCounts;
     }
 

@@ -25,7 +25,7 @@ import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object AclEntry {
   val WildcardPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*")

@@ -35,7 +35,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
@@ -176,7 +176,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignmentMethods(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
 
     // test with non-existing topic
     assertFalse(zkClient.topicExists(topic1))
@@ -209,7 +209,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => ReplicaAssignment(v, List(), List()) }.toMap)
+    zkClient.setTopicAssignment(topic1, updatedAssignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
     // add second topic
@@ -220,7 +220,56 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createTopicAssignment(topic2, secondAssignment)
 
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
+  }
+
+  @Test
+  def testGetAllTopicsInClusterTriggersWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(true).isEmpty)
+
+    // Verifies that listing all topics without registering the watch does
+    // not interfere with the previous registered watcher
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertTrue("Failed to receive watch notification",
+      latch.await(5, TimeUnit.SECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  @Test
+  def testGetAllTopicsInClusterDoesNotTriggerWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and don't register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertFalse("Received watch notification",
+      latch.await(100, TimeUnit.MILLISECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  private def registerChildChangeHandler(count: Int): CountDownLatch = {
+    val znodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val znodeChildChangeHandler = new ZNodeChildChangeHandler {
+      override val path: String = TopicsZNode.path
+
+      override def handleChildChange(): Unit = {
+        znodeChildChangeHandlerCountDownLatch.countDown()
+      }
+    }
+    zkClient.registerZNodeChildChangeHandler(znodeChildChangeHandler)
+    znodeChildChangeHandlerCountDownLatch
   }
 
   @Test
@@ -815,10 +864,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     leaderIsrAndControllerEpochs(0, 0)
 
-  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] = initialLeaderIsrAndControllerEpochs.mapValues(_.leaderAndIsr).toMap
+  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] =
+    initialLeaderIsrAndControllerEpochs.map { case (k, v) => k -> v.leaderAndIsr }
 
   private def leaderIsrs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderAndIsr] =
-    leaderIsrAndControllerEpochs(state, zkVersion).mapValues(_.leaderAndIsr).toMap
+    leaderIsrAndControllerEpochs(state, zkVersion).map { case (k, v) => k -> v.leaderAndIsr }
 
   private def checkUpdateLeaderAndIsrResult(
                   expectedSuccessfulPartitions: Map[TopicPartition, LeaderAndIsr],
@@ -926,12 +976,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetTopicsAndPartitions(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
     zkClient.createRecursive(TopicZNode.path(topic1))
     zkClient.createRecursive(TopicZNode.path(topic2))
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
 
     assertTrue(zkClient.getAllPartitions.isEmpty)
 

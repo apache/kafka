@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class HeartbeatResponse extends AbstractResponse {
@@ -54,7 +53,7 @@ public class HeartbeatResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(error(), 1);
+        return errorCounts(error());
     }
 
     @Override

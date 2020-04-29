@@ -27,6 +27,7 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.InetAddress;
 
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManagerFactory;
 
 import java.nio.file.Files;
@@ -44,6 +45,8 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -68,6 +71,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class TestSslUtils {
 
@@ -358,6 +362,51 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
             return sslConfigs;
+        }
+    }
+
+    public static final class TestSslEngineFactory implements SslEngineFactory {
+
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+
+        @Override
+        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
+            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
+        }
+
+        @Override
+        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
+            return defaultSslEngineFactory.createServerSslEngine(peerHost, peerPort);
+        }
+
+        @Override
+        public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) {
+            return defaultSslEngineFactory.shouldBeRebuilt(nextConfigs);
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return defaultSslEngineFactory.reconfigurableConfigs();
+        }
+
+        @Override
+        public KeyStore keystore() {
+            return defaultSslEngineFactory.keystore();
+        }
+
+        @Override
+        public KeyStore truststore() {
+            return defaultSslEngineFactory.truststore();
+        }
+
+        @Override
+        public void close() throws IOException {
+            defaultSslEngineFactory.close();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            defaultSslEngineFactory.configure(configs);
         }
     }
 }

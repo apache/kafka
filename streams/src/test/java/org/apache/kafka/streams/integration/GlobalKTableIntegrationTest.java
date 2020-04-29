@@ -26,7 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -46,14 +46,15 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -65,7 +66,6 @@ public class GlobalKTableIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
     private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
@@ -79,12 +79,15 @@ public class GlobalKTableIntegrationTest {
     private KStream<String, Long> stream;
     private MockProcessorSupplier<String, String> supplier;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-test-" + testNo.incrementAndGet();
+        final String applicationId = "globalTableTopic-table-test-" + testName.getMethodName();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -142,7 +145,7 @@ public class GlobalKTableIntegrationTest {
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -150,7 +153,7 @@ public class GlobalKTableIntegrationTest {
             "waiting for data in replicated store");
 
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp =
-            kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
         assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
 
         firstTimestamp = mockTime.milliseconds();
@@ -209,7 +212,7 @@ public class GlobalKTableIntegrationTest {
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -217,7 +220,7 @@ public class GlobalKTableIntegrationTest {
             "waiting for data in replicated store");
 
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp =
-            kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
         assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
 
         firstTimestamp = mockTime.milliseconds();
@@ -254,23 +257,23 @@ public class GlobalKTableIntegrationTest {
         produceInitialGlobalTableValues();
 
         startStreams();
-        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
         assertThat(store.approximateNumEntries(), equalTo(4L));
         ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> timestampedStore =
-            kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
+            kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
         kafkaStreams.close();
 
         startStreams();
-        store = kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        store = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
         assertThat(store.approximateNumEntries(), equalTo(4L));
-        timestampedStore = kafkaStreams.store(StoreQueryParams.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
+        timestampedStore = kafkaStreams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.timestampedKeyValueStore()));
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
     }
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + testNo;
-        globalTableTopic = "globalTable-" + testNo;
+        streamTopic = "stream-" + testName.getMethodName();
+        globalTableTopic = "globalTable-" + testName.getMethodName();
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }

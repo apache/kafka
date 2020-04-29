@@ -39,9 +39,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     public static final String DEFAULT_MEMBER_ID = "";
     public static final long DEFAULT_RETENTION_TIME = -1L;
 
-    // default values for old versions,
-    // will be removed after these versions are deprecated
-    @Deprecated
+    // default values for old versions, will be removed after these versions are no longer supported
     public static final long DEFAULT_TIMESTAMP = -1L;            // for V0, V1
 
     private final OffsetCommitRequestData data;

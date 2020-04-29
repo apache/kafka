@@ -19,10 +19,10 @@ package kafka.log
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.Metrics
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.message._
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.InvalidRecordException
@@ -35,14 +35,14 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.{assertThrows, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogValidatorTest {
 
   val time = Time.SYSTEM
   val topicPartition = new TopicPartition("topic", 0)
   val brokerTopicStats = new BrokerTopicStats
-  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+  val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Test
   def testOnlyOneBatch(): Unit = {
@@ -1287,7 +1287,6 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
     }
 
-    e.recordErrors.foreach(e => println(e.batchIndex + " " + e.message))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertTrue(e.recordErrors.nonEmpty)
     // recordsWithInvalidInnerMagic creates 20 records

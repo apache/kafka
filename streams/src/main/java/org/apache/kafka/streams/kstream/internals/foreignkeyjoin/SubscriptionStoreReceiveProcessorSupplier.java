@@ -58,9 +58,10 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
             private Sensor droppedRecordsSensor;
 
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final ProcessorContext<Object, Object> context) {
                 super.init(context);
-                final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+                final InternalProcessorContext<Object, Object> internalProcessorContext =
+                    (InternalProcessorContext<Object, Object>) context;
 
                 droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                     Thread.currentThread().getName(),
@@ -68,6 +69,8 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                     internalProcessorContext.metrics()
                 );
                 store = internalProcessorContext.getStateStore(storeBuilder);
+
+                keySchema.init(context);
             }
 
             @Override

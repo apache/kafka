@@ -307,8 +307,9 @@ public class DescribeConfigsResponse extends LegacyAbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Config response : configs.values())
-            updateErrorCounts(errorCounts, response.error.error());
+        configs.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error.error())
+        );
         return errorCounts;
     }
 

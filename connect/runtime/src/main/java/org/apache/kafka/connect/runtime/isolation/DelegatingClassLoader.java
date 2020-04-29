@@ -47,6 +47,7 @@ import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -339,7 +340,14 @@ public class DelegatingClassLoader extends URLClassLoader {
             Class<T> klass,
             ClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
-        Set<Class<? extends T>> plugins = reflections.getSubTypesOf(klass);
+        Set<Class<? extends T>> plugins;
+        try {
+            plugins = reflections.getSubTypesOf(klass);
+        } catch (ReflectionsException e) {
+            log.debug("Reflections scanner could not find any classes for URLs: " +
+                    reflections.getConfiguration().getUrls(), e);
+            return Collections.emptyList();
+        }
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {

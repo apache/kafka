@@ -38,7 +38,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
     private Number inputValue;
 
     private Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformer;
-    private ProcessorContext context;
+    private ProcessorContext<Object, Object> context;
 
     private KStreamFlatTransformProcessor<Number, Number, Integer, Integer> processor;
 

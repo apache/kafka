@@ -29,6 +29,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
@@ -67,6 +69,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
+    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
+    }
+
     protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Errors error : errors)
@@ -82,8 +88,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        Integer count = errorCounts.get(error);
-        errorCounts.put(error, count == null ? 1 : count + 1);
+        Integer count = errorCounts.getOrDefault(error, 0);
+        errorCounts.put(error, count + 1);
     }
 
     /**
@@ -191,6 +197,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return ListPartitionReassignmentsResponse.parse(responseBuffer, version);
             case OFFSET_DELETE:
                 return OffsetDeleteResponse.parse(responseBuffer, version);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return DescribeClientQuotasResponse.parse(responseBuffer, version);
+            case ALTER_CLIENT_QUOTAS:
+                return AlterClientQuotasResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

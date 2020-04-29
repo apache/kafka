@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -26,19 +27,20 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class StopReplicaResponse extends AbstractResponse {
 
     /**
      * Possible error code:
-     *
-     * STALE_CONTROLLER_EPOCH (11)
-     * STALE_BROKER_EPOCH (77)
+     *  - {@link Errors#STALE_CONTROLLER_EPOCH}
+     *  - {@link Errors#STALE_BROKER_EPOCH}
+     *  - {@link Errors#FENCED_LEADER_EPOCH}
+     *  - {@link Errors#KAFKA_STORAGE_ERROR}
      */
     private final StopReplicaResponseData data;
 
     public StopReplicaResponse(StopReplicaResponseData data) {
+        super(ApiKeys.STOP_REPLICA);
         this.data = data;
     }
 
@@ -55,7 +57,7 @@ public class StopReplicaResponse extends AbstractResponse {
         if (data.errorCode() != Errors.NONE.code())
             // Minor optimization since the top-level error applies to all partitions
             return Collections.singletonMap(error(), data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())).collect(Collectors.toList()));
+        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())));
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {

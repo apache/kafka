@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class ListGroupsResponse extends AbstractResponse {
@@ -43,7 +42,7 @@ public class ListGroupsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     public static ListGroupsResponse parse(ByteBuffer buffer, short version) {

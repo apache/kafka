@@ -18,19 +18,14 @@ package org.apache.kafka.streams;
 
 import java.util.LinkedList;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -53,6 +48,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -90,10 +86,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsWithoutTimeout;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -681,7 +676,9 @@ public class KafkaStreams implements AutoCloseable {
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
                 Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
-        reporters.add(new JmxReporter(JMX_PREFIX));
+        final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        jmxReporter.configure(config.originals());
+        reporters.add(jmxReporter);
         metrics = new Metrics(metricConfig, reporters, time);
         streamsMetrics =
             new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
@@ -698,7 +695,7 @@ public class KafkaStreams implements AutoCloseable {
         internalTopologyBuilder.rewriteTopology(config);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        final ProcessorTopology taskTopology = internalTopologyBuilder.build();
+        final ProcessorTopology taskTopology = internalTopologyBuilder.buildTopology();
 
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
@@ -714,11 +711,11 @@ public class KafkaStreams implements AutoCloseable {
         }
         final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final long cacheSizePerThread = totalCacheSize / (threads.length + (globalTaskTopology == null ? 0 : 1));
-        final boolean createStateDirectory = taskTopology.hasPersistentLocalStore() ||
+        final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (globalTaskTopology != null && globalTaskTopology.hasPersistentGlobalStore());
 
         try {
-            stateDirectory = new StateDirectory(config, time, createStateDirectory);
+            stateDirectory = new StateDirectory(config, time, hasPersistentStores);
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
@@ -742,7 +739,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        adminClient = clientSupplier.getAdmin(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
+        adminClient = clientSupplier.getAdmin(config.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StreamThreadStateStoreProvider> storeProviders = new ArrayList<>();
@@ -765,6 +762,9 @@ public class KafkaStreams implements AutoCloseable {
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i], internalTopologyBuilder));
         }
 
+        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
+            Math.toIntExact(Arrays.stream(threads).filter(thread -> thread.state().isAlive()).count()));
+
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
@@ -776,14 +776,18 @@ public class KafkaStreams implements AutoCloseable {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+        stateDirCleaner = setupStateDirCleaner();
+
+        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
+        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private ScheduledExecutorService setupStateDirCleaner() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
             thread.setDaemon(true);
             return thread;
         });
-
-        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
-        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
     private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,
@@ -806,17 +810,12 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
-        if (endPoint == null || endPoint.trim().isEmpty()) {
+        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
+        if (hostInfo == null) {
             return StreamsMetadataState.UNKNOWN_HOST;
+        } else {
+            return hostInfo;
         }
-        final String host = getHost(endPoint);
-        final Integer port = getPort(endPoint);
-
-        if (host == null || port == null) {
-            throw new ConfigException(String.format("Error parsing host address %s. Expected format host:port.", endPoint));
-        }
-
-        return new HostInfo(host, port);
     }
 
     /**
@@ -1081,7 +1080,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param keySerializer serializer for the key
      * @param <K>           key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
      * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, Serializer)} instead.
      */
     @Deprecated
@@ -1114,7 +1114,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param partitioner the partitioner to be use to locate the host for the key
      * @param <K>         key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
-     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing,
+     * or {@code null} if no matching metadata could be found.
      * @deprecated Since 2.5. Use {@link #queryMetadataForKey(String, Object, StreamPartitioner)} instead.
      */
     @Deprecated
@@ -1132,7 +1133,8 @@ public class KafkaStreams implements AutoCloseable {
      * @param key           the key to find metadata for
      * @param keySerializer serializer for the key
      * @param <K>           key type
-     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store.
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store,
+     * or {@code null} if no matching metadata could be found.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -1149,7 +1151,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param partitioner the partitioner to be use to locate the host for the key
      * @param <K>           key type
      * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
-     * the supplied partitioner
+     * the supplied partitioner, or {@code null} if no matching metadata could be found.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -1160,27 +1162,25 @@ public class KafkaStreams implements AutoCloseable {
 
 
     /**
-     * @deprecated since 2.5 release; use {@link #store(StoreQueryParams)}  instead
+     * @deprecated since 2.5 release; use {@link #store(StoreQueryParameters)}  instead
      */
     @Deprecated
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        return store(StoreQueryParams.fromNameAndType(storeName, queryableStoreType));
+        return store(StoreQueryParameters.fromNameAndType(storeName, queryableStoreType));
     }
 
     /**
-     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.
-     * StoreQueryParams need required parameters to be set, which are {@code storeName} and if
-     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
+     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParameters}.
      * The returned object can be used to query the {@link StateStore} instances.
      *
-     * @param storeQueryParams   to set the optional parameters to fetch type of stores user wants to fetch when a key is queried
+     * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist
      */
-    public <T> T store(final StoreQueryParams<T> storeQueryParams) {
+    public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         validateIsRunningOrRebalancing();
-        return queryableStoreProvider.getStore(storeQueryParams);
+        return queryableStoreProvider.getStore(storeQueryParameters);
     }
 
     /**
@@ -1222,17 +1222,9 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
-        try {
-            allEndOffsets = adminClient.listOffsets(
-                allPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
-            ).all().get();
-        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
-            throw new StreamsException("Unable to obtain end offsets from kafka", e);
-        }
-
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsetsWithoutTimeout(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
+
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
             // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations
             // from zero instead of the real "earliest offset" for the changelog.

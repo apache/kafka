@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 
 public class ListPartitionReassignmentsResponse extends AbstractResponse {
@@ -53,10 +52,6 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
-        Errors topLevelErr = Errors.forCode(data.errorCode());
-        counts.put(topLevelErr, 1);
-
-        return counts;
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 }

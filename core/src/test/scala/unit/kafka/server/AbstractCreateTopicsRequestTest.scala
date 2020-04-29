@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 

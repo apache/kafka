@@ -38,7 +38,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
@@ -146,6 +146,10 @@ object TopicCommand extends Logging {
       print("\tLeader: " + (if (hasLeader) info.leader.id else "none"))
       print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
       print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
+      if (reassignment.nonEmpty) {
+        print("\tAdding Replicas: " + reassignment.get.addingReplicas().asScala.mkString(","))
+        print("\tRemoving Replicas: " + reassignment.get.removingReplicas().asScala.mkString(","))
+      }
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
     }
@@ -481,7 +485,7 @@ object TopicCommand extends Logging {
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
-      val allTopics = zkClient.getAllTopicsInCluster.toSeq.sorted
+      val allTopics = zkClient.getAllTopicsInCluster().toSeq.sorted
       doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
     }
 
@@ -559,10 +563,10 @@ object TopicCommand extends Logging {
     // It is possible for a reassignment to complete between the time we have fetched its state and the time
     // we fetch partition metadata. In ths case, we ignore the reassignment when determining replication factor.
     def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
-      // Reassignment is still in progress as long as the removing replicas are still present
+      // Reassignment is still in progress as long as the removing and adding replicas are still present
       val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet
-      val removingReplicaIds = ra.removingReplicas.asScala.map(Int.unbox).toSet
-      allReplicaIds.exists(removingReplicaIds.contains)
+      val changingReplicaIds = ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
+      allReplicaIds.exists(changingReplicaIds.contains)
     }
 
     reassignment match {
@@ -649,7 +653,7 @@ object TopicCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    private val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
+    private val allTopicLevelOpts = immutable.Set[OptionSpec[_]](alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
     private val allReplicationReportOpts: Set[OptionSpec[_]] = Set(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt)
 

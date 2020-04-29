@@ -30,7 +30,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogConfig, LogManager}
-import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.utils._
@@ -50,7 +50,7 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
 
 object KafkaServer {
@@ -133,6 +133,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private var logContext: LogContext = null
 
+  var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
 
   val brokerState: BrokerState = new BrokerState
@@ -186,7 +187,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   newGauge("BrokerState", () => brokerState.currentState)
   newGauge("ClusterId", () => clusterId)
-  newGauge("yammer-metrics-count", () => com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size)
+  newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -236,8 +237,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaScheduler.startup()
 
         /* create and configure metrics */
+        kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
+        kafkaYammerMetrics.configure(config.originals)
+
+        val jmxReporter = new JmxReporter(jmxPrefix)
+        jmxReporter.configure(config.originals)
+
         val reporters = new util.ArrayList[MetricsReporter]
-        reporters.add(new JmxReporter(jmxPrefix))
+        reporters.add(jmxReporter)
         val metricConfig = KafkaServer.metricConfig(config)
         metrics = new Metrics(metricConfig, reporters, time, true)
 
@@ -263,7 +270,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
-        socketServer.startup(startupProcessors = false)
+        socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -300,9 +307,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>
-            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
+            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.map { case (ep, cs) =>
+              ep -> cs.toCompletableFuture
+            }
           case None =>
-            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
+            brokerInfo.broker.endPoints.map { ep =>
+              ep.toJava -> CompletableFuture.completedFuture[Void](null)
+            }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,
@@ -341,8 +352,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        socketServer.startControlPlaneProcessor(authorizerFutures)
-        socketServer.startDataPlaneProcessors(authorizerFutures)
+        socketServer.startProcessingRequests(authorizerFutures)
+
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
@@ -719,7 +730,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
 
     if (brokerMetadataSet.size > 1) {
-      val builder = StringBuilder.newBuilder
+      val builder = new StringBuilder
 
       for ((logDir, brokerMetadata) <- brokerMetadataMap)
         builder ++= s"- $logDir -> $brokerMetadata\n"

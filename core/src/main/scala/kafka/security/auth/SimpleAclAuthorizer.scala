@@ -30,7 +30,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")

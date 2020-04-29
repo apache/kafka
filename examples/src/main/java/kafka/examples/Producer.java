@@ -40,12 +40,16 @@ public class Producer extends Thread {
                     final String transactionalId,
                     final boolean enableIdempotency,
                     final int numRecords,
+                    final int transactionTimeoutMs,
                     final CountDownLatch latch) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        if (transactionTimeoutMs > 0) {
+            props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs);
+        }
         if (transactionalId != null) {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
@@ -108,8 +112,8 @@ class DemoCallBack implements Callback {
      * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
      * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
      *
-     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). Null if an error
-     *                  occurred.
+     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
+     *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
     public void onCompletion(RecordMetadata metadata, Exception exception) {

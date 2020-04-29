@@ -31,7 +31,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class MetadataRequestTest extends BaseRequestTest {
@@ -274,7 +274,7 @@ class MetadataRequestTest extends BaseRequestTest {
       val serverId = server.dataPlaneRequestProcessor.brokerId
       val leaderId = partitionMetadata.leaderId
       val replicaIds = partitionMetadata.replicaIds.asScala
-      serverId != leaderId && replicaIds.contains(serverId)
+      leaderId.isPresent && leaderId.get() != serverId && replicaIds.contains(serverId)
     }.get
     downNode.shutdown()
 

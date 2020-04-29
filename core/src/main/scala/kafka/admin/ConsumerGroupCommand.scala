@@ -31,9 +31,9 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Map, Seq, Set, immutable, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import joptsimple.OptionSpec
 import org.apache.kafka.common.protocol.Errors
@@ -403,7 +403,7 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def deleteOffsets(groupId: String, topics: List[String]): (Errors, Map[TopicPartition, Throwable]) = {
-      var partitionLevelResult: Map[TopicPartition, Throwable] = mutable.HashMap()
+      val partitionLevelResult = mutable.Map[TopicPartition, Throwable]()
 
       val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
 
@@ -527,16 +527,17 @@ object ConsumerGroupCommand extends Logging {
             partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
             Some(s"${consumerSummary.clientId}"))
         }
-        val rowsWithoutConsumer = committedOffsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
-          case (topicPartition, offset) =>
-            collectConsumerAssignment(
-              groupId,
-              Option(consumerGroup.coordinator),
-              Seq(topicPartition),
-              Map(topicPartition -> Some(offset.offset)),
-              Some(MISSING_COLUMN_VALUE),
-              Some(MISSING_COLUMN_VALUE),
-              Some(MISSING_COLUMN_VALUE)).toSeq
+        val rowsWithoutConsumer = committedOffsets.filter { case (tp, _) =>
+          !assignedTopicPartitions.contains(tp)
+        }.flatMap { case (topicPartition, offset) =>
+          collectConsumerAssignment(
+            groupId,
+            Option(consumerGroup.coordinator),
+            Seq(topicPartition),
+            Map(topicPartition -> Some(offset.offset)),
+            Some(MISSING_COLUMN_VALUE),
+            Some(MISSING_COLUMN_VALUE),
+            Some(MISSING_COLUMN_VALUE)).toSeq
         }
         groupId -> (Some(state.toString), Some(rowsWithConsumer ++ rowsWithoutConsumer))
       }).toMap
@@ -862,10 +863,10 @@ object ConsumerGroupCommand extends Logging {
         withTimeoutMs(new DeleteConsumerGroupsOptions)
       ).deletedGroups().asScala
 
-      val result = groupsToDelete.mapValues { f =>
+      val result = groupsToDelete.map { case (g, f) =>
         Try(f.get) match {
-          case _: Success[_] => null
-          case Failure(e) => e
+          case Success(_) => g -> null
+          case Failure(e) => g -> e
         }
       }
 
@@ -1009,11 +1010,11 @@ object ConsumerGroupCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    val allGroupSelectionScopeOpts: Set[OptionSpec[_]] = Set(groupOpt, allGroupsOpt)
-    val allConsumerGroupLevelOpts: Set[OptionSpec[_]]  = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
-    val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
+    val allGroupSelectionScopeOpts = immutable.Set[OptionSpec[_]](groupOpt, allGroupsOpt)
+    val allConsumerGroupLevelOpts = immutable.Set[OptionSpec[_]](listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
+    val allResetOffsetScenarioOpts = immutable.Set[OptionSpec[_]](resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
-    val allDeleteOffsetsOpts: Set[OptionSpec[_]] = Set(groupOpt, topicOpt)
+    val allDeleteOffsetsOpts = immutable.Set[OptionSpec[_]](groupOpt, topicOpt)
 
     def checkArgs(): Unit = {
 

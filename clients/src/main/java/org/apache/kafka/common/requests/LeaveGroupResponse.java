@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -51,6 +52,7 @@ public class LeaveGroupResponse extends AbstractResponse {
     public final LeaveGroupResponseData data;
 
     public LeaveGroupResponse(LeaveGroupResponseData data) {
+        super(ApiKeys.LEAVE_GROUP);
         this.data = data;
     }
 
@@ -58,6 +60,7 @@ public class LeaveGroupResponse extends AbstractResponse {
                               Errors topLevelError,
                               final int throttleTimeMs,
                               final short version) {
+        super(ApiKeys.LEAVE_GROUP);
         if (version <= 2) {
             // Populate member level error.
             final short errorCode = getError(topLevelError, memberResponses).code();
@@ -116,12 +119,12 @@ public class LeaveGroupResponse extends AbstractResponse {
         }
 
         // Member level error.
-        for (MemberResponse memberResponse : data.members()) {
+        data.members().forEach(memberResponse -> {
             Errors memberError = Errors.forCode(memberResponse.errorCode());
             if (memberError != Errors.NONE) {
                 updateErrorCounts(combinedErrorCounts, memberError);
             }
-        }
+        });
         return combinedErrorCounts;
     }
 
@@ -148,5 +151,10 @@ public class LeaveGroupResponse extends AbstractResponse {
     @Override
     public int hashCode() {
         return Objects.hashCode(data);
+    }
+
+    @Override
+    public String toString() {
+        return data.toString();
     }
 }
