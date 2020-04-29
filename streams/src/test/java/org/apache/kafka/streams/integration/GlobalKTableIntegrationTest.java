@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,8 +38,8 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -50,11 +51,15 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNotNull;
@@ -87,8 +92,8 @@ public class GlobalKTableIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-test-" + testName.getMethodName();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -281,9 +286,24 @@ public class GlobalKTableIntegrationTest {
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
     }
 
+    @Test
+    public void shouldGetToRunningWithOnlyGlobalTopology() throws Exception {
+        builder = new StreamsBuilder();
+        globalTable = builder.globalTable(
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore(globalStore)));
+
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+
+        kafkaStreams.close();
+    }
+
     private void createTopics() throws Exception {
-        streamTopic = "stream-" + testName.getMethodName();
-        globalTableTopic = "globalTable-" + testName.getMethodName();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamTopic = "stream-" + safeTestName;
+        globalTableTopic = "globalTable-" + safeTestName;
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }

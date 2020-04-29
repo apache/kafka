@@ -50,6 +50,9 @@ import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidat
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.rules.TestName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Option;
 
 import java.io.File;
@@ -91,6 +94,7 @@ import static org.junit.Assert.fail;
 public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 60 * 1000L;
+    private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
 
     /*
      * Records state transition for StreamThread
@@ -109,6 +113,19 @@ public class IntegrationTestUtils {
         public boolean transitToPendingShutdownSeen() {
             return toPendingShutdownSeen;
         }
+    }
+
+    /**
+     * Gives a test name that is safe to be used in application ids, topic names, etc.
+     * The name is safe even for parameterized methods.
+     */
+    public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
+        return (testClass.getSimpleName() + testName.getMethodName())
+                .replace('.', '_')
+                .replace('[', '_')
+                .replace(']', '_')
+                .replace(' ', '_')
+                .replace('=', '_');
     }
 
     /**
@@ -145,12 +162,12 @@ public class IntegrationTestUtils {
         }
     }
 
-    public static void cleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
-        driver.cleanUp();
+    public static void quietlyCleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
         try {
+            driver.cleanUp();
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
+        } catch (final RuntimeException | InterruptedException e) {
+            LOG.warn("Ignoring failure to clean test state", e);
         }
     }
 
