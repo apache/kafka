@@ -139,7 +139,6 @@ public class SuppressScenarioTest {
                 )
             );
             inputTopic.pipeInput("x", "y", 4L);
-            System.out.println("Done piping into input topic!");
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(

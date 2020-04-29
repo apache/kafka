@@ -60,8 +60,6 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
      *         false otherwise
      */
     public static boolean maskTimestampAndCompareValues(final byte[] left, final byte[] right) {
-        System.out.println("Old serialized data " + Arrays.toString(left));
-        System.out.println("New serialized data " + Arrays.toString(right));
         if (left == right) {
             return true;
         }
