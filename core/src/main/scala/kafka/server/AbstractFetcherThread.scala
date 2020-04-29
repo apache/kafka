@@ -389,6 +389,11 @@ abstract class AbstractFetcherThread(name: String,
                     "that the partition is being moved")
                   partitionsWithError += topicPartition
 
+                case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                  warn(s"Remote broker does not host the partition $topicPartition, which could indicate " +
+                    "that the partition is being created or deleted.")
+                  partitionsWithError += topicPartition
+
                 case _ =>
                   error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}",
                     partitionData.error.exception)
