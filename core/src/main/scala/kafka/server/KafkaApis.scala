@@ -3023,7 +3023,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
-    println(s"api throttle ms $throttleTimeMs ${request.header} ${request.header.clientId}")
     request.apiThrottleTimeMs = throttleTimeMs
     throttleTimeMs
   }
