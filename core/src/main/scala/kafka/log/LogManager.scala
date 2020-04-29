@@ -687,16 +687,17 @@ class LogManager(logDirs: Seq[File],
 
   /**
    * Method to indicate that the log initialization for the partition passed in as argument is
-   * finished. This method should follow a call to [[kafka.log.LogManager#initializingLog]]
+   * finished. This method should follow a call to [[kafka.log.LogManager#initializingLog]].
+   *
+   * It will retrieve the topic configs a second time if they were updated while the
+   * relevant log was being loaded.
    */
   def finishedInitializingLog(topicPartition: TopicPartition,
                               maybeLog: Option[Log],
                               fetchLogConfig: () => LogConfig): Unit = {
-    if (partitionsInitializing(topicPartition)) {
+    val removedValue = partitionsInitializing.remove(topicPartition)
+    if (removedValue.contains(true))
       maybeLog.foreach(_.updateConfig(fetchLogConfig()))
-    }
-
-    partitionsInitializing -= topicPartition
   }
 
   /**
@@ -705,12 +706,12 @@ class LogManager(logDirs: Seq[File],
    * Otherwise throw KafkaStorageException
    *
    * @param topicPartition The partition whose log needs to be returned or created
-   * @param config The configuration of the log that should be applied for log creation
+   * @param loadConfig A function to retrieve the log config, this is only called if the log is created
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    */
-  def getOrCreateLog(topicPartition: TopicPartition, config: LogConfig, isNew: Boolean = false, isFuture: Boolean = false): Log = {
+  def getOrCreateLog(topicPartition: TopicPartition, loadConfig: () => LogConfig, isNew: Boolean = false, isFuture: Boolean = false): Log = {
     logCreationOrDeletionLock synchronized {
       getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
@@ -747,6 +748,7 @@ class LogManager(logDirs: Seq[File],
           .getOrElse(Failure(new KafkaStorageException("No log directories available. Tried " + logDirs.map(_.getAbsolutePath).mkString(", "))))
           .get // If Failure, will throw
 
+        val config = loadConfig()
         val log = Log(
           dir = logDir,
           config = config,
