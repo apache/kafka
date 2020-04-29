@@ -181,7 +181,7 @@
               files="StreamsPartitionAssignor.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(ProcessorStateManager|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread|TaskManager|AssignorConfiguration).java"/>
+              files="(AssignorConfiguration|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
 
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
