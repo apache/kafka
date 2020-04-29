@@ -53,8 +53,8 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.junit.Assert.assertFalse;
 
 
@@ -158,7 +158,7 @@ public class EOSUncleanShutdownIntegrationTest {
             // the state directory should still exist with the empty checkpoint file
             assertFalse(stateDir.exists());
 
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 }

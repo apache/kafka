@@ -98,6 +98,7 @@ import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
@@ -140,14 +141,15 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, Long>> stringLongComparator;
 
     private void createTopics() throws Exception {
-        streamOne = streamOne + "-" + name.getMethodName();
-        streamConcurrent = streamConcurrent + "-" + name.getMethodName();
-        streamThree = streamThree + "-" + name.getMethodName();
-        outputTopic = outputTopic + "-" + name.getMethodName();
-        outputTopicConcurrent = outputTopicConcurrent + "-" + name.getMethodName();
-        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + name.getMethodName();
-        outputTopicThree = outputTopicThree + "-" + name.getMethodName();
-        streamTwo = streamTwo + "-" + name.getMethodName();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamOne = streamOne + "-" + safeTestName;
+        streamConcurrent = streamConcurrent + "-" + safeTestName;
+        streamThree = streamThree + "-" + safeTestName;
+        outputTopic = outputTopic + "-" + safeTestName;
+        outputTopicConcurrent = outputTopicConcurrent + "-" + safeTestName;
+        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + safeTestName;
+        outputTopicThree = outputTopicThree + "-" + safeTestName;
+        streamTwo = streamTwo + "-" + safeTestName;
         CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
@@ -191,18 +193,18 @@ public class QueryableStateIntegrationTest {
     }
 
     @Rule
-    public TestName name = new TestName();
+    public TestName testName = new TestName();
 
     @Before
     public void before() throws Exception {
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "queryable-state-" + name.getMethodName();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
 
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("state-" + applicationId).getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
