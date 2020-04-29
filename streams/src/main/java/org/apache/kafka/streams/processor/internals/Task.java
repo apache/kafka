@@ -202,7 +202,7 @@ public interface Task {
 
     default void recordProcessBatchTime(final long processBatchTime) {}
 
-    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {}
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
 
     default boolean process(final long wallClockTime) {
         return false;

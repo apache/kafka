@@ -386,12 +386,12 @@ public class StreamTaskTest {
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20)
         ));
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(2.0d));
 
         task.process(0L);
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(1.0d));
     }
@@ -406,7 +406,7 @@ public class StreamTaskTest {
 
         task.recordProcessBatchTime(10L);
         task.recordProcessBatchTime(15L);
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(0.25d));
 
@@ -415,7 +415,7 @@ public class StreamTaskTest {
         assertThat(metric.metricValue(), equalTo(0.25d));
 
         task.recordProcessBatchTime(10L);
-        task.recordProcessTimeRatioAndBufferSize(20L);
+        task.recordProcessTimeRatioAndBufferSize(20L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(1.0d));
     }

@@ -297,7 +297,7 @@ public class RocksDBMetricsRecorderTest {
         replay(statisticsToAdd1);
         replay(statisticsToAdd2);
 
-        recorder.record();
+        recorder.record(0L);
 
         verify(statisticsToAdd1);
         verify(statisticsToAdd2);
@@ -319,7 +319,7 @@ public class RocksDBMetricsRecorderTest {
         replay(blockCacheIndexHitRatioSensor);
         replay(blockCacheFilterHitRatioSensor);
 
-        recorder.record();
+        recorder.record(0L);
 
         verify(memtableHitRatioSensor);
         verify(blockCacheDataHitRatioSensor);

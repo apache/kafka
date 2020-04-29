@@ -30,7 +30,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
 
-    private ProcessorContext<Object, Object> context;
+    private InternalProcessorContext<Object, Object> context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
@@ -65,7 +65,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Object, Object> context) {
         // It is important to first create the sensor before calling init on the
         // parent object. Otherwise due to backwards compatibility an empty sensor
         // without parent is created with the same name.
@@ -99,7 +99,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        processAtSourceSensor.record();
+        processAtSourceSensor.record(1.0d, context.currentSystemTimeMs());
     }
 
     /**

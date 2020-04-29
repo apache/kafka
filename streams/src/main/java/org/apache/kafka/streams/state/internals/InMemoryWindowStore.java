@@ -123,7 +123,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record();
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {
