@@ -191,15 +191,11 @@ abstract class QuotaTestClients(topic: String,
                                 val producer: KafkaProducer[Array[Byte], Array[Byte]],
                                 val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
 
-  def userPrincipal: KafkaPrincipal
   def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit
   def removeQuotaOverrides(): Unit
 
-  def quotaMetricTags(clientId: String): Map[String, String]
-
-  def quota(quotaManager: ClientQuotaManager, userPrincipal: KafkaPrincipal, clientId: String): Quota = {
-    quotaManager.quota(userPrincipal, clientId)
-  }
+  protected def userPrincipal: KafkaPrincipal
+  protected def quotaMetricTags(clientId: String): Map[String, String]
 
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
@@ -240,8 +236,12 @@ abstract class QuotaTestClients(topic: String,
     numConsumed
   }
 
-  def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, metricNameSuffix: String,
-                                             clientId: String, expectThrottle: Boolean): Unit = {
+  private def quota(quotaManager: ClientQuotaManager, userPrincipal: KafkaPrincipal, clientId: String): Quota = {
+    quotaManager.quota(userPrincipal, clientId)
+  }
+
+  private def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, metricNameSuffix: String,
+                                                     clientId: String, expectThrottle: Boolean): Unit = {
     val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix)
     if (expectThrottle)
       assertTrue(s"Client with id=$clientId should have been throttled, $throttleTimeMs", throttleTimeMs > 0)
@@ -267,7 +267,7 @@ abstract class QuotaTestClients(topic: String,
       verifyConsumerClientThrottleTimeMetric(expectThrottle)
   }
 
-  def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
+  private def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
     val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
     if (expectThrottle) {
       assertTrue(s"Client with id=$clientId should have been throttled", throttleMetricValue > 0)
@@ -276,7 +276,7 @@ abstract class QuotaTestClients(topic: String,
     }
   }
 
-  def throttleMetricName(quotaType: QuotaType, clientId: String): MetricName = {
+  private def throttleMetricName(quotaType: QuotaType, clientId: String): MetricName = {
     leaderNode.metrics.metricName("throttle-time",
       quotaType.toString,
       quotaMetricTags(clientId).asJava)
@@ -307,7 +307,7 @@ abstract class QuotaTestClients(topic: String,
     leaderNode.metrics.metrics.get(metricName)
   }
 
-  def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
+  private def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
     val tags = new HashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
