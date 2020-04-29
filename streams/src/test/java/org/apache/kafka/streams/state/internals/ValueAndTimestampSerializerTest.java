@@ -53,7 +53,7 @@ public class ValueAndTimestampSerializerTest {
     }
 
     @Test
-    public void shouldCompareSerializedValuesWithoutTimestamp() {
+    public void shouldDropSerializedValueIfEqualWithGreaterTimestamp() {
         final String value = "food";
 
         final ValueAndTimestamp<String> oldValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP);
@@ -61,7 +61,14 @@ public class ValueAndTimestampSerializerTest {
         final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP + 1);
         final byte[] newSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, newValueAndTimestamp);
         assertTrue(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, newSerializedValue));
+    }
 
+    @Test
+    public void shouldKeepSerializedValueIfOutOfOrder() {
+        final String value = "balls";
+
+        final ValueAndTimestamp<String> oldValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP);
+        final byte[] oldSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, oldValueAndTimestamp);
         final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP - 1);
         final byte[] outOfOrderSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, outOfOrderValueAndTimestamp);
         assertFalse(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, outOfOrderSerializedValue));
