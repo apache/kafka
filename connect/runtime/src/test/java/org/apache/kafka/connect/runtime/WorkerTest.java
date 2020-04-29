@@ -78,6 +78,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -135,6 +136,7 @@ public class WorkerTest extends ThreadedTest {
     @Mock private HeaderConverter taskHeaderConverter;
     @Mock private ExecutorService executorService;
     @MockNice private ConnectorConfig connectorConfig;
+    private String mockFileProviderTestId;
 
     @Before
     public void setup() {
@@ -149,6 +151,8 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         workerProps.put("config.providers", "file");
         workerProps.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        mockFileProviderTestId = UUID.randomUUID().toString();
+        workerProps.put("config.providers.file.param.testId", mockFileProviderTestId);
         config = new StandaloneConfig(workerProps);
 
         defaultProducerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -243,7 +247,7 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
-        MockFileConfigProvider.assertClosed();
+        MockFileConfigProvider.assertClosed(mockFileProviderTestId);
     }
 
     private void expectFileConfigProvider() {
@@ -251,7 +255,7 @@ public class WorkerTest extends ThreadedTest {
                     EasyMock.eq("config.providers.file"), EasyMock.anyObject()))
                 .andAnswer(() -> {
                     MockFileConfigProvider mockFileConfigProvider = new MockFileConfigProvider();
-                    mockFileConfigProvider.configure(Collections.emptyMap());
+                    mockFileConfigProvider.configure(Collections.singletonMap("testId", mockFileProviderTestId));
                     return mockFileConfigProvider;
                 });
     }

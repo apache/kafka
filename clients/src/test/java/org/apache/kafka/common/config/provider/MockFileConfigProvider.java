@@ -19,16 +19,29 @@ package org.apache.kafka.common.config.provider;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
+
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class MockFileConfigProvider extends FileConfigProvider {
 
-    private static Set<MockFileConfigProvider> unclosedInstances = new HashSet<>();
+    private static final Map<String, MockFileConfigProvider> INSTANCES = Collections.synchronizedMap(new HashMap<>());
+    private String id;
+    private boolean closed = false;
 
     public void configure(Map<String, ?> configs) {
-        unclosedInstances.add(this);
+        Object id = configs.get("testId");
+        if (id == null) {
+            throw new RuntimeException(getClass().getName() + " missing 'testId' config");
+        }
+        if (this.id != null) {
+            throw new RuntimeException(getClass().getName() + " instance was configured twice");
+        }
+        this.id = id.toString();
+        INSTANCES.put(id.toString(), this);
     }
 
     @Override
@@ -37,13 +50,15 @@ public class MockFileConfigProvider extends FileConfigProvider {
     }
 
     @Override
-    public void close() {
-        unclosedInstances.remove(this);
+    public synchronized void close() {
+        closed = true;
     }
 
-    public static void assertClosed() {
-        if (!unclosedInstances.isEmpty()) {
-            throw new AssertionError("Unclosed ConfigProvider");
+    public static void assertClosed(String id) {
+        MockFileConfigProvider instance = INSTANCES.remove(id);
+        assertNotNull(instance);
+        synchronized (instance) {
+            assertTrue(instance.closed);
         }
     }
 }
