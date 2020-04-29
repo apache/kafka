@@ -191,8 +191,6 @@ public class MeteredTimestampedKeyValueStoreTest {
         expectLastCall();
         init();
 
-        metered.put(key, valueAndTimestamp);
-
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(key);
         assertEquals(valueWithBinary.value, valueAndTimestamp);
         assertEquals(valueWithBinary.serializedValue, valueAndTimestampBytes);
@@ -200,7 +198,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @SuppressWarnings("resource")
     @Test
-    public void shouldPutIfDifferentValues() {
+    public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
         inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
         expectLastCall();
         init();
@@ -213,6 +211,19 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertFalse(metered.putIfDifferentValues(key,
                                                  newValueAndTimestamp,
                                                  encodedOldValue));
+    }
+
+    @SuppressWarnings("resource")
+    @Test
+    public void shouldPutIfOutOfOrder() {
+        inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
+        expectLastCall();
+        init();
+
+        metered.put(key, valueAndTimestamp);
+
+        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
+        final byte[] encodedOldValue = stringSerde.serializer().serialize("TOPIC", valueAndTimestamp);
 
         final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make("value", 95L);
         assertTrue(metered.putIfDifferentValues(key, outOfOrderValueAndTimestamp, encodedOldValue));

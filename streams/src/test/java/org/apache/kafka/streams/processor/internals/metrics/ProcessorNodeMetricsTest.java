@@ -115,7 +115,8 @@ public class ProcessorNodeMetricsTest {
         );
 
         verifySensor(
-            () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
+            () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
+        );
     }
 
     @Test
