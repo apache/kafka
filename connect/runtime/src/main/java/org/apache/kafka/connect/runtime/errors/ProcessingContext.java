@@ -219,15 +219,16 @@ class ProcessingContext implements AutoCloseable {
 
     @Override
     public void close() {
-        ConnectException e = new ConnectException("Failed to close all reporters");
+        ConnectException e = null;
         for (ErrorReporter reporter : reporters) {
             try {
                 reporter.close();
             } catch (Throwable t) {
+                e = e != null ? e : new ConnectException("Failed to close all reporters");
                 e.addSuppressed(t);
             }
         }
-        if (e.getSuppressed().length > 0) {
+        if (e != null) {
             throw e;
         }
     }
