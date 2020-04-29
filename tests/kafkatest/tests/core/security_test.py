@@ -45,17 +45,6 @@ class SecurityTest(EndToEndTest):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(SecurityTest, self).__init__(test_context=test_context)
 
-    def producer_consumer_have_expected_error(self, error):
-        try:
-            for node in self.producer.nodes:
-                node.account.ssh("grep %s %s" % (error, self.producer.LOG_FILE))
-            for node in self.consumer.nodes:
-                node.account.ssh("grep %s %s" % (error, self.consumer.LOG_FILE))
-        except RemoteCommandError:
-            return False
-
-        return True
-
     @cluster(num_nodes=7)
     @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='SSL')
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
@@ -75,29 +64,31 @@ class SecurityTest(EndToEndTest):
 
         self.create_kafka(security_protocol=security_protocol,
                           interbroker_security_protocol=interbroker_security_protocol)
+
+        error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'TimeoutException'
+        try:
+            self.kafka.start()
+            raise RuntimeError("Handshake should fail!")
+        except Exception as err:
+            assert(error in str(err))
+
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+
+    @cluster(num_nodes=7)
+    @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='SSL')
+    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
+    def test_client_ssl_endpoint_validation_success(self, security_protocol, interbroker_security_protocol):
+        SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
+                                                  valid_hostname=True)
+        self.create_zookeeper()
+        self.zk.start()
+
+        self.create_kafka(security_protocol=security_protocol,
+                          interbroker_security_protocol=interbroker_security_protocol)
         self.kafka.start()
 
-        # We need more verbose logging to catch the expected errors
         self.create_and_start_clients(log_level="DEBUG")
-
-        try:
-            wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30)
-
-            # Fail quickly if messages are successfully acked
-            raise RuntimeError("Messages published successfully but should not have!"
-                               " Endpoint validation did not fail with invalid hostname")
-        except TimeoutError:
-            # expected
-            pass
-
-        error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
-        wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
-        self.producer.stop()
-        self.consumer.stop()
-
-        SecurityConfig.ssl_stores.valid_hostname = True
-        self.kafka.restart_cluster()
-        self.create_and_start_clients(log_level="INFO")
         self.run_validation()
 
     def create_and_start_clients(self, log_level):

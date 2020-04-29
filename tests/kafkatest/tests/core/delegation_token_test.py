@@ -35,6 +35,7 @@ class DelegationTokenTest(Test):
         self.topic = "topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
+                                  security_protocol = "SSL",
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
                                   server_prop_overides=[
                                       [config_property.DELEGATION_TOKEN_MAX_LIFETIME_MS, "604800000"],

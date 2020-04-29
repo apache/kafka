@@ -87,6 +87,8 @@ class QuotaConfig(object):
         cmd += " --entity-type " + entity_args[0] + self.entity_name_opt(entity_args[1])
         if len(entity_args) > 2:
             cmd += " --entity-type " + entity_args[2] + self.entity_name_opt(entity_args[3])
+        if node.version.config_command_supports_bootstrap_server():
+            cmd += " --command-config <(echo '%s')" % (kafka.security_config.client_config())
         node.account.ssh(cmd)
 
     def entity_name_opt(self, name):

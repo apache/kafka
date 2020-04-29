@@ -544,6 +544,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
 
+        # TO-DO: may add admin config for security
         if node.version.config_command_supports_bootstrap_server():
             cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
                    (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, msg_format_version)
@@ -564,6 +565,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
 
+        # TO-DO: may add admin config for security
         if node.version.config_command_supports_bootstrap_server():
             cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
                    (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, str(value).lower())
