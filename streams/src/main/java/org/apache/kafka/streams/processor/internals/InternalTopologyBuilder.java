@@ -1240,6 +1240,10 @@ public class InternalTopologyBuilder {
         return topicPattern;
     }
 
+    public boolean hasNoNonGlobalTopology() {
+        return !usesPatternSubscription() && sourceTopicCollection().isEmpty();
+    }
+
     private boolean isGlobalSource(final String nodeName) {
         final NodeFactory nodeFactory = nodeFactories.get(nodeName);
 
