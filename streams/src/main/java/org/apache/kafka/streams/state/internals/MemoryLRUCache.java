@@ -104,7 +104,6 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
-        System.out.println("Restoring stuff here");
         if (value == null) {
             delete(key);
         } else {
