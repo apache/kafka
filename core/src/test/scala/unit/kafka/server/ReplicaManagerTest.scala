@@ -1373,9 +1373,9 @@ class ReplicaManagerTest {
     val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(mockLogMgr.liveLogDirs).andReturn(config.logDirs.map(new File(_).getAbsoluteFile)).anyTimes
-    EasyMock.expect(mockLogMgr.currentDefaultConfig).andReturn(LogConfig())
-    EasyMock.expect(mockLogMgr.getOrCreateLog(topicPartitionObj,
-      LogConfig(), isNew = false, isFuture = false)).andReturn(mockLog).anyTimes
+    EasyMock.expect(mockLogMgr.getOrCreateLog(EasyMock.eq(topicPartitionObj),
+      EasyMock.anyObject[() => LogConfig](), isNew = EasyMock.eq(false),
+      isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
     if (expectTruncation) {
       EasyMock.expect(mockLogMgr.truncateTo(Map(topicPartitionObj -> offsetFromLeader),
         isFuture = false)).once

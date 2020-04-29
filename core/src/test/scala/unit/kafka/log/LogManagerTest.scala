@@ -74,7 +74,7 @@ class LogManagerTest {
    */
   @Test
   def testCreateLog(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     assertEquals(1, logManager.liveLogDirs.size)
 
     val logFile = new File(logDir, name + "-0")
@@ -97,7 +97,7 @@ class LogManagerTest {
     logManager = createLogManager(dirs)
     logManager.startup()
 
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -131,7 +131,7 @@ class LogManagerTest {
 
     // Request creating a new log.
     // LogManager should try using all configured log directories until one succeeds.
-    logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+    logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
 
     // Verify that half the directories were considered broken,
     assertEquals(dirs.length / 2, brokenDirs.size)
@@ -160,7 +160,7 @@ class LogManagerTest {
    */
   @Test
   def testCleanupExpiredSegments(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     var offset = 0L
     for(_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -211,7 +211,7 @@ class LogManagerTest {
     logManager.startup()
 
     // create a log
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), config)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -265,7 +265,7 @@ class LogManagerTest {
   private def testDoesntCleanLogs(policy: String): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.CleanupPolicyProp, policy)
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
@@ -294,7 +294,7 @@ class LogManagerTest {
 
     logManager = createLogManager()
     logManager.startup()
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), config)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -318,7 +318,7 @@ class LogManagerTest {
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.getOrCreateLog(new TopicPartition("test", partition), logConfig)
+      logManager.getOrCreateLog(new TopicPartition("test", partition), () => logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
@@ -369,7 +369,7 @@ class LogManagerTest {
   }
 
   private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File): Unit = {
-    val logs = topicPartitions.map(logManager.getOrCreateLog(_, logConfig))
+    val logs = topicPartitions.map(logManager.getOrCreateLog(_, () => logConfig))
     logs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -395,7 +395,7 @@ class LogManagerTest {
 
   @Test
   def testFileReferencesAfterAsyncDelete(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
     val indexName = activeSegment.offsetIndex.file.getName
@@ -432,7 +432,7 @@ class LogManagerTest {
   @Test
   def testCreateAndDeleteOverlyLongTopic(): Unit = {
     val invalidTopicName = String.join("", Collections.nCopies(253, "x"))
-    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
+    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), () => logConfig)
     logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 
@@ -445,7 +445,7 @@ class LogManagerTest {
       new TopicPartition("test-b", 0),
       new TopicPartition("test-b", 1))
 
-    val allLogs = tps.map(logManager.getOrCreateLog(_, logConfig))
+    val allLogs = tps.map(logManager.getOrCreateLog(_, () => logConfig))
     allLogs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
