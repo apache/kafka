@@ -24,12 +24,14 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -38,10 +40,15 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 public class KTableKTableForeignKeyJoinDefaultSerdeTest {
+
     @Test
     public void shouldWorkWithDefaultSerdes() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -161,7 +168,72 @@ public class KTableKTableForeignKeyJoinDefaultSerdeTest {
         validateTopologyCanProcessData(builder);
     }
 
-    private static void validateTopologyCanProcessData(final StreamsBuilder builder) {
+    @Test
+    public void shouldUseExpectedTopicsWithSerde() {
+        final String applicationId = "ktable-ktable-joinOnForeignKey";
+        final Properties streamsConfig = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+        ));
+
+        final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String leftTable = "left_table";
+        final String rightTable = "right_table";
+        final String output = "output-topic";
+
+        final KTable<String, String> left = builder.table(
+            leftTable,
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+        );
+        final KTable<String, String> right = builder.table(
+            rightTable,
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+        );
+
+        left.join(
+            right,
+            value -> value.split("\\|")[1],
+            (value1, value2) -> "(" + value1 + "," + value2 + ")",
+            Materialized.with(null, serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)
+            ))
+            .toStream()
+            .to(output);
+
+
+        final Topology topology = builder.build(streamsConfig);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> leftInput = driver.createInputTopic(leftTable, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> rightInput = driver.createInputTopic(rightTable, new StringSerializer(), new StringSerializer());
+            leftInput.pipeInput("lhs1", "lhsValue1|rhs1");
+            rightInput.pipeInput("rhs1", "rhsValue1");
+        }
+        // verifying primarily that no extra pseudo-topics were used, but it's nice to also verify the rest of the
+        // topics our serdes serialize data for
+        assertThat(serdeScope.registeredTopics(), is(mkSet(
+            // expected pseudo-topics
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-vh--value",
+            // internal topics
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--key",
+            applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic--value",
+            applicationId + "-left_table-STATE-STORE-0000000000-changelog--key",
+            applicationId + "-left_table-STATE-STORE-0000000000-changelog--value",
+            applicationId + "-right_table-STATE-STORE-0000000003-changelog--key",
+            applicationId + "-right_table-STATE-STORE-0000000003-changelog--value",
+            // output topics
+            "output-topic--key",
+            "output-topic--value"
+        )));
+    }
+
+    private void validateTopologyCanProcessData(final StreamsBuilder builder) {
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-" + UUID.randomUUID());
         config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
