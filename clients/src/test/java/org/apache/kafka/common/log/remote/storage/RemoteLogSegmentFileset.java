@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -166,11 +168,6 @@ public final class RemoteLogSegmentFileset {
         return new RemoteLogSegmentFileset(tpDirectory, id, files);
     }
 
-
-    public RemoteTopicPartitionDirectory getPartitionDirectory() {
-        return partitionDirectory;
-    }
-
     public RemoteLogSegmentId getRemoteLogSegmentId() {
         return remoteLogSegmentId;
     }
@@ -193,6 +190,14 @@ public final class RemoteLogSegmentFileset {
         transferer.transfer(data.logSegment(), files.get(SEGMENT));
         transferer.transfer(data.offsetIndex(), files.get(OFFSET_INDEX));
         transferer.transfer(data.timeIndex(), files.get(TIME_INDEX));
+    }
+
+    public String toString() {
+        final String ls = files.values().stream()
+                .map(file -> "\t" + file.getName() + "\n")
+                .reduce("", (s1, s2) -> s1 + s2);
+
+        return format("%s/\n%s", partitionDirectory.getDirectory().getName(), ls);
     }
 
     public static boolean deleteFilesOnly(final Collection<File> files) {

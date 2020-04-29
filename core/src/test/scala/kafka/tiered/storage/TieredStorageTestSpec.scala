@@ -18,13 +18,15 @@
 
 package kafka.tiered.storage
 
+import java.io.PrintStream
 import java.util.Properties
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.utils.{TestUtils, nonthreadsafe}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.log.remote.storage.LocalTieredStorageCondition.expectEvent
 import org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.{FETCH_SEGMENT, OFFLOAD_SEGMENT}
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset
@@ -48,7 +50,12 @@ import scala.collection.{Seq, mutable}
 final case class OffloadedSegmentSpec(val sourceBrokerId: Int,
                                       val topicPartition: TopicPartition,
                                       val baseOffset: Int,
-                                      val records: Seq[ProducerRecord[String, String]])
+                                      val records: Seq[ProducerRecord[String, String]]) {
+
+  override def toString: String =
+    s"Segment[$topicPartition offloaded-by-broker-id=$sourceBrokerId base-offset=$baseOffset " +
+      s"record-count=${records.size}]"
+}
 
 /**
   * Specifies a topic-partition with attributes customized for the purpose of tiered-storage tests.
@@ -65,7 +72,13 @@ final case class TopicSpec(val topicName: String,
                            val partitionCount: Int,
                            val replicationFactor: Int,
                            val segmentSize: Int,
-                           val properties: Properties = new Properties)
+                           val assignment: Option[Map[Int, Seq[Int]]],
+                           val properties: Properties = new Properties) {
+
+  override def toString: String =
+    s"Topic[name=$topicName partition-count=$partitionCount replication-factor=$replicationFactor " +
+    s"segment-size=$segmentSize assignment=$assignment]"
+}
 
 /**
   * Specifies a fetch (download) event from a second-tier storage. This is used to ensure the
@@ -85,13 +98,27 @@ final case class RemoteFetchSpec(val sourceBrokerId: Int,
   */
 trait TieredStorageTestAction {
 
-  def execute(context: TieredStorageTestContext): Unit
+  final def execute(context: TieredStorageTestContext): Unit = {
+    try {
+      doExecute(context)
+      context.succeed(this)
+
+    } catch {
+      case e: Throwable =>
+        context.fail(this)
+        throw e
+    }
+  }
+
+  protected def doExecute(context: TieredStorageTestContext): Unit
+
+  def describe(output: PrintStream): Unit
 
 }
 
 final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestAction {
 
-  override def execute(context: TieredStorageTestContext): Unit = {
+  override def doExecute(context: TieredStorageTestContext): Unit = {
     //
     // Ensure offset and time indexes are generated for every record.
     //
@@ -119,6 +146,8 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
 
     context.createTopic(spec)
   }
+
+  override def describe(output: PrintStream): Unit = output.println(s"create-topic: $spec")
 }
 
 /**
@@ -139,7 +168,7 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
 
   private implicit val serde: Serde[String] = Serdes.String()
 
-  override def execute(context: TieredStorageTestContext): Unit = {
+  override def doExecute(context: TieredStorageTestContext): Unit = {
     val tieredStorages = context.getTieredStorages
     val localStorages = context.getLocalStorages
 
@@ -148,11 +177,19 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     }
 
     //
+    // Retrieve the offsets of the next records which would be consumed from the topic-partitions
+    // before records are produced. This allows to consume only the newly produced records afterwards.
+    //
+    val startOffsets = context.nextOffsets(recordsToProduce.keys)
+
+    //
     // Records are produced here.
     //
     context.produce(recordsToProduce.values.flatten)
 
-    tieredStorageConditions.reduce(_ and _).waitUntilTrue(offloadWaitTimeoutSec, TimeUnit.SECONDS)
+    if (!tieredStorageConditions.isEmpty) {
+        tieredStorageConditions.reduce(_ and _).waitUntilTrue(offloadWaitTimeoutSec, TimeUnit.SECONDS)
+    }
 
     //
     // At this stage, records were produced and the expected remote log segments found in the second-tier storage.
@@ -162,16 +199,28 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     //    in the special case of these integration tests, only the active segment.
     // 2) consume the records and verify they match the produced records.
     //
-    // TODO: Handle consume from any offset.
-    //
     recordsToProduce.foreach {
       case (topicPartition, producedRecords) =>
         val topicSpec = context.topicSpec(topicPartition.topic())
         val expectedEarliestOffset = producedRecords.size - (producedRecords.size % topicSpec.segmentSize) - 1
 
-        localStorages.foreach(_.waitForEarliestOffset(topicPartition, expectedEarliestOffset))
+        localStorages
+          //
+          // Select brokers which are assigned a replica of the topic-partition
+          //
+          .filter(s => context.isAssignedReplica(topicPartition, s.brokerId))
+          //
+          // Filter out inactive brokers, which may still contain log segments we would expect
+          // to be deleted based on the retention configuration.
+          //
+          .filter(s => context.isActive(s.brokerId))
+          //
+          // Wait until the brokers local storage have been cleared from the inactive log segments.
+          //
+          .foreach(_.waitForEarliestOffset(topicPartition, expectedEarliestOffset))
 
-        val consumedRecords = context.consume(topicPartition, producedRecords.length)
+        val startOffset = startOffsets(topicPartition)
+        val consumedRecords = context.consume(topicPartition, producedRecords.length, startOffset)
         assertThat(consumedRecords, correspondTo(producedRecords, topicPartition))
     }
 
@@ -187,11 +236,35 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     offloadedSegmentSpecs.foreach {
       case (topicPartition: TopicPartition, specs: Seq[OffloadedSegmentSpec]) =>
         snapshot.getFilesets(topicPartition).asScala
+          //
+          // Snapshot does not sort the filesets by base offset.
+          //
           .sortWith((x, y) => x.getRecords.get(0).offset() <= y.getRecords.get(0).offset())
+          //
+          // Don't include the records which were stored before our records were produced.
+          //
+          .drop(startOffsets(topicPartition).toInt)
+          // TODO: Add check on size
           .zip(specs)
           .foreach {
             pair => compareRecords(pair._1, pair._2, topicPartition)
           }
+    }
+  }
+
+  override def describe(output: PrintStream) = {
+    output.println("produce-records:")
+
+    recordsToProduce.foreach {
+      case (topicPartition, records) =>
+        output.println(s"  $topicPartition")
+        records.foreach(record => output.println(s"    ${record}"))
+    }
+
+    offloadedSegmentSpecs.foreach {
+      case (topicPartition, specs) =>
+        output.println(s"  $topicPartition")
+        specs.foreach(spec => output.println(s"    $spec"))
     }
   }
 
@@ -205,7 +278,7 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     // Records expected to be found, based on what was sent by the producer.
     val producerRecords = spec.records
 
-    assertThat(producerRecords, correspondTo(discoveredRecords, topicPartition))
+    assertThat(discoveredRecords, correspondTo(producerRecords, topicPartition))
     assertEquals("Base offset of segment mismatch", spec.baseOffset, discoveredRecords.head.offset())
   }
 }
@@ -228,7 +301,7 @@ final class ConsumeAction(val topicPartition: TopicPartition,
 
   private implicit val serde: Serde[String] = Serdes.String()
 
-  override def execute(context: TieredStorageTestContext): Unit = {
+  override def doExecute(context: TieredStorageTestContext): Unit = {
     //
     // Retrieve the history (which stores the chronological sequence of interactions with the second-tier
     // storage) for the expected broker. Note that while the second-tier storage is unique, each broker
@@ -305,40 +378,72 @@ final class ConsumeAction(val topicPartition: TopicPartition,
 
     assertEquals(remoteFetchSpec.count, eventsInScope.size)
   }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"consume-action:")
+    output.println(s"  topic-partition = $topicPartition")
+    output.println(s"  fetch-offset = $fetchOffset")
+    output.println(s"  expected-record-count = $expectedTotalCount")
+    output.println(s"  expected-record-from-tiered-storage = $expectedFromSecondTierCount")
+  }
 }
 
 final class BounceBrokerAction(val brokerId: Int) extends TieredStorageTestAction {
-  override def execute(context: TieredStorageTestContext): Unit = context.bounce(brokerId)
+  override def doExecute(context: TieredStorageTestContext): Unit = context.bounce(brokerId)
+  override def describe(output: PrintStream): Unit = output.println(s"bounce-broker: $brokerId")
 }
 
 final class StopBrokerAction(val brokerId: Int) extends TieredStorageTestAction {
-  override def execute(context: TieredStorageTestContext): Unit = context.stop(brokerId)
+  override def doExecute(context: TieredStorageTestContext): Unit = context.stop(brokerId)
+  override def describe(output: PrintStream): Unit = output.println(s"stop-broker: $brokerId")
 }
 
 final class StartBrokerAction(val brokerId: Int) extends TieredStorageTestAction {
-  override def execute(context: TieredStorageTestContext): Unit = context.start(brokerId)
+  override def doExecute(context: TieredStorageTestContext): Unit = context.start(brokerId)
+  override def describe(output: PrintStream): Unit = output.println(s"start-broker: $brokerId")
 }
 
 final class EraseBrokerStorageAction(val brokerId: Int) extends TieredStorageTestAction {
-  override def execute(context: TieredStorageTestContext): Unit = context.eraseBrokerStorage(brokerId)
+  override def doExecute(context: TieredStorageTestContext): Unit = context.eraseBrokerStorage(brokerId)
+  override def describe(output: PrintStream): Unit = output.println(s"erase-broker-storage: $brokerId")
 }
 
 final class ExpectLeaderAction(val topicPartition: TopicPartition, val replicaId: Int, val electLeader: Boolean)
   extends TieredStorageTestAction {
 
-  override def execute(context: TieredStorageTestContext): Unit = {
+  override def doExecute(context: TieredStorageTestContext): Unit = {
     if (electLeader) {
       context.admin().electLeaders(ElectionType.PREFERRED, Set(topicPartition).asJava)
     }
 
-    // TODO Provide a valid error message.
-    TestUtils.assertLeader(context.admin(), topicPartition, replicaId)
+    val topic = topicPartition.topic()
+    val partition = topicPartition.partition()
+    var actualLeader = -1
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResult = context.admin().describeTopics(List(topic).asJava).all.get.get(topic)
+        actualLeader = Option(topicResult.partitions.get(partition).leader()).map(_.id).getOrElse(-1)
+        replicaId == actualLeader
+
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, s"Leader of $topicPartition was not $replicaId. Actual leader: $actualLeader")
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"expect-leader: topic-partition: $topicPartition replica-id: $replicaId")
   }
 }
 
 final class ExpectBrokerInISR(val topicPartition: TopicPartition, replicaId: Int) extends TieredStorageTestAction {
-  override def execute(context: TieredStorageTestContext): Unit = {
+  override def doExecute(context: TieredStorageTestContext): Unit = {
     TestUtils.waitForBrokersInIsr(context.admin(), topicPartition, Set(replicaId))
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"expect-broker-in-isr: topic-partition $topicPartition broker-id: $replicaId")
   }
 }
 
@@ -356,7 +461,12 @@ final class TieredStorageTestBuilder {
 
   private val actions = mutable.Buffer[TieredStorageTestAction]()
 
-  def createTopic(topic: String, partitionsCount: Int, replicationFactor: Int, segmentSize: Int): this.type = {
+  def createTopic(topic: String,
+                  partitionsCount: Int,
+                  replicationFactor: Int,
+                  segmentSize: Int,
+                  replicaAssignment: Map[Int, Seq[Int]] = Map()): this.type = {
+
     assert(segmentSize >= 1, s"Segments size for topic ${topic} needs to be >= 1")
     assert(partitionsCount >= 1, s"Partition count for topic ${topic} needs to be >= 1")
     assert(replicationFactor >= 1, s"Replication factor for topic ${topic} needs to be >= 1")
@@ -364,7 +474,8 @@ final class TieredStorageTestBuilder {
     maybeCreateProduceAction()
     maybeCreateConsumeActions()
 
-    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, segmentSize))
+    val assignment = if (replicaAssignment.isEmpty) None else Some(replicaAssignment)
+    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, segmentSize, assignment))
     this
   }
 

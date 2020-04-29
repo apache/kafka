@@ -24,7 +24,10 @@ import kafka.log.Log
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
-final class BrokerLocalStorage(private val storageDirname: String, private val storageWaitTimeoutSec: Int) {
+final class BrokerLocalStorage(val brokerId: Int,
+                               private val storageDirname: String,
+                               private val storageWaitTimeoutSec: Int) {
+
   private val brokerStorageDirectory = new File(storageDirname)
   private val storagePollPeriodSec = 1
   private val time = Time.SYSTEM
@@ -47,9 +50,9 @@ final class BrokerLocalStorage(private val storageDirname: String, private val s
 
     if (earliestOffset._1 < offset) {
       val sep = System.lineSeparator()
-      val message = s"The base offset of the first log segment of $topicPartition in the log directory is " +
-        s"${earliestOffset._1} which is smaller than the expected offset $offset. The directory of $topicPartition " +
-        s"is made of the following files: $sep${earliestOffset._2.mkString(sep)}"
+      val message = s"[BrokerId=$brokerId] The base offset of the first log segment of $topicPartition in the log" +
+        s"directory is ${earliestOffset._1} which is smaller than the expected offset $offset. The directory of" +
+        s"$topicPartition is made of the following files: $sep${earliestOffset._2.mkString(sep)}"
 
       throw new AssertionError(message)
     }
@@ -78,7 +81,8 @@ final class BrokerLocalStorage(private val storageDirname: String, private val s
       .map(_.getName)
       .find(_ == topicPartition.toString)
       .getOrElse {
-        throw new IllegalArgumentException(s"Directory for the topic-partition $topicPartition was not found")
+        throw new IllegalArgumentException(
+          s"[BrokerId=$brokerId] Directory for the topic-partition $topicPartition was not found")
       }
 
     new File(brokerStorageDirectory, topicPartitionDir)

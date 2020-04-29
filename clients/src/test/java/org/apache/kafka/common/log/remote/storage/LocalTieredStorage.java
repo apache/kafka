@@ -155,7 +155,13 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     public void traverse(final LocalTieredStorageTraverser traverser) {
         Objects.requireNonNull(traverser);
 
-        Arrays.stream(storageDirectory.listFiles())
+        final File[] files = storageDirectory.listFiles();
+        if (files == null) {
+            // files can be null if the directory is empty.
+            return;
+        }
+
+        Arrays.stream(files)
                 .filter(File::isDirectory)
                 .forEach(dir ->
                         openExistingTopicPartitionDirectory(dir.getName(), storageDirectory).traverse(traverser));

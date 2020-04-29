@@ -78,10 +78,12 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     //
     overridingProps.setProperty(STORAGE_DIR_PROP, TestUtils.tempDir().getAbsolutePath)
 
+    overridingProps.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, true.toString)
+
     createBrokerConfigs(numConfigs = brokerCount, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var context: TieredStorageTestContext = _
+  private var contextOpt: Option[TieredStorageTestContext] = None
 
   protected def readReplicaSelectorClass: Option[Class[_ <: ReplicaSelector]] = None
 
@@ -90,22 +92,21 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    context = new TieredStorageTestContext(zkClient, servers, producerConfig, consumerConfig, securityProtocol)
+    contextOpt = Some(new TieredStorageTestContext(zkClient, servers, producerConfig, consumerConfig, securityProtocol))
   }
 
   @Test
   def executeTieredStorageTest(): Unit = {
     val builder = new TieredStorageTestBuilder
     writeTestSpecifications(builder)
-    builder.complete().foreach(_.execute(context))
+    contextOpt.foreach(context => builder.complete().foreach(_.execute(context)))
   }
 
   @After
   override def tearDown(): Unit = {
-    if (context != null) {
-      context.close()
-    }
+    contextOpt.foreach(_.close())
     super.tearDown()
+    contextOpt.foreach(_.printReport(Console.out))
   }
 }
 
@@ -122,6 +123,6 @@ object TieredStorageTestHarness {
   }
 
   def getLocalStorages(brokers: Seq[KafkaServer]): Seq[BrokerLocalStorage] = {
-    brokers.map(b => new BrokerLocalStorage(b.config.logDirs.head, storageWaitTimeoutSec))
+    brokers.map(b => new BrokerLocalStorage(b.config.brokerId, b.config.logDirs.head, storageWaitTimeoutSec))
   }
 }

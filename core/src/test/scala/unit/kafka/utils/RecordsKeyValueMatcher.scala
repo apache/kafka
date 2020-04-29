@@ -56,7 +56,7 @@ final class RecordsKeyValueMatcher[R1, R2, K, V](private val expectedRecords: It
   extends TypeSafeDiagnosingMatcher[Iterable[R2]] {
 
   override def describeTo(description: Description): Unit = {
-    description.appendText(s"Marcher for records of $topicPartition")
+    description.appendText(s"Records of $topicPartition: $expectedRecords")
   }
 
   override def matchesSafely(actualRecord: Iterable[R2], mismatchDescription: Description): Boolean = {
@@ -95,7 +95,7 @@ final class RecordsKeyValueMatcher[R1, R2, K, V](private val expectedRecords: It
           .appendValue(deserializer.deserialize(topicPartition.topic(), Utils.toNullableArray(lhs)))
           .appendText("; Actual: ")
           .appendValue(deserializer.deserialize(topicPartition.topic(), Utils.toNullableArray(rhs)))
-          .appendText(";")
+          .appendText("; ")
 
         false
       } else true

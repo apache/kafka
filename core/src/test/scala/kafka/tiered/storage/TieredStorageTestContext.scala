@@ -18,12 +18,13 @@
 
 package kafka.tiered.storage
 
+import java.io.PrintStream
 import java.time.Duration
 import java.util.Properties
 
 import kafka.admin.AdminUtils.assignReplicasToBrokers
 import kafka.admin.BrokerMetadata
-import kafka.server.KafkaServer
+import kafka.server.{KafkaServer, RunningAsBroker}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG
@@ -47,8 +48,10 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
                                      private val consumerConfig: Properties,
                                      private val securityProtocol: SecurityProtocol) {
 
-  private val (ser, de) = (Serdes.String().serializer(), Serdes.String().deserializer())
+  private[storage] val (ser, de) = (Serdes.String().serializer(), Serdes.String().deserializer())
   private val topicSpecs = mutable.Map[String, TopicSpec]()
+
+  private val testReport = new TieredStorageTestReport(this)
 
   @volatile private var producer: KafkaProducer[String, String] = _
   @volatile private var consumer: KafkaConsumer[String, String] = _
@@ -76,10 +79,12 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
   }
 
   def createTopic(spec: TopicSpec): Unit = {
-    val metadata = brokers.head.metadataCache.getAliveBrokers.map(b => BrokerMetadata(b.id, b.rack))
-    val assignments = assignReplicasToBrokers(metadata, spec.partitionCount, spec.replicationFactor, 0, 0)
-    TestUtils.createTopic(zookeeperClient, spec.topicName, assignments, brokers, spec.properties)
+    val assignments = spec.assignment.getOrElse {
+      val metadata = brokers.head.metadataCache.getAliveBrokers.map(b => BrokerMetadata(b.id, b.rack))
+      assignReplicasToBrokers(metadata, spec.partitionCount, spec.replicationFactor, 0, 0)
+    }
 
+    TestUtils.createTopic(zookeeperClient, spec.topicName, assignments, brokers, spec.properties)
     topicSpecs.synchronized { topicSpecs += spec.topicName -> spec }
   }
 
@@ -110,6 +115,12 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
         s"in $timeoutMs ms. ${records.size} message(s) consumed:$sep ${records.mkString(sep)}")
 
     records
+  }
+
+  def nextOffsets(topicPartitions: Iterable[TopicPartition]): Map[TopicPartition, Long] = {
+    consumer.assign(topicPartitions.toList.asJava)
+    consumer.seekToEnd(topicPartitions.toList.asJava)
+    topicPartitions.map(tp => tp -> consumer.position(tp)).toMap
   }
 
   def bounce(brokerId: Int): Unit = {
@@ -163,8 +174,28 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
 
   def admin() = adminClient
 
+  def isActive(brokerId: Int): Boolean = {
+    brokers(brokerId).brokerState.currentState equals RunningAsBroker.state
+  }
+
+  def isAssignedReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
+    val assignments = zookeeperClient.getPartitionAssignmentForTopics(Set(topicPartition.topic()))
+    assignments(topicPartition.topic())(topicPartition.partition()).replicas.contains(replicaId)
+  }
+
+  def succeed(action: TieredStorageTestAction): Unit = {
+    testReport.addSucceeded(action)
+  }
+
+  def fail(action: TieredStorageTestAction): Unit = {
+    testReport.addFailed(action)
+  }
+
+  def printReport(output: PrintStream): Unit = {
+    testReport.print(output)
+  }
+
   def close(): Unit = {
-    getTieredStorages.find(_ => true).foreach(_.clear())
     Utils.closeAll(producer, consumer)
     adminClient.close()
   }
@@ -174,5 +205,37 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
     consumer.close(Duration.ofSeconds(5))
     adminClient.close()
   }
+}
 
+final class TieredStorageTestReport(private val context: TieredStorageTestContext) {
+  val successfulActions: mutable.Buffer[TieredStorageTestAction] = mutable.Buffer()
+  val failedActions: mutable.Buffer[TieredStorageTestAction] = mutable.Buffer()
+
+  def addSucceeded(action: TieredStorageTestAction): Unit = {
+    this.synchronized { successfulActions += action }
+  }
+
+  def addFailed(action: TieredStorageTestAction): Unit = {
+    this.synchronized { failedActions += action }
+  }
+
+  def print(output: PrintStream): Unit = {
+    output.println()
+    var seqNo = 0
+
+    Seq(this.synchronized(successfulActions.toSeq), this.synchronized(failedActions.toSeq))
+      .zip(Seq("SUCCESS", "FAILURE"))
+      .foreach {
+        case (actions, ident) => actions.foreach {
+          case action =>
+            seqNo += 1
+            output.print(s"[${ident}] ($seqNo) ")
+            action.describe(output)
+            output.println()
+          }
+      }
+
+    val lts = DumpLocalTieredStorage.dump(context.getTieredStorages.head, context.de, context.de)
+    output.println(s"Content of local tiered storage:\n\n$lts")
+  }
 }

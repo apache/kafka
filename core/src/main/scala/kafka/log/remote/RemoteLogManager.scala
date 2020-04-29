@@ -277,7 +277,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
-    this.logIdent = s"[RemoteLogManager=$brokerId partition=$tp ] "
+    this.logIdent = s"[RemoteLogManager=$brokerId partition=$tp] "
     @volatile private var leaderEpoch: Int = -1
 
     private def isLeader(): Boolean = leaderEpoch >= 0

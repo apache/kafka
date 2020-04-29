@@ -64,6 +64,10 @@ public final class LocalTieredStorageSnapshot {
         return fileset.getFile(type);
     }
 
+    public String toString() {
+        return snapshot.records.values().stream().map(Object::toString).reduce("", (s1, s2) -> s1 + s2);
+    }
+
     private final Snapshot snapshot;
 
     private LocalTieredStorageSnapshot(final Snapshot snapshot) {
