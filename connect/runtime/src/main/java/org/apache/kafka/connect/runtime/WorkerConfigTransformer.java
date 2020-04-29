@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentMap;
  * A wrapper class to perform configuration transformations and schedule reloads for any
  * retrieved TTL values.
  */
-public class WorkerConfigTransformer {
+public class WorkerConfigTransformer implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfigTransformer.class);
 
     private final Worker worker;
@@ -102,6 +102,7 @@ public class WorkerConfigTransformer {
         connectorRequests.put(path, request);
     }
 
+    @Override
     public void close() {
         configProviders.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
     }
