@@ -79,6 +79,7 @@ class ReplicaManagerTest {
 
   @After
   def tearDown(): Unit = {
+    TestUtils.clearYammerMetrics()
     metrics.close()
   }
 
