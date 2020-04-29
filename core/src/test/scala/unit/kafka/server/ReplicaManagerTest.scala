@@ -1152,6 +1152,47 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testFetchFromFollowerAlwaysAllowedForDebugConsumer(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1))
+
+    val tp0 = new TopicPartition(topic, 0)
+    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
+    val partition0Replicas = Seq[Integer](0, 1).asJava
+    val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic)
+        .setPartitionIndex(tp0.partition)
+        .setControllerEpoch(0)
+        .setLeader(1)
+        .setLeaderEpoch(0)
+        .setIsr(partition0Replicas)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava)
+      .build()
+    replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+
+    // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
+    val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
+    var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(0))
+    var fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata),
+      isDebugConsumer = true)
+    assertNotNull(fetchResult.get)
+    assertEquals(Errors.NONE, fetchResult.get.error)
+
+    // Fetch from follower, with empty ClientMetadata (which implies an older version)
+    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(0))
+    fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, isDebugConsumer = true)
+    assertNotNull(fetchResult.get)
+    assertEquals(Errors.NONE, fetchResult.get.error)
+  }
+
+
+  @Test
   def testClearFetchPurgatoryOnStopReplica(): Unit = {
     // As part of a reassignment, we may send StopReplica to the old leader.
     // In this case, we should ensure that pending purgatory operations are cancelled
@@ -1256,14 +1297,21 @@ class ReplicaManagerTest {
                                 topicPartition: TopicPartition,
                                 partitionData: FetchRequest.PartitionData,
                                 clientMetadataOpt: Option[ClientMetadata],
-                                timeout: Long = 0L): AtomicReference[FetchPartitionData] = {
+                                timeout: Long = 0L,
+                                isDebugConsumer: Boolean = false): AtomicReference[FetchPartitionData] = {
     val fetchResult = new AtomicReference[FetchPartitionData]()
     def callback(response: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       fetchResult.set(response.toMap.apply(topicPartition))
     }
+
+    val replicaId = if (isDebugConsumer)
+      Request.DebuggingConsumerId
+    else
+      Request.OrdinaryConsumerId
+
     replicaManager.fetchMessages(
       timeout = timeout,
-      replicaId = Request.OrdinaryConsumerId,
+      replicaId = replicaId,
       fetchMinBytes = 1,
       fetchMaxBytes = 100,
       hardMaxBytesLimit = false,

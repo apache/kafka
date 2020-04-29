@@ -949,8 +949,11 @@ class ReplicaManager(val config: KafkaConfig,
     else
       FetchHighWatermark
 
-    // Restrict fetching to leader if request is from follower or from a client with older version (no ClientMetadata)
-    val fetchOnlyFromLeader = isFromFollower || (isFromConsumer && clientMetadata.isEmpty)
+    // Restrict fetching to leader if request is from follower or from an ordinary consumer
+    // with an older version (which is implied by no ClientMetadata)
+    val fetchOnlyFromLeader = isFromFollower ||
+      (isFromConsumer && clientMetadata.isEmpty && replicaId != Request.DebuggingConsumerId)
+
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
