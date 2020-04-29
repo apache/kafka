@@ -121,6 +121,21 @@ public final class Stores {
      * build an in-memory store
      */
     public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
+        return inMemoryKeyValueStore(name, false);
+    }
+
+    /**
+     * Create an in-memory {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * or {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @param asyncPersistent If {@code true} then store will be asynchronously persisted.
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
+     * build an in-memory store
+     */
+    public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name, final boolean asyncPersistent) {
         Objects.requireNonNull(name, "name cannot be null");
         return new KeyValueBytesStoreSupplier() {
             @Override
@@ -130,7 +145,7 @@ public final class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                return new InMemoryKeyValueStore(name);
+                return new InMemoryKeyValueStore(name, asyncPersistent);
             }
 
             @Override

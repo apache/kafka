@@ -39,7 +39,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
-    private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
+    private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv", false);
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());

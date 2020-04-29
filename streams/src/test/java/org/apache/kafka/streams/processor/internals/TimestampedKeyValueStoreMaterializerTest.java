@@ -108,7 +108,7 @@ public class TimestampedKeyValueStoreMaterializerTest {
     @Test
     public void shouldCreateKeyValueStoreWithTheProvidedInnerStore() {
         final KeyValueBytesStoreSupplier supplier = EasyMock.createNiceMock(KeyValueBytesStoreSupplier.class);
-        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name");
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name", false);
         EasyMock.expect(supplier.name()).andReturn("name").anyTimes();
         EasyMock.expect(supplier.get()).andReturn(store);
         EasyMock.replay(supplier);

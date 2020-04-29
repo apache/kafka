@@ -40,7 +40,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
-    private final InMemoryKeyValueStore root = new InMemoryKeyValueStore("kv");
+    private final InMemoryKeyValueStore root = new InMemoryKeyValueStore("kv", false);
     private final ChangeLoggingTimestampedKeyValueBytesStore store = new ChangeLoggingTimestampedKeyValueBytesStore(root);
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());

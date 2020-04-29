@@ -70,7 +70,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Before
     public void setUp() {
         final String storeName = "store";
-        underlyingStore = new InMemoryKeyValueStore(storeName);
+        underlyingStore = new InMemoryKeyValueStore(storeName, false);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
         store = new CachingKeyValueStore(underlyingStore);
         store.setFlushListener(cacheFlushListener, false);
