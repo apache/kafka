@@ -205,7 +205,7 @@ public class ErrorHandlingTaskTest {
         sourceTask.stop();
         PowerMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject());
+        producer.close(EasyMock.anyLong(), EasyMock.anyObject());
         PowerMock.expectLastCall();
 
         reporter.close();
@@ -233,7 +233,7 @@ public class ErrorHandlingTaskTest {
         sourceTask.stop();
         PowerMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject());
+        producer.close(EasyMock.anyLong(), EasyMock.anyObject());
         PowerMock.expectLastCall();
 
         // Even though the reporters throw exceptions, they should both still be closed.
