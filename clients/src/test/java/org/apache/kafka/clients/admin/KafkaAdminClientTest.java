@@ -2028,6 +2028,50 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.all().get());
             assertNull(noErrorResult.memberResult(memberOne).get());
             assertNull(noErrorResult.memberResult(memberTwo).get());
+
+            // Return with success for "removeAll" scenario
+            // 1. KafkaAdminClient should query all members successfully
+            // 1.1 construct the DescribeGroupsResponse
+            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+
+            final List<TopicPartition> topicPartitions = new ArrayList<>();
+            topicPartitions.add(0, myTopicPartition0);
+            topicPartitions.add(1, myTopicPartition1);
+            topicPartitions.add(2, myTopicPartition2);
+
+            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
+            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+            DescribedGroupMember groupInstanceOne = DescribeGroupsResponse.groupMember("0", instanceOne, "clientId0", "clientHost", memberAssignmentBytes, null);
+            DescribedGroupMember groupInstanceTwo = DescribeGroupsResponse.groupMember("1", instanceTwo, "clientId1", "clientHost", memberAssignmentBytes, null);
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                    groupId,
+                    Errors.NONE,
+                    "",
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    "",
+                    asList(groupInstanceOne, groupInstanceTwo),
+                    Collections.emptySet()));
+
+            // 1.2 prepare response for AdminClient.describeConsumerGroups
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            // 2. KafkaAdminClient should delete all members correctly
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                            Arrays.asList(responseTwo,
+                                    new MemberResponse().setGroupInstanceId(instanceOne).setErrorCode(Errors.NONE.code())
+                            ))
+            ));
+            final RemoveMembersFromConsumerGroupResult successResult = env.adminClient().removeMembersFromConsumerGroup(
+                    groupId,
+                    new RemoveMembersFromConsumerGroupOptions(true)
+            );
+            assertNull(successResult.all().get());
         }
     }
 

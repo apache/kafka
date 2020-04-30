@@ -160,7 +160,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
@@ -3467,6 +3466,27 @@ public class KafkaAdminClient extends AdminClient {
                 || resource.type() == ConfigResource.Type.BROKER_LOGGER;
     }
 
+    private List<MemberIdentity> getMembersFromGroup(String groupId) {
+        Collection<MemberDescription> members = new ArrayList<>();
+        try {
+            members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
+        } catch (Throwable ex) {
+            System.out.println("Encounter exception when trying to get members from group: " + groupId);
+            ex.printStackTrace();
+        }
+
+        List<MemberIdentity> memberToRemove = new ArrayList<>();
+        for (MemberDescription member: members) {
+            if (member.groupInstanceId().isPresent()) {
+                memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get())
+                );
+            } else {
+                memberToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
+            }
+        }
+        return memberToRemove;
+    }
+
     @Override
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
@@ -3476,24 +3496,37 @@ public class KafkaAdminClient extends AdminClient {
         KafkaFutureImpl<Map<MemberIdentity, Errors>> future = new KafkaFutureImpl<>();
 
         ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context =
-            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+                new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
-        Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> getRemoveMembersFromGroupCall(context));
+        Call findCoordinatorCall;
+        if (options.removeAll()) {
+            List<MemberIdentity> members = getMembersFromGroup(groupId);
+            findCoordinatorCall = getFindCoordinatorCall(context,
+                () -> getRemoveMembersFromGroupCall(context, members));
+        } else {
+            findCoordinatorCall = getFindCoordinatorCall(context,
+                () -> getRemoveMembersFromGroupCall(context, new ArrayList<>()));
+        }
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
-        return new RemoveMembersFromConsumerGroupResult(future, options.members());
+        return new RemoveMembersFromConsumerGroupResult(future, options.members(), options.removeAll());
     }
 
-    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context) {
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>,
+            RemoveMembersFromConsumerGroupOptions> context, List<MemberIdentity> allMembers) {
         return new Call("leaveGroup",
                         context.deadline(),
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                return new LeaveGroupRequest.Builder(context.groupId(),
-                                                     context.options().members().stream().map(
-                                                         MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
+                if (context.options().removeAll()) {
+                    return new LeaveGroupRequest.Builder(context.groupId(),
+                            allMembers);
+                } else {
+                    return new LeaveGroupRequest.Builder(context.groupId(),
+                            context.options().members().stream().map(
+                                    MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
+                }
             }
 
             @Override
@@ -3502,7 +3535,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getRemoveMembersFromGroupCall(context));
+                    rescheduleFindCoordinatorTask(context, () -> getRemoveMembersFromGroupCall(context, allMembers));
                     return;
                 }
 
@@ -3514,7 +3547,7 @@ public class KafkaAdminClient extends AdminClient {
                     // We set member.id to empty here explicitly, so that the lookup will succeed as user doesn't
                     // know the exact member.id.
                     memberErrors.put(new MemberIdentity()
-                                         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                                         .setMemberId(memberResponse.memberId())
                                          .setGroupInstanceId(memberResponse.groupInstanceId()),
                                      Errors.forCode(memberResponse.errorCode()));
                 }

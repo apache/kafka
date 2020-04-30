@@ -33,11 +33,14 @@ public class RemoveMembersFromConsumerGroupResult {
 
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
     private final Set<MemberToRemove> memberInfos;
+    private final boolean removeAll;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         Set<MemberToRemove> memberInfos) {
+                                         Set<MemberToRemove> memberInfos,
+                                         Boolean removeAll) {
         this.future = future;
         this.memberInfos = memberInfos;
+        this.removeAll = removeAll;
     }
 
     /**
@@ -46,20 +49,33 @@ public class RemoveMembersFromConsumerGroupResult {
      * If not, the first member error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        this.future.whenComplete((memberErrors, throwable) -> {
-            if (throwable != null) {
-                result.completeExceptionally(throwable);
-            } else {
-                for (MemberToRemove memberToRemove : memberInfos) {
-                    if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
-                        return;
-                    }
+        if (removeAll) {
+            final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+            this.future.whenComplete((memberErrors, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    System.out.println("Remove all active members succeeded, removed " + memberErrors.size() + " members: " + memberErrors.keySet());
+                    result.complete(null);
                 }
-                result.complete(null);
-            }
-        });
-        return result;
+            });
+            return result;
+        } else {
+            final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+            this.future.whenComplete((memberErrors, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    for (MemberToRemove memberToRemove : memberInfos) {
+                        if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
+                            return;
+                        }
+                    }
+                    result.complete(null);
+                }
+            });
+            return result;
+        }
     }
 
     /**

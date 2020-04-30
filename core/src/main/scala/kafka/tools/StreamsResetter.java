@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -106,6 +107,7 @@ public class StreamsResetter {
     private static OptionSpec versionOption;
     private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
+    private static OptionSpec forceOption;
 
     private static String usage = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
@@ -149,7 +151,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
             adminClient = Admin.create(properties);
-            validateNoActiveConsumers(groupId, adminClient);
+            maybeDeleteActiveConsumers(groupId, adminClient);
 
             allTopics.clear();
             allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -176,8 +178,14 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private void validateNoActiveConsumers(final String groupId,
-                                           final Admin adminClient)
+    private void forceDeleteActiveConsumers(final String groupId,
+                                            final Admin adminClient) {
+        System.out.println("Force deleting all active members in the group: " + groupId);
+        adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(true)).all();
+    }
+
+    private void maybeDeleteActiveConsumers(final String groupId,
+                                            final Admin adminClient)
         throws ExecutionException, InterruptedException {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
@@ -186,9 +194,14 @@ public class StreamsResetter {
         final List<MemberDescription> members =
             new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
         if (!members.isEmpty()) {
-            throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                    + "and has following members: " + members + ". "
-                    + "Make sure to stop all running application instances before running the reset tool.");
+            if (options.has(forceOption)) {
+                forceDeleteActiveConsumers(groupId, adminClient);
+            } else {
+                throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                        + "and has following members: " + members + ". "
+                        + "Make sure to stop all running application instances before running the reset tool." +
+                        "Try set '--force' in the cmdline to force delete active members.");
+            }
         }
     }
 
@@ -236,6 +249,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
+        forceOption = optionParser.accepts("force","force delete members");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
