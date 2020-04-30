@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,7 +33,6 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
@@ -153,50 +151,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             state.assignActive(task);
             statelessActiveTaskClientsByTaskLoad.offer(client);
         }
-    }
-
-    /**
-     * @return true iff all active tasks with caught-up client are assigned to one of them, and all tasks are assigned
-     */
-    boolean previousAssignmentIsValid() {
-        final Set<TaskId> unassignedActiveTasks = new HashSet<>(allTasks);
-        final Map<TaskId, Integer> unassignedStandbyTasks =
-            configs.numStandbyReplicas == 0 ?
-                Collections.emptyMap() :
-                new HashMap<>(statefulTasksToRankedCandidates.keySet().stream()
-                                  .collect(Collectors.toMap(task -> task, task -> configs.numStandbyReplicas)));
-
-        for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
-            final UUID client = clientEntry.getKey();
-            final ClientState state = clientEntry.getValue();
-            final Set<TaskId> prevActiveTasks = state.prevActiveTasks();
-
-            // Verify that this client was caught-up on all stateful active tasks
-            for (final TaskId activeTask : prevActiveTasks) {
-                if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(activeTask, client, tasksToCaughtUpClients)) {
-                    return false;
-                }
-            }
-            if (!unassignedActiveTasks.containsAll(prevActiveTasks)) {
-                return false;
-            }
-            unassignedActiveTasks.removeAll(prevActiveTasks);
-
-            for (final TaskId task : state.prevStandbyTasks()) {
-                final Integer remainingStandbys = unassignedStandbyTasks.get(task);
-                if (remainingStandbys != null) {
-                    if (remainingStandbys == 1) {
-                        unassignedStandbyTasks.remove(task);
-                    } else {
-                        unassignedStandbyTasks.put(task, remainingStandbys - 1);
-                    }
-                } else {
-                    return false;
-                }
-            }
-
-        }
-        return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
     }
 
     /**
