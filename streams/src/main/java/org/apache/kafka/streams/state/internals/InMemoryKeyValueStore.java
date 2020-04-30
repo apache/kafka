@@ -16,21 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
-import java.util.Arrays;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -50,19 +47,17 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private static final String IN_MEMORY_KEY_VALUE_STORE_THREAD_PREFIX = "kafka-in-memory-key-value-store-thread-";
 
-    private static final String STORE_FILE_DIR = "inmem";
+    public static final String INMEM_EXTENSION = ".inmem";
 
-    private static final String INMEM_EXTENSION = ".inmem";
-
-    private static final int COUNT_FLUSH_TO_STORE = 10;
+    public static final int COUNT_FLUSH_TO_STORE = 10;
 
     private final String name;
-    private TreeMap<Bytes, byte[]> map = new TreeMap<>();
+    private TreeMap<Bytes, byte[]> map;
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
     private final InMemoryKeyValueStorePersistThread persistThread;
-    private File storeDir;
+    private Path storeDir;
     private AtomicInteger flushCounter;
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
@@ -80,24 +75,33 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        size = 0;
-        if (root != null) {
-            // register the store
-            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
-        }
 
         if (persistThread != null) {
             flushCounter = new AtomicInteger();
 
-            storeDir = new File(new File(context.stateDir(), STORE_FILE_DIR), name);
+            storeDir = Paths.get(context.stateDir().getAbsolutePath(), name);
 
-            if (!storeDir.exists()) {
-                createStore();
+            if (!Files.exists(storeDir)) {
+                try {
+                    Files.createDirectories(storeDir);
+                } catch (final IOException fatal) {
+                    throw new ProcessorStateException(fatal);
+                }
             } else {
                 loadStore();
             }
 
             persistThread.start();
+        }
+
+        if (map == null) {
+            map = new TreeMap<>();
+            size = 0;
+        }
+
+        if (root != null) {
+            // register the store
+            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
         }
 
         open = true;
@@ -184,7 +188,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             return;
 
         final int flushCount = flushCounter.incrementAndGet();
-
         if (flushCount % COUNT_FLUSH_TO_STORE != 0)
             return;
 
@@ -204,7 +207,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         open = false;
         if (persistThread != null) {
             synchronized (persistThread) {
-                persistThread.mapToStore = null;
                 persistThread.notify();
             }
         }
@@ -239,48 +241,36 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    private void createStore() {
-        try {
-            Files.createDirectories(storeDir.getParentFile().toPath());
-            Files.createDirectories(storeDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new ProcessorStateException(fatal);
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private void loadStore() {
-        final File[] files = storeDir.listFiles();
+        try {
+            Files.list(storeDir)
+                .filter(p -> p.toString().endsWith(INMEM_EXTENSION))
+                .sorted((p1, p2) -> (int) (fileNameTimestamp(p2) - fileNameTimestamp(p1)))
+                .forEach(p -> {
+                    if (this.map != null)
+                        return;
 
-        if (files == null)
-            return;
-
-        Arrays.sort(files, (f1, f2) -> (int) (fileNameTimestamp(f2) - fileNameTimestamp(f1)));
-
-        for (final File f : files) {
-            if (!f.getName().endsWith(INMEM_EXTENSION)) {
-                break;
-            }
-
-            try (ObjectInputStream oos = new ObjectInputStream(new FileInputStream(f))) {
-                this.map = (TreeMap<Bytes, byte[]>) oos.readObject();
-                this.persistThread.lastWritten = fileNameTimestamp(f);
-                if (log.isInfoEnabled())
-                    log.info("InMemoryKeyValueStore loaded from file {}", f.getName());
-                return;
-            } catch (final IOException | ClassNotFoundException e) {
-                // ignore.
-            }
+                    try (ObjectInputStream oos = new ObjectInputStream(Files.newInputStream(p))) {
+                        this.map = (TreeMap<Bytes, byte[]>) oos.readObject();
+                        this.size = map.size();
+                        this.persistThread.lastWritten = fileNameTimestamp(p);
+                        if (log.isInfoEnabled())
+                            log.info("InMemoryKeyValueStore loaded from file {}", p);
+                    } catch (final IOException | ClassNotFoundException e) {
+                        if (log.isWarnEnabled())
+                            log.warn("InMemoryKeyValueStore corrupted file skipped {}", p);
+                    }
+                });
+        } catch (final IOException e) {
+            if (log.isWarnEnabled())
+                log.warn("Error listing file", e);
         }
     }
 
-    private long fileNameTimestamp(final File file) {
-        final String name = file.getName();
-
-        if (!name.endsWith(INMEM_EXTENSION))
-            return -1;
-
-        return Long.parseLong(name.substring(0, name.length() - INMEM_EXTENSION.length()));
+    private long fileNameTimestamp(final Path file) {
+        final String fileName = file.toFile().getName();
+        return Long.parseLong(fileName.substring(0, fileName.length() - INMEM_EXTENSION.length()));
     }
 
     private class InMemoryKeyValueStorePersistThread extends KafkaThread {
@@ -320,25 +310,27 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             }
         }
 
-        private long writeStoreToDisk(final Map<Bytes, byte[]> map, long lastWritten) {
+        private long writeStoreToDisk(final Map<Bytes, byte[]> map, final long lastWritten) {
             final long now = System.currentTimeMillis();
 
-            final File store = new File(storeDir, now + INMEM_EXTENSION);
-
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(store))) {
+            try (ObjectOutputStream oos =
+                     new ObjectOutputStream(Files.newOutputStream(storeDir.resolve(now + INMEM_EXTENSION)))) {
                 oos.writeObject(map);
             } catch (final IOException e) {
                 throw new KafkaStorageException(e);
             }
 
             if (log.isDebugEnabled())
-                log.debug("InMemoryKeyValueStore saved to file {}", store.getName());
+                log.debug("InMemoryKeyValueStore[{}] saved to file {}", name, now + INMEM_EXTENSION);
 
             if (now != lastWritten && lastWritten != 0) {
-                File file = new File(storeDir, lastWritten + INMEM_EXTENSION);
-                boolean deleted = file.delete();
-                if (!deleted && log.isWarnEnabled())
-                    log.warn("Can't remove InMemoryKeyValueStore file {}", file.getName());
+                try {
+                    Files.delete(storeDir.resolve(lastWritten + INMEM_EXTENSION));
+                } catch (final IOException e) {
+                    if (log.isWarnEnabled()) {
+                        log.warn("Can't remove InMemoryKeyValueStore[{}] file:", name, e);
+                    }
+                }
             }
 
             return now;
