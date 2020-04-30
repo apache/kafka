@@ -229,7 +229,7 @@
   </ul>
 
   <p>
-  --reset-offsets also has following scenarios to choose from (atleast one scenario must be selected):
+  --reset-offsets also has following scenarios to choose from (at least one scenario must be selected):
   <ul>
     <li>
       --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
@@ -273,7 +273,7 @@
   <p>
 
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
-  <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
+  <code>--zookeeper</code> instead of <code>--bootstrap-server</code>:
 
   <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
@@ -676,7 +676,7 @@
 
   From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
-  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
+  At the time this is written, LinkedIn is running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
   <pre class="brush: text;">
   -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
   -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
