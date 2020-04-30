@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class NoOpProcessorContext extends AbstractProcessorContext<Object, Object> {
+public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
     @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();

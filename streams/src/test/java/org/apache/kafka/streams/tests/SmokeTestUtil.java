@@ -48,7 +48,7 @@ public class SmokeTestUtil {
                     private long largestOffset = Long.MIN_VALUE;
 
                     @Override
-                    public void init(final ProcessorContext<Object, Object> context) {
+                    public void init(final ProcessorContext context) {
                         super.init(context);
                         System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         System.out.flush();
