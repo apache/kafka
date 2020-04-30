@@ -80,11 +80,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
 
 
-        if (shouldUsePreviousAssignment()) {
-            assignPreviousTasksToClientStates();
-            return false;
-        }
-
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
 
@@ -227,30 +222,4 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         return maxActiveStatefulTasksPerThreadCount - minActiveStatefulTasksPerThreadCount;
     }
-
-    /**
-     * Determines whether to use the new proposed assignment or just return the group's previous assignment. The
-     * previous assignment will be chosen and returned iff all of the following are true:
-     *   1) it satisfies the state constraint, ie all tasks with caught up clients are assigned to one of those clients
-     *   2) it satisfies the balance factor
-     *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
-     *   4) there are no warmup tasks
-     */
-    private boolean shouldUsePreviousAssignment() {
-        if (previousAssignmentIsValid()) {
-            final int previousAssignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statefulTasks);
-            return previousAssignmentBalanceFactor <= configs.balanceFactor;
-        } else {
-            return false;
-        }
-    }
-
-    private void assignPreviousTasksToClientStates() {
-        for (final ClientState clientState : clientStates.values()) {
-            clientState.assignActiveTasks(clientState.prevActiveTasks());
-            clientState.assignStandbyTasks(clientState.prevStandbyTasks());
-        }
-    }
-
 }
