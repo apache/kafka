@@ -386,7 +386,6 @@ public class EosBetaUpgradeIntegrationTest {
 
                 final List<KeyValue<Long, Long>> expectedCommittedResult =
                     computeExpectedResult(committedInputDataDuringFirstUpgrade, committedState);
-                // TODO: if we don't use the custom partitioner, the test hangs here until TX times out and is aborted
                 verifyCommitted(expectedCommittedResult);
             } else {
                 // retrying TX
@@ -880,9 +879,6 @@ public class EosBetaUpgradeIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
-        // TODO
-        //   if we don't use this custom partitioner the test fails for the non-error case
-        //   unclear why -- see other TODO
         properties.put(StreamsConfig.producerPrefix(ProducerConfig.PARTITIONER_CLASS_CONFIG), KeyPartitioner.class);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
