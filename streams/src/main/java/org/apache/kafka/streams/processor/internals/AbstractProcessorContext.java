@@ -63,7 +63,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     }
 
     @Override
-    public void setSystemTimeMs(long timeMs) {
+    public void setSystemTimeMs(final long timeMs) {
         currentSystemTimeMs = timeMs;
     }
 
