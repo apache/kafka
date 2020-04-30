@@ -388,6 +388,7 @@ public class EosBetaUpgradeIntegrationTest {
 
                 final List<KeyValue<Long, Long>> expectedCommittedResult =
                     computeExpectedResult(committedInputDataDuringFirstUpgrade, committedState);
+                // TODO: if we don't use the custom partitioner, the test hangs here until TX times out and is aborted
                 verifyCommitted(expectedCommittedResult);
             } else {
                 // retrying TX
@@ -881,6 +882,10 @@ public class EosBetaUpgradeIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
+        // TODO
+        //   if we don't use this custom partitioner the test fails for the non-error case
+        //   unclear why -- see other TODO
+        properties.put(StreamsConfig.producerPrefix(ProducerConfig.PARTITIONER_CLASS_CONFIG), KeyPartitioner.class);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
 
@@ -957,7 +962,7 @@ public class EosBetaUpgradeIntegrationTest {
         return data;
     }
 
-    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
+    private void writeInputData(final List<KeyValue<Long, Long>> records) {
         final Properties config = TestUtils.producerConfig(
             CLUSTER.bootstrapServers(),
             LongSerializer.class,
@@ -993,7 +998,9 @@ public class EosBetaUpgradeIntegrationTest {
                     LongDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
+                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                    )
+                ),
                 MULTI_PARTITION_OUTPUT_TOPIC,
                 numberOfRecords
             );
@@ -1064,6 +1071,8 @@ public class EosBetaUpgradeIntegrationTest {
 
     // must be public to allow KafkaProducer to instantiate it
     public static class KeyPartitioner implements Partitioner {
+        private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+
         @Override
         public int partition(final String topic,
                              final Object key,
@@ -1071,7 +1080,7 @@ public class EosBetaUpgradeIntegrationTest {
                              final Object value,
                              final byte[] valueBytes,
                              final Cluster cluster) {
-            return ((Long) key).intValue() % NUM_TOPIC_PARTITIONS;
+            return LONG_DESERIALIZER.deserialize(topic, keyBytes).intValue() % NUM_TOPIC_PARTITIONS;
         }
 
         @Override
