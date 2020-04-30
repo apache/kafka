@@ -67,7 +67,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals("routable-listener", endpoint.host)
     assertEquals(3334, endpoint.port)
     assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
-    assertEquals(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), endpoint.listenerName)
+    assertEquals(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value(), endpoint.listenerName.value())
   }
 
   @Test
