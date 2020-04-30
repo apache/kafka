@@ -21,8 +21,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
+    private final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
 
     private final WindowBytesStoreSupplier storeSupplier;
 
@@ -36,6 +39,11 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
 
     @Override
     public WindowStore<K, V> build() {
+        if (storeSupplier.retainDuplicates() && enableCaching) {
+            log.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
+            enableCaching = false;
+        }
+
         return new MeteredWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
             storeSupplier.windowSize(),

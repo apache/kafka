@@ -27,9 +27,9 @@ import org.junit.{Before, Test}
 
 import scala.jdk.CollectionConverters._
 
-class AddPartitionsToTxnRequestTest extends BaseRequestTest {
-  private val topic1 = "foobartopic"
-  val numPartitions = 3
+class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
+  private val topic1 = "topic1"
+  val numPartitions = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
@@ -47,7 +47,17 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
     val nonExistentTopic = new TopicPartition("unknownTopic", 0)
     val createdTopicPartition = new TopicPartition(topic1, 0)
 
-    val request = createRequest(List(createdTopicPartition, nonExistentTopic))
+    val transactionalId = "foobar"
+    val producerId = 1000L
+    val producerEpoch: Short = 0
+
+    val request = new AddPartitionsToTxnRequest.Builder(
+      transactionalId,
+      producerId,
+      producerEpoch,
+      List(createdTopicPartition, nonExistentTopic).asJava)
+      .build()
+
     val leaderId = servers.head.config.brokerId
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(leaderId))
 
@@ -58,13 +68,5 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
 
     assertTrue(response.errors.containsKey(nonExistentTopic))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(nonExistentTopic))
-  }
-
-  private def createRequest(partitions: List[TopicPartition]): AddPartitionsToTxnRequest = {
-    val transactionalId = "foobar"
-    val producerId = 1000L
-    val producerEpoch: Short = 0
-    val builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions.asJava)
-    builder.build()
   }
 }

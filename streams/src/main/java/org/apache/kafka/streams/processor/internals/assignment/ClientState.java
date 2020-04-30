@@ -29,6 +29,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.unmodifiableMap;
+import static java.util.Collections.unmodifiableSet;
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class ClientState {
@@ -83,6 +87,22 @@ public class ClientState {
         this.ownedPartitions = ownedPartitions;
         this.taskOffsetSums = taskOffsetSums;
         this.taskLagTotals = taskLagTotals;
+        this.capacity = capacity;
+    }
+
+    public ClientState(final Set<TaskId> previousActiveTasks,
+                       final Set<TaskId> previousStandbyTasks,
+                       final Map<TaskId, Long> taskLagTotals,
+                       final int capacity) {
+        activeTasks = new HashSet<>();
+        standbyTasks = new HashSet<>();
+        assignedTasks = new HashSet<>();
+        prevActiveTasks = unmodifiableSet(new HashSet<>(previousActiveTasks));
+        prevStandbyTasks = unmodifiableSet(new HashSet<>(previousStandbyTasks));
+        prevAssignedTasks = unmodifiableSet(union(HashSet::new, previousActiveTasks, previousStandbyTasks));
+        ownedPartitions = emptyMap();
+        taskOffsetSums = emptyMap();
+        this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
     }
 
@@ -245,12 +265,20 @@ public class ClientState {
         return capacity;
     }
 
+    double activeTaskLoad() {
+        return ((double) activeTaskCount()) / capacity;
+    }
+
+    double taskLoad() {
+        return ((double) assignedTaskCount()) / capacity;
+    }
+
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }
 
     boolean hasMoreAvailableCapacityThan(final ClientState other) {
-        if (this.capacity <= 0) {
+        if (capacity <= 0) {
             throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
         }
 

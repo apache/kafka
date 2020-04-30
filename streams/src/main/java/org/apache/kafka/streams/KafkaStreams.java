@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
@@ -51,6 +52,7 @@ import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
+import org.apache.kafka.streams.processor.internals.GlobalStreamThread.State;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
@@ -482,8 +484,9 @@ public class KafkaStreams implements AutoCloseable {
                     final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
                     globalThreadState = newState;
 
-                    // special case when global thread is dead
-                    if (newState == GlobalStreamThread.State.DEAD) {
+                    if (newState == GlobalStreamThread.State.RUNNING) {
+                        maybeSetRunning();
+                    } else if (newState == GlobalStreamThread.State.DEAD) {
                         if (setState(State.ERROR)) {
                             log.error("Global thread has died. The instance will be in error state and should be closed.");
                         }
@@ -701,18 +704,34 @@ public class KafkaStreams implements AutoCloseable {
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
+        final int numStreamThreads;
+        if (internalTopologyBuilder.hasNoNonGlobalTopology()) {
+            log.info("Overriding number of StreamThreads to zero for global-only topology");
+            numStreamThreads = 0;
+        } else {
+            numStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        }
+
         // create the stream thread, global update thread, and cleanup thread
-        threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
+        threads = new StreamThread[numStreamThreads];
+
+        final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        final boolean hasGlobalTopology = globalTaskTopology != null;
+
+        if (numStreamThreads == 0 && !hasGlobalTopology) {
+            log.error("Topology with no input topics will create no stream threads and no global thread.");
+            throw new TopologyException("Topology has no stream threads and no global threads, " +
+                "must subscribe to at least one source topic or global table.");
+        }
 
         long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
         if (totalCacheSize < 0) {
             totalCacheSize = 0;
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
-        final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
-        final long cacheSizePerThread = totalCacheSize / (threads.length + (globalTaskTopology == null ? 0 : 1));
+        final long cacheSizePerThread = totalCacheSize / (threads.length + (hasGlobalTopology ? 1 : 0));
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
-                (globalTaskTopology != null && globalTaskTopology.hasPersistentGlobalStore());
+                (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
         try {
             stateDirectory = new StateDirectory(config, time, hasPersistentStores);
@@ -722,7 +741,7 @@ public class KafkaStreams implements AutoCloseable {
 
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
-        if (globalTaskTopology != null) {
+        if (hasGlobalTopology) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(
                 globalTaskTopology,
@@ -766,7 +785,7 @@ public class KafkaStreams implements AutoCloseable {
             Math.toIntExact(Arrays.stream(threads).filter(thread -> thread.state().isAlive()).count()));
 
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
-        if (globalTaskTopology != null) {
+        if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
         }
         for (final StreamThread thread : threads) {

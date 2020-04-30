@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
@@ -35,14 +35,15 @@ import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
-    public static final String HIGH_AVAILABILITY_ENABLED_CONFIG = "internal.high.availability.enabled";
-    private final boolean highAvailabilityEnabled;
+    private final String taskAssignorClass;
 
     private final String logPrefix;
     private final Logger log;
@@ -162,11 +163,11 @@ public final class AssignorConfiguration {
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
 
         {
-            final Object o = configs.get(HIGH_AVAILABILITY_ENABLED_CONFIG);
+            final String o = (String) configs.get(INTERNAL_TASK_ASSIGNOR_CLASS);
             if (o == null) {
-                highAvailabilityEnabled = false;
+                taskAssignorClass = HighAvailabilityTaskAssignor.class.getName();
             } else {
-                highAvailabilityEnabled = (Boolean) o;
+                taskAssignorClass = o;
             }
         }
     }
@@ -328,8 +329,15 @@ public final class AssignorConfiguration {
         return assignmentConfigs;
     }
 
-    public boolean isHighAvailabilityEnabled() {
-        return highAvailabilityEnabled;
+    public TaskAssignor getTaskAssignor() {
+        try {
+            return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
+        } catch (final ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
+                e
+            );
+        }
     }
 
     public static class AssignmentConfigs {
