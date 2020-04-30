@@ -21,18 +21,24 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
@@ -40,107 +46,156 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    private Map<UUID, ClientState> clientStates;
-    private Map<UUID, Integer> clientsToNumberOfThreads;
-    private SortedSet<UUID> sortedClients;
-
-    private Set<TaskId> allTasks;
-    private SortedSet<TaskId> statefulTasks;
-    private SortedSet<TaskId> statelessTasks;
-
-    private AssignmentConfigs configs;
-
-    private SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
-    private Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
-
     @Override
-    public boolean assign(final Map<UUID, ClientState> clientStates,
-                          final Set<TaskId> allTasks,
-                          final Set<TaskId> statefulTasks,
+    public boolean assign(final Map<UUID, ClientState> clients,
+                          final Set<TaskId> allTaskIds,
+                          final Set<TaskId> statefulTaskIds,
                           final AssignmentConfigs configs) {
-        this.configs = configs;
-        this.clientStates = clientStates;
-        this.allTasks = allTasks;
-        this.statefulTasks = new TreeSet<>(statefulTasks);
+        final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
+        final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        statelessTasks = new TreeSet<>(allTasks);
-        statelessTasks.removeAll(statefulTasks);
+        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
+            buildClientRankingsByTask(statefulTasks, clients, configs.acceptableRecoveryLag);
 
-        sortedClients = new TreeSet<>();
-        clientsToNumberOfThreads = new HashMap<>();
-        clientStates.forEach((client, state) -> {
-            sortedClients.add(client);
-            clientsToNumberOfThreads.put(client, state.capacity());
-        });
-
-        statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(statefulTasks, clientStates, configs.acceptableRecoveryLag);
-        tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
-
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients =
+            tasksToCaughtUpClients(statefulTasksToRankedCandidates);
 
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
 
-        final boolean probingRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
+        assignActiveStatefulTasks(clientStates, statefulTasks);
 
-        assignStandbyReplicaTasks(tasksToRemainingStandbys);
+        assignStandbyReplicaTasks(
+            tasksToRemainingStandbys,
+            clientStates,
+            statefulTasksToRankedCandidates,
+            configs.numStandbyReplicas
+        );
 
-        assignStatelessActiveTasks();
+        final boolean probingRebalanceNeeded = assignTaskMovements(
+            tasksToCaughtUpClients,
+            clientStates,
+            configs.maxWarmupReplicas
+        );
+
+        assignStatelessActiveTasks(clientStates, diff(TreeSet::new, allTaskIds, statefulTasks));
 
         log.info("Decided on assignment: " +
-                     clientStates +
+                     clients +
                      " with " +
                      (probingRebalanceNeeded ? "" : "no") +
                      " followup probing rebalance.");
+
         return probingRebalanceNeeded;
     }
 
-    private boolean assignStatefulActiveTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
-        final Map<UUID, List<TaskId>> statefulActiveTaskAssignment = new DefaultBalancedAssignor().assign(
-            sortedClients,
-            statefulTasks,
-            clientsToNumberOfThreads
-        );
+    private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
+                                                  final SortedSet<TaskId> statefulTasks) {
+        Iterator<ClientState> clientStateIterator = null;
+        for (final TaskId task : statefulTasks) {
+            if (clientStateIterator == null || ! clientStateIterator.hasNext()) {
+                clientStateIterator = clientStates.values().iterator();
+            }
+            clientStateIterator.next().assignActive(task);
+        }
 
-        return assignTaskMovements(
-            statefulActiveTaskAssignment,
-            tasksToCaughtUpClients,
+        balanceTasksOverThreads(
             clientStates,
-            tasksToRemainingStandbys,
-            configs.maxWarmupReplicas
+            ClientState::activeTasks,
+            ClientState::unAssignActive,
+            ClientState::assignActive
         );
     }
 
-    private void assignStandbyReplicaTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
-        final ValidClientsByTaskLoadQueue standbyTaskClientsByTaskLoad = new ValidClientsByTaskLoadQueue(
-            clientStates,
-            (client, task) -> !clientStates.get(client).assignedTasks().contains(task)
+    private static void assignStandbyReplicaTasks(final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                  final TreeMap<UUID, ClientState> clientStates,
+                                                  final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates,
+                                                  final int numStandbyReplicas) {
+        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
+            (client, task) -> !clientStates.get(client).assignedTasks().contains(task),
+            (client) -> clientStates.get(client).taskLoad()
         );
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
-            final int numRemainingStandbys = tasksToRemainingStandbys.get(task);
-            final List<UUID> clients = standbyTaskClientsByTaskLoad.poll(task, numRemainingStandbys);
-            for (final UUID client : clients) {
+            int numRemainingStandbys = tasksToRemainingStandbys.get(task);
+            while (numRemainingStandbys > 0) {
+                final UUID client = standbyTaskClientsByTaskLoad.poll(task);
+                if (client == null) {
+                    break;
+                }
                 clientStates.get(client).assignStandby(task);
+                numRemainingStandbys--;
+                standbyTaskClientsByTaskLoad.offer(client);
             }
-            standbyTaskClientsByTaskLoad.offerAll(clients);
 
-            final int numStandbysAssigned = clients.size();
-            if (numStandbysAssigned < numRemainingStandbys) {
+            if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
                              "There is not enough available capacity. You should " +
                              "increase the number of threads and/or application instances " +
                              "to maintain the requested number of standby replicas.",
-                         numRemainingStandbys - numStandbysAssigned, configs.numStandbyReplicas, task);
+                         numRemainingStandbys, numStandbyReplicas, task);
+            }
+        }
+
+        balanceTasksOverThreads(
+            clientStates,
+            ClientState::standbyTasks,
+            ClientState::unAssignStandby,
+            ClientState::assignStandby
+        );
+    }
+
+    private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
+                                                final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
+                                                final BiConsumer<ClientState, TaskId> taskUnassignor,
+                                                final BiConsumer<ClientState, TaskId> taskAssignor) {
+        boolean keepBalancing = true;
+        while (keepBalancing) {
+            keepBalancing = false;
+            for (final Map.Entry<UUID, ClientState> sourceEntry : clientStates.entrySet()) {
+                final UUID sourceClient = sourceEntry.getKey();
+                final ClientState sourceClientState = sourceEntry.getValue();
+
+                for (final Map.Entry<UUID, ClientState> destinationEntry : clientStates.entrySet()) {
+                    final UUID destinationClient = destinationEntry.getKey();
+                    final ClientState destinationClientState = destinationEntry.getValue();
+                    if (sourceClient.equals(destinationClient)) {
+                        continue;
+                    }
+
+                    final Set<TaskId> sourceTasks = new TreeSet<>(currentAssignmentAccessor.apply(sourceClientState));
+                    final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
+                    while (isSkewed(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
+                        final TaskId taskToMove = sourceIterator.next();
+                        if (!destinationClientState.assignedTasks().contains(taskToMove)) {
+                            taskUnassignor.accept(sourceClientState, taskToMove);
+                            taskAssignor.accept(destinationClientState, taskToMove);
+                        }
+                        keepBalancing = true;
+                    }
+                }
             }
         }
     }
 
-    private void assignStatelessActiveTasks() {
-        final ValidClientsByTaskLoadQueue statelessActiveTaskClientsByTaskLoad = new ValidClientsByTaskLoadQueue(
-            clientStates,
-            (client, task) -> true
+    private static boolean isSkewed(final ClientState sourceClientState, final ClientState destinationClientState) {
+        final double assignedTasksPerStreamThreadAtDestination =
+            1.0 * destinationClientState.assignedTasks().size() / destinationClientState.capacity();
+        final double assignedTasksPerStreamThreadAtSource =
+            1.0 * sourceClientState.assignedTasks().size() / sourceClientState.capacity();
+        return assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > 1;
+    }
+
+    private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,
+                                                   final Iterable<TaskId> statelessTasks) {
+        final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
+            (client, task) -> true,
+            client -> {
+                final ClientState clientState = clientStates.get(client);
+                final double activeTaskLoad = 1.0 * clientState.activeTasks().size() / clientState.capacity();
+                return activeTaskLoad;
+            }
         );
         statelessActiveTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
@@ -152,27 +207,4 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
     }
 
-    /**
-     * Compute the balance factor as the difference in stateful active task count per thread between the most and
-     * least loaded clients
-     */
-    static int computeBalanceFactor(final Collection<ClientState> clientStates,
-                                    final Set<TaskId> statefulTasks) {
-        int minActiveStatefulTasksPerThreadCount = Integer.MAX_VALUE;
-        int maxActiveStatefulTasksPerThreadCount = 0;
-
-        for (final ClientState state : clientStates) {
-            final Set<TaskId> activeTasks = new HashSet<>(state.prevActiveTasks());
-            activeTasks.retainAll(statefulTasks);
-            final int taskPerThreadCount = activeTasks.size() / state.capacity();
-            if (taskPerThreadCount < minActiveStatefulTasksPerThreadCount) {
-                minActiveStatefulTasksPerThreadCount = taskPerThreadCount;
-            }
-            if (taskPerThreadCount > maxActiveStatefulTasksPerThreadCount) {
-                maxActiveStatefulTasksPerThreadCount = taskPerThreadCount;
-            }
-        }
-
-        return maxActiveStatefulTasksPerThreadCount - minActiveStatefulTasksPerThreadCount;
-    }
 }
