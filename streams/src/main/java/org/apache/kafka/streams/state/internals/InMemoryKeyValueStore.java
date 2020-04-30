@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -52,7 +53,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public static final int COUNT_FLUSH_TO_STORE = 10;
 
     private final String name;
-    private TreeMap<Bytes, byte[]> map;
+    private TreeMap<Bytes, byte[]> map = new TreeMap<>();
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
@@ -92,11 +93,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             }
 
             persistThread.start();
-        }
-
-        if (map == null) {
-            map = new TreeMap<>();
-            size = 0;
         }
 
         if (root != null) {
@@ -244,24 +240,24 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @SuppressWarnings("unchecked")
     private void loadStore() {
         try {
-            Files.list(storeDir)
+            final List<Path> files = Files.list(storeDir)
                 .filter(p -> p.toString().endsWith(INMEM_EXTENSION))
                 .sorted((p1, p2) -> (int) (fileNameTimestamp(p2) - fileNameTimestamp(p1)))
-                .forEach(p -> {
-                    if (this.map != null)
-                        return;
+                .collect(Collectors.toList());
 
-                    try (ObjectInputStream oos = new ObjectInputStream(Files.newInputStream(p))) {
-                        this.map = (TreeMap<Bytes, byte[]>) oos.readObject();
-                        this.size = map.size();
-                        this.persistThread.lastWritten = fileNameTimestamp(p);
-                        if (log.isInfoEnabled())
-                            log.info("InMemoryKeyValueStore loaded from file {}", p);
-                    } catch (final IOException | ClassNotFoundException e) {
-                        if (log.isWarnEnabled())
-                            log.warn("InMemoryKeyValueStore corrupted file skipped {}", p);
-                    }
-                });
+            for (final Path file : files) {
+                try (ObjectInputStream oos = new ObjectInputStream(Files.newInputStream(file))) {
+                    this.map = (TreeMap<Bytes, byte[]>) oos.readObject();
+                    this.size = map.size();
+                    this.persistThread.lastWritten = fileNameTimestamp(file);
+                    if (log.isInfoEnabled())
+                        log.info("InMemoryKeyValueStore loaded from file {}", file);
+                    return;
+                } catch (final IOException | ClassNotFoundException e) {
+                    if (log.isWarnEnabled())
+                        log.warn("InMemoryKeyValueStore corrupted file skipped {}", file);
+                }
+            }
         } catch (final IOException e) {
             if (log.isWarnEnabled())
                 log.warn("Error listing file", e);
