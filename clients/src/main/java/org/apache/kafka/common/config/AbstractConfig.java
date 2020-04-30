@@ -483,6 +483,7 @@ public class AbstractConfig {
                 resolvedOriginals.putAll(result.data());
             }
         }
+        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }

@@ -104,8 +104,8 @@ public class Worker {
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
-    private WorkerConfigTransformer workerConfigTransformer;
-    private ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    private final WorkerConfigTransformer workerConfigTransformer;
+    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
 
     public Worker(
         String workerId,
@@ -220,6 +220,8 @@ public class Worker {
 
         workerMetricsGroup.close();
         connectorStatusMetricsGroup.close();
+
+        workerConfigTransformer.close();
     }
 
     /**
@@ -854,11 +856,11 @@ public class Worker {
     }
 
     static class ConnectorStatusMetricsGroup {
-        private ConnectMetrics connectMetrics;
-        private ConnectMetricsRegistry registry;
-        private ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
-        private Herder herder;
-        private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
+        private final ConnectMetrics connectMetrics;
+        private final ConnectMetricsRegistry registry;
+        private final ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
+        private final Herder herder;
+        private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
 
 
         protected ConnectorStatusMetricsGroup(
