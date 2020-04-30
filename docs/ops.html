@@ -886,7 +886,7 @@
         <td></td>
       </tr>
       <tr>
-        <td># of under replicated partitions (|ISR| &lt |all replicas|)</td>
+        <td># of under replicated partitions (the number of non-reassigning replicas - the number of ISR &gt 0)</td>
         <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
         <td>0</td>
       </tr>
@@ -1103,6 +1103,21 @@
         <td>Consumer Group Count, per State</td>
         <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
         <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+      </tr>
+      <tr>
+        <td>Number of reassigning partitions</td>
+        <td>kafka.server:type=ReplicaManager,name=ReassigningPartitions</td>
+        <td>The number of reassigning leader partitions on a broker.</td>
+      </tr>
+      <tr>
+        <td>Outgoing byte rate of reassignment traffic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Incoming byte rate of reassignment traffic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
+        <td></td>
       </tr>
   </tbody></table>
 
