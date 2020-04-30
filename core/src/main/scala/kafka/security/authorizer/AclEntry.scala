@@ -105,7 +105,7 @@ object AclEntry {
     // Escape backslash and retry to handle these strings which may have been persisted in ZK.
     // Note that this does not handle all special characters (e.g. non-escaped double quotes are not supported)
     Json.tryParseBytes(input) match {
-      case Left(e) =>
+      case Left(_) =>
         val escapedInput = new String(input, StandardCharsets.UTF_8).replaceAll("\\\\", "\\\\\\\\")
         Json.parseFull(escapedInput)
       case Right(v) => Some(v)
