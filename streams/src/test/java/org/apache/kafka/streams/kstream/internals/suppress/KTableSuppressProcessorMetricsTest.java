@@ -18,7 +18,9 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -26,8 +28,10 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -42,6 +46,8 @@ import java.util.Properties;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
@@ -49,6 +55,7 @@ import static org.hamcrest.core.Is.is;
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
+    public static final String NODE_NAME = "testNode";
     private Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
     private final String threadId = Thread.currentThread().getName();
 
@@ -59,7 +66,7 @@ public class KTableSuppressProcessorMetricsTest {
         mkMap(
             mkEntry("client-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry("processor-node-id", NODE_NAME)
         )
     );
 
@@ -70,7 +77,7 @@ public class KTableSuppressProcessorMetricsTest {
         mkMap(
             mkEntry("thread-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry("processor-node-id", NODE_NAME)
         )
     );
 
@@ -81,7 +88,7 @@ public class KTableSuppressProcessorMetricsTest {
         mkMap(
             mkEntry("client-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry("processor-node-id", NODE_NAME)
         )
     );
 
@@ -92,7 +99,7 @@ public class KTableSuppressProcessorMetricsTest {
         mkMap(
             mkEntry("thread-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry("processor-node-id", NODE_NAME)
         )
     );
 
@@ -235,9 +242,12 @@ public class KTableSuppressProcessorMetricsTest {
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context =
-            new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(
+            streamsConfig,
+            TestUtils.tempDirectory(),
+            new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()))
+        );
+        context.setCurrentNode(new ProcessorNode<>(NODE_NAME));
 
         buffer.init(context, buffer);
         processor.init(context);

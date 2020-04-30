@@ -29,12 +29,14 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -80,7 +82,7 @@ public class CachingSessionStoreTest {
 
     private SessionStore<Bytes, byte[]> underlyingStore =
         new InMemorySessionStore("store-name", Long.MAX_VALUE, "metric-scope");
-    private InternalMockProcessorContext context;
+    private InternalProcessorContext<Object, Object> context;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
 
@@ -88,7 +90,7 @@ public class CachingSessionStoreTest {
     public void before() {
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context = new MockInternalProcessorContext(StreamsTestUtils.getStreamsConfig(), TestUtils.tempDirectory(), cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
     }
@@ -184,7 +186,7 @@ public class CachingSessionStoreTest {
         EasyMock.replay(underlyingStore);
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = EasyMock.niceMock(ThreadCache.class);
-        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context = new MockInternalProcessorContext(StreamsTestUtils.getStreamsConfig(), TestUtils.tempDirectory(), cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         cachingStore.init(context, cachingStore);
     }

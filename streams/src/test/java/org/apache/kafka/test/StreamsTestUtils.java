@@ -222,4 +222,12 @@ public final class StreamsTestUtils {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
     }
+
+    public static boolean containsMetric(final Map<MetricName, ? extends Metric> metrics,
+                                         final String name,
+                                         final String group,
+                                         final Map<String, String> tags) {
+        final MetricName metricName = new MetricName(name, group, "", tags);
+        return metrics.containsKey(metricName);
+    }
 }

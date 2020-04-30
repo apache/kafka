@@ -16,23 +16,25 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
+    private MockInternalProcessorContext context;
     private final RecordCollector recordCollector = new MockRecordCollector();
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
@@ -42,13 +44,18 @@ public class SinkNodeTest {
 
     @Before
     public void before() {
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class);
+        context = new MockInternalProcessorContext(properties, new Metrics());
+        context.setRecordCollector(recordCollector);
         sink.init(context);
     }
 
     @Test
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
         // When/Then
-        context.setTime(-1); // ensures a negative timestamp is set for the record we send next
+        context.setTimestamp(-1); // ensures a negative timestamp is set for the record we send next
         try {
             illTypedSink.process("any key".getBytes(), "any value".getBytes());
             fail("Should have thrown StreamsException");
@@ -56,5 +63,4 @@ public class SinkNodeTest {
             // expected
         }
     }
-
 }

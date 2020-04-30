@@ -65,7 +65,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() {
-        context.setTime(1L);
+        context.setTimestamp(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.range(1, 2);
@@ -76,7 +76,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() {
-        context.setTime(1L);
+        context.setTimestamp(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.all();
@@ -87,7 +87,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
-        context.setTime(1L);
+        context.setTimestamp(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);

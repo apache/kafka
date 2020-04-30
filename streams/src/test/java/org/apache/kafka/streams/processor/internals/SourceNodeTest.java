@@ -16,26 +16,34 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_MAX_CACHE_SIZE_BYTES;
+import static org.apache.kafka.test.MockInternalProcessorContext.DEFAULT_THREAD_CACHE_PREFIX;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -81,9 +89,14 @@ public class SourceNodeTest {
     }
 
     private void shouldExposeProcessMetrics(final String builtInMetricsVersion) {
-        final Metrics metrics = new Metrics();
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
+        final Properties properties = StreamsTestUtils.getStreamsConfig();
+        properties.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final InternalProcessorContext<Object, Object> context = new MockInternalProcessorContext(
+                properties,
+                TestUtils.tempDirectory(),
+                new ThreadCache(new LogContext(DEFAULT_THREAD_CACHE_PREFIX), DEFAULT_MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()))
+        );
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), Collections.singletonList("topic"), new TheDeserializer(), new TheDeserializer());
         node.init(context);
@@ -118,8 +131,13 @@ public class SourceNodeTest {
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
 
             final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
-            final Sensor processSensor =
-                metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
+            final Sensor processSensor = context.metrics().nodeLevelSensor(
+                threadId,
+                context.taskId().toString(),
+                context.currentNode().name(),
+                "process",
+                Sensor.RecordingLevel.DEBUG
+            );
             final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
             assertThat(
                 sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
