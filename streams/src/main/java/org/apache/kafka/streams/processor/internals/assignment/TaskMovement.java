@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
-
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -39,6 +38,16 @@ class TaskMovement {
         if (caughtUpClients == null || caughtUpClients.isEmpty()) {
             throw new IllegalStateException("Should not attempt to move a task if no caught up clients exist");
         }
+    }
+
+    /**
+     * @return true if this client is caught-up for this task, or the task has no caught-up clients
+     */
+    private static boolean taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(final TaskId task,
+                                                                          final UUID client,
+                                                                          final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
+        return caughtUpClients == null || caughtUpClients.contains(client);
     }
 
     /**
