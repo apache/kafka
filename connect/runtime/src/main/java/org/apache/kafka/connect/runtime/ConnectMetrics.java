@@ -64,21 +64,20 @@ public class ConnectMetrics {
      * @param time     the time; may not be null
      */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
-        this(workerId, time, config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG),
-                config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG),
-                config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class));
-    }
-
-    public ConnectMetrics(String workerId, Time time, int numSamples, long sampleWindowMs, String metricsRecordingLevel,
-                          List<MetricsReporter> reporters) {
         this.workerId = workerId;
         this.time = time;
+
+        int numSamples = config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG);
+        long sampleWindowMs = config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG);
+        String metricsRecordingLevel = config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG);
+        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
 
         MetricConfig metricConfig = new MetricConfig().samples(numSamples)
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
-        reporters.add(new JmxReporter(JMX_PREFIX));
+        JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        jmxReporter.configure(config.originals());
+        reporters.add(jmxReporter);
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
         AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics, time.milliseconds());
@@ -305,12 +304,7 @@ public class ConnectMetrics {
         public <T> void addValueMetric(MetricNameTemplate nameTemplate, final LiteralSupplier<T> supplier) {
             MetricName metricName = metricName(nameTemplate);
             if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, new Gauge<T>() {
-                    @Override
-                    public T value(MetricConfig config, long now) {
-                        return supplier.metricValue(now);
-                    }
-                });
+                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> supplier.metricValue(now));
             }
         }
 
@@ -324,12 +318,7 @@ public class ConnectMetrics {
         public <T> void addImmutableValueMetric(MetricNameTemplate nameTemplate, final T value) {
             MetricName metricName = metricName(nameTemplate);
             if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, new Gauge<T>() {
-                    @Override
-                    public T value(MetricConfig config, long now) {
-                        return value;
-                    }
-                });
+                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> value);
             }
         }
 

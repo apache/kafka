@@ -22,12 +22,13 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.IntGaugeSuite;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -40,17 +41,16 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -90,7 +90,7 @@ public class Selector implements Selectable, AutoCloseable {
     public static final int NO_FAILED_AUTHENTICATION_DELAY = 0;
 
     private enum CloseMode {
-        GRACEFUL(true),            // process outstanding staged receives, notify disconnect
+        GRACEFUL(true),            // process outstanding buffered receives, notify disconnect
         NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
         DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
 
@@ -107,8 +107,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
     private final List<Send> completedSends;
-    private final List<NetworkReceive> completedReceives;
-    private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+    private final LinkedHashMap<KafkaChannel, NetworkReceive> completedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
@@ -167,21 +166,20 @@ public class Selector implements Selectable, AutoCloseable {
         this.explicitlyMutedChannels = new HashSet<>();
         this.outOfMemory = false;
         this.completedSends = new ArrayList<>();
-        this.completedReceives = new ArrayList<>();
-        this.stagedReceives = new HashMap<>();
+        this.completedReceives = new LinkedHashMap<>();
         this.immediatelyConnectedKeys = new HashSet<>();
         this.closingChannels = new HashMap<>();
         this.keysWithBufferedRead = new HashSet<>();
         this.connected = new ArrayList<>();
         this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
+        this.log = logContext.logger(Selector.class);
         this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
         this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
-        this.log = logContext.logger(Selector.class);
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
     }
@@ -312,6 +310,11 @@ public class Selector implements Selectable, AutoCloseable {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
+        // Default to empty client information as the ApiVersionsRequest is not
+        // mandatory. In this case, we still want to account for the connection.
+        ChannelMetadataRegistry metadataRegistry = this.channel(id).channelMetadataRegistry();
+        if (metadataRegistry.clientInformation() == null)
+            metadataRegistry.registerClientInformation(ClientInformation.EMPTY);
     }
 
     private void ensureNotRegistered(String id) {
@@ -332,7 +335,8 @@ public class Selector implements Selectable, AutoCloseable {
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
+                new SelectorChannelMetadataRegistry());
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -421,11 +425,10 @@ public class Selector implements Selectable, AutoCloseable {
      * This requires additional buffers to be maintained as we are reading from network, since the data on the wire is encrypted
      * we won't be able to read exact no.of bytes as kafka protocol requires. We read as many bytes as we can, up to SSLEngine's
      * application buffer size. This means we might be reading additional bytes than the requested size.
-     * If there is no further data to read from socketChannel selector won't invoke that channel and we've have additional bytes
-     * in the buffer. To overcome this issue we added "stagedReceives" map which contains per-channel deque. When we are
-     * reading a channel we read as many responses as we can and store them into "stagedReceives" and pop one response during
-     * the poll to add the completedReceives. If there are any active channels in the "stagedReceives" we set "timeout" to 0
-     * and pop response and add to the completedReceives.
+     * If there is no further data to read from socketChannel selector won't invoke that channel and we have additional bytes
+     * in the buffer. To overcome this issue we added "keysWithBufferedRead" map which tracks channels which have data in the SSL
+     * buffers. If there are channels with buffered data that can by processed, we set "timeout" to 0 and process the data even
+     * if there is no more data to read from the socket.
      *
      * Atmost one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
      * requests from a channel are processed on the broker in the order they are sent. Since outstanding requests added
@@ -447,7 +450,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         boolean dataInBuffers = !keysWithBufferedRead.isEmpty();
 
-        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty() || (madeReadProgressLastCall && dataInBuffers))
+        if (!immediatelyConnectedKeys.isEmpty() || (madeReadProgressLastCall && dataInBuffers))
             timeout = 0;
 
         if (!memoryPool.isOutOfMemory() && outOfMemory) {
@@ -498,10 +501,6 @@ public class Selector implements Selectable, AutoCloseable {
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
-
-        // Add to completedReceives after closing expired connections to avoid removing
-        // channels with completed receives until all staged receives are completed.
-        addToCompletedReceives();
     }
 
     /**
@@ -531,6 +530,7 @@ public class Selector implements Selectable, AutoCloseable {
                     if (channel.finishConnect()) {
                         this.connected.add(nodeId);
                         this.sensors.connectionCreated.record();
+
                         SocketChannel socketChannel = (SocketChannel) key.channel();
                         log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
                                 socketChannel.socket().getReceiveBufferSize(),
@@ -564,12 +564,21 @@ public class Selector implements Selectable, AutoCloseable {
                         log.debug("Successfully {}authenticated with {}", isReauthentication ?
                             "re-" : "", channel.socketDescription());
                     }
-                    List<NetworkReceive> responsesReceivedDuringReauthentication = channel
-                            .getAndClearResponsesReceivedDuringReauthentication();
-                    responsesReceivedDuringReauthentication.forEach(receive -> addToStagedReceives(channel, receive));
                 }
+                if (channel.ready() && channel.state() == ChannelState.NOT_CONNECTED)
+                    channel.state(ChannelState.READY);
+                Optional<NetworkReceive> responseReceivedDuringReauthentication = channel.pollResponseReceivedDuringReauthentication();
+                responseReceivedDuringReauthentication.ifPresent(receive -> {
+                    long currentTimeMs = time.milliseconds();
+                    addToCompletedReceives(channel, receive, currentTimeMs);
+                });
 
-                attemptRead(key, channel);
+                //if channel is ready and has bytes to read from socket or buffer, and has no
+                //previous completed receive then read from it
+                if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasCompletedReceive(channel)
+                        && !explicitlyMutedChannels.contains(channel)) {
+                    attemptRead(channel);
+                }
 
                 if (channel.hasBytesBuffered()) {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
@@ -663,37 +672,43 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private void attemptRead(SelectionKey key, KafkaChannel channel) throws IOException {
-        //if channel is ready and has bytes to read from socket or buffer, and has no
-        //previous receive(s) already staged or otherwise in progress then read from it
-        if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasStagedReceive(channel)
-            && !explicitlyMutedChannels.contains(channel)) {
+    private void attemptRead(KafkaChannel channel) throws IOException {
+        String nodeId = channel.id();
 
-            String nodeId = channel.id();
+        long bytesReceived = channel.read();
+        if (bytesReceived != 0) {
+            long currentTimeMs = time.milliseconds();
+            sensors.recordBytesReceived(nodeId, bytesReceived, currentTimeMs);
+            madeReadProgressLastPoll = true;
 
-            while (true) {
-                long bytesReceived = channel.read();
-                if (bytesReceived == 0)
-                    break;
-
-                long currentTimeMs = time.milliseconds();
-                sensors.recordBytesReceived(nodeId, bytesReceived, currentTimeMs);
-                madeReadProgressLastPoll = true;
-
-                NetworkReceive receive = channel.maybeCompleteReceive();
-                if (receive == null)
-                    break;
-
-                sensors.recordCompletedReceive(nodeId, receive.size(), currentTimeMs);
-                addToStagedReceives(channel, receive);
-            }
-
-            if (channel.isMuted()) {
-                outOfMemory = true; //channel has muted itself due to memory pressure.
-            } else {
-                madeReadProgressLastPoll = true;
+            NetworkReceive receive = channel.maybeCompleteReceive();
+            if (receive != null) {
+                addToCompletedReceives(channel, receive, currentTimeMs);
             }
         }
+        if (channel.isMuted()) {
+            outOfMemory = true; //channel has muted itself due to memory pressure.
+        } else {
+            madeReadProgressLastPoll = true;
+        }
+    }
+
+    private boolean maybeReadFromClosingChannel(KafkaChannel channel) {
+        boolean hasPending;
+        if (channel.state().state() != ChannelState.State.READY)
+            hasPending = false;
+        else if (explicitlyMutedChannels.contains(channel) || hasCompletedReceive(channel))
+            hasPending = true;
+        else {
+            try {
+                attemptRead(channel);
+                hasPending = hasCompletedReceive(channel);
+            } catch (Exception e) {
+                log.trace("Read from closing channel failed, ignoring exception", e);
+                hasPending = false;
+            }
+        }
+        return hasPending;
     }
 
     // Record time spent in pollSelectionKeys for channel (moved into a method to keep checkstyle happy)
@@ -708,8 +723,8 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     @Override
-    public List<NetworkReceive> completedReceives() {
-        return this.completedReceives;
+    public Collection<NetworkReceive> completedReceives() {
+        return this.completedReceives.values();
     }
 
     @Override
@@ -797,12 +812,14 @@ public class Selector implements Selectable, AutoCloseable {
         this.connected.clear();
         this.disconnected.clear();
 
-        // Remove closed channels after all their staged receives have been processed or if a send was requested
+        // Remove closed channels after all their buffered receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
-            Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
             boolean sendFailed = failedSends.remove(channel.id());
-            if (deque == null || deque.isEmpty() || sendFailed) {
+            boolean hasPending = false;
+            if (!sendFailed)
+                hasPending = maybeReadFromClosingChannel(channel);
+            if (!hasPending || sendFailed) {
                 doClose(channel, true);
                 it.remove();
             }
@@ -868,7 +885,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     /**
      * Begin closing this connection.
-     * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but staged receives
+     * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but outstanding receives
      * are processed. The channel is closed when there are no outstanding receives or if a send is
      * requested. For other values of `closeMode`, outstanding receives are discarded and the channel
      * is closed immediately.
@@ -889,9 +906,7 @@ public class Selector implements Selectable, AutoCloseable {
         // handle close(). When the remote end closes its connection, the channel is retained until
         // a send fails or all outstanding receives are processed. Mute state of disconnected channels
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
-        Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-        if (closeMode == CloseMode.GRACEFUL && deque != null && !deque.isEmpty()) {
-            // stagedReceives will be moved to completedReceives later along with receives from other channels
+        if (closeMode == CloseMode.GRACEFUL && maybeReadFromClosingChannel(channel)) {
             closingChannels.put(channel.id(), channel);
             log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else {
@@ -918,8 +933,9 @@ public class Selector implements Selectable, AutoCloseable {
             key.cancel();
             key.attach(null);
         }
+
         this.sensors.connectionClosed.record();
-        this.stagedReceives.remove(channel);
+        this.completedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)
             this.disconnected.put(channel.id(), channel.state());
@@ -996,57 +1012,21 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
-     * Check if given channel has a staged receive
+     * Check if given channel has a completed receive
      */
-    private boolean hasStagedReceive(KafkaChannel channel) {
-        return stagedReceives.containsKey(channel);
+    private boolean hasCompletedReceive(KafkaChannel channel) {
+        return completedReceives.containsKey(channel);
     }
 
     /**
-     * check if stagedReceives have unmuted channel
+     * adds a receive to completed receives
      */
-    private boolean hasStagedReceives() {
-        for (KafkaChannel channel : this.stagedReceives.keySet()) {
-            if (!channel.isMuted())
-                return true;
-        }
-        return false;
-    }
+    private void addToCompletedReceives(KafkaChannel channel, NetworkReceive networkReceive, long currentTimeMs) {
+        if (hasCompletedReceive(channel))
+            throw new IllegalStateException("Attempting to add second completed receive to channel " + channel.id());
 
-
-    /**
-     * adds a receive to staged receives
-     */
-    private void addToStagedReceives(KafkaChannel channel, NetworkReceive receive) {
-        if (!stagedReceives.containsKey(channel))
-            stagedReceives.put(channel, new ArrayDeque<>());
-
-        Deque<NetworkReceive> deque = stagedReceives.get(channel);
-        deque.add(receive);
-    }
-
-    /**
-     * checks if there are any staged receives and adds to completedReceives
-     */
-    private void addToCompletedReceives() {
-        if (!this.stagedReceives.isEmpty()) {
-            Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet().iterator();
-            while (iter.hasNext()) {
-                Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
-                KafkaChannel channel = entry.getKey();
-                if (!explicitlyMutedChannels.contains(channel)) {
-                    Deque<NetworkReceive> deque = entry.getValue();
-                    addToCompletedReceives(channel, deque);
-                    if (deque.isEmpty())
-                        iter.remove();
-                }
-            }
-        }
-    }
-
-    private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
-        NetworkReceive networkReceive = stagedDeque.poll();
-        this.completedReceives.add(networkReceive);
+        this.completedReceives.put(channel, networkReceive);
+        sensors.recordCompletedReceive(channel.id(), networkReceive.size(), currentTimeMs);
     }
 
     // only for testing
@@ -1054,10 +1034,57 @@ public class Selector implements Selectable, AutoCloseable {
         return new HashSet<>(nioSelector.keys());
     }
 
-    // only for testing
-    public int numStagedReceives(KafkaChannel channel) {
-        Deque<NetworkReceive> deque = stagedReceives.get(channel);
-        return deque == null ? 0 : deque.size();
+
+    class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
+        private CipherInformation cipherInformation;
+        private ClientInformation clientInformation;
+
+        @Override
+        public void registerCipherInformation(final CipherInformation cipherInformation) {
+            if (this.cipherInformation != null) {
+                if (this.cipherInformation.equals(cipherInformation))
+                    return;
+                sensors.connectionsByCipher.decrement(this.cipherInformation);
+            }
+
+            this.cipherInformation = cipherInformation;
+            sensors.connectionsByCipher.increment(cipherInformation);
+        }
+
+        @Override
+        public CipherInformation cipherInformation() {
+            return cipherInformation;
+        }
+
+        @Override
+        public void registerClientInformation(final ClientInformation clientInformation) {
+            if (this.clientInformation != null) {
+                if (this.clientInformation.equals(clientInformation))
+                    return;
+                sensors.connectionsByClient.decrement(this.clientInformation);
+            }
+
+            this.clientInformation = clientInformation;
+            sensors.connectionsByClient.increment(clientInformation);
+        }
+
+        @Override
+        public ClientInformation clientInformation() {
+            return clientInformation;
+        }
+
+        @Override
+        public void close() {
+            if (this.cipherInformation != null) {
+                sensors.connectionsByCipher.decrement(this.cipherInformation);
+                this.cipherInformation = null;
+            }
+
+            if (this.clientInformation != null) {
+                sensors.connectionsByClient.decrement(this.clientInformation);
+                this.clientInformation = null;
+            }
+        }
     }
 
     class SelectorMetrics implements AutoCloseable {
@@ -1081,6 +1108,8 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor responsesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
+        public final IntGaugeSuite<CipherInformation> connectionsByCipher;
+        public final IntGaugeSuite<ClientInformation> connectionsByClient;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
@@ -1176,6 +1205,24 @@ public class Selector implements Selectable, AutoCloseable {
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
+
+            this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
+                cipherInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("cipher", cipherInformation.cipher());
+                    tags.put("protocol", cipherInformation.protocol());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this SSL cipher and protocol.", tags);
+                }, 100);
+
+            this.connectionsByClient = new IntGaugeSuite<>(log, "clients", metrics,
+                clientInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("clientSoftwareName", clientInformation.softwareName());
+                    tags.put("clientSoftwareVersion", clientInformation.softwareVersion());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this client and version.", tags);
+                }, 100);
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -1299,6 +1346,8 @@ public class Selector implements Selectable, AutoCloseable {
                 metrics.removeMetric(metricName);
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
+            connectionsByCipher.close();
+            connectionsByClient.close();
         }
     }
 

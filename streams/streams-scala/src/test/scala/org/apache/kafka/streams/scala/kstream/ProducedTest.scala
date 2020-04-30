@@ -23,8 +23,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.Serdes
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class ProducedTest extends FlatSpec with Matchers {

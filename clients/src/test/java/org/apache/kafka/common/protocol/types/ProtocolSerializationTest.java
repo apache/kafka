@@ -44,6 +44,7 @@ public class ProtocolSerializationTest {
                                  new Field("int64", Type.INT64),
                                  new Field("varint", Type.VARINT),
                                  new Field("varlong", Type.VARLONG),
+                                 new Field("float64", Type.FLOAT64),
                                  new Field("string", Type.STRING),
                                  new Field("compact_string", Type.COMPACT_STRING),
                                  new Field("nullable_string", Type.NULLABLE_STRING),
@@ -64,6 +65,7 @@ public class ProtocolSerializationTest {
                                              .set("int64", 1L)
                                              .set("varint", 300)
                                              .set("varlong", 500L)
+                                             .set("float64", 0.5D)
                                              .set("string", "1")
                                              .set("compact_string", "1")
                                              .set("nullable_string", null)
@@ -87,6 +89,16 @@ public class ProtocolSerializationTest {
         check(Type.INT16, (short) -11111, "INT16");
         check(Type.INT32, -11111111, "INT32");
         check(Type.INT64, -11111111111L, "INT64");
+        check(Type.FLOAT64, 2.5, "FLOAT64");
+        check(Type.FLOAT64, -0.5, "FLOAT64");
+        check(Type.FLOAT64, 1e300, "FLOAT64");
+        check(Type.FLOAT64, 0.0, "FLOAT64");
+        check(Type.FLOAT64, -0.0, "FLOAT64");
+        check(Type.FLOAT64, Double.MAX_VALUE, "FLOAT64");
+        check(Type.FLOAT64, Double.MIN_VALUE, "FLOAT64");
+        check(Type.FLOAT64, Double.NaN, "FLOAT64");
+        check(Type.FLOAT64, Double.NEGATIVE_INFINITY, "FLOAT64");
+        check(Type.FLOAT64, Double.POSITIVE_INFINITY, "FLOAT64");
         check(Type.STRING, "", "STRING");
         check(Type.STRING, "hello", "STRING");
         check(Type.STRING, "A\u00ea\u00f1\u00fcC", "STRING");

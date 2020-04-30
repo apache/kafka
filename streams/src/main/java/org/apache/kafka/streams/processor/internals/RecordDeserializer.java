@@ -28,12 +28,12 @@ import org.slf4j.Logger;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
-    private final SourceNode sourceNode;
-    private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final Logger log;
+    private final SourceNode<?, ?> sourceNode;
     private final Sensor droppedRecordsSensor;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    RecordDeserializer(final SourceNode sourceNode,
+    RecordDeserializer(final SourceNode<?, ?> sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
                        final Sensor droppedRecordsSensor) {
@@ -96,7 +96,7 @@ class RecordDeserializer {
         }
     }
 
-    SourceNode sourceNode() {
+    SourceNode<?, ?> sourceNode() {
         return sourceNode;
     }
 }

@@ -582,7 +582,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       TestUtils.grabConsoleOutputAndError(service.describeGroups())
       fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -602,7 +602,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupOffsets(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e : ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -622,12 +622,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupMembers(group, false)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException])// OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         try {
           service.collectGroupMembers(group, true)
           fail("The consumer group command should fail due to low initialization timeout (verbose)")
         } catch {
-          case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+          case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         }
     }
   }
@@ -648,7 +648,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupState(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 

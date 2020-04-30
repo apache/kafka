@@ -17,31 +17,44 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
+    private final String taskAssignorClass;
+
     private final String logPrefix;
     private final Logger log;
-    private final Integer numStandbyReplicas;
+    private final AssignmentConfigs assignmentConfigs;
     @SuppressWarnings("deprecation")
     private final org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private final String userEndPoint;
     private final TaskManager taskManager;
+    private final StreamsMetadataState streamsMetadataState;
+    private final Admin adminClient;
+    private final int adminClientTimeout;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
@@ -55,7 +68,7 @@ public final class AssignorConfiguration {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        assignmentConfigs = new AssignmentConfigs(streamsConfig);
 
         partitionGrouper = streamsConfig.getConfiguredInstance(
             StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
@@ -87,26 +100,76 @@ public final class AssignorConfiguration {
             userEndPoint = null;
         }
 
-        final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
-        if (o == null) {
-            final KafkaException fatalException = new KafkaException("TaskManager is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("TaskManager is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof TaskManager)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            taskManager = (TaskManager) o;
         }
 
-        if (!(o instanceof TaskManager)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof StreamsMetadataState)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), StreamsMetadataState.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            streamsMetadataState = (StreamsMetadataState) o;
         }
 
-        taskManager = (TaskManager) o;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("Admin is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
 
-        internalTopicManager = new InternalTopicManager(taskManager.adminClient(), streamsConfig);
+            if (!(o instanceof Admin)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), Admin.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            adminClient = (Admin) o;
+            internalTopicManager = new InternalTopicManager(adminClient, streamsConfig);
+        }
+
+        adminClientTimeout = streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
         copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
+
+        {
+            final String o = (String) configs.get(INTERNAL_TASK_ASSIGNOR_CLASS);
+            if (o == null) {
+                taskAssignorClass = HighAvailabilityTaskAssignor.class.getName();
+            } else {
+                taskAssignorClass = o;
+            }
+        }
     }
 
     public AtomicInteger getAssignmentErrorCode(final Map<String, ?> configs) {
@@ -127,8 +190,50 @@ public final class AssignorConfiguration {
         return (AtomicInteger) ai;
     }
 
+    public AtomicLong getNextProbingRebalanceMs(final Map<String, ?> configs) {
+        final Object al = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
+        if (al == null) {
+            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(al instanceof AtomicLong)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", al.getClass().getName(), AtomicLong.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        return (AtomicLong) al;
+    }
+
+    public Time getTime(final Map<String, ?> configs) {
+        final Object t = configs.get(InternalConfig.TIME);
+        if (t == null) {
+            final KafkaException fatalException = new KafkaException("time is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(t instanceof Time)) {
+            final KafkaException fatalException = new KafkaException(
+                String.format("%s is not an instance of %s", t.getClass().getName(), Time.class.getName())
+            );
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        return (Time) t;
+    }
+
     public TaskManager getTaskManager() {
         return taskManager;
+    }
+
+    public StreamsMetadataState getStreamsMetadataState() {
+        return streamsMetadataState;
     }
 
     public RebalanceProtocol rebalanceProtocol() {
@@ -195,10 +300,6 @@ public final class AssignorConfiguration {
         return priorVersion;
     }
 
-    public int getNumStandbyReplicas() {
-        return numStandbyReplicas;
-    }
-
     @SuppressWarnings("deprecation")
     public org.apache.kafka.streams.processor.PartitionGrouper getPartitionGrouper() {
         return partitionGrouper;
@@ -208,11 +309,64 @@ public final class AssignorConfiguration {
         return userEndPoint;
     }
 
+    public Admin getAdminClient() {
+        return adminClient;
+    }
+
+    public int getAdminClientTimeout() {
+        return adminClientTimeout;
+    }
+
     public InternalTopicManager getInternalTopicManager() {
         return internalTopicManager;
     }
 
     public CopartitionedTopicsEnforcer getCopartitionedTopicsEnforcer() {
         return copartitionedTopicsEnforcer;
+    }
+
+    public AssignmentConfigs getAssignmentConfigs() {
+        return assignmentConfigs;
+    }
+
+    public TaskAssignor getTaskAssignor() {
+        try {
+            return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
+        } catch (final ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
+                e
+            );
+        }
+    }
+
+    public static class AssignmentConfigs {
+        public final long acceptableRecoveryLag;
+        public final int balanceFactor;
+        public final int maxWarmupReplicas;
+        public final int numStandbyReplicas;
+        public final long probingRebalanceIntervalMs;
+
+        private AssignmentConfigs(final StreamsConfig configs) {
+            this(
+                configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
+                configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG),
+                configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
+                configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
+                configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG)
+            );
+        }
+
+        AssignmentConfigs(final Long acceptableRecoveryLag,
+                          final Integer balanceFactor,
+                          final Integer maxWarmupReplicas,
+                          final Integer numStandbyReplicas,
+                          final Long probingRebalanceIntervalMs) {
+            this.acceptableRecoveryLag = acceptableRecoveryLag;
+            this.balanceFactor = balanceFactor;
+            this.maxWarmupReplicas = maxWarmupReplicas;
+            this.numStandbyReplicas = numStandbyReplicas;
+            this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;
+        }
     }
 }

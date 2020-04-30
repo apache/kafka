@@ -50,13 +50,13 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
     SessionWindowedKStreamImpl(final SessionWindows windows,
                                final InternalStreamsBuilder builder,
-                               final Set<String> sourceNodes,
+                               final Set<String> subTopologySourceNodes,
                                final String name,
                                final Serde<K> keySerde,
                                final Serde<V> valSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, valSerde, subTopologySourceNodes, streamsGraphNode, builder);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;

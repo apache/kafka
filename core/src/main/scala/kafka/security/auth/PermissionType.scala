@@ -19,20 +19,24 @@ package kafka.security.auth
 import kafka.common.{BaseEnum, KafkaException}
 import org.apache.kafka.common.acl.AclPermissionType
 
+@deprecated("Use org.apache.kafka.common.acl.AclPermissionType", "Since 2.5")
 sealed trait PermissionType extends BaseEnum {
   val toJava: AclPermissionType
 }
 
+@deprecated("Use org.apache.kafka.common.acl.AclPermissionType", "Since 2.5")
 case object Allow extends PermissionType {
   val name = "Allow"
   val toJava = AclPermissionType.ALLOW
 }
 
+@deprecated("Use org.apache.kafka.common.acl.AclPermissionType", "Since 2.5")
 case object Deny extends PermissionType {
   val name = "Deny"
   val toJava = AclPermissionType.DENY
 }
 
+@deprecated("Use org.apache.kafka.common.acl.AclPermissionType", "Since 2.5")
 object PermissionType {
   def fromString(permissionType: String): PermissionType = {
     val pType = values.find(pType => pType.name.equalsIgnoreCase(permissionType))

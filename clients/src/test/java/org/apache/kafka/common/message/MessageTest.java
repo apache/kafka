@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
@@ -104,9 +106,9 @@ public final class MessageTest {
     @Test
     public void testDescribeAclsRequest() throws Exception {
         testAllMessageRoundTrips(new DescribeAclsRequestData().
-                setResourceType((byte) 42).
+                setResourceTypeFilter((byte) 42).
                 setResourceNameFilter(null).
-                setResourcePatternType((byte) 3).
+                setPatternTypeFilter((byte) 3).
                 setPrincipalFilter("abc").
                 setHostFilter(null).
                 setOperation((byte) 0).
@@ -381,6 +383,9 @@ public final class MessageTest {
         String txnId = "transactionalId";
         int producerId = 25;
         short producerEpoch = 10;
+        String instanceId = "instance";
+        String memberId = "member";
+        int generationId = 1;
 
         int partition = 2;
         int offset = 100;
@@ -406,6 +411,9 @@ public final class MessageTest {
                       .setTransactionalId(txnId)
                       .setProducerId(producerId)
                       .setProducerEpoch(producerEpoch)
+                      .setGroupInstanceId(instanceId)
+                      .setMemberId(memberId)
+                      .setGenerationId(generationId)
                       .setTopics(Collections.singletonList(
                           new TxnOffsetCommitRequestTopic()
                               .setName(topicName)
@@ -419,8 +427,18 @@ public final class MessageTest {
 
         for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
             TxnOffsetCommitRequestData requestData = request.get();
-            if (version < 6) {
+            if (version < 2) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+            }
+
+            if (version < 3) {
+                final short finalVersion = version;
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setGroupInstanceId(null);
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setMemberId("");
+                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
+                requestData.setGenerationId(-1);
             }
 
             testAllMessageRoundTripsFromVersion(version, requestData);
@@ -450,27 +468,39 @@ public final class MessageTest {
         String groupId = "groupId";
         String topicName = "topic";
 
+        List<OffsetFetchRequestTopic> topics = Collections.singletonList(
+            new OffsetFetchRequestTopic()
+                .setName(topicName)
+                .setPartitionIndexes(Collections.singletonList(5)));
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setTopics(new ArrayList<>())
                                      .setGroupId(groupId));
 
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetFetchRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitionIndexes(Collections.singletonList(5))))
-        );
+                                     .setTopics(topics));
 
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
+
+        OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
+                                                       .setGroupId(groupId)
+                                                       .setTopics(topics)
+                                                       .setRequireStable(true);
+
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            final short finalVersion = version;
             if (version < 2) {
-                final short finalVersion = version;
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
+
+            if (version < 7) {
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
+            } else {
+                testAllMessageRoundTripsFromVersion(finalVersion, requireStableData);
             }
         }
 
@@ -578,6 +608,22 @@ public final class MessageTest {
         }
     }
 
+    @Test
+    public void testSimpleMessage() throws Exception {
+        final SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(
+            Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
+        ));
+        message.setMyTaggedStruct(new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc"));
+
+        message.setProcessId(UUID.randomUUID());
+        message.setMyNullableString("notNull");
+        message.setMyInt16((short) 3);
+        message.setMyString("test string");
+
+        testAllMessageRoundTripsFromVersion((short) 2, message);
+    }
+
     private void testAllMessageRoundTrips(Message message) throws Exception {
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
     }
@@ -610,6 +656,7 @@ public final class MessageTest {
     private void testEquivalentMessageRoundTrip(short version, Message message) throws Exception {
         testStructRoundTrip(version, message, message);
         testByteBufferRoundTrip(version, message, message);
+        testJsonRoundTrip(version, message, message);
     }
 
     private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
@@ -620,7 +667,7 @@ public final class MessageTest {
         message.write(byteBufferAccessor, cache, version);
         assertEquals("The result of the size function does not match the number of bytes " +
             "written for version " + version, size, buf.position());
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
         assertEquals("The result of the size function does not match the number of bytes " +
@@ -633,8 +680,17 @@ public final class MessageTest {
 
     private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
         Struct struct = message.toStruct(version);
-        Message message2 = message.getClass().newInstance();
+        Message message2 = message.getClass().getConstructor().newInstance();
         message2.fromStruct(struct, version);
+        assertEquals(expected, message2);
+        assertEquals(expected.hashCode(), message2.hashCode());
+        assertEquals(expected.toString(), message2.toString());
+    }
+
+    private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
+        JsonNode jsonNode = message.toJson(version);
+        Message message2 = message.getClass().newInstance();
+        message2.fromJson(jsonNode, version);
         assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
@@ -645,7 +701,7 @@ public final class MessageTest {
      * schemas accessible through the ApiKey class.
      */
     @Test
-    public void testMessageVersions() throws Exception {
+    public void testMessageVersions() {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Message message = null;
             try {

@@ -311,14 +311,9 @@ class ConnectDistributedTest(Test):
 
         self.cc.restart()
 
-        if connect_protocol == 'compatible':
-            timeout_sec = 120
-        else:
-            timeout_sec = 30
-
         # we should still be paused after restarting
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=timeout_sec,
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=120,
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=6)
@@ -350,14 +345,9 @@ class ConnectDistributedTest(Test):
         # only processing new data.
         self.cc.restart()
 
-        if connect_protocol == 'compatible':
-            timeout_sec = 150
-        else:
-            timeout_sec = 70
-
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=timeout_sec, err_msg="Sink output file never converged to the same state as the input file")
+        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=150, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=6)
     @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'])

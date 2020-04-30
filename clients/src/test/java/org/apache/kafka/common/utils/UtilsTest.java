@@ -30,11 +30,14 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -45,7 +48,11 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -70,8 +77,8 @@ public class UtilsTest {
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
         cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
-        for (Map.Entry c : cases.entrySet()) {
-            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
+        for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
+            assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
     }
 
@@ -452,6 +459,27 @@ public class UtilsTest {
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
 
+    @Test
+    public void testLoadProps() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "a=1\nb=2\n#a comment\n\nc=3\nd=";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            Properties props = Utils.loadProps(tempFile.getPath());
+            assertEquals(4, props.size());
+            assertEquals("1", props.get("a"));
+            assertEquals("2", props.get("b"));
+            assertEquals("3", props.get("c"));
+            assertEquals("", props.get("d"));
+            Properties restrictedProps = Utils.loadProps(tempFile.getPath(), Arrays.asList("b", "d", "e"));
+            assertEquals(2, restrictedProps.size());
+            assertEquals("2", restrictedProps.get("b"));
+            assertEquals("", restrictedProps.get("d"));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
     /**
      * Expectation setter for multiple reads where each one reads random bytes to the buffer.
      *
@@ -558,5 +586,15 @@ public class UtilsTest {
             fail("Expected exception not thrown");
         } catch (IllegalArgumentException e) {
         }
+    }
+
+    @Test
+    public void testUnion() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> union = union(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
     }
 }
