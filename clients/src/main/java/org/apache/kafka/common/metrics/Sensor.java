@@ -209,8 +209,7 @@ public final class Sensor {
                 if (quota != null) {
                     double value = metric.measurableValue(timeMs);
                     if (!quota.acceptable(value)) {
-                        throw new QuotaViolationException(metric.metricName(), value,
-                            quota.bound());
+                        throw new QuotaViolationException(metric, value, quota.bound());
                     }
                 }
             }
