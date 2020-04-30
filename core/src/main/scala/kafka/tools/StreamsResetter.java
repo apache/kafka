@@ -178,12 +178,6 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private void forceDeleteActiveConsumers(final String groupId,
-                                            final Admin adminClient) {
-        System.out.println("Force deleting all active members in the group: " + groupId);
-        adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(true)).all();
-    }
-
     private void maybeDeleteActiveConsumers(final String groupId,
                                             final Admin adminClient)
         throws ExecutionException, InterruptedException {
@@ -195,7 +189,8 @@ public class StreamsResetter {
             new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
         if (!members.isEmpty()) {
             if (options.has(forceOption)) {
-                forceDeleteActiveConsumers(groupId, adminClient);
+                System.out.println("Force deleting all active members in the group: " + groupId);
+                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(true)).all();
             } else {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
@@ -249,7 +244,8 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
-        forceOption = optionParser.accepts("force","force delete members");
+        forceOption = optionParser.accepts("force","Force remove members when long session time out has been configured, " +
+                "please make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
