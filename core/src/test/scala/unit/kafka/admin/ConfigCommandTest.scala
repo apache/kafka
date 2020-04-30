@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.{Ignore, Test}
+import org.junit.Test
 import org.scalatest.Assertions.intercept
 
 import scala.collection.{Seq, mutable}
@@ -51,7 +51,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldExitWithNonZeroStatusOnZkCommandError(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
@@ -89,19 +88,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
     testArgumentParse("clients", zkConfig = true)
   }
 
   @Test
-  @Ignore
   def shouldParseArgumentsForClientsEntityType(): Unit = {
     testArgumentParse("clients", zkConfig = false)
   }
 
   @Test
-  @Ignore
   def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
     testArgumentParse("users", zkConfig = true)
   }
@@ -263,7 +259,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testOptionEntityTypeNamesUsingZookeeper(): Unit = {
     doTestOptionEntityTypeNames(zkConfig = true)
   }
@@ -288,7 +283,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
@@ -303,7 +297,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
@@ -318,7 +311,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldFailIfMixedEntityTypeFlagsUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
@@ -333,7 +325,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldAddClientConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-client-id",
@@ -413,7 +404,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldAddTopicConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
@@ -522,7 +512,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldAddBrokerQuotaConfig(): Unit = {
     val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -558,7 +547,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
     val optsList = List("--zookeeper", "localhost:9092",
       "--entity-type", ConfigType.Broker,
@@ -601,7 +589,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  @Ignore
   def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
@@ -753,7 +740,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldSupportCommaSeparatedValuesUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
@@ -774,7 +760,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test (expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldNotUpdateBrokerConfigIfMalformedEntityNameUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1,2,3", //Don't support multiple brokers currently
@@ -795,7 +780,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testDynamicBrokerConfigUpdateUsingZooKeeper(): Unit = {
     val brokerId = "1"
     val adminZkClient = new AdminZkClient(zkClient)
@@ -891,7 +875,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test (expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldNotUpdateBrokerConfigIfMalformedConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -912,7 +895,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test (expected = classOf[IllegalArgumentException])
-  @Ignore
   def shouldNotUpdateBrokerConfigIfMalformedBracketConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -933,7 +915,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test (expected = classOf[InvalidConfigurationException])
-  @Ignore
   def shouldNotUpdateConfigIfNonExistingConfigIsDeletedUsingZookeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
@@ -976,7 +957,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def shouldDeleteBrokerConfig(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -1003,7 +983,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testScramCredentials(): Unit = {
     def createOpts(user: String, config: String): ConfigCommandOptions = {
       new ConfigCommandOptions(Array("--zookeeper", zkConnect,
@@ -1123,7 +1102,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testQuotaConfigEntityUsingZookeeper(): Unit = {
     doTestQuotaConfigEntity(zkConfig = true)
   }
@@ -1179,7 +1157,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  @Ignore
   def testUserClientQuotaOptsUsingZookeeper(): Unit = {
     doTestUserClientQuotaOpts(zkConfig = true)
   }

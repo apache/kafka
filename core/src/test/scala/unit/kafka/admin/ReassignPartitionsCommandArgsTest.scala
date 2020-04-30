@@ -19,7 +19,7 @@ package kafka.admin
 import kafka.utils.Exit
 import org.junit.Assert._
 import org.junit.rules.Timeout
-import org.junit.{After, Before, Ignore, Rule, Test}
+import org.junit.{After, Before, Rule, Test}
 
 class ReassignPartitionsCommandArgsTest {
   @Rule
@@ -56,7 +56,6 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  @Ignore
   def shouldCorrectlyParseValidMinimumLegacyExecuteOptions(): Unit = {
     val args = Array(
       "--zookeeper", "localhost:1234",
@@ -75,7 +74,6 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  @Ignore
   def shouldCorrectlyParseValidMinimumLegacyVerifyOptions(): Unit = {
     val args = Array(
       "--zookeeper", "localhost:1234",
@@ -234,7 +232,6 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  @Ignore
   def testInvalidCommandConfigArgumentForLegacyGenerate(): Unit = {
     val args = Array(
       "--zookeeper", "localhost:1234",
@@ -313,7 +310,6 @@ class ReassignPartitionsCommandArgsTest {
 
   ///// Test --list
   @Test
-  @Ignore
   def shouldNotAllowZooKeeperWithListOption(): Unit = {
     val args = Array(
       "--list",
