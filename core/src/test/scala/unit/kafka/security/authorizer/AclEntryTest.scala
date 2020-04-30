@@ -23,32 +23,28 @@ import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
-import org.scalatestplus.junit.JUnitSuite
-import scala.collection.Map
 
-class AclEntryTest extends JUnitSuite {
+class AclEntryTest {
 
   val AclJson = """{"version": 1, "acls": [{"host": "host1","permissionType": "Deny","operation": "READ", "principal": "User:alice"  },
     {  "host":  "*" ,  "permissionType": "Allow",  "operation":  "Read", "principal": "User:bob"  },
     {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob"},
-    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:\\bob"},
-    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob1\\bob2"}]}"""
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:\,bob"},
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob1\,bob2"}]}"""
 
   @Test
   def testAclJsonConversion(): Unit = {
     val acl1 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
     val acl2 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
     val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
-    val acl4 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "\\bob"), Deny, "host1", Read)
-    val acl5 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob1\\bob2"), Deny, "host1", Read)
+    val acl4 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "\\,bob"), DENY, "host1", READ)
+    val acl5 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob1\\,bob2"), DENY, "host1", READ)
 
     val acls = Set[AclEntry](acl1, acl2, acl3, acl4, acl5)
-    val jsonAcls = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)
 
-    Assert.assertEquals(acls, AclEntry.fromBytes(jsonAcls))
+    Assert.assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)))
     Assert.assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
   }
 }
