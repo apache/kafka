@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import java.util.Collection;
@@ -28,7 +29,7 @@ import java.util.Objects;
  * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
  * to exist per task in a JVM.
  */
-class ProcessingContext {
+class ProcessingContext implements AutoCloseable {
 
     private Collection<ErrorReporter> reporters = Collections.emptyList();
 
@@ -216,4 +217,19 @@ class ProcessingContext {
         this.reporters = reporters;
     }
 
+    @Override
+    public void close() {
+        ConnectException e = null;
+        for (ErrorReporter reporter : reporters) {
+            try {
+                reporter.close();
+            } catch (Throwable t) {
+                e = e != null ? e : new ConnectException("Failed to close all reporters");
+                e.addSuppressed(t);
+            }
+        }
+        if (e != null) {
+            throw e;
+        }
+    }
 }
