@@ -232,7 +232,6 @@ public class TaskAssignorConvergenceTest {
     @Test
     public void staticAssignmentShouldConvergeWithTheFirstAssignment() {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 2,
                                                                 0,
                                                                 1000L);
@@ -251,7 +250,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -273,7 +271,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -314,7 +311,6 @@ public class TaskAssignorConvergenceTest {
             final int numberOfEvents = prng.nextInt(10) + 1;
 
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                    1,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
                                                                     1000L);

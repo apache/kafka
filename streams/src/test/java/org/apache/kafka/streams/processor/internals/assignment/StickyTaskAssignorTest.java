@@ -668,7 +668,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, 0, 0L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, 0L)
         );
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -687,7 +687,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, numStandbys, 0L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 0, numStandbys, 0L)
         );
     }
 
