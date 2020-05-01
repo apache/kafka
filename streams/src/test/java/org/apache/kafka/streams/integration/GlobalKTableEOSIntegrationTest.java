@@ -151,20 +151,13 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+D");
         expected.put("e", "5+null");
 
-        try {
-            TestUtils.waitForCondition(
-                () -> results.equals(expected),
-                30000L,
-                "waiting for initial values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                    "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> results.equals(expected),
+            30000L,
+            () -> "waiting for initial values;" +
+                "\n  expected: " + expected +
+                "\n  received: " + results
+        );
 
 
         produceGlobalTableValues();
@@ -173,17 +166,11 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
-        try {
-            TestUtils.waitForCondition(
-                () -> "J".equals(replicatedStore.get(5L)),
-                30000,
-                "waiting for data in replicated store"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError("expected 'J'; got: " + replicatedStore.get(5L));
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> "J".equals(replicatedStore.get(5L)),
+            30000,
+            () -> "waiting for data in replicated store; expected 'J'; received: " + replicatedStore.get(5L)
+        );
 
 
         produceTopicValues(streamTopic);
@@ -194,20 +181,13 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        try {
-            TestUtils.waitForCondition(
-                () -> results.equals(expected),
-                30000L,
-                "waiting for final values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> results.equals(expected),
+            30000L,
+            () -> "waiting for final values" +
+                "\n  expected:" + expected +
+                "\n  received: " + results
+        );
     }
 
     @Test
@@ -224,20 +204,13 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("c", "3+C");
         expected.put("d", "4+D");
 
-        try {
-            TestUtils.waitForCondition(
-                () -> results.equals(expected),
-                30000L,
-                "waiting for initial values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                    "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> results.equals(expected),
+            30000L,
+            () -> "waiting for initial values" +
+                "\n  expected:" + expected +
+                "\n  received: " + results
+        );
 
 
         produceGlobalTableValues();
@@ -246,17 +219,11 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
-        try {
-            TestUtils.waitForCondition(
-                () -> "J".equals(replicatedStore.get(5L)),
-                30000,
-                "waiting for data in replicated store"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError("expected 'J'; got: " + replicatedStore.get(5L));
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> "J".equals(replicatedStore.get(5L)),
+            30000,
+            () -> "waiting for data in replicated store; expected 'J'; received: " + replicatedStore.get(5L)
+        );
 
 
         produceTopicValues(streamTopic);
@@ -267,20 +234,13 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        try {
-            TestUtils.waitForCondition(
-                () -> results.equals(expected),
-                30000L,
-                "waiting for final values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                    "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        TestUtils.waitForCondition(
+            () -> results.equals(expected),
+            30000L,
+            () -> "waiting for final values" +
+                "\n  expected:" + expected +
+                "\n  received: " + results
+        );
     }
 
     @Test
@@ -299,29 +259,22 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        try {
-            final Map<Long, String> result = new HashMap<>();
-            TestUtils.waitForCondition(
-                () -> {
-                    result.clear();
-                    final Iterator<KeyValue<Long, String>> it = store.all();
-                    while (it.hasNext()) {
-                        final KeyValue<Long, String> kv = it.next();
-                        result.put(kv.key, kv.value);
-                    }
-                    return result.equals(expected);
-                },
-                30000L,
-                "waiting for initial values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                    "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        final Map<Long, String> result = new HashMap<>();
+        TestUtils.waitForCondition(
+            () -> {
+                result.clear();
+                final Iterator<KeyValue<Long, String>> it = store.all();
+                while (it.hasNext()) {
+                    final KeyValue<Long, String> kv = it.next();
+                    result.put(kv.key, kv.value);
+                }
+                return result.equals(expected);
+            },
+            30000L,
+            () -> "waiting for initial values" +
+                "\n  expected:" + expected +
+                "\n  received: " + results
+        );
     }
     
     @Test
@@ -342,29 +295,22 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        try {
-            final Map<Long, String> result = new HashMap<>();
-            TestUtils.waitForCondition(
-                () -> {
-                    result.clear();
-                    final Iterator<KeyValue<Long, String>> it = store.all();
-                    while (it.hasNext()) {
-                        final KeyValue<Long, String> kv = it.next();
-                        result.put(kv.key, kv.value);
-                    }
-                    return result.equals(expected);
-                },
-                30000L,
-                "waiting for initial values"
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError(
-                "result: " + results +
-                    "\nexpected: " + expected
-            );
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        final Map<Long, String> result = new HashMap<>();
+        TestUtils.waitForCondition(
+            () -> {
+                result.clear();
+                final Iterator<KeyValue<Long, String>> it = store.all();
+                while (it.hasNext()) {
+                    final KeyValue<Long, String> kv = it.next();
+                    result.put(kv.key, kv.value);
+                }
+                return result.equals(expected);
+            },
+            30000L,
+            () -> "waiting for initial values" +
+                "\n  expected:" + expected +
+                "\n  received: " + results
+        );
     }
 
     private void createTopics() throws Exception {
