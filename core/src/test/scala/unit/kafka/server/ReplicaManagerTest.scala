@@ -554,14 +554,16 @@ class ReplicaManagerTest {
         }
       }
 
-      // Fetch a message above the high watermark as a follower
+      // Followers are always allowed to fetch above the high watermark
       val followerFetchResult = fetchAsFollower(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
       assertEquals("Should not give an exception", Errors.NONE, followerFetchData.error)
       assertTrue("Should return some data", followerFetchData.records.batches.iterator.hasNext)
 
-      // Fetch a message above the high watermark as a consumer
+      // Consumers are not allowed to consume above the high watermark. However, since the
+      // high watermark could be stale at the time of the request, we do not return an out of
+      // range error and instead return an empty record set.
       val consumerFetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
