@@ -33,22 +33,9 @@ import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResp
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class KafkaNetworkChannel(time: Time,
-                          client: KafkaClient,
-                          clientId: String,
-                          retryBackoffMs: Int,
-                          requestTimeoutMs: Int) extends NetworkChannel {
-  type ResponseHandler = AbstractResponse => Unit
+object KafkaNetworkChannel {
 
-  private val requestIdCounter = new AtomicInteger(0)
-  private val pendingInbound = mutable.Map.empty[Long, ResponseHandler]
-  private val undelivered = new ArrayBlockingQueue[RaftMessage](10)
-  private val pendingOutbound = new ArrayBlockingQueue[RaftRequest.Outbound](10)
-  private val endpoints = mutable.HashMap.empty[Int, Node]
-
-  override def newRequestId(): Int = requestIdCounter.getAndIncrement()
-
-  private def buildResponse(responseData: ApiMessage): AbstractResponse = {
+  private[raft] def buildResponse(responseData: ApiMessage): AbstractResponse = {
     responseData match {
       case voteResponse: VoteResponseData =>
         new VoteResponse(voteResponse)
@@ -63,7 +50,7 @@ class KafkaNetworkChannel(time: Time,
     }
   }
 
-  private def buildRequest(requestData: ApiMessage): AbstractRequest.Builder[_ <: AbstractRequest] = {
+  private[raft] def buildRequest(requestData: ApiMessage): AbstractRequest.Builder[_ <: AbstractRequest] = {
     requestData match {
       case voteRequest: VoteRequestData =>
         new VoteRequest.Builder(voteRequest)
@@ -77,6 +64,24 @@ class KafkaNetworkChannel(time: Time,
         new FindQuorumRequest.Builder(findLeaderRequest)
     }
   }
+}
+
+class KafkaNetworkChannel(time: Time,
+                          client: KafkaClient,
+                          clientId: String,
+                          retryBackoffMs: Int,
+                          requestTimeoutMs: Int) extends NetworkChannel {
+  import KafkaNetworkChannel._
+
+  type ResponseHandler = AbstractResponse => Unit
+
+  private val requestIdCounter = new AtomicInteger(0)
+  private val pendingInbound = mutable.Map.empty[Long, ResponseHandler]
+  private val undelivered = new ArrayBlockingQueue[RaftMessage](10)
+  private val pendingOutbound = new ArrayBlockingQueue[RaftRequest.Outbound](10)
+  private val endpoints = mutable.HashMap.empty[Int, Node]
+
+  override def newRequestId(): Int = requestIdCounter.getAndIncrement()
 
   private def buildClientRequest(req: RaftRequest.Outbound): ClientRequest = {
     val destination = req.destinationId.toString
@@ -107,7 +112,13 @@ class KafkaNetworkChannel(time: Time,
       val request = pendingOutbound.peek()
       endpoints.get(request.destinationId) match {
         case Some(node) =>
-          if (client.isReady(node, currentTimeMs)) {
+          if (client.connectionFailed(node)) {
+            pendingOutbound.poll()
+            val apiKey = ApiKeys.forId(request.data.apiKey)
+            val disconnectResponse = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
+            undelivered.offer(new RaftResponse.Inbound(
+              request.requestId, disconnectResponse, request.destinationId))
+          } else if (client.ready(node, currentTimeMs)) {
             pendingOutbound.poll()
             val clientRequest = buildClientRequest(request)
             client.send(clientRequest, currentTimeMs)
@@ -118,23 +129,12 @@ class KafkaNetworkChannel(time: Time,
 
         case None =>
           pendingOutbound.poll()
-          val responseData = errorResponseData(apiKeyForRequest(request), Errors.BROKER_NOT_AVAILABLE)
+          val apiKey = ApiKeys.forId(request.data.apiKey)
+          val responseData = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
           val response = new RaftResponse.Inbound(request.requestId, responseData, request.destinationId)
           if (!undelivered.offer(response))
             throw new KafkaException("Undelivered queue is full")
       }
-    }
-  }
-
-  private def apiKeyForRequest(request: RaftRequest): ApiKeys = {
-    // TODO: could probably push ApiKey into RaftRequest to make this annoying method go away
-    request.data match {
-      case _: VoteRequestData => ApiKeys.VOTE
-      case _: BeginQuorumEpochRequestData => ApiKeys.BEGIN_QUORUM_EPOCH
-      case _: EndQuorumEpochRequestData => ApiKeys.END_QUORUM_EPOCH
-      case _: FetchQuorumRecordsRequestData => ApiKeys.FETCH_QUORUM_RECORDS
-      case _: FindQuorumRequestData => ApiKeys.FIND_QUORUM
-      case _ => throw new IllegalArgumentException(s"Unknown request type ${request.data}")
     }
   }
 
@@ -175,10 +175,10 @@ class KafkaNetworkChannel(time: Time,
 
   private def buildInboundRaftResponse(response: ClientResponse): RaftResponse.Inbound = {
     val header = response.requestHeader()
-    val data = if (response.wasDisconnected) {
-      errorResponseData(header.apiKey, Errors.BROKER_NOT_AVAILABLE)
-    } else if (response.authenticationException != null) {
+    val data = if (response.authenticationException != null) {
       errorResponseData(header.apiKey, Errors.CLUSTER_AUTHORIZATION_FAILED)
+    } else if (response.wasDisconnected) {
+      errorResponseData(header.apiKey, Errors.BROKER_NOT_AVAILABLE)
     } else {
       responseData(response.responseBody)
     }

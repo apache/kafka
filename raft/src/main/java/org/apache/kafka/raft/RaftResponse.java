@@ -60,7 +60,7 @@ public abstract class RaftResponse implements RaftMessage {
     }
 
     public static class Outbound extends RaftResponse {
-        protected Outbound(int requestId, ApiMessage data) {
+        public Outbound(int requestId, ApiMessage data) {
             super(requestId, data);
         }
 

@@ -20,7 +20,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    {"name": "ClusterId", "type": "int32", "versions": "0+"},
+    {"name": "ClusterId", "type": "string", "versions": "0+"},
     {"name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The ID of the replica sending the request"},
     {"name": "LeaderEpoch", "type": "int32", "versions": "0+",
