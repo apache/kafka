@@ -99,8 +99,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final Map<UUID, List<TaskId>> statefulActiveTaskAssignment = new DefaultBalancedAssignor().assign(
             sortedClients,
             statefulTasks,
-            clientsToNumberOfThreads,
-            configs.balanceFactor
+            clientsToNumberOfThreads
         );
 
         return assignTaskMovements(

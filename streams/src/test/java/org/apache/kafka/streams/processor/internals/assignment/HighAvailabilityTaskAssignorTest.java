@@ -61,7 +61,6 @@ import static org.hamcrest.Matchers.not;
 public class HighAvailabilityTaskAssignorTest {
     private final AssignmentConfigs configWithoutStandbys = new AssignmentConfigs(
         /*acceptableRecoveryLag*/ 100L,
-        /*balanceFactor*/ 1,
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 0,
         /*probingRebalanceIntervalMs*/ 60 * 1000L
@@ -69,12 +68,10 @@ public class HighAvailabilityTaskAssignorTest {
 
     private final AssignmentConfigs configWithStandbys = new AssignmentConfigs(
         /*acceptableRecoveryLag*/ 100L,
-        /*balanceFactor*/ 1,
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 1,
         /*probingRebalanceIntervalMs*/ 60 * 1000L
     );
-
 
     @Test
     public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks() {
@@ -286,7 +283,6 @@ public class HighAvailabilityTaskAssignorTest {
             statefulTasks,
             new AssignmentConfigs(
                 /*acceptableRecoveryLag*/ 100L,
-                /*balanceFactor*/ 1,
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 0,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L
@@ -315,7 +311,6 @@ public class HighAvailabilityTaskAssignorTest {
             statefulTasks,
             new AssignmentConfigs(
                 /*acceptableRecoveryLag*/ 100L,
-                /*balanceFactor*/ 1,
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 1,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L
