@@ -131,26 +131,6 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void shouldReusePreviousAssignmentIfItIsAlreadyBalanced() {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);
-        final ClientState client2 =
-            new ClientState(singleton(TASK_0_1), emptySet(), mkMap(mkEntry(TASK_0_0, 0L), mkEntry(TASK_0_1, 0L)), 1);
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, client1),
-            mkEntry(UUID_2, client2)
-        );
-
-        final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
-
-        assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_0)));
-        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_1)));
-        assertThat(probingRebalanceNeeded, is(false));
-    }
-
-    @Test
     public void shouldComputeBalanceFactorAsDifferenceBetweenMostAndLeastLoadedClients() {
         final ClientState client1 = EasyMock.createNiceMock(ClientState.class);
         final ClientState client2 = EasyMock.createNiceMock(ClientState.class);
