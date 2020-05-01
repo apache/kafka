@@ -79,6 +79,7 @@ class ReplicaManagerTest {
 
   @After
   def tearDown(): Unit = {
+    TestUtils.clearYammerMetrics()
     metrics.close()
   }
 
@@ -519,7 +520,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testFetchBeyondHighWatermarkReturnEmptyResponse(): Unit = {
+  def testFetchBeyondHighWatermark(): Unit = {
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1, 2))
     try {
       val brokerList = Seq[Integer](0, 1, 2).asJava
@@ -553,14 +554,16 @@ class ReplicaManagerTest {
         }
       }
 
-      // Fetch a message above the high watermark as a follower
+      // Followers are always allowed to fetch above the high watermark
       val followerFetchResult = fetchAsFollower(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
       assertEquals("Should not give an exception", Errors.NONE, followerFetchData.error)
       assertTrue("Should return some data", followerFetchData.records.batches.iterator.hasNext)
 
-      // Fetch a message above the high watermark as a consumer
+      // Consumers are not allowed to consume above the high watermark. However, since the
+      // high watermark could be stale at the time of the request, we do not return an out of
+      // range error and instead return an empty record set.
       val consumerFetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
@@ -1015,6 +1018,51 @@ class ReplicaManagerTest {
     fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None)
     assertNotNull(fetchResult.get)
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, fetchResult.get.error)
+  }
+
+  @Test
+  def testFetchRequestRateMetrics(): Unit = {
+    val mockTimer = new MockTimer
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
+
+    val tp0 = new TopicPartition(topic, 0)
+    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
+    val partition0Replicas = Seq[Integer](0, 1).asJava
+
+    val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic)
+        .setPartitionIndex(tp0.partition)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(partition0Replicas)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+
+    def assertMetricCount(expected: Int): Unit = {
+      assertEquals(expected, replicaManager.brokerTopicStats.allTopicsStats.totalFetchRequestRate.count)
+      assertEquals(expected, replicaManager.brokerTopicStats.topicStats(topic).totalFetchRequestRate.count)
+    }
+
+    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.empty())
+
+    val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, timeout = 0)
+    assertNotNull(nonPurgatoryFetchResult.get)
+    assertEquals(Errors.NONE, nonPurgatoryFetchResult.get.error)
+    assertMetricCount(1)
+
+    val purgatoryFetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, timeout = 10)
+    assertNull(purgatoryFetchResult.get)
+    mockTimer.advanceClock(11)
+    assertNotNull(purgatoryFetchResult.get)
+    assertEquals(Errors.NONE, purgatoryFetchResult.get.error)
+    assertMetricCount(2)
   }
 
   @Test
