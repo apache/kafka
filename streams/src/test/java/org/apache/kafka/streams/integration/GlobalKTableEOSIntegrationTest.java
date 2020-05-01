@@ -444,18 +444,21 @@ public class GlobalKTableEOSIntegrationTest {
 
     private void produceGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalTableTopic,
-                Arrays.asList(
-                        new KeyValue<>(1L, "F"),
-                        new KeyValue<>(2L, "G"),
-                        new KeyValue<>(3L, "H"),
-                        new KeyValue<>(4L, "I"),
-                        new KeyValue<>(5L, "J")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            globalTableTopic,
+            Arrays.asList(
+                new KeyValue<>(1L, "F"),
+                new KeyValue<>(2L, "G"),
+                new KeyValue<>(3L, "H"),
+                new KeyValue<>(4L, "I"),
+                new KeyValue<>(5L, "J")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                StringSerializer.class,
+                new Properties()
+            ),
+            mockTime
+        );
     }
 }
