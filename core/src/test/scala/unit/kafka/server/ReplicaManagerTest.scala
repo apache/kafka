@@ -520,7 +520,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testFetchBeyondHighWatermarkReturnEmptyResponse(): Unit = {
+  def testFetchBeyondHighWatermark(): Unit = {
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1, 2))
     try {
       val brokerList = Seq[Integer](0, 1, 2).asJava
