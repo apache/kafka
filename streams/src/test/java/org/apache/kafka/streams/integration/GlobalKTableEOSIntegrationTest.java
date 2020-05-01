@@ -151,10 +151,20 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+D");
         expected.put("e", "5+null");
 
-        TestUtils.waitForCondition(
-            () -> results.equals(expected),
-            30000L,
-            "waiting for initial values");
+        try {
+            TestUtils.waitForCondition(
+                () -> results.equals(expected),
+                30000L,
+                "waiting for initial values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                    "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
 
 
         produceGlobalTableValues();
@@ -163,10 +173,18 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
-        TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
-            30000,
-            "waiting for data in replicated store");
+        try {
+            TestUtils.waitForCondition(
+                () -> "J".equals(replicatedStore.get(5L)),
+                30000,
+                "waiting for data in replicated store"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError("expected 'J'; got: " + replicatedStore.get(5L));
+            newError.addSuppressed(error);
+            throw newError;
+        }
+
 
         produceTopicValues(streamTopic);
 
@@ -176,10 +194,20 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        TestUtils.waitForCondition(
-            () -> results.equals(expected),
-            30000L,
-            "waiting for final values");
+        try {
+            TestUtils.waitForCondition(
+                () -> results.equals(expected),
+                30000L,
+                "waiting for final values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
     }
 
     @Test
@@ -196,10 +224,20 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("c", "3+C");
         expected.put("d", "4+D");
 
-        TestUtils.waitForCondition(
-            () -> results.equals(expected),
-            30000L,
-            "waiting for initial values");
+        try {
+            TestUtils.waitForCondition(
+                () -> results.equals(expected),
+                30000L,
+                "waiting for initial values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                    "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
 
 
         produceGlobalTableValues();
@@ -208,10 +246,18 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
-        TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
-            30000,
-            "waiting for data in replicated store");
+        try {
+            TestUtils.waitForCondition(
+                () -> "J".equals(replicatedStore.get(5L)),
+                30000,
+                "waiting for data in replicated store"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError("expected 'J'; got: " + replicatedStore.get(5L));
+            newError.addSuppressed(error);
+            throw newError;
+        }
+
 
         produceTopicValues(streamTopic);
 
@@ -221,10 +267,20 @@ public class GlobalKTableEOSIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        TestUtils.waitForCondition(
-            () -> results.equals(expected),
-            30000L,
-            "waiting for final values");
+        try {
+            TestUtils.waitForCondition(
+                () -> results.equals(expected),
+                30000L,
+                "waiting for final values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                    "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
     }
 
     @Test
@@ -243,18 +299,29 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        TestUtils.waitForCondition(
-            () -> {
-                final Map<Long, String> result = new HashMap<>();
-                final Iterator<KeyValue<Long, String>> it = store.all();
-                while (it.hasNext()) {
-                    final KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
-                }
-                return result.equals(expected);
-            },
-            30000L,
-            "waiting for initial values");
+        try {
+            final Map<Long, String> result = new HashMap<>();
+            TestUtils.waitForCondition(
+                () -> {
+                    result.clear();
+                    final Iterator<KeyValue<Long, String>> it = store.all();
+                    while (it.hasNext()) {
+                        final KeyValue<Long, String> kv = it.next();
+                        result.put(kv.key, kv.value);
+                    }
+                    return result.equals(expected);
+                },
+                30000L,
+                "waiting for initial values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                    "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
     }
     
     @Test
@@ -275,18 +342,29 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        TestUtils.waitForCondition(
-            () -> {
-                final Map<Long, String> result = new HashMap<>();
-                final Iterator<KeyValue<Long, String>> it = store.all();
-                while (it.hasNext()) {
-                    final KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
-                }
-                return result.equals(expected);
-            },
-            30000L,
-            "waiting for initial values");
+        try {
+            final Map<Long, String> result = new HashMap<>();
+            TestUtils.waitForCondition(
+                () -> {
+                    result.clear();
+                    final Iterator<KeyValue<Long, String>> it = store.all();
+                    while (it.hasNext()) {
+                        final KeyValue<Long, String> kv = it.next();
+                        result.put(kv.key, kv.value);
+                    }
+                    return result.equals(expected);
+                },
+                30000L,
+                "waiting for initial values"
+            );
+        } catch (final AssertionError error) {
+            final AssertionError newError = new AssertionError(
+                "result: " + results +
+                    "\nexpected: " + expected
+            );
+            newError.addSuppressed(error);
+            throw newError;
+        }
     }
 
     private void createTopics() throws Exception {
@@ -304,59 +382,64 @@ public class GlobalKTableEOSIntegrationTest {
 
     private void produceTopicValues(final String topic) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                topic,
-                Arrays.asList(
-                        new KeyValue<>("a", 1L),
-                        new KeyValue<>("b", 2L),
-                        new KeyValue<>("c", 3L),
-                        new KeyValue<>("d", 4L),
-                        new KeyValue<>("e", 5L)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        LongSerializer.class,
-                        new Properties()),
-                mockTime);
+            topic,
+            Arrays.asList(
+                new KeyValue<>("a", 1L),
+                new KeyValue<>("b", 2L),
+                new KeyValue<>("c", 3L),
+                new KeyValue<>("d", 4L),
+                new KeyValue<>("e", 5L)
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                LongSerializer.class,
+                new Properties()
+            ),
+            mockTime
+        );
     }
 
     private void produceAbortedMessages() throws Exception {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
-        properties.put(ProducerConfig.RETRIES_CONFIG, 1);
         IntegrationTestUtils.produceAbortedKeyValuesSynchronouslyWithTimestamp(
-                globalTableTopic, Arrays.asList(
-                        new KeyValue<>(1L, "A"),
-                        new KeyValue<>(2L, "B"),
-                        new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D")
-                        ), 
-                TestUtils.producerConfig(
-                                CLUSTER.bootstrapServers(),
-                                LongSerializer.class,
-                                StringSerializer.class,
-                                properties),
-                mockTime.milliseconds());
+            globalTableTopic, Arrays.asList(
+                new KeyValue<>(1L, "A"),
+                new KeyValue<>(2L, "B"),
+                new KeyValue<>(3L, "C"),
+                new KeyValue<>(4L, "D")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                StringSerializer.class,
+                properties
+            ),
+            mockTime.milliseconds()
+        );
     }
 
     private void produceInitialGlobalTableValues() {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
-        properties.put(ProducerConfig.RETRIES_CONFIG, 1);
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalTableTopic,
-                Arrays.asList(
-                        new KeyValue<>(1L, "A"),
-                        new KeyValue<>(2L, "B"),
-                        new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D")
-                        ),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class,
-                        properties),
-                mockTime,
-                true);
+            globalTableTopic,
+            Arrays.asList(
+                new KeyValue<>(1L, "A"),
+                new KeyValue<>(2L, "B"),
+                new KeyValue<>(3L, "C"),
+                new KeyValue<>(4L, "D")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                StringSerializer.class,
+                properties
+            ),
+            mockTime,
+            true
+        );
     }
 
     private void produceGlobalTableValues() {
