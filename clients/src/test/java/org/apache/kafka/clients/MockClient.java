@@ -554,6 +554,7 @@ public class MockClient implements KafkaClient {
      * to inspect the request body for the type of the request or for specific fields that should be set,
      * and to fail the test if it doesn't match.
      */
+    @FunctionalInterface
     public interface RequestMatcher {
         boolean matches(AbstractRequest body);
     }
