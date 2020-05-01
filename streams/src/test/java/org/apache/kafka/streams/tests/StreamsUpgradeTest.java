@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 
@@ -194,7 +193,7 @@ public class StreamsUpgradeTest {
                 assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
 
             if (maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
-                setAssignmentErrorCode(AssignorError.REBALANCE_NEEDED.code());
+                scheduleImmediateFollowupRebalance();
                 usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
             }
 

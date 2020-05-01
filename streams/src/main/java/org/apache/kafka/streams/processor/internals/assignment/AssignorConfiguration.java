@@ -190,8 +190,8 @@ public final class AssignorConfiguration {
         return (AtomicInteger) ai;
     }
 
-    public AtomicLong getNextProbingRebalanceMs(final Map<String, ?> configs) {
-        final Object al = configs.get(InternalConfig.NEXT_PROBING_REBALANCE_MS);
+    public AtomicLong getNextScheduledRebalanceMs(final Map<String, ?> configs) {
+        final Object al = configs.get(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
         if (al == null) {
             final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
             log.error(fatalException.getMessage(), fatalException);
