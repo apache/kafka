@@ -249,7 +249,7 @@ object ConfigCommand extends Config {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
-      props.putAll(Utils.loadProps(file))
+      props ++= Utils.loadProps(file)
     }
     if (opts.options.has(opts.addConfig)) {
       // Split list by commas, but avoid those in [], then into KV pairs
