@@ -30,7 +30,6 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -189,7 +188,7 @@ public class KTableSourceTest {
                     Duration.ZERO
                 );
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table1.name)));
+            getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);

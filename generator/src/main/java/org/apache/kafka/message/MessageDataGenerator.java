@@ -1444,7 +1444,7 @@ public final class MessageDataGenerator {
                     lengthExpression = "_stringBytes.length";
                 } else if (type.isBytes()) {
                     if (zeroCopy) {
-                        lengthExpression = String.format("%s.remaining()", name, name);
+                        lengthExpression = String.format("%s.remaining()", name);
                     } else {
                         lengthExpression = String.format("%s.length", name);
                     }

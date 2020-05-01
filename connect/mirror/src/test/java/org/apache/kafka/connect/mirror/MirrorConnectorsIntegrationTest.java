@@ -86,8 +86,8 @@ public class MirrorConnectorsIntegrationTest {
         mm2Props.put("heartbeats.topic.replication.factor", "1");
         mm2Props.put("offset-syncs.topic.replication.factor", "1");
         mm2Props.put("config.storage.topic.replication.factor", "1");
-        mm2Props.put("offset.stoage.topic.replication.factor", "1");
-        mm2Props.put("status.stoage.topic.replication.factor", "1");
+        mm2Props.put("offset.storage.topic.replication.factor", "1");
+        mm2Props.put("status.storage.topic.replication.factor", "1");
         mm2Props.put("replication.factor", "1");
         
         mm2Config = new MirrorMakerConfig(mm2Props); 

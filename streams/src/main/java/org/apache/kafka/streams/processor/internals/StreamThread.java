@@ -574,6 +574,7 @@ public class StreamThread extends Thread {
                     taskManager.tasks()
                         .values()
                         .stream()
+                        .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
                         .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
                         .collect(Collectors.toSet())
                 );

@@ -1841,8 +1841,8 @@ class KafkaApisTest {
   }
 
   private def expectNoThrottling(): Capture[RequestChannel.Response] = {
-    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(EasyMock.anyObject[RequestChannel.Request]()))
-      .andReturn(0)
+    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(EasyMock.anyObject[RequestChannel.Request](),
+      EasyMock.anyObject[Long])).andReturn(0)
     EasyMock.expect(clientRequestQuotaManager.throttle(EasyMock.anyObject[RequestChannel.Request](), EasyMock.eq(0),
       EasyMock.anyObject[RequestChannel.Response => Unit]()))
 

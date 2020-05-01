@@ -51,7 +51,7 @@ public class GlobalProcessorContextImplTest {
     private static final String UNKNOWN_STORE = "unknown-store";
     private static final String CHILD_PROCESSOR = "child";
 
-    private GlobalProcessorContextImpl<Object, Object> globalContext;
+    private GlobalProcessorContextImpl globalContext;
 
     private ProcessorNode<?, ?> child;
     private ProcessorRecordContext recordContext;
@@ -74,7 +74,7 @@ public class GlobalProcessorContextImplTest {
         expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
         replay(stateManager);
 
-        globalContext = new GlobalProcessorContextImpl<>(
+        globalContext = new GlobalProcessorContextImpl(
             streamsConfig,
             stateManager,
             null,

@@ -320,13 +320,11 @@ public class GlobalStreamThread extends Thread {
                 stateRestoreListener,
                 config);
 
-            final GlobalProcessorContextImpl<Object, Object> globalProcessorContext =
-                new GlobalProcessorContextImpl<>(
-                    config,
-                    stateMgr,
-                    streamsMetrics,
-                    cache
-                );
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
+                config,
+                stateMgr,
+                streamsMetrics,
+                cache);
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(

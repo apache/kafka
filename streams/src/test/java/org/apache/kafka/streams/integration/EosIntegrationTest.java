@@ -31,10 +31,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -59,6 +57,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -74,6 +74,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -89,6 +90,7 @@ import static org.junit.Assert.fail;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosIntegrationTest {
+    private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
@@ -111,8 +113,9 @@ public class EosIntegrationTest {
     private final String storeName = "store";
 
     private AtomicBoolean errorInjected;
-    private AtomicBoolean gcInjected;
-    private volatile boolean doGC = true;
+    private AtomicBoolean stallInjected;
+    private AtomicReference<String> stallingHost;
+    private volatile boolean doStall = true;
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
@@ -382,7 +385,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams(false, "appDir", 2, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -450,7 +453,7 @@ public class EosIntegrationTest {
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
 
-        try (final KafkaStreams streams = getKafkaStreams(true, "appDir", 2, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -515,84 +518,114 @@ public class EosIntegrationTest {
         // the app is supposed to copy all 60 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         //
-        // a GC pause gets inject after 20 committed and 30 uncommitted records got received
-        // -> the GC pause only affects one thread and should trigger a rebalance
+        // a stall gets injected after 20 committed and 30 uncommitted records got received
+        // -> the stall only affects one thread and should trigger a rebalance
         // after rebalancing, we should read 40 committed records (even if 50 record got written)
         //
         // afterwards, the "stalling" thread resumes, and another rebalance should get triggered
         // we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams(false, "appDir1", 1, eosConfig);
-            final KafkaStreams streams2 = getKafkaStreams(false, "appDir2", 1, eosConfig)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig)
         ) {
             startKafkaStreamsAndWaitForRunningState(streams1, MAX_WAIT_TIME_MS);
             startKafkaStreamsAndWaitForRunningState(streams2, MAX_WAIT_TIME_MS);
 
-            final List<KeyValue<Long, Long>> committedDataBeforeGC = prepareData(0L, 10L, 0L, 1L);
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeGC = prepareData(10L, 15L, 0L, 1L);
+            final List<KeyValue<Long, Long>> committedDataBeforeStall = prepareData(0L, 10L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeStall = prepareData(10L, 15L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataBeforeGC = new ArrayList<>();
-            dataBeforeGC.addAll(committedDataBeforeGC);
-            dataBeforeGC.addAll(uncommittedDataBeforeGC);
+            final List<KeyValue<Long, Long>> dataBeforeStall = new ArrayList<>();
+            dataBeforeStall.addAll(committedDataBeforeStall);
+            dataBeforeStall.addAll(uncommittedDataBeforeStall);
 
             final List<KeyValue<Long, Long>> dataToTriggerFirstRebalance = prepareData(15L, 20L, 0L, 1L);
 
             final List<KeyValue<Long, Long>> dataAfterSecondRebalance = prepareData(20L, 30L, 0L, 1L);
 
-            writeInputData(committedDataBeforeGC);
+            writeInputData(committedDataBeforeStall);
 
             waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "SteamsTasks did not request commit.");
 
-            writeInputData(uncommittedDataBeforeGC);
+            writeInputData(uncommittedDataBeforeStall);
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeGC.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeGC.size(), CONSUMER_GROUP_ID);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeStall.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
 
-            checkResultPerKey(committedRecords, committedDataBeforeGC);
-            checkResultPerKey(uncommittedRecords, dataBeforeGC);
+            checkResultPerKey(committedRecords, committedDataBeforeStall);
+            checkResultPerKey(uncommittedRecords, dataBeforeStall);
 
-            gcInjected.set(true);
+            LOG.info("Injecting Stall");
+            stallInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
-
+            LOG.info("Input Data Written");
             waitForCondition(
-                () -> streams1.allMetadata().size() == 1
-                    && streams2.allMetadata().size() == 1
-                    && (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
-                        || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
-                MAX_WAIT_TIME_MS, "Should have rebalanced.");
+                () -> stallingHost.get() != null,
+                MAX_WAIT_TIME_MS,
+                "Expected a host to start stalling"
+            );
+            final String observedStallingHost = stallingHost.get();
+            final KafkaStreams stallingInstance;
+            final KafkaStreams remainingInstance;
+            if ("streams1".equals(observedStallingHost)) {
+                stallingInstance = streams1;
+                remainingInstance = streams2;
+            } else if ("streams2".equals(observedStallingHost)) {
+                stallingInstance = streams2;
+                remainingInstance = streams1;
+            } else {
+                throw new IllegalArgumentException("unexpected host name: " + observedStallingHost);
+            }
+
+            // the stalling instance won't have an updated view, and it doesn't matter what it thinks
+            // the assignment is. We only really care that the remaining instance only sees one host
+            // that owns both partitions.
+            waitForCondition(
+                () -> stallingInstance.allMetadata().size() == 2
+                    && remainingInstance.allMetadata().size() == 1
+                    && remainingInstance.allMetadata().iterator().next().topicPartitions().size() == 2,
+                MAX_WAIT_TIME_MS,
+                () -> "Should have rebalanced.\n" +
+                    "Streams1[" + streams1.allMetadata() + "]\n" +
+                    "Streams2[" + streams2.allMetadata() + "]");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
-                uncommittedDataBeforeGC.size() + dataToTriggerFirstRebalance.size(),
+                uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size(),
                 CONSUMER_GROUP_ID);
 
             final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>();
-            expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeGC);
+            expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeStall);
             expectedCommittedRecordsAfterRebalance.addAll(dataToTriggerFirstRebalance);
 
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
-            doGC = false;
+            LOG.info("Releasing Stall");
+            doStall = false;
+            // Once the stalling host rejoins the group, we expect both instances to see both instances.
+            // It doesn't really matter what the assignment is, but we might as well also assert that they
+            // both see both partitions assigned exactly once
             waitForCondition(
-                () -> streams1.allMetadata().size() == 1
-                    && streams2.allMetadata().size() == 1
-                    && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
-                    && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
+                () -> streams1.allMetadata().size() == 2
+                    && streams2.allMetadata().size() == 2
+                    && streams1.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
+                    && streams2.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
                 MAX_WAIT_TIME_MS,
-                "Should have rebalanced.");
+                () -> "Should have rebalanced.\n" +
+                    "Streams1[" + streams1.allMetadata() + "]\n" +
+                    "Streams2[" + streams2.allMetadata() + "]");
 
             writeInputData(dataAfterSecondRebalance);
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
-                committedDataBeforeGC.size() + uncommittedDataBeforeGC.size()
+                committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
                 + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
-            allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeGC);
-            allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeGC);
+            allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeStall);
+            allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeStall);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataToTriggerFirstRebalance);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterSecondRebalance);
 
@@ -614,13 +647,15 @@ public class EosIntegrationTest {
         return data;
     }
 
-    private KafkaStreams getKafkaStreams(final boolean withState,
+    private KafkaStreams getKafkaStreams(final String dummyHostName,
+                                         final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
                                          final String eosConfig) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
-        gcInjected = new AtomicBoolean(false);
+        stallInjected = new AtomicBoolean(false);
+        stallingHost = new AtomicReference<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
         String[] storeNames = new String[0];
@@ -653,8 +688,10 @@ public class EosIntegrationTest {
 
                     @Override
                     public KeyValue<Long, Long> transform(final Long key, final Long value) {
-                        if (gcInjected.compareAndSet(true, false)) {
-                            while (doGC) {
+                        if (stallInjected.compareAndSet(true, false)) {
+                            LOG.info(dummyHostName + " is executing the injected stall");
+                            stallingHost.set(dummyHostName);
+                            while (doStall) {
                                 final StreamThread thread = (StreamThread) Thread.currentThread();
                                 if (thread.isInterrupted() || !thread.isRunning()) {
                                     throw new RuntimeException("Detected we've been interrupted.");
@@ -714,7 +751,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
-        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -736,7 +773,7 @@ public class EosIntegrationTest {
         return streams;
     }
 
-    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
+    private void writeInputData(final List<KeyValue<Long, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
             records,
@@ -810,21 +847,9 @@ public class EosIntegrationTest {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent) {
-        ReadOnlyKeyValueStore<Long, Long> store = null;
-
-        final long maxWaitingTime = System.currentTimeMillis() + 300000L;
-        while (System.currentTimeMillis() < maxWaitingTime) {
-            try {
-                store = streams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
-                break;
-            } catch (final InvalidStateStoreException okJustRetry) {
-                try {
-                    Thread.sleep(5000L);
-                } catch (final Exception ignore) { }
-            }
-        }
-
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws InterruptedException {
+        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
+            .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();

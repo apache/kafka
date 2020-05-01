@@ -44,9 +44,14 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                  })
 
     def test_standby_tasks_rebalance(self):
-        configs = self.get_configs(",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s" % (self.streams_source_topic,
-                                                                                    self.streams_sink_topic_1,
-                                                                                    self.streams_sink_topic_2))
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        configs = self.get_configs(
+            ",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor" % (
+            self.streams_source_topic,
+            self.streams_sink_topic_1,
+            self.streams_sink_topic_2
+            )
+        )
 
         producer = self.get_producer(self.streams_source_topic, self.num_messages, throughput=15000, repeating_keys=6)
         producer.start()
