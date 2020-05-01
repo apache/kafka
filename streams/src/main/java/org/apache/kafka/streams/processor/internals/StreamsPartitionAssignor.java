@@ -927,12 +927,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                              final int minUserMetadataVersion,
                                                              final int minSupportedMetadataVersion) {
         final Map<String, Assignment> assignment = new HashMap<>();
+        boolean stableAssignment = true;
 
         // Since we know another rebalance will be triggered anyway, just try and generate a balanced assignment
         // (without violating cooperative protocol) now so that on the second rebalance we can just give tasks
         // back to their previous owners
         // within the client, distribute tasks to its owned consumers
-        for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientsMetadata.entrySet()) {
+            final UUID client = clientEntry.getKey();
+            final ClientMetadata clientMetadata = clientEntry.getValue();
             final ClientState state = clientMetadata.state;
 
             final Map<String, List<TaskId>> interleavedActive =
@@ -940,7 +943,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Map<String, List<TaskId>> interleavedStandby =
                 interleaveConsumerTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
-            addClientAssignments(
+            final boolean followupRebalanceScheduled = addClientAssignments(
                 assignment,
                 clientMetadata,
                 partitionsForTask,
@@ -953,6 +956,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion,
                 true,
                 false);
+
+            if (followupRebalanceScheduled) {
+                stableAssignment = false;
+                log.debug("Requested client {} to schedule a followup rebalance", client);
+            }
+        }
+
+        if (stableAssignment) {
+            log.info("Finished stable assignment of tasks, no followup rebalances required.");
+        } else {
+            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
         }
 
         return assignment;
@@ -960,20 +974,21 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * Adds the encoded assignment for each StreamThread consumer in the client to the overall assignment map
+     * @return true if this client has been told to schedule a followup rebalance
      */
-    private void addClientAssignments(final Map<String, Assignment> assignment,
-                                      final ClientMetadata clientMetadata,
-                                      final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                      final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
-                                      final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
-                                      final Set<TopicPartition> allOwnedPartitions,
-                                      final Map<String, List<TaskId>> activeTaskAssignments,
-                                      final Map<String, List<TaskId>> standbyTaskAssignments,
-                                      final int minUserMetadataVersion,
-                                      final int minSupportedMetadataVersion,
-                                      final boolean versionProbing,
-                                      final boolean probingRebalanceNeeded) {
-        boolean stableAssignment = !probingRebalanceNeeded && !versionProbing;
+    private boolean addClientAssignments(final Map<String, Assignment> assignment,
+                                         final ClientMetadata clientMetadata,
+                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
+                                         final Set<TopicPartition> allOwnedPartitions,
+                                         final Map<String, List<TaskId>> activeTaskAssignments,
+                                         final Map<String, List<TaskId>> standbyTaskAssignments,
+                                         final int minUserMetadataVersion,
+                                         final int minSupportedMetadataVersion,
+                                         final boolean versionProbing,
+                                         final boolean probingRebalanceNeeded) {
+        boolean rebalanceRequested = probingRebalanceNeeded || versionProbing;
         boolean shouldEncodeProbingRebalanceTime = probingRebalanceNeeded;
 
         // Loop through the consumers and build their assignment
@@ -1008,17 +1023,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (tasksRevoked) {
                 // TODO: once KAFKA-9821 is resolved we can leave it to the client to trigger this rebalance
-                log.info("Scheduled an immediate followup rebalance so assigned tasks can be revoked from their current owner.");
+                log.info("Follow-up rebalance: scheduled immediately due to tasks changing ownership.");
                 info.setNextRebalanceTime(0L);
-                stableAssignment = false;
+                rebalanceRequested = true;
             } else if (shouldEncodeProbingRebalanceTime) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Scheduled a followup probing rebalance for {} ms.", nextRebalanceTimeMs);
+                log.info("Follow-up rebalance: scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalanceTime = false;
             }
 
-            // finally, encode the assignment and insert into map with all assignments
             assignment.put(
                 consumer,
                 new Assignment(
@@ -1027,12 +1041,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 )
             );
         }
-
-        if (stableAssignment) {
-            log.info("Finished stable assignment of tasks, no followup rebalances required.");
-        } else {
-            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
-        }
+        return rebalanceRequested;
     }
 
     /**
@@ -1334,9 +1343,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     @Override
     public void onAssignment(final Assignment assignment, final ConsumerGroupMetadata metadata) {
-        // reset the rebalance schedule so that we don't trigger unnecessary rebalances
-        nextScheduledRebalanceMs.set(Long.MAX_VALUE);
-
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
         partitions.sort(PARTITION_COMPARATOR);
 
@@ -1361,18 +1367,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         validateMetadataVersions(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion);
 
-        // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
-        if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
-            log.info("Version probing detected. Rejoining the consumer group to trigger a new rebalance.");
-            scheduleImmediateFollowupRebalance();
-        }
-
         // version 1 field
         final Map<TaskId, Set<TopicPartition>> activeTasks;
         // version 2 fields
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo;
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
+        final long encodedNextScheduledRebalanceMs;
 
         switch (receivedAssignmentMetadataVersion) {
             case 1:
@@ -1382,6 +1383,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = Collections.emptyMap();
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = Collections.emptyMap();
+                encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 2:
             case 3:
@@ -1393,6 +1395,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 6:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
@@ -1401,6 +1404,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 7:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
@@ -1409,7 +1413,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
-                nextScheduledRebalanceMs.set(info.nextRebalanceMs());
+                encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
                 break;
             default:
                 throw new IllegalStateException(
@@ -1418,7 +1422,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 );
         }
 
-        verifyHostInfo(partitionsByHost.keySet());
+        maybeScheduleFollowupRebalance(
+            encodedNextScheduledRebalanceMs,
+            receivedAssignmentMetadataVersion,
+            latestCommonlySupportedVersion,
+            partitionsByHost.keySet()
+        );
 
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
@@ -1428,6 +1437,28 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
     }
 
+    private void maybeScheduleFollowupRebalance(final long encodedNextScheduledRebalanceMs,
+                                                final int receivedAssignmentMetadataVersion,
+                                                final int latestCommonlySupportedVersion,
+                                                final Set<HostInfo> groupHostInfo) {
+        if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
+            log.info("Requested to schedule immediate rebalance due to version probing.");
+            nextScheduledRebalanceMs.set(0L);
+        } else if (!verifyHostInfo(groupHostInfo)) {
+            log.info("Requested to schedule immediate rebalance to update group with new host endpoint = {}.", userEndPoint);
+            nextScheduledRebalanceMs.set(0L);
+        } else if (encodedNextScheduledRebalanceMs == 0L) {
+            log.info("Requested to schedule immediate rebalance for new tasks to be safely revoked from current owner.");
+            nextScheduledRebalanceMs.set(0L);
+        } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
+            log.info("Requested to schedule probing rebalance for {} ms.", encodedNextScheduledRebalanceMs);
+            nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
+        } else {
+            log.trace("No followup rebalance was requested, resetting the rebalance schedule.");
+            nextScheduledRebalanceMs.set(Long.MAX_VALUE);
+        }
+    }
+
     /**
      * Verify that this client's host info was included in the map returned in the assignment, and trigger a
      * rebalance if not. This may be necessary when using static membership, as a rejoining client will be handed
@@ -1435,15 +1466,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * to force a rebalance for the other members in the group to get the updated host info for this client.
      *
      * @param groupHostInfo the HostInfo of all clients in the group
+     * @return false if the current host info does not match that in the group assignment
      */
-    private void verifyHostInfo(final Set<HostInfo> groupHostInfo) {
+    private boolean verifyHostInfo(final Set<HostInfo> groupHostInfo) {
         if (userEndPoint != null && !groupHostInfo.isEmpty()) {
             final HostInfo myHostInfo = HostInfo.buildFromEndpoint(userEndPoint);
 
-            if (!groupHostInfo.contains(myHostInfo)) {
-                log.info("Triggering a rebalance to update group with new endpoint = {}", userEndPoint);
-                scheduleImmediateFollowupRebalance();
-            }
+            return groupHostInfo.contains(myHostInfo);
+        } else {
+            return true;
         }
     }
 
@@ -1546,10 +1577,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion, supportedVersion);
             return minSupportedMetadataVersion;
         }
-    }
-
-    protected void scheduleImmediateFollowupRebalance() {
-        nextScheduledRebalanceMs.set(0L);
     }
 
     // following functions are for test only
