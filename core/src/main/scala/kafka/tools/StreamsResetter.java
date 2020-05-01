@@ -244,7 +244,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
-        forceOption = optionParser.accepts("force","Force remove members when long session time out has been configured, " +
+        forceOption = optionParser.accepts("force", "Force remove members when long session time out has been configured, " +
                 "please make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");

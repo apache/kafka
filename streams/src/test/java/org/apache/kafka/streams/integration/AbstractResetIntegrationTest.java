@@ -285,8 +285,7 @@ public abstract class AbstractResetIntegrationTest {
         exitCode = tryCleanGlobal(false, "--force", null);
         Assert.assertEquals(0, exitCode);
 
-        TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
-                "Reset Tool consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(null);
 
@@ -591,7 +590,7 @@ public abstract class AbstractResetIntegrationTest {
     private void cleanGlobal(final boolean withIntermediateTopics,
                              final String resetScenario,
                              final String resetScenarioArg) throws Exception {
-        int exitCode = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
+        final int exitCode = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
         Assert.assertEquals(0, exitCode);
     }
 
