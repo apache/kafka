@@ -816,13 +816,13 @@ public class EosBetaUpgradeIntegrationTest {
             @Override
             public Transformer<Long, Long, KeyValue<Long, Long>> get() {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
-                    ProcessorContext<Object, Object> context;
+                    ProcessorContext context;
                     KeyValueStore<Long, Long> state = null;
                     AtomicBoolean crash;
                     AtomicInteger sharedCommit;
 
                     @Override
-                    public void init(final ProcessorContext<Object, Object> context) {
+                    public void init(final ProcessorContext context) {
                         this.context = context;
                         state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
                         final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
@@ -906,40 +906,28 @@ public class EosBetaUpgradeIntegrationTest {
 
     private void waitForStateTransition(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
                                         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
-        throws Exception {
+            throws Exception {
 
-        try {
-            waitForCondition(
-                () -> observed.equals(expected),
-                MAX_WAIT_TIME_MS,
-                "Client did not startup on time."
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError("Client transitions: " + observed);
-            newError.addSuppressed(error);
-            throw newError;
-        }
+        waitForCondition(
+            () -> observed.equals(expected),
+            MAX_WAIT_TIME_MS,
+            () -> "Client did not startup on time. Observers transitions: " + observed
+        );
     }
 
     private void waitForStateTransition(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed1,
                                         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected1,
                                         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed2,
                                         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected2)
-        throws Exception {
+            throws Exception {
 
-        try {
-            waitForCondition(
-                () -> observed1.equals(expected1) && observed2.equals(expected2),
-                MAX_WAIT_TIME_MS,
-                "Clients did not startup and stabilize on time."
-            );
-        } catch (final AssertionError error) {
-            final AssertionError newError = new AssertionError("Client transitions: " +
+        waitForCondition(
+            () -> observed1.equals(expected1) && observed2.equals(expected2),
+            MAX_WAIT_TIME_MS,
+            () -> "Clients did not startup and stabilize on time. Observed transitions: " +
                 "\n  client-1 transitions: " + observed1 +
-                "\n  client-2 transitions: " + observed2);
-            newError.addSuppressed(error);
-            throw newError;
-        }
+                "\n  client-2 transitions: " + observed2
+        );
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
