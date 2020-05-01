@@ -1572,10 +1572,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return assignmentConfigs.acceptableRecoveryLag;
     }
 
-    int balanceFactor() {
-        return assignmentConfigs.balanceFactor;
-    }
-
     int maxWarmupReplicas() {
         return assignmentConfigs.maxWarmupReplicas;
     }
