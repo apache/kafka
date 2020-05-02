@@ -549,7 +549,7 @@ public class StreamThread extends Thread {
             try {
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("The assignor requested a follow-up rebalance, triggering the scheduled rebalance now.");
+                    log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
                     mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {

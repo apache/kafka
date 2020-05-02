@@ -864,7 +864,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
                                                          final boolean shouldTriggerProbingRebalance) {
-        // keep track of whether a 2nd rebalance is unavoidable so we can skip trying to get a completely sticky assignment
         boolean rebalanceRequired = shouldTriggerProbingRebalance;
         final Map<String, Assignment> assignment = new HashMap<>();
 
@@ -878,8 +877,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // Try to avoid triggering another rebalance by giving active tasks back to their previous owners within a
             // client, without violating load balance. If we already know another rebalance will be required, or the
-            // client had no owned partitions, try to balance the workload as evenly as possible by interleaving the
-            // tasks among consumers and hopefully spreading the heavier subtopologies evenly across threads.
+            // client had no owned partitions, try to balance the workload as evenly as possible by interleaving tasks
             if (rebalanceRequired || state.ownedPartitions().isEmpty()) {
                 activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), consumers);
             } else if ((activeTaskAssignments = tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, allOwnedPartitions))
@@ -894,7 +892,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance
             final boolean encodeNextProbingRebalanceTime = clientId.equals(taskManager.processId()) && shouldTriggerProbingRebalance;
 
-            addClientAssignments(
+            final boolean followupRebalanceScheduled = addClientAssignments(
                 assignment,
                 clientMetadata,
                 partitionsForTask,
@@ -907,6 +905,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion,
                 false,
                 encodeNextProbingRebalanceTime);
+
+            if (followupRebalanceScheduled) {
+                rebalanceRequired = true;
+                log.debug("Requested client {} to schedule a followup rebalance", clientId);
+            }
+        }
+
+        if (rebalanceRequired) {
+            log.info("Finished unstable assignment of tasks, a followup rebalance will be scheduled.");
+        } else {
+            log.info("Finished stable assignment of tasks, no followup rebalances required.");
         }
 
         return assignment;
@@ -927,15 +936,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                              final int minUserMetadataVersion,
                                                              final int minSupportedMetadataVersion) {
         final Map<String, Assignment> assignment = new HashMap<>();
-        boolean stableAssignment = true;
 
         // Since we know another rebalance will be triggered anyway, just try and generate a balanced assignment
         // (without violating cooperative protocol) now so that on the second rebalance we can just give tasks
         // back to their previous owners
         // within the client, distribute tasks to its owned consumers
-        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientsMetadata.entrySet()) {
-            final UUID client = clientEntry.getKey();
-            final ClientMetadata clientMetadata = clientEntry.getValue();
+        for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             final ClientState state = clientMetadata.state;
 
             final Map<String, List<TaskId>> interleavedActive =
@@ -943,7 +949,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Map<String, List<TaskId>> interleavedStandby =
                 interleaveConsumerTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
-            final boolean followupRebalanceScheduled = addClientAssignments(
+            addClientAssignments(
                 assignment,
                 clientMetadata,
                 partitionsForTask,
@@ -956,18 +962,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion,
                 true,
                 false);
-
-            if (followupRebalanceScheduled) {
-                stableAssignment = false;
-                log.debug("Requested client {} to schedule a followup rebalance", client);
-            }
         }
 
-        if (stableAssignment) {
-            log.info("Finished stable assignment of tasks, no followup rebalances required.");
-        } else {
-            log.info("Finished unstable assignment of tasks, a followup rebalance will be triggered.");
-        }
+        log.info("Finished unstable assignment of tasks, a followup rebalance will be scheduled due to version probing.");
 
         return assignment;
     }
@@ -989,7 +986,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final boolean versionProbing,
                                          final boolean probingRebalanceNeeded) {
         boolean rebalanceRequested = probingRebalanceNeeded || versionProbing;
-        boolean shouldEncodeProbingRebalanceTime = probingRebalanceNeeded;
+        boolean shouldEncodeProbingRebalance = probingRebalanceNeeded;
 
         // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
@@ -1023,14 +1020,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (tasksRevoked) {
                 // TODO: once KAFKA-9821 is resolved we can leave it to the client to trigger this rebalance
-                log.info("Follow-up rebalance: scheduled immediately due to tasks changing ownership.");
+                log.debug("Requesting followup rebalance be scheduled immediately due to tasks changing ownership.");
                 info.setNextRebalanceTime(0L);
                 rebalanceRequested = true;
-            } else if (shouldEncodeProbingRebalanceTime) {
+            } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Follow-up rebalance: scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
+                log.debug("Requesting followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
-                shouldEncodeProbingRebalanceTime = false;
+                shouldEncodeProbingRebalance = false;
             }
 
             assignment.put(
