@@ -29,11 +29,13 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.BufferedOutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import static org.junit.Assert.assertEquals;
 
@@ -167,6 +169,70 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         assertEquals(TOPIC, records.get(0).topic());
         assertEquals("line", records.get(0).value());
 
+        task.stop();
+    }
+
+    static final String KAFKAMSG = "Kafka® is used for building real-time data pipelines and streaming apps. " +
+            "It is horizontally scalable, fault-tolerant, wicked fast, " +
+            "and runs in production in thousands of companies.";
+
+    @Test
+    public void testSmallBatch() throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
+        replay();
+
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "2");
+        task.start(config);
+
+        OutputStream os = new BufferedOutputStream(Files.newOutputStream(tempFile.toPath()));
+        for (int i = 0; i < 100; i++) {
+            os.write((i + KAFKAMSG + "\n").getBytes());
+        }
+        os.flush();
+        List<SourceRecord> records = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            List<SourceRecord>  srs = task.poll();
+            if (srs != null) {
+                records.addAll(srs);
+                assertEquals((i * 2) + KAFKAMSG, srs.get(0).value());
+                assertEquals((i * 2 + 1) + KAFKAMSG, srs.get(1).value());
+            }
+        }
+
+        assertEquals(100, records.size());
+
+        os.close();
+        task.stop();
+    }
+
+    // run this test manually
+    public void testLargeFile() throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
+        replay();
+
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "10");
+        task.start(config);
+
+        OutputStream os = new BufferedOutputStream(Files.newOutputStream(tempFile.toPath()));
+
+        for (int i = 0; i < 10_000_000; i++) {
+            os.write((i + KAFKAMSG + "\n").getBytes());
+        }
+        os.flush();
+        List<SourceRecord> records = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            List<SourceRecord>  srs = task.poll();
+            if (srs != null) {
+                records.addAll(srs);
+                for (int j = 0; j < 10; j++) {
+                    assertEquals((i * 10 + j) + KAFKAMSG, srs.get(j).value());
+                }
+            }
+        }
+
+        assertEquals(200, records.size());
+
+        os.close();
         task.stop();
     }
 
