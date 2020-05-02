@@ -635,34 +635,31 @@ public class InternalTopologyBuilder {
     }
 
     public void validateCopartition() {
-        final List<Set<String>> copartitionGroups =
+        // allCopartitionedSourceTopics take the list of co-partitioned nodes and
+        // replaces each processor name with the corresponding source topic name
+        final List<Set<String>> allCopartitionedSourceTopics =
                 copartitionSourceGroups
                         .stream()
                         .map(sourceGroup -> sourceGroup
                                 .stream()
-                                .flatMap(node -> nodeToSourceTopics.get(node).stream())
+                                .flatMap(sourceNodeName -> nodeToSourceTopics.get(sourceNodeName).stream())
                                 .collect(Collectors.toSet())
                         ).collect(Collectors.toList());
-        for (final Set<String> copartition : copartitionGroups) {
-            final Map<String, Integer> topicPartNum = new HashMap<>();
+        for (final Set<String> copartition : allCopartitionedSourceTopics) {
+            final Map<String, Integer> numberOfPartitionsPerTopic = new HashMap<>();
             copartition.forEach(topic -> {
                 final InternalTopicProperties prop = internalTopicNamesWithProperties.get(topic);
                 if (prop != null && prop.getNumberOfPartitions().isPresent()) {
-                    topicPartNum.put(topic, prop.getNumberOfPartitions().get());
+                    numberOfPartitionsPerTopic.put(topic, prop.getNumberOfPartitions().get());
                 }
             });
-            internalTopicNamesWithProperties.forEach((topic, prop) -> {
-                if (copartition.contains(topic) && prop.getNumberOfPartitions().isPresent()) {
-                    topicPartNum.put(topic, prop.getNumberOfPartitions().get());
-                }
-            });
-            if (copartition.equals(topicPartNum.keySet())) {
-                final Collection<Integer> partNums = topicPartNum.values();
-                final Integer first = partNums.iterator().next();
-                for (final Integer partNum : partNums) {
-                    if (partNum.equals(first)) {
+            if (!numberOfPartitionsPerTopic.isEmpty() && copartition.equals(numberOfPartitionsPerTopic.keySet())) {
+                final Collection<Integer> partitionNumbers = numberOfPartitionsPerTopic.values();
+                final Integer first = partitionNumbers.iterator().next();
+                for (final Integer partitionNumber : partitionNumbers) {
+                    if (!partitionNumber.equals(first)) {
                         final String msg = String.format("Following topics do not have the same number of " +
-                                        "partitions: [%s]", new TreeMap<>(topicPartNum));
+                                "partitions: [%s]", new TreeMap<>(numberOfPartitionsPerTopic));
                         throw new TopologyException(msg);
 
                     }

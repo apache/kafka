@@ -37,7 +37,6 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -58,6 +57,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class KStreamRepartitionTest {
@@ -146,16 +146,14 @@ public class KStreamRepartitionTest {
                 Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
         );
 
-        try {
-            builder.build(props);
-            Assert.fail();
-        } catch (final TopologyException t) {
-            final String expectedErrorMessage = String.format("Following topics do not have the same " +
-                            "number of partitions: [%s]",
-                    new TreeMap<>(repartitionTopicsWithNumOfPartitions));
-            assertNotNull(t);
-            assertTrue(t.getMessage().contains(expectedErrorMessage));
-        }
+        final TopologyException expected = assertThrows(
+                TopologyException.class, () -> builder.build(props)
+        );
+        final String expectedErrorMessage = String.format("Following topics do not have the same " +
+                        "number of partitions: [%s]",
+                new TreeMap<>(repartitionTopicsWithNumOfPartitions));
+        assertNotNull(expected);
+        assertTrue(expected.getMessage().contains(expectedErrorMessage));
     }
 
     private String toRepartitionTopicName(final String input) {
