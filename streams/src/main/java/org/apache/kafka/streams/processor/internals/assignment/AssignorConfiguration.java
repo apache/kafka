@@ -342,7 +342,6 @@ public final class AssignorConfiguration {
 
     public static class AssignmentConfigs {
         public final long acceptableRecoveryLag;
-        public final int balanceFactor;
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
@@ -350,7 +349,6 @@ public final class AssignorConfiguration {
         private AssignmentConfigs(final StreamsConfig configs) {
             this(
                 configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
-                configs.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG),
                 configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
                 configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
                 configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG)
@@ -358,12 +356,10 @@ public final class AssignorConfiguration {
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
-                          final Integer balanceFactor,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
                           final Long probingRebalanceIntervalMs) {
             this.acceptableRecoveryLag = acceptableRecoveryLag;
-            this.balanceFactor = balanceFactor;
             this.maxWarmupReplicas = maxWarmupReplicas;
             this.numStandbyReplicas = numStandbyReplicas;
             this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;

@@ -64,7 +64,7 @@ public interface Transformer<K, V, R> {
      *
      * @param context the context
      */
-    void init(final ProcessorContext<Object, Object> context);
+    void init(final ProcessorContext context);
 
     /**
      * Transform the record with the given key and value.

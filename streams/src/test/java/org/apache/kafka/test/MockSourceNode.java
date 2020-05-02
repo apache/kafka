@@ -48,7 +48,7 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     }
 
     @Override
-    public void init(final InternalProcessorContext<Object, Object> context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         initialized = true;
     }

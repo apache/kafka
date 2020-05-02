@@ -939,18 +939,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSetDefaultBalanceFactor() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG), is(1));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionIfBalanceFactorIsOutsideBounds() {
-        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 0);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-    }
-
-    @Test
     public void shouldSetDefaultNumStandbyReplicas() {
         final StreamsConfig config = new StreamsConfig(props);
         assertThat(config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), is(0));

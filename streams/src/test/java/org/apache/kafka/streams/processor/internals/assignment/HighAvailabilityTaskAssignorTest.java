@@ -61,7 +61,6 @@ import static org.hamcrest.Matchers.not;
 public class HighAvailabilityTaskAssignorTest {
     private final AssignmentConfigs configWithoutStandbys = new AssignmentConfigs(
         /*acceptableRecoveryLag*/ 100L,
-        /*balanceFactor*/ 1,
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 0,
         /*probingRebalanceIntervalMs*/ 60 * 1000L
@@ -69,12 +68,10 @@ public class HighAvailabilityTaskAssignorTest {
 
     private final AssignmentConfigs configWithStandbys = new AssignmentConfigs(
         /*acceptableRecoveryLag*/ 100L,
-        /*balanceFactor*/ 1,
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 1,
         /*probingRebalanceIntervalMs*/ 60 * 1000L
     );
-
 
     @Test
     public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks() {
@@ -128,26 +125,6 @@ public class HighAvailabilityTaskAssignorTest {
         // we'll warm up task 0_0 on client1 because it's first in sorted order,
         // although this isn't an optimal convergence
         assertThat(probingRebalanceNeeded, is(true));
-    }
-
-    @Test
-    public void shouldReusePreviousAssignmentIfItIsAlreadyBalanced() {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);
-        final ClientState client2 =
-            new ClientState(singleton(TASK_0_1), emptySet(), mkMap(mkEntry(TASK_0_0, 0L), mkEntry(TASK_0_1, 0L)), 1);
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, client1),
-            mkEntry(UUID_2, client2)
-        );
-
-        final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
-
-        assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_0)));
-        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_1)));
-        assertThat(probingRebalanceNeeded, is(false));
     }
 
     @Test
@@ -306,7 +283,6 @@ public class HighAvailabilityTaskAssignorTest {
             statefulTasks,
             new AssignmentConfigs(
                 /*acceptableRecoveryLag*/ 100L,
-                /*balanceFactor*/ 1,
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 0,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L
@@ -335,7 +311,6 @@ public class HighAvailabilityTaskAssignorTest {
             statefulTasks,
             new AssignmentConfigs(
                 /*acceptableRecoveryLag*/ 100L,
-                /*balanceFactor*/ 1,
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 1,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L

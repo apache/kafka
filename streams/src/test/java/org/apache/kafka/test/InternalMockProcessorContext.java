@@ -55,7 +55,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext
-    extends AbstractProcessorContext<Object, Object>
+    extends AbstractProcessorContext
     implements RecordCollector.Supplier {
 
     private final File stateDir;

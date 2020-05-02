@@ -45,7 +45,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
-public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> implements RecordCollector.Supplier {
+public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final StreamTask task;
     private final RecordCollector collector;
@@ -126,13 +126,16 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
     }
 
     @Override
-    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
+    public <K, V> void forward(final K key,
+                               final V value) {
         forward(key, value, SEND_TO_ALL);
     }
 
     @Override
     @Deprecated
-    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
+    public <K, V> void forward(final K key,
+                               final V value,
+                               final int childIndex) {
         forward(
             key,
             value,
@@ -141,13 +144,17 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
 
     @Override
     @Deprecated
-    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
+    public <K, V> void forward(final K key,
+                               final V value,
+                               final String childName) {
         forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
+    public <K, V> void forward(final K key,
+                               final V value,
+                               final To to) {
         final ProcessorNode<?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
@@ -182,7 +189,9 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         }
     }
 
-    private <K1 extends K, V1 extends V> void forward(final ProcessorNode<K1, V1> child, final K1 key, final V1 value) {
+    private <K, V> void forward(final ProcessorNode<K, V> child,
+                                final K key,
+                                final V value) {
         setCurrentNode(child);
         child.process(key, value);
     }
@@ -207,7 +216,7 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
-                                final Punctuator callback) {
+                                final Punctuator callback) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }

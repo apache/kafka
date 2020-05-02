@@ -31,12 +31,11 @@ public class DefaultBalancedAssignor implements BalancedAssignor {
     @Override
     public Map<UUID, List<TaskId>> assign(final SortedSet<UUID> clients,
                                           final SortedSet<TaskId> tasks,
-                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads,
-                                          final int balanceFactor) {
+                                          final Map<UUID, Integer> clientsToNumberOfStreamThreads) {
         final Map<UUID, List<TaskId>> assignment = new HashMap<>();
         clients.forEach(client -> assignment.put(client, new ArrayList<>()));
         distributeTasksEvenlyOverClients(assignment, clients, tasks);
-        balanceTasksOverStreamThreads(assignment, clients, clientsToNumberOfStreamThreads, balanceFactor);
+        balanceTasksOverStreamThreads(assignment, clients, clientsToNumberOfStreamThreads);
         return assignment;
     }
 
@@ -58,8 +57,7 @@ public class DefaultBalancedAssignor implements BalancedAssignor {
 
     private void balanceTasksOverStreamThreads(final Map<UUID, List<TaskId>> assignment,
                                                final SortedSet<UUID> clients,
-                                               final Map<UUID, Integer> clientsToNumberOfStreamThreads,
-                                               final int balanceFactor) {
+                                               final Map<UUID, Integer> clientsToNumberOfStreamThreads) {
         boolean stop = false;
         while (!stop) {
             stop = true;
@@ -74,7 +72,7 @@ public class DefaultBalancedAssignor implements BalancedAssignor {
                         destinationTasks.size() / clientsToNumberOfStreamThreads.get(destinationClient);
                     final int assignedTasksPerStreamThreadAtSource =
                         sourceTasks.size() / clientsToNumberOfStreamThreads.get(sourceClient);
-                    if (assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > balanceFactor) {
+                    if (assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > 1) {
                         final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
                         final TaskId taskToMove = sourceIterator.next();
                         sourceIterator.remove();

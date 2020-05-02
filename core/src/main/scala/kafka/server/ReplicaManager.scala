@@ -973,6 +973,9 @@ class ReplicaManager(val config: KafkaConfig,
     val logReadResultMap = new mutable.HashMap[TopicPartition, LogReadResult]
     var anyPartitionsNeedHwUpdate = false
     logReadResults.foreach { case (topicPartition, logReadResult) =>
+      brokerTopicStats.topicStats(topicPartition.topic).totalFetchRequestRate.mark()
+      brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
+
       if (logReadResult.error != Errors.NONE)
         errorReadingData = true
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
@@ -1034,9 +1037,6 @@ class ReplicaManager(val config: KafkaConfig,
       val offset = fetchInfo.fetchOffset
       val partitionFetchSize = fetchInfo.maxBytes
       val followerLogStartOffset = fetchInfo.logStartOffset
-
-      brokerTopicStats.topicStats(tp.topic).totalFetchRequestRate.mark()
-      brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
       try {
