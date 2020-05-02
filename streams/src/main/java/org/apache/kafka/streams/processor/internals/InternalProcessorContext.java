@@ -34,6 +34,16 @@ public interface InternalProcessorContext extends ProcessorContext {
     StreamsMetricsImpl metrics();
 
     /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
+
+    /**
+     * @retun the current wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
+
+    /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */

@@ -302,7 +302,7 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
+    private void produceValueRange(final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);

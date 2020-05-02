@@ -201,7 +201,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                 internalProcessorContext.setRecordContext(toEmit.recordContext());
                 try {
                     internalProcessorContext.forward(toEmit.key(), toEmit.value());
-                    suppressionEmitSensor.record();
+                    suppressionEmitSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
                 } finally {
                     internalProcessorContext.setRecordContext(prevRecordContext);
                 }

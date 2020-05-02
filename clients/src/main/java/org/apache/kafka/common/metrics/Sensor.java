@@ -139,20 +139,21 @@ public final class Sensor {
     }
 
     /**
-     * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
-     */
-    public void record() {
-        if (shouldRecord()) {
-            record(1.0);
-        }
-    }
-
-    /**
      * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
      */
     public boolean shouldRecord() {
         return this.recordingLevel.shouldRecord(config.recordLevel().id);
     }
+
+    /**
+     * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
+     */
+    public void record() {
+        if (shouldRecord()) {
+            recordInternal(1.0d, time.milliseconds(), true);
+        }
+    }
+
     /**
      * Record a value with this sensor
      * @param value The value to record
@@ -161,7 +162,7 @@ public final class Sensor {
      */
     public void record(double value) {
         if (shouldRecord()) {
-            record(value, time.milliseconds());
+            recordInternal(value, time.milliseconds(), true);
         }
     }
 
@@ -174,24 +175,30 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        record(value, timeMs, true);
+        if (shouldRecord()) {
+            recordInternal(value, timeMs, true);
+        }
     }
 
     public void record(double value, long timeMs, boolean checkQuotas) {
         if (shouldRecord()) {
-            this.lastRecordTime = timeMs;
-            synchronized (this) {
-                synchronized (metricLock()) {
-                    // increment all the stats
-                    for (Stat stat : this.stats)
-                        stat.record(config, value, timeMs);
-                }
-                if (checkQuotas)
-                    checkQuotas(timeMs);
-            }
-            for (Sensor parent : parents)
-                parent.record(value, timeMs, checkQuotas);
+            recordInternal(value, timeMs, checkQuotas);
         }
+    }
+
+    private void recordInternal(double value, long timeMs, boolean checkQuotas) {
+        this.lastRecordTime = timeMs;
+        synchronized (this) {
+            synchronized (metricLock()) {
+                // increment all the stats
+                for (Stat stat : this.stats)
+                    stat.record(config, value, timeMs);
+            }
+            if (checkQuotas)
+                checkQuotas(timeMs);
+        }
+        for (Sensor parent : parents)
+            parent.record(value, timeMs, checkQuotas);
     }
 
     /**

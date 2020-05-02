@@ -44,6 +44,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?> currentNode;
+    private long currentSystemTimeMs;
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -59,6 +60,16 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+    }
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        currentSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return currentSystemTimeMs;
     }
 
     @Override

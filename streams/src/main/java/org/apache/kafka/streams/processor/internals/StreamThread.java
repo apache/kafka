@@ -649,7 +649,7 @@ public class StreamThread extends Thread {
 
         if (records != null && !records.isEmpty()) {
             pollSensor.record(pollLatency, now);
-            pollRecordsSensor.record(records.count());
+            pollRecordsSensor.record(records.count(), now);
             addRecordsToTasks(records);
         }
 
@@ -749,16 +749,16 @@ public class StreamThread extends Thread {
 
             // we record the ratio out of the while loop so that the accumulated latency spans over
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
-            taskManager.recordTaskProcessRatio(totalProcessLatency);
+            taskManager.recordTaskProcessRatio(totalProcessLatency, now);
         }
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
-        processRecordsSensor.record(totalProcessed);
-        processRatioSensor.record((double) totalProcessLatency / runOnceLatency);
-        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency);
-        pollRatioSensor.record((double) pollLatency / runOnceLatency);
-        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency);
+        processRecordsSensor.record(totalProcessed, now);
+        processRatioSensor.record((double) totalProcessLatency / runOnceLatency, now);
+        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
+        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
+        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
     }
 
     /**

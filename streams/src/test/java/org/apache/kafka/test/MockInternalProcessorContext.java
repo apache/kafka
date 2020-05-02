@@ -37,12 +37,23 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
+    private long currentSystemTimeMs;
 
     public MockInternalProcessorContext() {
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
+    }
+
+    @Override
+    public void setSystemTimeMs(long timeMs) {
+        currentSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return currentSystemTimeMs;
     }
 
     @Override

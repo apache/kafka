@@ -157,7 +157,7 @@ public class KafkaStreams implements AutoCloseable {
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
 
-    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger();
+    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     // container states
     /**
@@ -685,6 +685,7 @@ public class KafkaStreams implements AutoCloseable {
         metrics = new Metrics(metricConfig, reporters, time);
         streamsMetrics =
             new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
+        rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
         streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
