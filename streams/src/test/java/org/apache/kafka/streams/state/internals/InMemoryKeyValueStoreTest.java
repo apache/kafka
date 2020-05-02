@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
-import static org.apache.kafka.streams.state.internals.InMemoryKeyValueStore.INMEM_EXTENSION;
+import static org.apache.kafka.streams.state.internals.InMemoryKeyValueStore.STORE_EXTENSION;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -100,7 +100,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         // Creating corrupted file from future.
         Files.createFile(context.stateDir().toPath()
             .resolve(STORE)
-            .resolve(future + INMEM_EXTENSION));
+            .resolve(future + STORE_EXTENSION));
 
         checkRestored();
     }
@@ -139,7 +139,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             if (!Files.exists(storeDir))
                 return false;
 
-            return Files.list(storeDir).filter(p -> p.toString().endsWith(INMEM_EXTENSION)).count() == 1;
+            return Files.list(storeDir).filter(p -> p.toString().endsWith(STORE_EXTENSION)).count() == 1;
         }, "store should be persisted");
 
         store.close();

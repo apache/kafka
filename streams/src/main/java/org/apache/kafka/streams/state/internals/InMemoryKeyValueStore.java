@@ -48,7 +48,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private static final String IN_MEMORY_KEY_VALUE_STORE_THREAD_PREFIX = "kafka-in-memory-key-value-store-thread-";
 
-    public static final String INMEM_EXTENSION = ".inmem";
+    public static final String STORE_EXTENSION = ".store";
 
     public static final int COUNT_FLUSH_TO_STORE = 10;
 
@@ -241,7 +241,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private void loadStore() {
         try {
             final List<Path> files = Files.list(storeDir)
-                .filter(p -> p.toString().endsWith(INMEM_EXTENSION))
+                .filter(p -> p.toString().endsWith(STORE_EXTENSION))
                 .sorted((p1, p2) -> (int) (fileNameTimestamp(p2) - fileNameTimestamp(p1)))
                 .collect(Collectors.toList());
 
@@ -266,7 +266,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private long fileNameTimestamp(final Path file) {
         final String fileName = file.toFile().getName();
-        return Long.parseLong(fileName.substring(0, fileName.length() - INMEM_EXTENSION.length()));
+        return Long.parseLong(fileName.substring(0, fileName.length() - STORE_EXTENSION.length()));
     }
 
     private class InMemoryKeyValueStorePersistThread extends KafkaThread {
@@ -310,18 +310,18 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             final long now = System.currentTimeMillis();
 
             try (ObjectOutputStream oos =
-                     new ObjectOutputStream(Files.newOutputStream(storeDir.resolve(now + INMEM_EXTENSION)))) {
+                     new ObjectOutputStream(Files.newOutputStream(storeDir.resolve(now + STORE_EXTENSION)))) {
                 oos.writeObject(map);
             } catch (final IOException e) {
                 throw new KafkaStorageException(e);
             }
 
             if (log.isDebugEnabled())
-                log.debug("InMemoryKeyValueStore[{}] saved to file {}", name, now + INMEM_EXTENSION);
+                log.debug("InMemoryKeyValueStore[{}] saved to file {}", name, now + STORE_EXTENSION);
 
             if (now != lastWritten && lastWritten != 0) {
                 try {
-                    Files.delete(storeDir.resolve(lastWritten + INMEM_EXTENSION));
+                    Files.delete(storeDir.resolve(lastWritten + STORE_EXTENSION));
                 } catch (final IOException e) {
                     if (log.isWarnEnabled()) {
                         log.warn("Can't remove InMemoryKeyValueStore[{}] file:", name, e);
