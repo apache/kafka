@@ -157,7 +157,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private def createTransactionalProducer(transactionalId: String) = {
     val props = new Properties()
     props.put(ProducerConfig.ACKS_CONFIG, "all")
-    props.put(ProducerConfig.BATCH_SIZE_CONFIG, 512)
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512")
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     createProducer(configOverrides = props)
