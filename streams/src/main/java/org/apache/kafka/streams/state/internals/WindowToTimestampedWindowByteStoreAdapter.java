@@ -97,8 +97,8 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection readDirection) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all(readDirection));
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all(direction));
     }
 
     @Override

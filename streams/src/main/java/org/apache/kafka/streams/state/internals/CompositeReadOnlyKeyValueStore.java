@@ -84,7 +84,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     }
 
     @Override
-    public KeyValueIterator<K, V> all(ReadDirection direction) {
+    public KeyValueIterator<K, V> all(final ReadDirection direction) {
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {

@@ -22,7 +22,11 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.state.*;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
@@ -82,7 +86,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
         return wrapped().all(direction);
     }
 

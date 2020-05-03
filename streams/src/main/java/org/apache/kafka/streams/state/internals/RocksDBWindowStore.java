@@ -70,7 +70,7 @@ public class RocksDBWindowStore
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, ReadDirection direction) {
+    public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, final ReadDirection direction) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(key, timeFrom, timeTo, direction);
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).valuesIterator();
     }
@@ -87,7 +87,7 @@ public class RocksDBWindowStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().all();
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }

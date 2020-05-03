@@ -206,7 +206,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+        public KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
             if (direction == ReadDirection.BACKWARD) innerIterWithTimestamp.seekToLast();
             else innerIterWithTimestamp.seekToFirst();

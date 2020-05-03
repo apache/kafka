@@ -19,7 +19,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.*;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.ReadDirection;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
 import java.util.List;
@@ -135,9 +139,9 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> all(ReadDirection direction) {
+    public KeyValueIterator<Windowed<K>, V> all(final ReadDirection direction) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
-                (store) -> store.all(direction);
+            store -> store.all(direction);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(

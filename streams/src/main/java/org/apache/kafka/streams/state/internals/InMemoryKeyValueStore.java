@@ -129,7 +129,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+    public synchronized KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
         if (direction == ReadDirection.BACKWARD) return new DelegatingPeekingKeyValueIterator<>(
                 name,
                 new InMemoryKeyValueIterator(map.descendingMap().keySet()));

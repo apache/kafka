@@ -16,7 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -273,8 +281,8 @@ class NamedCache {
         return cache.isEmpty();
     }
 
-    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, ReadDirection direction) {
-        NavigableSet<Bytes> keySet = cache.navigableKeySet().subSet(from, true, to, true);
+    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, final ReadDirection direction) {
+        final NavigableSet<Bytes> keySet = cache.navigableKeySet().subSet(from, true, to, true);
         if (direction == ReadDirection.BACKWARD) return keySetIterator(keySet.descendingSet());
         else return keySetIterator(keySet);
     }
@@ -283,7 +291,7 @@ class NamedCache {
         return new TreeSet<>(keySet).iterator();
     }
 
-    synchronized Iterator<Bytes> allKeys(ReadDirection direction) {
+    synchronized Iterator<Bytes> allKeys(final ReadDirection direction) {
         if (direction == ReadDirection.BACKWARD) return keySetIterator(cache.navigableKeySet().descendingSet());
         else return keySetIterator(cache.navigableKeySet());
     }

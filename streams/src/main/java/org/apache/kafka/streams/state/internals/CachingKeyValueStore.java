@@ -257,7 +257,7 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+    public KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());

@@ -43,7 +43,7 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
     }
 
     @Override
-    public KeyValueIterator<K, V> all(ReadDirection direction) {
+    public KeyValueIterator<K, V> all(final ReadDirection direction) {
         return new KeyValueIteratorFacade<>(inner.all(direction));
     }
 

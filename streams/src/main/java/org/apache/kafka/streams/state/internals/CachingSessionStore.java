@@ -156,7 +156,7 @@ class CachingSessionStore
             cache.range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime)),
-                        ReadDirection.FORWARD);//TODO check
+                        ReadDirection.FORWARD);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
                                                                                                earliestSessionEndTime,

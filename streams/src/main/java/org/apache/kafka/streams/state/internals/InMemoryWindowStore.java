@@ -176,8 +176,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return WrappedInMemoryWindowStoreIterator.emptyIterator();
         }
 
-        ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
-        Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
         if (direction == ReadDirection.BACKWARD) iterator = map.descendingMap().entrySet().iterator();
         else iterator = map.entrySet().iterator();
         return registerNewWindowStoreIterator(key, iterator);
@@ -209,8 +209,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
-        Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
         if (direction == ReadDirection.BACKWARD) iterator = map.descendingMap().entrySet().iterator();
         else iterator = map.entrySet().iterator();
         return registerNewWindowedKeyValueIterator(from, to, iterator);
@@ -228,21 +228,21 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
-        Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.subMap(minTime, true, timeTo, true);
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
         if (direction == ReadDirection.BACKWARD) iterator = map.descendingMap().entrySet().iterator();
         else iterator = map.entrySet().iterator();
         return registerNewWindowedKeyValueIterator(null, null, iterator);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
         removeExpiredSegments();
 
         final long minTime = observedStreamTime - retentionPeriod;
 
-        ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.tailMap(minTime, false);
-        Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> map = segmentMap.tailMap(minTime, false);
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> iterator;
         if (direction == ReadDirection.BACKWARD) iterator = map.descendingMap().entrySet().iterator();
         else iterator = map.entrySet().iterator();
         return registerNewWindowedKeyValueIterator(null, null, iterator);

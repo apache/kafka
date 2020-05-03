@@ -22,7 +22,13 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.*;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.List;
 import java.util.Objects;
@@ -130,7 +136,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+        public KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
             return wrapped.all(direction);
         }
 

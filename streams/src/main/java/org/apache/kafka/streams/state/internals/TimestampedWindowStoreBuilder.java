@@ -22,9 +22,17 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.*;
 
 import java.util.Objects;
+
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -155,7 +163,7 @@ public class TimestampedWindowStoreBuilder<K, V>
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
             return wrapped.all(direction);
         }
 
