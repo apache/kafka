@@ -1053,7 +1053,7 @@ class ReplicaManager(val config: KafkaConfig,
           metadata => findPreferredReadReplica(partition, metadata, replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
-          replicaSelectorOpt.foreach{ selector =>
+          replicaSelectorOpt.foreach { selector =>
             debug(s"Replica selector ${selector.getClass.getSimpleName} returned preferred replica " +
               s"${preferredReadReplica.get} for $clientMetadata")
           }
