@@ -29,8 +29,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.BinaryOperator;
-import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -40,6 +40,7 @@ import static java.util.Arrays.stream;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
+import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.toMap;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
@@ -54,12 +55,24 @@ import static org.slf4j.LoggerFactory.getLogger;
  * the local tiered storage:
  *
  * <code>
- * / storage-directory / topic-partition / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-segment
- *                                       . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-offset_index
- *                                       . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-time_index
+ * / storage-directory / topic-partition / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-segment
+ *                                       . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-offset_index
+ *                                       . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-time_index
  * </code>
  */
 public final class RemoteLogSegmentFileset {
+
+    /**
+     * The format of a file which belongs to the fileset, i.e. a file which is assigned to a log segment in
+     * Kafka's log directory.
+     *
+     * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
+     * follows the structure UUID-BrokerId-FileType.
+     */
+    private static final Pattern FILENAME_FORMAT = compile("(\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12})-(\\d+)-([a-z_]+)");
+    private static final int GROUP_UUID = 1;
+    private static final int GROUP_BROKER_ID = 2;
+    private static final int GROUP_FILE_TYPE = 3;
 
     /**
      * Characterises the type of a file in the local tiered storage copied from Apache Kafka's standard storage.
@@ -73,28 +86,16 @@ public final class RemoteLogSegmentFileset {
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
          * e.g. uuid-segment.
          */
-        public String toFilename(final UUID uuid) {
-            return format("%s-%s", uuid.toString(), name().toLowerCase());
+        public String toFilename(final UUID uuid, final int brokerId) {
+            return format("%s-%d-%s", uuid.toString(), brokerId, name().toLowerCase());
         }
-
-        /**
-         * Separator in the file name of a file offloaded to the local tiered storage.
-         * It separates the string representation of the UUID and a suffix which characterizes
-         * the nature of the file.
-         */
-        private static final char separator = '-';
 
         /**
          * Returns the nature of the data stored in the file with the provided name.
          */
         public static RemoteLogSegmentFileType getFileType(final String filename) {
-            final int separatorIndex = filename.lastIndexOf(separator);
-            if (separatorIndex == -1) {
-                throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename));
-            }
-
             try {
-                return RemoteLogSegmentFileType.valueOf(filename.substring(1 + separatorIndex).toUpperCase());
+                return RemoteLogSegmentFileType.valueOf(substr(filename, GROUP_FILE_TYPE).toUpperCase());
 
             } catch (final RuntimeException e) {
                 throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename), e);
@@ -107,12 +108,22 @@ public final class RemoteLogSegmentFileset {
          * indexes or other associated files).
          */
         public static UUID getUUID(final String filename) {
-            final int separatorIndex = filename.lastIndexOf(separator);
-            if (separatorIndex == -1) {
+            return UUID.fromString(substr(filename, GROUP_UUID));
+        }
+
+        /**
+         * Extracts the broker id this file was offloaded from.
+         */
+        public static int getBrokerId(final String filename) {
+            return Integer.parseInt(substr(filename, GROUP_BROKER_ID));
+        }
+
+        private static String substr(final String filename, final int group) {
+            final Matcher m = FILENAME_FORMAT.matcher(filename);
+            if (!m.matches()) {
                 throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename));
             }
-
-            return UUID.fromString(filename.substring(0, separatorIndex));
+            return m.group(group);
         }
     }
 
@@ -131,13 +142,15 @@ public final class RemoteLogSegmentFileset {
      * @param id Remote log segment id assigned to a log segment in Kafka.
      * @return A new fileset instance.
      */
-    public static RemoteLogSegmentFileset openFileset(final File storageDir, final RemoteLogSegmentId id) {
+    public static RemoteLogSegmentFileset openFileset(
+            final int brokerId, final File storageDir, final RemoteLogSegmentId id) {
+
         final RemoteTopicPartitionDirectory tpDir = openTopicPartitionDirectory(id.topicPartition(), storageDir);
         final File partitionDirectory = tpDir.getDirectory();
         final UUID uuid = id.id();
 
         final Map<RemoteLogSegmentFileType, File> files = stream(RemoteLogSegmentFileType.values())
-                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(uuid))));
+                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(uuid, brokerId))));
 
         return new RemoteLogSegmentFileset(tpDir, id, files);
     }

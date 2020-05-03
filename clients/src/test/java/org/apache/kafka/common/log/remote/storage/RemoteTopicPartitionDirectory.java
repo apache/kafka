@@ -40,13 +40,13 @@ import static org.slf4j.LoggerFactory.getLogger;
  * log segments are stored.
  *
  * <code>
- * / storage-directory / a-topic-1 / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-segment
- *                     .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-offset_index
- *                     .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-time_index
+ * / storage-directory / a-topic-1 / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-segment
+ *                     .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-offset_index
+ *                     .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-1-time_index
  *                     .
- *                     / b-topic-3 / df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-segment
- *                                 . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-offset_index
- *                                 . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-time_index
+ *                     / b-topic-3 / df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-segment
+ *                                 . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-offset_index
+ *                                 . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-time_index
  * </code>
  */
 public final class RemoteTopicPartitionDirectory {

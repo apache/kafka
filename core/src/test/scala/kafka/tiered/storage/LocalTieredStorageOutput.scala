@@ -15,12 +15,13 @@ import scala.jdk.CollectionConverters._
 final class LocalTieredStorageOutput[K, V](val keyDe: Deserializer[K],
                                            val valueDe: Deserializer[V]) extends LocalTieredStorageTraverser {
   private[storage] var output: String =
-    row("File", "Base offset", "End offset", "First record", "Last record")
+    row("File", "Base offset", "End offset", "First record", "Last record", "Broker ID")
 
-  output += "-" * (55 + 12 + 12 + 13 + 13 + (4 * 2)) + "\n" // Columns length + 4 column separators.
+  output += "-" * (55 + 12 + 12 + 13 + 13 + 10 + (5 * 2)) + "\n" // Columns length + 5 column separators.
 
-  private def row(c1: String = "", c2: Any = "", c3: Any = "", c4: String = "", c5: String = "", ident: String = " " * 4) = {
-    f"${ident + c1}%-55s |${c2.toString}%12s |${c3.toString}%12s |$c4%13s |$c5%13s\n"
+  private def row(c1: String = "", c2: Any = "", c3: Any = "", c4: String = "",
+                  c5: String = "", c6: String = "", ident: String = " " * 4) = {
+    f"${ident + c1}%-55s |${c2.toString}%12s |${c3.toString}%12s |$c4%13s |$c5%13s |$c6%10s\n"
   }
 
   private var currentTopic: String = ""
@@ -48,12 +49,16 @@ final class LocalTieredStorageOutput[K, V](val keyDe: Deserializer[K],
       endValue = des(valueDe)(tail.value())
     }
 
+    val segFilename = fileset.getFile(SEGMENT).getName
+    val brokerId = RemoteLogSegmentFileset.RemoteLogSegmentFileType.getBrokerId(segFilename)
+
     output += row(
-      fileset.getFile(SEGMENT).getName,
+      segFilename,
       baseOffset,
       endOffset,
       s"($baseKey, $baseValue)",
-      s"($endKey, $endValue)"
+      s"($endKey, $endValue)",
+      s"$brokerId"
     )
 
     output += row(fileset.getFile(OFFSET_INDEX).getName)

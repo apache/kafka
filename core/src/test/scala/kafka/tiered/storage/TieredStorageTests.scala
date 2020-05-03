@@ -206,7 +206,6 @@ object TieredStorageTests {
         .start(follower)
         .expectLeader(topicA, p0, follower)
         .produce(topicA, p0, ("k4", "v4"), ("k5", "v5"))
-        .expectSegmentToBeOffloaded(follower, topicA, p0, baseOffset = 0, segmentSize = 1)
         .expectSegmentToBeOffloaded(follower, topicA, p0, baseOffset = 1, segmentSize = 1)
     }
   }

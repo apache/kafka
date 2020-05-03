@@ -79,6 +79,7 @@ public final class LocalTieredStorageTest {
         Map<String, Object> config = new HashMap<>();
         config.put(LocalTieredStorage.STORAGE_DIR_PROP, generateStorageId());
         config.put(LocalTieredStorage.DELETE_ON_CLOSE_PROP, "true");
+        config.put(LocalTieredStorage.BROKER_ID, 1);
         config.putAll(extraConfig);
 
         tieredStorage.configure(config);
@@ -266,7 +267,8 @@ public final class LocalTieredStorageTest {
     }
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
-        return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, new byte[0]);
+        final byte[] context = ByteBuffer.allocate(4).putInt(tieredStorage.getBrokerId()).array();
+        return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, context);
     }
 
     private RemoteLogSegmentId newRemoteLogSegmentId() {
@@ -303,15 +305,15 @@ public final class LocalTieredStorageTest {
             this.topicPartition = requireNonNull(topicPartition);
         }
 
-        private List<String> expectedPaths(final RemoteLogSegmentId id, final LogSegmentData data) {
+        private List<String> expectedPaths(final RemoteLogSegmentId id, final int brokerId) {
             final String rootPath = getStorageRootDirectory();
             final String topicPartitionSubpath = format("%s-%d", topicPartition.topic(), topicPartition.partition());
             final String uuid = id.id().toString();
 
             return Arrays.asList(
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-segment").toString(),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-offset_index").toString(),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-time_index").toString()
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-" + brokerId + "-segment").toString(),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-" + brokerId + "-offset_index").toString(),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-" + brokerId + "-time_index").toString()
             );
         }
 
@@ -322,7 +324,7 @@ public final class LocalTieredStorageTest {
          * @param segment The segment stored on Kafka's local storage.
          */
         public void verifyContainsLogSegmentFiles(final RemoteLogSegmentId id, final LogSegmentData segment) {
-            expectedPaths(id, segment).forEach(this::assertFileExists);
+            expectedPaths(id, remoteStorage.getBrokerId()).forEach(this::assertFileExists);
         }
 
         /**
@@ -332,7 +334,7 @@ public final class LocalTieredStorageTest {
          * @param segment The segment stored on Kafka's local storage.
          */
         public void verifyLogSegmentFilesAbsent(final RemoteLogSegmentId id, final LogSegmentData segment) {
-            expectedPaths(id, segment).forEach(this::assertFileDoesNotExist);
+            expectedPaths(id, remoteStorage.getBrokerId()).forEach(this::assertFileDoesNotExist);
         }
 
         /**
@@ -343,7 +345,7 @@ public final class LocalTieredStorageTest {
          * @param seg The segment stored on Kafka's local storage.
          */
         public void verifyRemoteLogSegmentMatchesLocal(final RemoteLogSegmentId id, final LogSegmentData seg) {
-            final String remoteSegmentPath = expectedPaths(id, seg).get(0);
+            final String remoteSegmentPath = expectedPaths(id, remoteStorage.getBrokerId()).get(0);
             assertFileDataEquals(remoteSegmentPath, seg.logSegment().getAbsolutePath());
         }
 
@@ -401,7 +403,8 @@ public final class LocalTieredStorageTest {
         }
 
         private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
-            return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, new byte[0]);
+            final byte[] context = ByteBuffer.allocate(4).putInt(remoteStorage.getBrokerId()).array();
+            return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, context);
         }
 
         private String getStorageRootDirectory() {
