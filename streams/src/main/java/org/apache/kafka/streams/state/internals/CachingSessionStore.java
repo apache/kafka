@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -154,8 +155,8 @@ class CachingSessionStore
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime) :
             cache.range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
-                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
-            );
+                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime)),
+                        ReadDirection.FORWARD);//TODO check
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
                                                                                                earliestSessionEndTime,
@@ -185,7 +186,7 @@ class CachingSessionStore
 
         final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo, ReadDirection.FORWARD);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
@@ -283,7 +284,7 @@ class CachingSessionStore
 
             setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
 
-            this.current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+            this.current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo, ReadDirection.FORWARD);
         }
 
         @Override
@@ -354,7 +355,7 @@ class CachingSessionStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+            current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo, ReadDirection.FORWARD);
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

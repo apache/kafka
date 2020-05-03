@@ -21,6 +21,7 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -98,7 +99,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws NullPointerException if the given key is {@code null}
      */
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
-    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
+    default WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
+        return fetch(key, timeFrom, timeTo, ReadDirection.FORWARD);
+    }
+
+    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo, ReadDirection direction);
 
     @Override
     default WindowStoreIterator<V> fetch(final K key,
@@ -108,6 +113,18 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
             key,
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
             ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+    }
+
+    @Override
+    default WindowStoreIterator<V> fetch(final K key,
+                                         final Instant from,
+                                         final Instant to,
+                                         final ReadDirection direction) {
+        return fetch(
+                key,
+                ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+                ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+                direction);
     }
 
     /**
@@ -124,7 +141,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws NullPointerException if one of the given keys is {@code null}
      */
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
-    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
+    default KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
+        return fetch(from, to, timeFrom, timeTo, ReadDirection.FORWARD);
+    }
+
+    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo, ReadDirection direction);
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from,
@@ -138,6 +159,20 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
             ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
+    @Override
+    default KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                   final K to,
+                                                   final Instant fromTime,
+                                                   final Instant toTime,
+                                                   final ReadDirection direction) {
+        return fetch(
+                from,
+                to,
+                ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+                ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")),
+                direction);
+    }
+
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
@@ -147,12 +182,24 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      */
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
-    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
+    default KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
+        return fetchAll(timeFrom, timeTo, ReadDirection.FORWARD);
+    }
+
+    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo, ReadDirection direction);
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
         return fetchAll(
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
             ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+    }
+
+    @Override
+    default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to, ReadDirection direction) {
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+            direction);
     }
 }

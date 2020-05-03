@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -177,20 +178,20 @@ public class ThreadCache {
         return cache.delete(key);
     }
 
-    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
+    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to, ReadDirection direction) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to, direction), cache);
     }
 
-    public MemoryLRUCacheBytesIterator all(final String namespace) {
+    public MemoryLRUCacheBytesIterator all(final String namespace, final ReadDirection direction) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
+        return new MemoryLRUCacheBytesIterator(cache.allKeys(direction), cache);
     }
 
     public long size() {

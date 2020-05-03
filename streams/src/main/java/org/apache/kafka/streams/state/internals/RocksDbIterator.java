@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksIterator;
 
@@ -31,6 +32,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     private final String storeName;
     private final RocksIterator iter;
     private final Set<KeyValueIterator<Bytes, byte[]>> openIterators;
+    private final ReadDirection direction;
 
     private volatile boolean open = true;
 
@@ -38,10 +40,12 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     RocksDbIterator(final String storeName,
                     final RocksIterator iter,
-                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                    final ReadDirection direction) {
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
+        this.direction = direction;
     }
 
     @Override
@@ -58,7 +62,8 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
             return allDone();
         } else {
             next = getKeyValue();
-            iter.next();
+            if (direction == ReadDirection.BACKWARD) iter.prev();
+            else iter.next();
             return next;
         }
     }

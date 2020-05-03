@@ -29,14 +29,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.*;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
@@ -253,13 +246,14 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
-                                            final K to) {
-            return wrapped().range(from, to);
+                                            final K to,
+                                            final ReadDirection direction) {
+            return wrapped().range(from, to, direction);
         }
 
         @Override
-        public KeyValueIterator<K, V> all() {
-            return wrapped().all();
+        public KeyValueIterator<K, V> all(final ReadDirection direction) {
+            return wrapped().all(direction);
         }
 
         @Override
@@ -331,8 +325,9 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         @Deprecated
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
-                                            final long timeTo) {
-            return wrapped().fetch(key, timeFrom, timeTo);
+                                            final long timeTo,
+                                            final ReadDirection direction) {
+            return wrapped().fetch(key, timeFrom, timeTo, direction);
         }
 
         @Override
@@ -340,20 +335,22 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                       final K to,
                                                       final long timeFrom,
-                                                      final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
+                                                      final long timeTo,
+                                                      final ReadDirection direction) {
+            return wrapped().fetch(from, to, timeFrom, timeTo, direction);
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> all() {
-            return wrapped().all();
+        public KeyValueIterator<Windowed<K>, V> all(final ReadDirection direction) {
+            return wrapped().all(direction);
         }
 
         @Override
         @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return wrapped().fetchAll(timeFrom, timeTo);
+                                                         final long timeTo,
+                                                         final ReadDirection direction) {
+            return wrapped().fetchAll(timeFrom, timeTo, direction);
         }
     }
 
@@ -453,13 +450,14 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
-                                            final K to) {
-            return wrapped().range(from, to);
+                                            final K to,
+                                            final ReadDirection direction) {
+            return wrapped().range(from, to, direction);
         }
 
         @Override
-        public KeyValueIterator<K, V> all() {
-            return wrapped().all();
+        public KeyValueIterator<K, V> all(final ReadDirection direction) {
+            return wrapped().all(direction);
         }
 
         @Override
@@ -531,8 +529,9 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         @Override
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
-                                            final long timeTo) {
-            return wrapped().fetch(key, timeFrom, timeTo);
+                                            final long timeTo,
+                                            final ReadDirection direction) {
+            return wrapped().fetch(key, timeFrom, timeTo, direction);
         }
 
         @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
@@ -540,20 +539,22 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                       final K to,
                                                       final long timeFrom,
-                                                      final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
+                                                      final long timeTo,
+                                                      final ReadDirection direction) {
+            return wrapped().fetch(from, to, timeFrom, timeTo, direction);
         }
 
         @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return wrapped().fetchAll(timeFrom, timeTo);
+                                                         final long timeTo,
+                                                         final ReadDirection direction) {
+            return wrapped().fetchAll(timeFrom, timeTo, direction);
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> all() {
-            return wrapped().all();
+        public KeyValueIterator<Windowed<K>, V> all(final ReadDirection direction) {
+            return wrapped().all(direction);
         }
     }
 

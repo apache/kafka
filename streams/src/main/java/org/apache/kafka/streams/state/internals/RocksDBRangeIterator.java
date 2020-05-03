@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.rocksdb.RocksIterator;
 
 import java.util.Comparator;
@@ -35,8 +36,9 @@ class RocksDBRangeIterator extends RocksDbIterator {
                          final RocksIterator iter,
                          final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
-                         final Bytes to) {
-        super(storeName, iter, openIterators);
+                         final Bytes to,
+                         final ReadDirection direction) {
+        super(storeName, iter, openIterators, direction);
         iter.seek(from.get());
         rawToKey = to.get();
         if (rawToKey == null) {

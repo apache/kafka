@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.util.List;
 
@@ -34,7 +35,7 @@ interface Segments<S extends Segment> {
 
     void openExisting(final InternalProcessorContext context, final long streamTime);
 
-    List<S> segments(final long timeFrom, final long timeTo);
+    List<S> segments(final long timeFrom, final long timeTo, final ReadDirection readDirection);
 
     List<S> allSegments();
 

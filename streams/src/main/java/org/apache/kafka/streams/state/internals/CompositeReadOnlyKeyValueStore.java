@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.util.List;
@@ -65,14 +66,14 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to, final ReadDirection direction) {
         Objects.requireNonNull(from);
         Objects.requireNonNull(to);
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
                 try {
-                    return store.range(from, to);
+                    return store.range(from, to, direction);
                 } catch (final InvalidStateStoreException e) {
                     throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
                 }
@@ -83,12 +84,12 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
+    public KeyValueIterator<K, V> all(ReadDirection direction) {
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
                 try {
-                    return store.all();
+                    return store.all(direction);
                 } catch (final InvalidStateStoreException e) {
                     throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
                 }

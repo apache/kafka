@@ -22,10 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.*;
 
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
@@ -69,8 +66,9 @@ class ChangeLoggingWindowBytesStore
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final long from,
-                                             final long to) {
-        return wrapped().fetch(key, from, to);
+                                             final long to,
+                                             final ReadDirection direction) {
+        return wrapped().fetch(key, from, to, direction);
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
@@ -78,20 +76,22 @@ class ChangeLoggingWindowBytesStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
                                                            final long from,
-                                                           final long to) {
-        return wrapped().fetch(keyFrom, keyTo, from, to);
+                                                           final long to,
+                                                           final ReadDirection direction) {
+        return wrapped().fetch(keyFrom, keyTo, from, to, direction);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return wrapped().all();
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+        return wrapped().all(direction);
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
-        return wrapped().fetchAll(timeFrom, timeTo);
+                                                              final long timeTo,
+                                                              final ReadDirection direction) {
+        return wrapped().fetchAll(timeFrom, timeTo, direction);
     }
 
     @Deprecated

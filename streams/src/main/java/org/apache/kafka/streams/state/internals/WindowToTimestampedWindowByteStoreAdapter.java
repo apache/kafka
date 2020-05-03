@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -63,15 +64,17 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     @SuppressWarnings("deprecation")
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final long timeFrom,
-                                             final long timeTo) {
-        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+                                             final long timeTo,
+                                             final ReadDirection direction) {
+        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, timeFrom, timeTo, direction));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final Instant from,
-                                             final Instant to) {
-        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, from, to));
+                                             final Instant to,
+                                             final ReadDirection direction) {
+        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, from, to, direction));
     }
 
     @Override
@@ -79,34 +82,38 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                            final Bytes to,
                                                            final long timeFrom,
-                                                           final long timeTo) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo));
+                                                           final long timeTo,
+                                                           final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo, direction));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                            final Bytes to,
                                                            final Instant fromTime,
-                                                           final Instant toTime) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, fromTime, toTime));
+                                                           final Instant toTime,
+                                                           final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, fromTime, toTime, direction));
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all());
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection readDirection) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all(readDirection));
     }
 
     @Override
     @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+                                                              final long timeTo,
+                                                              final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo, direction));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from,
-                                                              final Instant to) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(from, to));
+                                                              final Instant to,
+                                                              final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(from, to, direction));
     }
 
     @Override

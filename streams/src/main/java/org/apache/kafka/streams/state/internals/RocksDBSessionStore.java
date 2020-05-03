@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.SessionStore;
 
 
@@ -37,7 +38,8 @@ public class RocksDBSessionStore
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
             key,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            ReadDirection.FORWARD
         );
         return new WrappedSessionStoreIterator(bytesIterator);
     }
@@ -51,7 +53,8 @@ public class RocksDBSessionStore
             keyFrom,
             keyTo,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            ReadDirection.FORWARD
         );
         return new WrappedSessionStoreIterator(bytesIterator);
     }

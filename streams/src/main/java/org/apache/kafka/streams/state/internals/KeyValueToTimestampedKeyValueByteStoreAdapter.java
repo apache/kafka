@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.util.List;
 
@@ -114,13 +115,14 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.range(from, to));
+                                                 final Bytes to,
+                                                 final ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.range(from, to, direction));
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all());
+    public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all(direction));
     }
 
     @Override

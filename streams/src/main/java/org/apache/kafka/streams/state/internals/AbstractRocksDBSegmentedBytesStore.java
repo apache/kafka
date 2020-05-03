@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
@@ -66,8 +67,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
-                                                 final long to) {
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+                                                 final long to,
+                                                 final ReadDirection direction) {
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, direction);
 
         final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
@@ -83,7 +85,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
                                                  final Bytes keyTo,
                                                  final long from,
-                                                 final long to) {
+                                                 final long to,
+                                                 final ReadDirection direction) {
         if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -91,7 +94,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, direction);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
@@ -116,8 +119,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
-                                                    final long timeTo) {
-        final List<S> searchSpace = segments.segments(timeFrom, timeTo);
+                                                    final long timeTo,
+                                                    final ReadDirection direction) {
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, direction);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),

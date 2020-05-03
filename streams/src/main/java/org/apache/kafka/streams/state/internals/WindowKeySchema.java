@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
@@ -93,8 +94,9 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
                                                         final long from,
-                                                        final long to) {
-        return segments.segments(from, to);
+                                                        final long to,
+                                                        final ReadDirection direction) {
+        return segments.segments(from, to, direction);
     }
 
     /**

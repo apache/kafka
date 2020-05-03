@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.rocksdb.RocksIterator;
 
 import java.util.Set;
@@ -28,8 +29,9 @@ class RocksDBPrefixIterator extends RocksDbIterator {
     RocksDBPrefixIterator(final String name,
                           final RocksIterator newIterator,
                           final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
-                          final Bytes prefix) {
-        super(name, newIterator, openIterators);
+                          final Bytes prefix,
+                          final ReadDirection direction) {
+        super(name, newIterator, openIterators, direction);
         rawPrefix = prefix.get();
         newIterator.seek(rawPrefix);
     }

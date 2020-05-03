@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,12 +118,13 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public List<S> segments(final long timeFrom, final long timeTo) {
+    public List<S> segments(final long timeFrom, final long timeTo, final ReadDirection direction) {
         final List<S> result = new ArrayList<>();
-        final NavigableMap<Long, S> segmentsInRange = segments.subMap(
+        NavigableMap<Long, S> segmentsInRange = segments.subMap(
             segmentId(timeFrom), true,
             segmentId(timeTo), true
         );
+        if (direction == ReadDirection.BACKWARD) segmentsInRange = segmentsInRange.descendingMap();
         for (final S segment : segmentsInRange.values()) {
             if (segment.isOpen()) {
                 result.add(segment);

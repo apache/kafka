@@ -16,23 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NavigableMap;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
@@ -280,16 +273,19 @@ class NamedCache {
         return cache.isEmpty();
     }
 
-    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, ReadDirection direction) {
+        NavigableSet<Bytes> keySet = cache.navigableKeySet().subSet(from, true, to, true);
+        if (direction == ReadDirection.BACKWARD) return keySetIterator(keySet.descendingSet());
+        else return keySetIterator(keySet);
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
         return new TreeSet<>(keySet).iterator();
     }
 
-    synchronized Iterator<Bytes> allKeys() {
-        return keySetIterator(cache.navigableKeySet());
+    synchronized Iterator<Bytes> allKeys(ReadDirection direction) {
+        if (direction == ReadDirection.BACKWARD) return keySetIterator(cache.navigableKeySet().descendingSet());
+        else return keySetIterator(cache.navigableKeySet());
     }
 
     synchronized LRUCacheEntry first() {

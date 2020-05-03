@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
@@ -175,16 +176,17 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public KeyValueIterator<K, V> range(final K from,
-                                        final K to) {
+                                        final K to,
+                                        final ReadDirection direction) {
         return new MeteredKeyValueIterator(
-            wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
+            wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), direction),
             rangeSensor
         );
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(wrapped().all(), allSensor);
+    public KeyValueIterator<K, V> all(final ReadDirection direction) {
+        return new MeteredKeyValueIterator(wrapped().all(direction), allSensor);
     }
 
     @Override

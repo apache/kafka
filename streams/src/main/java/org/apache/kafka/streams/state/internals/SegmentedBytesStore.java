@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.util.List;
 
@@ -38,7 +39,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
-    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to);
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to, final ReadDirection direction);
 
     /**
      * Fetch all records from the segmented store in the provided key range and time range
@@ -49,7 +50,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
-    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to, final ReadDirection direction);
     
     /**
      * Gets all the key-value pairs in the existing windows.
@@ -68,7 +69,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if null is used for any key
      */
-    KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to);
+    KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to, final ReadDirection direction);
 
     /**
      * Remove the record with the provided key. The key
@@ -154,7 +155,7 @@ public interface SegmentedBytesStore extends StateStore {
 
         /**
          * Create an implementation of {@link HasNextCondition} that knows when
-         * to stop iterating over the KeyValueSegments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * to stop iterating over the KeyValueSegments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long, ReadDirection)} operations
          * @param binaryKeyFrom the first key in the range
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
@@ -164,13 +165,13 @@ public interface SegmentedBytesStore extends StateStore {
         HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
 
         /**
-         * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine
+         * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long, ReadDirection)} operations to determine
          * which segments should be scanned.
          * @param segments
          * @param from
          * @param to
          * @return  List of segments to search
          */
-        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to);
+        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to, ReadDirection readDirection);
     }
 }

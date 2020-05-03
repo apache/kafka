@@ -29,29 +29,12 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.rocksdb.BlockBasedTableConfig;
-import org.rocksdb.BloomFilter;
-import org.rocksdb.Cache;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.ColumnFamilyOptions;
-import org.rocksdb.CompactionStyle;
-import org.rocksdb.CompressionType;
-import org.rocksdb.DBOptions;
-import org.rocksdb.FlushOptions;
-import org.rocksdb.InfoLogLevel;
-import org.rocksdb.LRUCache;
-import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.RocksIterator;
-import org.rocksdb.Statistics;
-import org.rocksdb.WriteBatch;
-import org.rocksdb.WriteOptions;
+import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -318,8 +301,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     }
 
     @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> range(Bytes from, Bytes to) {
+        return range(from, to, ReadDirection.FORWARD);
+    }
+
+    @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                              final Bytes to) {
+                                                              final Bytes to,
+                                                              final ReadDirection direction) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -332,7 +321,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to);
+        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, direction);
         openIterators.add(rocksDBRangeIterator);
 
         return rocksDBRangeIterator;
@@ -340,8 +329,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
+        return all(ReadDirection.FORWARD);
+    }
+
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all();
+        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all(direction);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -490,9 +484,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         byte[] getOnly(final byte[] key) throws RocksDBException;
 
         KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                              final Bytes to);
+                                              final Bytes to,
+                                              final ReadDirection direction);
 
-        KeyValueIterator<Bytes, byte[]> all();
+        KeyValueIterator<Bytes, byte[]> all(ReadDirection direction);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -558,20 +553,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         @Override
         public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                     final Bytes to) {
+                                                     final Bytes to,
+                                                     final ReadDirection direction) {
             return new RocksDBRangeIterator(
                 name,
                 db.newIterator(columnFamily),
                 openIterators,
                 from,
-                to);
+                to,
+                direction);
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all() {
+        public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
             innerIterWithTimestamp.seekToFirst();
-            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators);
+            if (direction == ReadDirection.BACKWARD) innerIterWithTimestamp.seekToLast();
+            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, direction);
         }
 
         @Override

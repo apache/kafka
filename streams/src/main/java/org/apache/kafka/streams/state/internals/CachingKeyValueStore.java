@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -240,7 +241,8 @@ public class CachingKeyValueStore
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
+                                                 final Bytes to,
+                                                 final ReadDirection direction) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -249,17 +251,17 @@ public class CachingKeyValueStore
         }
 
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to, direction);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to, direction);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
+    public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName, direction);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 

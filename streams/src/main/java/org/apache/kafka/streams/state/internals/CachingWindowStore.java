@@ -26,10 +26,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,7 +184,8 @@ class CachingWindowStore
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                           final long timeFrom,
-                                                          final long timeTo) {
+                                                          final long timeTo,
+                                                          final ReadDirection direction) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -198,11 +196,11 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, timeFrom, timeTo) :
+            new CacheIteratorWrapper(key, timeFrom, timeTo, direction) :
             cache.range(name,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
-                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
-            );
+                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo)),
+                        direction);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
@@ -217,7 +215,8 @@ class CachingWindowStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                            final Bytes to,
                                                            final long timeFrom,
-                                                           final long timeTo) {
+                                                           final long timeTo,
+                                                           final ReadDirection direction) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -236,11 +235,11 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo, direction) :
             cache.range(name,
                         cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
-                        cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
-            );
+                        cacheFunction.cacheKey(keySchema.upperRange(to, timeTo)),
+                        direction);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -257,11 +256,12 @@ class CachingWindowStore
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
+                                                              final long timeTo,
+                                                              final ReadDirection direction) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name, direction);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
@@ -276,11 +276,11 @@ class CachingWindowStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all(final ReadDirection direction) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]>  underlyingIterator = wrapped().all();
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name, direction);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
             cacheIterator,
@@ -319,6 +319,7 @@ class CachingWindowStore
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long timeTo;
+        private final ReadDirection direction;
         private long lastSegmentId;
 
         private long currentSegmentId;
@@ -329,17 +330,20 @@ class CachingWindowStore
 
         private CacheIteratorWrapper(final Bytes key,
                                      final long timeFrom,
-                                     final long timeTo) {
-            this(key, key, timeFrom, timeTo);
+                                     final long timeTo,
+                                     final ReadDirection direction) {
+            this(key, key, timeFrom, timeTo, direction);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long timeFrom,
-                                     final long timeTo) {
+                                     final long timeTo,
+                                     final ReadDirection direction) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;
+            this.direction = direction;
             this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp));
 
             this.segmentInterval = cacheFunction.getSegmentInterval();
@@ -347,7 +351,7 @@ class CachingWindowStore
 
             setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
-            this.current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+            this.current = cache.range(name, cacheKeyFrom, cacheKeyTo, direction);
         }
 
         @Override
@@ -418,7 +422,7 @@ class CachingWindowStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+            current = cache.range(name, cacheKeyFrom, cacheKeyTo, direction);
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

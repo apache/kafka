@@ -19,10 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.*;
 
 import java.time.Instant;
 import java.util.List;
@@ -71,12 +68,13 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @Deprecated
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
-                                        final long timeTo) {
+                                        final long timeTo,
+                                        final ReadDirection direction) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
-                final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
+                final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo, direction);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
@@ -95,11 +93,13 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @Override
     public WindowStoreIterator<V> fetch(final K key,
                                         final Instant from,
-                                        final Instant to) throws IllegalArgumentException {
+                                        final Instant to,
+                                        final ReadDirection direction) throws IllegalArgumentException {
         return fetch(
             key,
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+            direction);
     }
 
     @SuppressWarnings("deprecation") // removing fetch(K from, K to, long from, long to) will fix this
@@ -107,11 +107,12 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
                                                   final long timeFrom,
-                                                  final long timeTo) {
+                                                  final long timeTo,
+                                                  final ReadDirection direction) {
         Objects.requireNonNull(from, "from can't be null");
         Objects.requireNonNull(to, "to can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
-            store -> store.fetch(from, to, timeFrom, timeTo);
+            store -> store.fetch(from, to, timeFrom, timeTo, direction);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
@@ -123,18 +124,20 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
                                                   final Instant fromTime,
-                                                  final Instant toTime) throws IllegalArgumentException {
+                                                  final Instant toTime,
+                                                  final ReadDirection direction) throws IllegalArgumentException {
         return fetch(
             from,
             to,
             ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
-            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")),
+            direction);
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> all() {
+    public KeyValueIterator<Windowed<K>, V> all(ReadDirection direction) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
-            ReadOnlyWindowStore::all;
+                (store) -> store.all(direction);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
@@ -145,9 +148,10 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @Override
     @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                     final long timeTo) {
+                                                     final long timeTo,
+                                                     final ReadDirection direction) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
-            store -> store.fetchAll(timeFrom, timeTo);
+            store -> store.fetchAll(timeFrom, timeTo, direction);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
@@ -158,9 +162,11 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @SuppressWarnings("deprecation") // removing fetchAll(long from, long to) will fix this
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from,
-                                                     final Instant to) throws IllegalArgumentException {
+                                                     final Instant to,
+                                                     final ReadDirection direction) throws IllegalArgumentException {
         return fetchAll(
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+            direction);
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -87,8 +88,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
                                                         final long from,
-                                                        final long to) {
-        return segments.segments(from, Long.MAX_VALUE);
+                                                        final long to,
+                                                        final ReadDirection direction) {
+        return segments.segments(from, Long.MAX_VALUE, direction);
     }
 
     private static <K> K extractKey(final byte[] binaryKey,

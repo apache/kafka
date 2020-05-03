@@ -21,6 +21,7 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -29,6 +30,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
+
+import org.apache.kafka.streams.state.ReadDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,25 +112,30 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final ReadDirection direction) {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
+        NavigableMap<Bytes, byte[]> map = this.map.subMap(from, true, to, true);
+        if (direction == ReadDirection.BACKWARD) map = map.descendingMap();
         return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
+                name,
+                new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet()));
+    public synchronized KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+        if (direction == ReadDirection.BACKWARD) return new DelegatingPeekingKeyValueIterator<>(
+                name,
+                new InMemoryKeyValueIterator(map.descendingMap().keySet()));
+        else return new DelegatingPeekingKeyValueIterator<>(
+                name,
+                new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override

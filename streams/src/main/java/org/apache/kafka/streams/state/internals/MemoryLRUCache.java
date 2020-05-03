@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -138,7 +139,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
      * @throws UnsupportedOperationException at every invocation
      */
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final ReadDirection readDirection) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
     }
 
@@ -146,7 +147,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
      * @throws UnsupportedOperationException at every invocation
      */
     @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
+    public KeyValueIterator<Bytes, byte[]> all(final ReadDirection readDirection) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
     }
 

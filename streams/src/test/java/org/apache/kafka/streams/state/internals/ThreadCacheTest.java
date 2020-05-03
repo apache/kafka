@@ -238,7 +238,7 @@ public class ThreadCacheTest {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
         final Bytes theByte = Bytes.wrap(new byte[]{0});
         cache.put(namespace, theByte, dirtyEntry(theByte.get()));
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, Bytes.wrap(new byte[]{1}));
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, Bytes.wrap(new byte[]{1}), direction);
         assertEquals(theByte, iterator.peekNextKey());
         assertEquals(theByte, iterator.peekNextKey());
     }
@@ -248,21 +248,21 @@ public class ThreadCacheTest {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
         final Bytes theByte = Bytes.wrap(new byte[]{0});
         cache.put(namespace, theByte, dirtyEntry(theByte.get()));
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, Bytes.wrap(new byte[]{1}));
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, Bytes.wrap(new byte[]{1}), direction);
         assertEquals(iterator.peekNextKey(), iterator.next().key);
     }
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowIfNoPeekNextKey() {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{1}));
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{1}), direction);
         iterator.peekNextKey();
     }
 
     @Test
     public void shouldReturnFalseIfNoNextKey() {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{1}));
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{1}), direction);
         assertFalse(iterator.hasNext());
     }
 
@@ -273,7 +273,7 @@ public class ThreadCacheTest {
         for (final byte[] aByte : bytes) {
             cache.put(namespace, Bytes.wrap(aByte), dirtyEntry(aByte));
         }
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{1}), Bytes.wrap(new byte[]{4}));
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{1}), Bytes.wrap(new byte[]{4}), direction);
         int bytesIndex = 1;
         while (iterator.hasNext()) {
             final Bytes peekedKey = iterator.peekNextKey();
@@ -300,7 +300,7 @@ public class ThreadCacheTest {
         // should evict byte[] {0}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
 
-        final ThreadCache.MemoryLRUCacheBytesIterator range = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{5}));
+        final ThreadCache.MemoryLRUCacheBytesIterator range = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{5}), direction);
 
         assertEquals(Bytes.wrap(new byte[]{1}), range.peekNextKey());
     }

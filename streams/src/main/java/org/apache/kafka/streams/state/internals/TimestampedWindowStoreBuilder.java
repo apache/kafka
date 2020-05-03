@@ -22,13 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.*;
 
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -137,8 +131,9 @@ public class TimestampedWindowStoreBuilder<K, V>
         @Override
         public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                  final long timeFrom,
-                                                 final long timeTo) {
-            return wrapped.fetch(key, timeFrom, timeTo);
+                                                 final long timeTo,
+                                                 final ReadDirection direction) {
+            return wrapped.fetch(key, timeFrom, timeTo, direction);
         }
 
         @SuppressWarnings("deprecation")
@@ -146,20 +141,22 @@ public class TimestampedWindowStoreBuilder<K, V>
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                                final Bytes to,
                                                                final long timeFrom,
-                                                               final long timeTo) {
-            return wrapped.fetch(from, to, timeFrom, timeTo);
+                                                               final long timeTo,
+                                                               final ReadDirection direction) {
+            return wrapped.fetch(from, to, timeFrom, timeTo, direction);
         }
 
         @SuppressWarnings("deprecation")
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                                  final long timeTo) {
-            return wrapped.fetchAll(timeFrom, timeTo);
+                                                                  final long timeTo,
+                                                                  final ReadDirection direction) {
+            return wrapped.fetchAll(timeFrom, timeTo, direction);
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-            return wrapped.all();
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all(ReadDirection direction) {
+            return wrapped.all(direction);
         }
 
         @Override
