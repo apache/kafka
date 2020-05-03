@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -356,8 +357,8 @@ public class ProcessorContextImplTest {
         expect(keyValueStoreMock.get(KEY)).andReturn(VALUE);
         expect(keyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
 
-        expect(keyValueStoreMock.range("one", "two")).andReturn(rangeIter);
-        expect(keyValueStoreMock.all()).andReturn(allIter);
+        expect(keyValueStoreMock.range("one", "two", ReadDirection.FORWARD)).andReturn(rangeIter);
+        expect(keyValueStoreMock.all(anyObject(ReadDirection.class))).andReturn(allIter);
 
 
         keyValueStoreMock.put(anyString(), anyLong());
@@ -398,8 +399,8 @@ public class ProcessorContextImplTest {
         expect(timestampedKeyValueStoreMock.get(KEY)).andReturn(VALUE_AND_TIMESTAMP);
         expect(timestampedKeyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
 
-        expect(timestampedKeyValueStoreMock.range("one", "two")).andReturn(timestampedRangeIter);
-        expect(timestampedKeyValueStoreMock.all()).andReturn(timestampedAllIter);
+        expect(timestampedKeyValueStoreMock.range("one", "two", ReadDirection.FORWARD)).andReturn(timestampedRangeIter);
+        expect(timestampedKeyValueStoreMock.all(anyObject(ReadDirection.class))).andReturn(timestampedAllIter);
 
 
         timestampedKeyValueStoreMock.put(anyString(), anyObject(ValueAndTimestamp.class));
@@ -437,11 +438,11 @@ public class ProcessorContextImplTest {
 
         initStateStoreMock(windowStore);
 
-        expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(iters.get(0));
-        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(iters.get(1));
-        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
+        expect(windowStore.fetchAll(anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(iters.get(0));
+        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(iters.get(1));
+        expect(windowStore.fetch(anyString(), anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(windowStoreIter);
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE);
-        expect(windowStore.all()).andReturn(iters.get(2));
+        expect(windowStore.all(anyObject(ReadDirection.class))).andReturn(iters.get(2));
 
         windowStore.put(anyString(), anyLong());
         expectLastCall().andAnswer(() -> {
@@ -460,11 +461,11 @@ public class ProcessorContextImplTest {
 
         initStateStoreMock(windowStore);
 
-        expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(timestampedIters.get(0));
-        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(timestampedIters.get(1));
-        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
+        expect(windowStore.fetchAll(anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(timestampedIters.get(0));
+        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(timestampedIters.get(1));
+        expect(windowStore.fetch(anyString(), anyLong(), anyLong(), anyObject(ReadDirection.class))).andReturn(windowStoreIter);
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE_AND_TIMESTAMP);
-        expect(windowStore.all()).andReturn(timestampedIters.get(2));
+        expect(windowStore.all(anyObject(ReadDirection.class))).andReturn(timestampedIters.get(2));
 
         windowStore.put(anyString(), anyObject(ValueAndTimestamp.class));
         expectLastCall().andAnswer(() -> {

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -64,13 +65,15 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @SuppressWarnings("deprecation")
     @Override
-    public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+    public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo, final ReadDirection direction) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Long, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
-            final Map<K, V> kvMap = data.get(now);
+            final Map<K, V> kvMap;
+            if (direction == ReadDirection.BACKWARD) kvMap = data.get(now).descendingMap();
+            else kvMap = data.get(now);
             if (kvMap != null && kvMap.containsKey(key)) {
                 results.add(new KeyValue<>(now, kvMap.get(key)));
             }
@@ -79,21 +82,24 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to, final ReadDirection direction) throws IllegalArgumentException {
         return fetch(
             key, 
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+            direction);
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> all() {
+    public KeyValueIterator<Windowed<K>, V> all(final ReadDirection direction) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (final long now : data.keySet()) {
-            final NavigableMap<K, V> kvMap = data.get(now);
+            final NavigableMap<K, V> kvMap;
+            if (direction == ReadDirection.BACKWARD) kvMap = data.get(now).descendingMap();
+            else kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
@@ -126,7 +132,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @SuppressWarnings("deprecation")
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo, final ReadDirection direction) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
@@ -135,7 +141,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             if (!(now >= timeFrom && now <= timeTo)) {
                 continue;
             }
-            final NavigableMap<K, V> kvMap = data.get(now);
+            final NavigableMap<K, V> kvMap;
+            if (direction == ReadDirection.BACKWARD) kvMap = data.get(now).descendingMap();
+            else kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
@@ -167,21 +175,24 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to, final ReadDirection direction) throws IllegalArgumentException {
         return fetchAll(
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")),
+            direction);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo, final ReadDirection direction) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
-            final NavigableMap<K, V> kvMap = data.get(now);
+            final NavigableMap<K, V> kvMap;
+            if (direction == ReadDirection.BACKWARD) kvMap = data.get(now).descendingMap();
+            else kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
@@ -215,12 +226,14 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                             final K to,
                                                             final Instant fromTime,
-                                                            final Instant toTime) throws IllegalArgumentException {
+                                                            final Instant toTime,
+                                                            final ReadDirection direction) throws IllegalArgumentException {
         return fetch(
             from,
             to, 
             ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
-            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")),
+            direction);
     }
 
     public void put(final K key, final V value, final long timestamp) {

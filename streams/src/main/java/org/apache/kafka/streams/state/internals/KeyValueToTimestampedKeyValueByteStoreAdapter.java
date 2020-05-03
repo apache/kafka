@@ -121,7 +121,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all(ReadDirection direction) {
+    public KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all(direction));
     }
 

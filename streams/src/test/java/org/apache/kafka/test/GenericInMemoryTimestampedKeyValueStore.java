@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
@@ -126,15 +127,21 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
 
     @Override
     public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
-        final K to) {
+                                                                        final K to, final ReadDirection direction) {
+        final NavigableMap<K, ValueAndTimestamp<V>> map = this.map.subMap(from, true, to, true);
+        final Iterator<Entry<K, ValueAndTimestamp<V>>> iterator;
+        if (direction == ReadDirection.BACKWARD) iterator = map.descendingMap().entrySet().iterator();
+        else iterator = map.entrySet().iterator();
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new GenericInMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+            new GenericInMemoryKeyValueIterator<>(iterator));
     }
 
     @Override
-    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> all() {
-        final TreeMap<K, ValueAndTimestamp<V>> copy = new TreeMap<>(this.map);
+    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> all(ReadDirection direction) {
+        final TreeMap<K, ValueAndTimestamp<V>> copy;
+        if (direction == ReadDirection.BACKWARD) copy = new TreeMap<>(this.map.descendingMap());
+        else copy = new TreeMap<>(this.map);
         return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 

@@ -178,12 +178,20 @@ public class ThreadCache {
         return cache.delete(key);
     }
 
+    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
+        return range(namespace, from, to, ReadDirection.FORWARD);
+    }
+
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to, final ReadDirection direction) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to, direction), cache);
+    }
+
+    public MemoryLRUCacheBytesIterator all(final String namespace) {
+        return all(namespace, ReadDirection.FORWARD);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace, final ReadDirection direction) {

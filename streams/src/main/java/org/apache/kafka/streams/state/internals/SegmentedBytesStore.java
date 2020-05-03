@@ -39,6 +39,10 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
+    default KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
+        return fetch(key, from, to, ReadDirection.FORWARD);
+    }
+
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to, final ReadDirection direction);
 
     /**
@@ -50,8 +54,12 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
+    default KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+        return fetch(keyFrom, keyTo, from, to, ReadDirection.FORWARD);
+    }
+
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to, final ReadDirection direction);
-    
+
     /**
      * Gets all the key-value pairs in the existing windows.
      *
@@ -59,7 +67,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<Bytes, byte[]> all();
-    
+
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
@@ -69,6 +77,10 @@ public interface SegmentedBytesStore extends StateStore {
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if null is used for any key
      */
+    default KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to) {
+        return fetchAll(from, to, ReadDirection.FORWARD);
+    }
+
     KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to, final ReadDirection direction);
 
     /**

@@ -22,7 +22,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.TreeMap;
+
+import org.apache.kafka.streams.state.ReadDirection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +38,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final ReadDirection direction) {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
@@ -45,15 +48,21 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         }
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+        final NavigableSet<Bytes> bytes;
+        if (direction == ReadDirection.BACKWARD) bytes = treeMap.descendingMap().navigableKeySet();
+        else bytes = treeMap.navigableKeySet();
         return new DelegatingPeekingKeyValueIterator<>(name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
+            new MemoryNavigableLRUCache.CacheIterator(bytes
                 .subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override
-    public  KeyValueIterator<Bytes, byte[]> all() {
+    public  KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().iterator(), treeMap);
+        final NavigableSet<Bytes> bytes;
+        if (direction == ReadDirection.BACKWARD) bytes = treeMap.descendingMap().navigableKeySet();
+        else bytes = treeMap.navigableKeySet();
+        return new MemoryNavigableLRUCache.CacheIterator(bytes.iterator(), treeMap);
     }
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.easymock.EasyMockRunner;
@@ -65,7 +66,7 @@ public class ReadOnlyKeyValueStoreFacadeTest {
         expect(mockedKeyValueTimestampIterator.next())
             .andReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 21L)))
             .andReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 42L)));
-        expect(mockedKeyValueTimestampStore.range("key1", "key2")).andReturn(mockedKeyValueTimestampIterator);
+        expect(mockedKeyValueTimestampStore.range("key1", "key2", ReadDirection.FORWARD)).andReturn(mockedKeyValueTimestampIterator);
         replay(mockedKeyValueTimestampIterator, mockedKeyValueTimestampStore);
 
         final KeyValueIterator<String, String> iterator = readOnlyKeyValueStoreFacade.range("key1", "key2");
@@ -79,7 +80,7 @@ public class ReadOnlyKeyValueStoreFacadeTest {
         expect(mockedKeyValueTimestampIterator.next())
             .andReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 21L)))
             .andReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 42L)));
-        expect(mockedKeyValueTimestampStore.all()).andReturn(mockedKeyValueTimestampIterator);
+        expect(mockedKeyValueTimestampStore.all(ReadDirection.FORWARD)).andReturn(mockedKeyValueTimestampIterator);
         replay(mockedKeyValueTimestampIterator, mockedKeyValueTimestampStore);
 
         final KeyValueIterator<String, String> iterator = readOnlyKeyValueStoreFacade.all();

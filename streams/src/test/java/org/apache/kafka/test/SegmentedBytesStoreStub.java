@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore;
 
 import java.util.Collections;
@@ -49,12 +50,12 @@ public class SegmentedBytesStoreStub implements SegmentedBytesStore {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
-        return fetch(key, key, from, to);
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to, final ReadDirection direction) {
+        return fetch(key, key, from, to, direction);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to, final ReadDirection direction) {
         fetchCalled = true;
         return new KeyValueIteratorStub<>(Collections.<KeyValue<Bytes, byte[]>>emptyIterator());
     }
@@ -66,7 +67,7 @@ public class SegmentedBytesStoreStub implements SegmentedBytesStore {
     }
     
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo, final ReadDirection direction) {
         fetchCalled = true;
         return new KeyValueIteratorStub<>(Collections.<KeyValue<Bytes, byte[]>>emptyIterator());
     }

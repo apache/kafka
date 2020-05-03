@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.io.File;
@@ -50,12 +51,12 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to, final ReadDirection direction) {
         return null;
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
+    public KeyValueIterator<K, V> all(final ReadDirection direction) {
         return null;
     }
 

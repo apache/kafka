@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -218,7 +219,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1, ReadDirection.FORWARD)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         replay(innerStoreMock);
 
         store.init(context, store);
@@ -243,7 +244,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1, ReadDirection.FORWARD)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         replay(innerStoreMock);
 
         store.init(context, store);

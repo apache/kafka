@@ -76,11 +76,12 @@ public interface ReadOnlyWindowStore<K, V> {
      * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
      */
     @Deprecated
+    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo, ReadDirection direction);
+
     default WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         return fetch(key, timeFrom, timeTo, ReadDirection.FORWARD);
     }
 
-    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo, ReadDirection direction);
 
     /**
      * Get all the key-value pairs with the given key and the time range from all the existing windows.
@@ -116,11 +117,11 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       If {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
+    WindowStoreIterator<V> fetch(K key, Instant from, Instant to, ReadDirection direction) throws IllegalArgumentException;
+
     default WindowStoreIterator<V> fetch(K key, Instant from, Instant to) throws IllegalArgumentException {
         return fetch(key, from, to, ReadDirection.FORWARD);
     }
-
-    WindowStoreIterator<V> fetch(K key, Instant from, Instant to, ReadDirection direction) throws IllegalArgumentException;
 
     /**
      * Get all the key-value pairs in the given key range and time range from all the existing windows.
@@ -137,11 +138,11 @@ public interface ReadOnlyWindowStore<K, V> {
      * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
      */
     @Deprecated
+    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo, ReadDirection direction);
+
     default KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
         return fetch(from, to, timeFrom, timeTo, ReadDirection.FORWARD);
     }
-
-    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo, ReadDirection direction);
 
     /**
      * Get all the key-value pairs in the given key range and time range from all the existing windows.
@@ -157,13 +158,13 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException If {@code null} is used for any key.
      * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
      */
+    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Instant toTime, ReadDirection direction)
+        throws IllegalArgumentException;
+
     default KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Instant toTime)
         throws IllegalArgumentException {
         return fetch(from, to, fromTime, toTime, ReadDirection.FORWARD);
     }
-
-    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Instant toTime, ReadDirection direction)
-            throws IllegalArgumentException;
 
     /**
      * Gets all the key-value pairs in the existing windows.
@@ -171,11 +172,12 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
+    KeyValueIterator<Windowed<K>, V> all(ReadDirection direction);
+
     default KeyValueIterator<Windowed<K>, V> all() {
         return all(ReadDirection.FORWARD);
     }
 
-    KeyValueIterator<Windowed<K>, V> all(ReadDirection direction);
 
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
@@ -188,25 +190,26 @@ public interface ReadOnlyWindowStore<K, V> {
      * @deprecated Use {@link #fetchAll(Instant, Instant)} instead
      */
     @Deprecated
+    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo, ReadDirection direction);
+
     default KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
         return fetchAll(timeFrom, timeTo, ReadDirection.FORWARD);
     }
-
-    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo, ReadDirection direction);
 
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
      * @param from the beginning of the time slot from which to search (inclusive)
      * @param to   the end of the time slot from which to search (inclusive)
+     * @param direction direction to read iterator results
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
+    KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Instant to, ReadDirection direction) throws IllegalArgumentException;
+
     default KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Instant to) throws IllegalArgumentException {
         return fetchAll(from, to, ReadDirection.FORWARD);
     }
-
-    KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Instant to, ReadDirection direction) throws IllegalArgumentException;
 }

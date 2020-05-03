@@ -86,18 +86,18 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     @SuppressWarnings("deprecation")
-    public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
+    public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo, final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
-    public WindowStoreIterator fetch(final Object key, final Instant from, final Instant to) {
+    public WindowStoreIterator fetch(final Object key, final Instant from, final Instant to, final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    public WindowStoreIterator<KeyValue> fetch(final Object from, final Object to, final long timeFrom, final long timeTo) {
+    public WindowStoreIterator<KeyValue> fetch(final Object from, final Object to, final long timeFrom, final long timeTo, final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
@@ -105,23 +105,24 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     public KeyValueIterator fetch(final Object from,
                                   final Object to,
                                   final Instant fromTime,
-                                  final Instant toTime) throws IllegalArgumentException {
+                                  final Instant toTime,
+                                  final ReadDirection direction) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
-    public WindowStoreIterator<KeyValue> all() {
+    public WindowStoreIterator<KeyValue> all(final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
     
     @Override
     @SuppressWarnings("deprecation")
-    public WindowStoreIterator<KeyValue> fetchAll(final long timeFrom, final long timeTo) {
+    public WindowStoreIterator<KeyValue> fetchAll(final long timeFrom, final long timeTo, final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
-    public KeyValueIterator fetchAll(final Instant from, final Instant to) {
+    public KeyValueIterator fetchAll(final Instant from, final Instant to, final ReadDirection direction) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }

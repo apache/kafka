@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockRecordCollector;
 import org.easymock.EasyMock;
@@ -88,7 +89,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
         EasyMock
-            .expect(inner.fetch(bytesKey, 0, 10))
+            .expect(inner.fetch(bytesKey, 0, 10, ReadDirection.FORWARD))
             .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
         init();
@@ -100,7 +101,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock
-            .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
+            .expect(inner.fetch(bytesKey, bytesKey, 0, 1, ReadDirection.FORWARD))
             .andReturn(KeyValueIterators.emptyIterator());
 
         init();

@@ -54,7 +54,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to, direction);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
         final byte[][] values = new byte[8][];
@@ -157,7 +157,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
         final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to, direction);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator =
                 new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator,

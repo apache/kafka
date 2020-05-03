@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.easymock.EasyMockRule;
@@ -237,7 +238,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
-        expect(inner.range(keyBytes, keyBytes)).andReturn(
+        expect(inner.range(keyBytes, keyBytes, ReadDirection.FORWARD)).andReturn(
             new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
 
@@ -253,7 +254,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
-        expect(inner.all())
+        expect(inner.all(ReadDirection.FORWARD))
             .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
 

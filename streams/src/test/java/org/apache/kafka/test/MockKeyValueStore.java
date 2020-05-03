@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadDirection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -120,12 +121,12 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public KeyValueIterator<Object, Object> range(final Object from, final Object to) {
+    public KeyValueIterator<Object, Object> range(final Object from, final Object to, final ReadDirection direction) {
         return null;
     }
 
     @Override
-    public KeyValueIterator<Object, Object> all() {
+    public KeyValueIterator<Object, Object> all(final ReadDirection direction) {
         return null;
     }
 

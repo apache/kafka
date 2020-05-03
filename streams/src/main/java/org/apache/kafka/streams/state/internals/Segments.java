@@ -35,6 +35,10 @@ interface Segments<S extends Segment> {
 
     void openExisting(final InternalProcessorContext context, final long streamTime);
 
+    default List<S> segments(final long timeFrom, final long timeTo) {
+        return segments(timeFrom, timeTo, ReadDirection.FORWARD);
+    }
+
     List<S> segments(final long timeFrom, final long timeTo, final ReadDirection readDirection);
 
     List<S> allSegments();
