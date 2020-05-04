@@ -236,6 +236,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         loginManagers.clear();
         for (AuthenticateCallbackHandler handler : saslCallbackHandlers.values())
             handler.close();
+        if (sslFactory != null) sslFactory.close();
     }
 
     // Visible to override for testing
