@@ -808,14 +808,17 @@ public class KStreamAggregationIntegrationTest {
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
                                                                  final int numMessages)
-        throws InterruptedException {
+            throws Exception {
+
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
                                                                  final Class innerClass,
-                                                                 final int numMessages) throws InterruptedException {
+                                                                 final int numMessages)
+            throws Exception {
+
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -835,9 +838,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
-                                                                                              final Deserializer<V> valueDeserializer,
-                                                                                              final Class innerClass,
-                                                                                              final int numMessages) throws InterruptedException {
+                                                                              final Deserializer<V> valueDeserializer,
+                                                                              final Class innerClass,
+                                                                              final int numMessages) throws Exception {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

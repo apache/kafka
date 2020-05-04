@@ -185,7 +185,7 @@ public class GlobalKTableEOSIntegrationTest {
             () -> results.equals(expected),
             30000L,
             () -> "waiting for final values" +
-                "\n  expected:" + expected +
+                "\n  expected: " + expected +
                 "\n  received: " + results
         );
     }
@@ -208,7 +208,7 @@ public class GlobalKTableEOSIntegrationTest {
             () -> results.equals(expected),
             30000L,
             () -> "waiting for initial values" +
-                "\n  expected:" + expected +
+                "\n  expected: " + expected +
                 "\n  received: " + results
         );
 
@@ -238,7 +238,7 @@ public class GlobalKTableEOSIntegrationTest {
             () -> results.equals(expected),
             30000L,
             () -> "waiting for final values" +
-                "\n  expected:" + expected +
+                "\n  expected: " + expected +
                 "\n  received: " + results
         );
     }
@@ -272,7 +272,7 @@ public class GlobalKTableEOSIntegrationTest {
             },
             30000L,
             () -> "waiting for initial values" +
-                "\n  expected:" + expected +
+                "\n  expected: " + expected +
                 "\n  received: " + results
         );
     }
@@ -308,7 +308,7 @@ public class GlobalKTableEOSIntegrationTest {
             },
             30000L,
             () -> "waiting for initial values" +
-                "\n  expected:" + expected +
+                "\n  expected: " + expected +
                 "\n  received: " + results
         );
     }
@@ -327,6 +327,9 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void produceTopicValues(final String topic) {
+        final Properties config = new Properties();
+        config.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topic,
             Arrays.asList(
@@ -340,7 +343,7 @@ public class GlobalKTableEOSIntegrationTest {
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
                 LongSerializer.class,
-                new Properties()
+                config
             ),
             mockTime
         );
@@ -349,6 +352,7 @@ public class GlobalKTableEOSIntegrationTest {
     private void produceAbortedMessages() throws Exception {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
+
         IntegrationTestUtils.produceAbortedKeyValuesSynchronouslyWithTimestamp(
             globalTableTopic, Arrays.asList(
                 new KeyValue<>(1L, "A"),
@@ -369,6 +373,7 @@ public class GlobalKTableEOSIntegrationTest {
     private void produceInitialGlobalTableValues() {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
+
         IntegrationTestUtils.produceKeyValuesSynchronously(
             globalTableTopic,
             Arrays.asList(
@@ -389,6 +394,9 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void produceGlobalTableValues() {
+        final Properties config = new Properties();
+        config.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+
         IntegrationTestUtils.produceKeyValuesSynchronously(
             globalTableTopic,
             Arrays.asList(
@@ -402,7 +410,7 @@ public class GlobalKTableEOSIntegrationTest {
                 CLUSTER.bootstrapServers(),
                 LongSerializer.class,
                 StringSerializer.class,
-                new Properties()
+                config
             ),
             mockTime
         );

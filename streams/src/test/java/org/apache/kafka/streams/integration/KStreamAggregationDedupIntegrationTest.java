@@ -239,7 +239,8 @@ public class KStreamAggregationDedupIntegrationTest {
     private <K, V> void validateReceivedMessages(final Deserializer<K> keyDeserializer,
                                                  final Deserializer<V> valueDeserializer,
                                                  final List<KeyValueTimestamp<K, V>> expectedRecords)
-        throws InterruptedException {
+            throws Exception {
+
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
