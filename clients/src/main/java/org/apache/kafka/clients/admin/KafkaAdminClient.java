@@ -1407,6 +1407,15 @@ public class KafkaAdminClient extends AdminClient {
         return runnable.pendingCalls.size();
     }
 
+    /**
+     * Fail the given future when a response handler expected a result for an entity but no result was present.
+     * @param future The future to fail.
+     * @param message The message to fail the future with
+     */
+    private void partialResponse(KafkaFutureImpl<?> future, String message) {
+        future.completeExceptionally(new ApiException(message));
+    }
+
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
@@ -1487,8 +1496,8 @@ public class KafkaAdminClient extends AdminClient {
                 for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
                     KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
                     if (!future.isDone()) {
-                        future.completeExceptionally(new ApiException("The server response did not " +
-                            "contain a reference to node " + entry.getKey()));
+                        partialResponse(future, "The controller response " +
+                                "did not contain a result for topic " + entry.getKey());
                     }
                 }
             }
@@ -1560,8 +1569,8 @@ public class KafkaAdminClient extends AdminClient {
                 for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
                     KafkaFutureImpl<Void> future = entry.getValue();
                     if (!future.isDone()) {
-                        future.completeExceptionally(new ApiException("The server response did not " +
-                            "contain a reference to node " + entry.getKey()));
+                        partialResponse(future, "The controller response " +
+                                "did not contain a result for topic " + entry.getKey());
                     }
                 }
             }
@@ -2262,6 +2271,16 @@ public class KafkaAdminClient extends AdminClient {
                             } else {
                                 future.completeExceptionally(Errors.forCode(partitionResult.errorCode()).exception());
                             }
+                        }
+                    }
+                    // The server should send back a response for every replica. But do a sanity check anyway.
+                    for (Map.Entry<TopicPartitionReplica, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
+                        TopicPartitionReplica replica = entry.getKey();
+                        KafkaFutureImpl<Void> future = entry.getValue();
+                        if (!future.isDone()
+                                && replica.brokerId() == brokerId) {
+                            partialResponse(future, "The response from broker " + brokerId +
+                                    " did not contain a result for replica " + replica);
                         }
                     }
                 }
