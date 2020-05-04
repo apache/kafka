@@ -82,7 +82,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldPersistAndRestore() throws Exception {
         store.close();
 
-        // Clean directory.
+        // Delete checkpoint file.
         Files.deleteIfExists(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION));
 
         // Add any entries that will be restored to any store that uses the driver's context ...
@@ -96,7 +96,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         for (int i = 0; i < InMemoryKeyValueStore.COUNT_FLUSH_TO_STORE; i++)
             store.flush();
 
-        // Store should be persisted to the disk.
+        // Checkpoint should be written to the disk.
         TestUtils.waitForCondition(() -> Files.exists(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION)),
             "store should be persisted");
 
@@ -116,7 +116,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         for (int i = 0; i < InMemoryKeyValueStore.COUNT_FLUSH_TO_STORE; i++)
             restored.flush();
 
-        // Store should be persisted to the disk.
+        // New checkpoint should be written to the disk.
         TestUtils.waitForCondition(() -> "four".equals(createPersistedKeyValueStore().get(4)),
             "store should be rewritten");
     }
