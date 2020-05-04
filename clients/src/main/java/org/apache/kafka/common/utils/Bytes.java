@@ -23,7 +23,7 @@ import java.util.Comparator;
 /**
  * Utility class that handles immutable byte arrays.
  */
-public class Bytes implements Comparable<Bytes>, Serializable {
+public class Bytes implements Comparable<Bytes> {
 
     public static final byte[] EMPTY = new byte[0];
 

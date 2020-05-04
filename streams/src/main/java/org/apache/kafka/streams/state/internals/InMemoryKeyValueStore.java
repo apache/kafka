@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,7 +30,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
@@ -45,9 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
-    private static final Logger log = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
-
-    private static final String IN_MEMORY_KEY_VALUE_STORE_THREAD_PREFIX = "kafka-in-memory-key-value-store-thread-";
+    private static final String IN_MEMORY_KEY_VALUE_CP_THREAD_PREFIX = "kafka-in-memory-key-value-checkpoint-thread-";
 
     public static final String STORE_EXTENSION = ".store";
 
@@ -58,15 +56,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
-    private final InMemoryKeyValueStorePersistThread persistThread;
-    private Path storeFile;
+    private final InMemoryKeyValueStoreCheckpointThread checkpointThread;
+    private Path checkpointFile;
     private AtomicInteger flushCounter;
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     public InMemoryKeyValueStore(final String name, final boolean persistent) {
         this.name = name;
-        this.persistThread = persistent ? new InMemoryKeyValueStorePersistThread(name) : null;
+        this.checkpointThread = persistent ? new InMemoryKeyValueStoreCheckpointThread(name) : null;
     }
 
     @Override
@@ -78,16 +76,16 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public void init(final ProcessorContext context,
                      final StateStore root) {
 
-        if (persistThread != null) {
+        if (checkpointThread != null) {
             flushCounter = new AtomicInteger();
 
-            storeFile = context.stateDir().toPath().resolve(name + STORE_EXTENSION);
+            checkpointFile = context.stateDir().toPath().resolve(name + STORE_EXTENSION);
 
-            if (Files.exists(storeFile)) {
+            if (Files.exists(checkpointFile)) {
                 loadStore();
             }
 
-            persistThread.start();
+            checkpointThread.start();
         }
 
         if (root != null) {
@@ -100,7 +98,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public boolean persistent() {
-        return persistThread != null;
+        return checkpointThread != null;
     }
 
     @Override
@@ -175,7 +173,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @SuppressWarnings("unchecked")
     @Override
     public void flush() {
-        if (persistThread == null)
+        if (checkpointThread == null)
             return;
 
         final int flushCount = flushCounter.incrementAndGet();
@@ -183,10 +181,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             return;
 
         synchronized (this) {
-            persistThread.mapToStore = (TreeMap<Bytes, byte[]>) map.clone();
+            checkpointThread.mapToStore = (TreeMap<Bytes, byte[]>) map.clone();
 
-            synchronized (persistThread) {
-                persistThread.notify();
+            synchronized (checkpointThread) {
+                checkpointThread.notify();
             }
         }
     }
@@ -196,9 +194,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         map.clear();
         size = 0;
         open = false;
-        if (persistThread != null) {
-            synchronized (persistThread) {
-                persistThread.notify();
+        if (checkpointThread != null) {
+            synchronized (checkpointThread) {
+                checkpointThread.notify();
             }
         }
     }
@@ -234,31 +232,45 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @SuppressWarnings("unchecked")
     private void loadStore() {
-        if (!Files.exists(storeFile)) {
-            if (log.isDebugEnabled())
-                log.debug("Store file for a in-memory store '{}' doesn't exists.", name);
+        if (!Files.exists(checkpointFile)) {
+            if (LOG.isDebugEnabled())
+                LOG.debug("Store file for a in-memory store '{}' doesn't exists.", name);
 
             return;
         }
 
-        try (ObjectInputStream oos = new ObjectInputStream(Files.newInputStream(storeFile))) {
-            this.map = (TreeMap<Bytes, byte[]>) oos.readObject();
-            this.size = map.size();
-            if (log.isInfoEnabled())
-                log.info("in-memory key-value store loaded from file {}", storeFile);
-        } catch (final IOException | ClassNotFoundException e) {
-            if (log.isWarnEnabled())
-                log.warn("in-memory key-value store corrupted file skipped {}", storeFile);
+        try {
+            final ByteBuffer buf = ByteBuffer.wrap(Files.readAllBytes(checkpointFile));
+            final ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+            final TreeMap<Bytes, byte[]> map = new TreeMap<>();
+            final int size = accessor.readInt();
+
+            for (int i = 0; i < size; i++) {
+                final byte[] key = new byte[accessor.readInt()];
+                accessor.readArray(key);
+                final byte[] value = new byte[accessor.readInt()];
+                accessor.readArray(value);
+                map.put(Bytes.wrap(key), value);
+            }
+
+            this.map = map;
+            this.size = size;
+
+            if (LOG.isInfoEnabled())
+                LOG.info("in-memory key-value store loaded from file {}", checkpointFile);
+        } catch (final IOException | BufferUnderflowException e) {
+            if (LOG.isWarnEnabled())
+                LOG.warn("in-memory key-value store corrupted file skipped {}", checkpointFile);
         }
     }
 
-    private class InMemoryKeyValueStorePersistThread extends KafkaThread {
+    private class InMemoryKeyValueStoreCheckpointThread extends KafkaThread {
         volatile Map<Bytes, byte[]> mapToStore;
 
-        private FileChannel storeFileChannel;
+        private FileChannel checkpointFileChannel;
 
-        InMemoryKeyValueStorePersistThread(final String name) {
-            super(IN_MEMORY_KEY_VALUE_STORE_THREAD_PREFIX + name, false);
+        InMemoryKeyValueStoreCheckpointThread(final String name) {
+            super(IN_MEMORY_KEY_VALUE_CP_THREAD_PREFIX + name, false);
         }
 
         @Override
@@ -266,7 +278,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             try {
                 Map<Bytes, byte[]> localMap = null;
 
-                storeFileChannel = FileChannel.open(storeFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                checkpointFileChannel = FileChannel.open(checkpointFile, StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE);
 
                 while (open) {
                     // If already store current iteration then must wait for a next one.
@@ -288,34 +301,48 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                     }
 
                     localMap = mapToStore;
-                    writeStoreToDisk(localMap);
+                    checkpoint(localMap);
                 }
             } catch (final IOException e) {
                 throw new KafkaStorageException(e);
             } finally {
-                Utils.closeQuietly(storeFileChannel, "InMemoryKeyValueStoreFile");
+                Utils.closeQuietly(checkpointFileChannel, "InMemoryKeyValueStoreFile");
             }
         }
 
-        private void writeStoreToDisk(final Map<Bytes, byte[]> map) throws IOException {
-            try (ByteBufferOutputStream data = new ByteBufferOutputStream(4 * 1024);
-                 ObjectOutputStream oos = new ObjectOutputStream(data)) {
-                oos.writeObject(map);
+        private void checkpoint(final Map<Bytes, byte[]> map) throws IOException {
+            final int size = checkpointSize(map);
 
-                final int length = data.position();
+            final ByteBuffer buf = ByteBuffer.allocate(size);
+            final ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
 
-                data.position(0);
-                data.limit(length);
+            accessor.writeInt(map.size());
 
-                Utils.writeFully(storeFileChannel, data.buffer());
-
-                storeFileChannel.truncate(length);
-                storeFileChannel.force(false);
-                storeFileChannel.position(0);
+            for (final Map.Entry<Bytes, byte[]> entry : map.entrySet()) {
+                accessor.writeInt(entry.getKey().get().length);
+                accessor.writeByteArray(entry.getKey().get());
+                accessor.writeInt(entry.getValue().length);
+                accessor.writeByteArray(entry.getValue());
             }
 
-            if (log.isDebugEnabled())
-                log.debug("in-memory key-value store '{}' saved to file {}", name, name + STORE_EXTENSION);
+            Utils.writeFully(checkpointFileChannel, buf.rewind());
+
+            checkpointFileChannel.truncate(size);
+            checkpointFileChannel.force(false);
+            checkpointFileChannel.position(0);
+
+            if (LOG.isDebugEnabled())
+                LOG.debug("in-memory key-value store '{}' saved to file {}", name, name + STORE_EXTENSION);
+        }
+
+        private int checkpointSize(final Map<Bytes, byte[]> map) {
+            int size = 4; //Map size.
+
+            for (final Map.Entry<Bytes, byte[]> entry : map.entrySet()) {
+                size += 4 + entry.getKey().get().length + 4 + entry.getValue().length;
+            }
+
+            return size;
         }
     }
 }
