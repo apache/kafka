@@ -55,7 +55,7 @@ import java.util.Properties;
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
-public class MockProcessorContext implements ProcessorContext<Object, Object>, RecordCollector.Supplier {
+public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
     private final TaskId taskId;

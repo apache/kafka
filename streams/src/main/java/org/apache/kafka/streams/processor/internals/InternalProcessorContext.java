@@ -28,10 +28,20 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext<K, V> extends ProcessorContext<K, V> {
+public interface InternalProcessorContext extends ProcessorContext {
 
     @Override
     StreamsMetricsImpl metrics();
+
+    /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
+
+    /**
+     * @retun the current wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
 
     /**
      * Returns the current {@link RecordContext}

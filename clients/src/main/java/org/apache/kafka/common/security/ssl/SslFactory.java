@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -47,7 +48,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 
-public class SslFactory implements Reconfigurable {
+public class SslFactory implements Reconfigurable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
 
     private final Mode mode;
@@ -228,6 +229,11 @@ public class SslFactory implements Reconfigurable {
         if (srcMap.containsKey(key)) {
             destMap.put(key, srcMap.get(key));
         }
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(sslEngineFactory, "close engine factory");
     }
 
     static class CertificateEntries {

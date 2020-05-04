@@ -236,8 +236,10 @@ subprojects {
     def logStreams = new HashMap<String, FileOutputStream>()
     beforeTest { TestDescriptor td ->
       def tid = testId(td)
+      // truncate the file name if it's too long
       def logFile = new File(
-          "${projectDir}/build/reports/testOutput/${tid}.test.stdout")
+              "${projectDir}/build/reports/testOutput/${tid.substring(0, Math.min(tid.size(),240))}.test.stdout"
+      )
       logFile.parentFile.mkdirs()
       logFiles.put(tid, logFile)
       logStreams.put(tid, new FileOutputStream(logFile))

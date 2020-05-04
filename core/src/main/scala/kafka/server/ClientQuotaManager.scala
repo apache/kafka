@@ -250,18 +250,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
-    var throttleTimeMs = 0
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
       clientSensors.quotaSensor.record(value, timeMs)
+      0
     } catch {
-      case _: QuotaViolationException =>
-        // Compute the delay
-        val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
-        throttleTimeMs = throttleTime(clientMetric).toInt
-        debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+      case e: QuotaViolationException =>
+        val throttleTimeMs = throttleTime(e.value, e.bound, windowSize(e.metric, timeMs)).toInt
+        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        throttleTimeMs
     }
-    throttleTimeMs
   }
 
   /** "Unrecord" the given value that has already been recorded for the given user/client by recording a negative value
@@ -337,15 +335,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * we need to add a delay of X to W such that O * W / (W + X) = T.
    * Solving for X, we get X = (O - T)/T * W.
    */
-  protected def throttleTime(clientMetric: KafkaMetric): Long = {
-    val config = clientMetric.config
-    val rateMetric: Rate = measurableAsRate(clientMetric.metricName(), clientMetric.measurable())
-    val quota = config.quota()
-    val difference = clientMetric.metricValue.asInstanceOf[Double] - quota.bound
+  protected def throttleTime(quotaValue: Double, quotaBound: Double, windowSize: Long): Long = {
+    val difference = quotaValue - quotaBound
     // Use the precise window used by the rate calculation
-    val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.milliseconds())
-    throttleTimeMs.round
+    val throttleTimeMs = difference / quotaBound * windowSize
+    Math.round(throttleTimeMs)
   }
+
+  private def windowSize(metric: KafkaMetric, timeMs: Long): Long =
+    measurableAsRate(metric.metricName, metric.measurable).windowSize(metric.config, timeMs)
 
   // Casting to Rate because we only use Rate in Quota computation
   private def measurableAsRate(name: MetricName, measurable: Measurable): Rate = {

@@ -109,7 +109,7 @@ public class PartitionGroup {
      *
      * @return StampedRecord
      */
-    StampedRecord nextRecord(final RecordInfo info) {
+    StampedRecord nextRecord(final RecordInfo info, final long wallClockTime) {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
@@ -132,9 +132,9 @@ public class PartitionGroup {
                 // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
                     streamTime = record.timestamp;
-                    recordLatenessSensor.record(0);
+                    recordLatenessSensor.record(0, wallClockTime);
                 } else {
-                    recordLatenessSensor.record(streamTime - record.timestamp);
+                    recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }
             }
         }

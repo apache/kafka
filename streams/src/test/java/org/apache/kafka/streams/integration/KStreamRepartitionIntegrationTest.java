@@ -77,6 +77,7 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
 import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -116,16 +117,12 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        final String suffix = testName.getMethodName()
-            .replace('[', '_')
-            .replace(']', '_')
-            .replace(' ', '_')
-            .replace('=', '_');
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
 
-        topicB = "topic-b-" + suffix;
-        inputTopic = "input-topic-" + suffix;
-        outputTopic = "output-topic-" + suffix;
-        applicationId = "kstream-repartition-stream-test-" + suffix;
+        topicB = "topic-b-" + safeTestName;
+        inputTopic = "input-topic-" + safeTestName;
+        outputTopic = "output-topic-" + safeTestName;
+        applicationId = "app-" + safeTestName;
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
@@ -812,9 +809,10 @@ public class KStreamRepartitionIntegrationTest {
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
 
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + testName.getMethodName());
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,

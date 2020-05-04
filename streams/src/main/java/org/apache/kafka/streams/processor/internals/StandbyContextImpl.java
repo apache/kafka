@@ -29,7 +29,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 
-class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
@@ -104,7 +104,7 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public void forward(final Void key, final Void value) {
+    public <K, V> void forward(final K key, final V value) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -112,16 +112,7 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public void forward(final Void key, final Void value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public void forward(final Void key, final Void value, final int childIndex) {
+    public <K, V> void forward(final K key, final V value, final To to) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -130,7 +121,16 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
      */
     @Override
     @Deprecated
-    public void forward(final Void key, final Void value, final String childName) {
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    @Deprecated
+    public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -155,7 +155,7 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 
@@ -176,7 +176,7 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
+    public void setCurrentNode(final ProcessorNode currentNode) {
         // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
 
@@ -184,7 +184,7 @@ class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 }

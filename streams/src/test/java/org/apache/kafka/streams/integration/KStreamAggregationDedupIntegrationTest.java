@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 /**
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
@@ -88,8 +89,8 @@ public class KStreamAggregationDedupIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" + testName.getMethodName();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -222,8 +223,9 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     private void createTopics() throws InterruptedException {
-        streamOneInput = "stream-one-" + testName.getMethodName();
-        outputTopic = "output-" + testName.getMethodName();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamOneInput = "stream-one-" + safeTestName;
+        outputTopic = "output-" + safeTestName;
         CLUSTER.createTopic(streamOneInput, 3, 1);
         CLUSTER.createTopic(outputTopic);
     }
@@ -238,9 +240,10 @@ public class KStreamAggregationDedupIntegrationTest {
                                                  final Deserializer<V> valueDeserializer,
                                                  final List<KeyValueTimestamp<K, V>> expectedRecords)
         throws InterruptedException {
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testName.getMethodName());
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());

@@ -331,7 +331,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the processing context; never null
      * @see #addEntryToRestoreLog(Object, Object)
      */
-    public ProcessorContext<Object, Object> context() {
+    public ProcessorContext context() {
         return context;
     }
 

@@ -303,9 +303,13 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.driver.disable_auto_terminate()
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor1.set_config("internal.task.assignor.class", "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor")
         self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor2.set_config("internal.task.assignor.class", "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor")
         self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor3.set_config("internal.task.assignor.class", "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor")
 
         self.driver.start()
         self.start_all_nodes_with("") # run with TRUNK

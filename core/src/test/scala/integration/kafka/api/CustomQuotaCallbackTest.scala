@@ -264,11 +264,16 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     def produceConsume(expectProduceThrottle: Boolean, expectConsumeThrottle: Boolean): Unit = {
       val numRecords = 1000
       val produced = produceUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false)
+      // don't verify request channel metrics as it's difficult to write non flaky assertions
+      // given the specifics of this test (throttle metric removal followed by produce/consume
+      // until throttled)
+      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
       // make sure there are enough records on the topic to test consumer throttling
       produceWithoutThrottle(topic, numRecords - produced)
       consumeUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false)
+      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
     }
 
     def removeThrottleMetrics(): Unit = {

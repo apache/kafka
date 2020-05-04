@@ -27,11 +27,8 @@ import java.util.Map;
 
 /**
  * Processor context interface.
- *
- * @param <K> the type of input keys that can be forwarded
- * @param <V> the type of input values that can be forwarded
  */
-public interface ProcessorContext<K, V> {
+public interface ProcessorContext {
 
     /**
      * Returns the application id
@@ -161,12 +158,11 @@ public interface ProcessorContext<K, V> {
      * @param interval the time interval between punctuations (supported minimum is 1 millisecond)
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
-     * @throws IllegalArgumentException if the interval is under 1 millisecond
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      */
     Cancellable schedule(final Duration interval,
                          final PunctuationType type,
-                         final Punctuator callback);
+                         final Punctuator callback) throws IllegalArgumentException;
 
     /**
      * Forwards a key/value pair to all downstream processors.
@@ -175,7 +171,7 @@ public interface ProcessorContext<K, V> {
      * @param key key
      * @param value value
      */
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value);
+    <K, V> void forward(final K key, final V value);
 
     /**
      * Forwards a key/value pair to the specified downstream processors.
@@ -185,7 +181,7 @@ public interface ProcessorContext<K, V> {
      * @param value value
      * @param to the options to use when forwarding
      */
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to);
+    <K, V> void forward(final K key, final V value, final To to);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by childIndex
@@ -196,7 +192,7 @@ public interface ProcessorContext<K, V> {
      */
     // TODO when we remove this method, we can also remove `ProcessorNode#children`
     @Deprecated
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex);
+    <K, V> void forward(final K key, final V value, final int childIndex);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
@@ -206,7 +202,7 @@ public interface ProcessorContext<K, V> {
      * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
     @Deprecated
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName);
+    <K, V> void forward(final K key, final V value, final String childName);
 
     /**
      * Requests a commit

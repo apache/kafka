@@ -847,9 +847,9 @@ public class TaskManager {
         return totalProcessed;
     }
 
-    void recordTaskProcessRatio(final long totalProcessLatencyMs) {
+    void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {
         for (final Task task : activeTaskIterable()) {
-            task.recordProcessTimeRatioAndBufferSize(totalProcessLatencyMs);
+            task.recordProcessTimeRatioAndBufferSize(totalProcessLatencyMs, now);
         }
     }
 

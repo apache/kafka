@@ -63,7 +63,8 @@ public class RecordQueueTest {
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new MockRecordCollector()
     );
-    private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(new String[] {"topic"}, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> mockSourceNodeWithMetrics
+        = new MockSourceNode<>(new String[] {"topic"}, intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition("topic", 1),
         mockSourceNodeWithMetrics,

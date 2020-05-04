@@ -375,9 +375,9 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
-        String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
         retryOnExceptionWithTimeout(maxWaitMs, () -> {
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
                 testCondition.conditionMet());
         });
