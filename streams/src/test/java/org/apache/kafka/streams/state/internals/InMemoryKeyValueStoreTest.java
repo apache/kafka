@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -31,6 +29,7 @@ import static org.apache.kafka.streams.state.internals.InMemoryKeyValueStore.STO
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public static final String STORE = "my-store";
@@ -83,45 +82,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldPersistAndRestore() throws Exception {
         store.close();
 
-        persistStoreAndCheck();
-
-        checkRestored();
-    }
-
-    @Test
-    public void shouldSkipCorruptedFile() throws Exception {
-        store.close();
-
-        persistStoreAndCheck();
-
-        // +1 to ensure that "future" is bigger then saved timestamp.
-        final long future = System.currentTimeMillis() + 1;
-
-        // Creating corrupted file from future.
-        Files.createFile(context.stateDir().toPath()
-            .resolve(STORE)
-            .resolve(future + STORE_EXTENSION));
-
-        checkRestored();
-    }
-
-    private void checkRestored() {
-        // Store state should be restored.
-        final KeyValueStore<Integer, String> restored = createPersistedKeyValueStore();
-
-        assertEquals(4, restored.approximateNumEntries());
-        assertEquals("zero", restored.get(0));
-        assertEquals("one", restored.get(1));
-        assertEquals("two", restored.get(2));
-        assertEquals("three", restored.get(3));
-    }
-
-    private void persistStoreAndCheck() throws IOException, InterruptedException {
         // Clean directory.
-        Files.deleteIfExists(context.stateDir().toPath().resolve(STORE));
+        Files.deleteIfExists(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION));
 
-        // Add any entries that will be restored to any store
-        // that uses the driver's context ...
+        // Add any entries that will be restored to any store that uses the driver's context ...
         final KeyValueStore<Integer, String> store = createPersistedKeyValueStore();
 
         store.put(0, "zero");
@@ -133,15 +97,44 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             store.flush();
 
         // Store should be persisted to the disk.
-        TestUtils.waitForCondition(() -> {
-            final Path storeDir = context.stateDir().toPath().resolve(store.name());
-
-            if (!Files.exists(storeDir))
-                return false;
-
-            return Files.list(storeDir).filter(p -> p.toString().endsWith(STORE_EXTENSION)).count() == 1;
-        }, "store should be persisted");
+        TestUtils.waitForCondition(() -> Files.exists(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION)),
+            "store should be persisted");
 
         store.close();
+
+        // Store state should be restored.
+        final KeyValueStore<Integer, String> restored = createPersistedKeyValueStore();
+
+        assertEquals(4, restored.approximateNumEntries());
+        assertEquals("zero", restored.get(0));
+        assertEquals("one", restored.get(1));
+        assertEquals("two", restored.get(2));
+        assertEquals("three", restored.get(3));
+
+        restored.put(4, "four");
+
+        for (int i = 0; i < InMemoryKeyValueStore.COUNT_FLUSH_TO_STORE; i++)
+            restored.flush();
+
+        // Store should be persisted to the disk.
+        TestUtils.waitForCondition(() -> "four".equals(createPersistedKeyValueStore().get(4)),
+            "store should be rewritten");
+    }
+
+    @Test
+    public void shouldSkipCorruptedFile() throws Exception {
+        store.close();
+
+        Files.deleteIfExists(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION));
+        Files.createFile(context.stateDir().toPath().resolve(STORE + STORE_EXTENSION));
+
+        // Store should be empty.
+        final KeyValueStore<Integer, String> restored = createPersistedKeyValueStore();
+
+        assertEquals(0, restored.approximateNumEntries());
+        assertNull(restored.get(0));
+        assertNull(restored.get(1));
+        assertNull(restored.get(2));
+        assertNull(restored.get(3));
     }
 }

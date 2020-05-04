@@ -92,6 +92,10 @@ public class ByteBufferOutputStream extends OutputStream {
         return buffer.limit();
     }
 
+    public void limit(int newLimit) {
+        buffer.limit(newLimit);
+    }
+
     public void position(int position) {
         ensureRemaining(position - buffer.position());
         buffer.position(position);
