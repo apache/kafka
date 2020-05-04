@@ -285,6 +285,7 @@ object ConfigCommand extends Config {
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     val adminClient = Admin.create(props)
 
+    warn(s"entityTypes = ${opts.entityTypes} entityNames = ${opts.entityNames}")
     if (opts.options.has(opts.alterOpt) && opts.entityTypes.size != opts.entityNames.size)
       throw new IllegalArgumentException(s"An entity name must be specified for every entity type")
 
@@ -473,10 +474,11 @@ object ConfigCommand extends Config {
   }
 
   private def describeClientQuotasConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+    warn(s"entityNames = $entityNames")
     getAllClientQuotasConfigs(adminClient, entityTypes, entityNames).foreach { case (entity, entries) =>
       val entityEntries = entity.entries.asScala
-      val entityStr = (entityEntries.get(ClientQuotaEntity.USER).map(u => s"user-principal '${u}'") ++
-        entityEntries.get(ClientQuotaEntity.CLIENT_ID).map(c => s"client-id '${c}'")).mkString(", ")
+      val entityStr = (entityEntries.get(ClientQuotaEntity.USER).map(u => s"user-principal '${Option(u).filterNot(_.isEmpty).getOrElse("default")}'") ++
+        entityEntries.get(ClientQuotaEntity.CLIENT_ID).map(c => s"client-id '${Option(c).filterNot(_.isEmpty).getOrElse("default")}'")).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
       println(s"Configs for ${entityStr} are ${entriesStr}")
     }

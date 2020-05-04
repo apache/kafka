@@ -50,6 +50,9 @@ public class Sanitizer {
      * using URL-encoding.
      */
     public static String sanitize(String name) {
+        if (name.equals("<default>"))
+            return name;
+
         String encoded = "";
         try {
             encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());

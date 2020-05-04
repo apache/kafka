@@ -717,7 +717,8 @@ class AdminManager(val config: KafkaConfig,
   private def sanitizeEntityName(entityName: String): String = {
     if (entityName == ConfigEntityName.Default)
       throw new InvalidRequestException(s"Entity name '${ConfigEntityName.Default}' is reserved")
-    Sanitizer.sanitize(Option(entityName).getOrElse(ConfigEntityName.Default))
+    warn(s"entityName = $entityName getOrElse = ${Option(entityName).filterNot(_.isEmpty).getOrElse(ConfigEntityName.Default)}")
+    Sanitizer.sanitize(Option(entityName).filterNot(_.isEmpty).getOrElse(ConfigEntityName.Default))
   }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
@@ -739,8 +740,6 @@ class AdminManager(val config: KafkaConfig,
         case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
         case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
       }
-      if (entityName != null && entityName.isEmpty)
-        throw new InvalidRequestException(s"Empty ${entityType} not supported")
     }
     (user, clientId)
   }
@@ -798,6 +797,9 @@ class AdminManager(val config: KafkaConfig,
     val excludeUser = wantExcluded(userComponent)
     val excludeClientId = wantExcluded(clientIdComponent)
 
+    warn(s"clientId = $clientId , sanitizedClientId = $sanitizedClientId")
+    warn(s"exactUser = $exactUser exactCliendId = $exactClientId excludeUser = $excludeUser excludeClientId = $excludeClientId")
+
     val userEntries = if (exactUser && excludeClientId)
       Map(((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
     else if (!excludeUser && !exactClientId)
@@ -828,6 +830,8 @@ class AdminManager(val config: KafkaConfig,
       }
     else
       Map.empty
+
+    warn(s"user entries = $userEntries client entries = $clientIdEntries both entries = $bothEntries")
 
     def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
       case Some(component) =>

@@ -329,11 +329,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def getEntityConfigs(rootEntityType: String, sanitizedEntityName: String): Properties = {
     val getDataRequest = GetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
-
+    warn(s"rootEntityType = $rootEntityType sanitizedEntityName = $sanitizedEntityName")
     getDataResponse.resultCode match {
       case Code.OK =>
         ConfigEntityZNode.decode(getDataResponse.data)
-      case Code.NONODE => new Properties()
+      case Code.NONODE =>
+        warn(s"Code.NONODE reached, creating empty properties")
+        new Properties()
       case _ => throw getDataResponse.resultException.get
     }
   }
