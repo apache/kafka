@@ -69,13 +69,16 @@ public class DistributedCounter implements DistributedStateMachine {
     @Override
     public synchronized void apply(Records records) {
         for (RecordBatch batch : records.batches()) {
-            for (Record record : batch) {
-                int value = deserialize(record);
-                if (value != committed.get() + 1)
-                    throw new IllegalStateException("Detected invalid increment in record at offset " + record.offset() +
-                            ", epoch " + batch.partitionLeaderEpoch() + ": " + committed.get() + " -> " + value);
-                log.trace("Applied counter update at offset {}: {} -> {}", record.offset(), committed.get(), value);
-                committed.set(value);
+            if (!batch.isControlBatch()) {
+                for (Record record : batch) {
+                    int value = deserialize(record);
+                    if (value != committed.get() + 1) {
+                        throw new IllegalStateException("Detected invalid increment in record at offset " + record.offset() +
+                                                            ", epoch " + batch.partitionLeaderEpoch() + ": " + committed.get() + " -> " + value);
+                    }
+                    log.trace("Applied counter update at offset {}: {} -> {}", record.offset(), committed.get(), value);
+                    committed.set(value);
+                }
             }
             this.position = new OffsetAndEpoch(batch.lastOffset() + 1, batch.partitionLeaderEpoch());
         }
