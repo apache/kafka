@@ -550,6 +550,22 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
       else 0
 
+    def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)
+                        (response: AbstractResponse): Unit = {
+      val stopReplicaResponse = response.asInstanceOf[StopReplicaResponse]
+      val partitionErrorsForDeletingTopics = mutable.Map.empty[TopicPartition, Errors]
+      stopReplicaResponse.partitionErrors.asScala.foreach { pe =>
+        val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
+        if (controllerContext.isTopicDeletionInProgress(pe.topicName) &&
+            isPartitionDeleted(tp)) {
+          partitionErrorsForDeletingTopics += tp -> Errors.forCode(pe.errorCode)
+        }
+      }
+      if (partitionErrorsForDeletingTopics.nonEmpty)
+        sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error,
+          partitionErrorsForDeletingTopics))
+    }
+
     stopReplicaRequestMap.foreach { case (brokerId, partitionStates) =>
       if (controllerContext.liveOrShuttingDownBrokerIds.contains(brokerId)) {
         if (traceEnabled)
@@ -572,23 +588,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
             stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
             false, stopReplicaTopicState.values.toBuffer.asJava)
-
-          sendRequest(brokerId, stopReplicaRequestBuilder, (r: AbstractResponse) => {
-            val stopReplicaResponse = r.asInstanceOf[StopReplicaResponse]
-            val partitionErrorsForDeletingTopics = mutable.Map.empty[TopicPartition, Errors]
-            stopReplicaResponse.partitionErrors.asScala.foreach { pe =>
-              val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
-              // Verify that the topic deletion is in progress and
-              // that the request deleted the replica
-              if (controllerContext.isTopicDeletionInProgress(pe.topicName) &&
-                partitionStates.get(tp).exists(_.deletePartition)) {
-                partitionErrorsForDeletingTopics += tp -> Errors.forCode(pe.errorCode)
-              }
-            }
-            if (partitionErrorsForDeletingTopics.nonEmpty)
-              sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error,
-                partitionErrorsForDeletingTopics))
-          })
+          sendRequest(brokerId, stopReplicaRequestBuilder,
+            responseCallback(brokerId, tp => partitionStates.get(tp).exists(_.deletePartition)))
         } else {
           var numPartitionStateWithDelete = 0
           var numPartitionStateWithoutDelete = 0
@@ -614,20 +615,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
             val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
               stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
               true, topicStatesWithDelete.values.toBuffer.asJava)
-
-            sendRequest(brokerId, stopReplicaRequestBuilder, (r: AbstractResponse) => {
-              val stopReplicaResponse = r.asInstanceOf[StopReplicaResponse]
-              val partitionErrorsForDeletingTopics = mutable.Map.empty[TopicPartition, Errors]
-              stopReplicaResponse.partitionErrors.asScala.foreach { pe =>
-                if (controllerContext.isTopicDeletionInProgress(pe.topicName)) {
-                  partitionErrorsForDeletingTopics +=
-                    new TopicPartition(pe.topicName, pe.partitionIndex) -> Errors.forCode(pe.errorCode)
-                }
-              }
-              if (partitionErrorsForDeletingTopics.nonEmpty)
-                sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error,
-                  partitionErrorsForDeletingTopics))
-            })
+            sendRequest(brokerId, stopReplicaRequestBuilder, responseCallback(brokerId, _ => true))
           }
 
           if (topicStatesWithoutDelete.nonEmpty) {
