@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -873,16 +874,16 @@ public class WorkerSinkTaskTest {
         // This exception is the true "cause" of the failure
         expectConsumerPoll(1);
         expectConversionAndTransformation(1);
-        Throwable a = new RuntimeException();
+        Throwable putException = new RuntimeException();
         sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(a);
+        PowerMock.expectLastCall().andThrow(putException);
 
         // Throw another exception while closing the task's assignment
         EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
             .andStubReturn(Collections.emptyMap());
-        Throwable b = new RuntimeException();
+        Throwable closeException = new RuntimeException();
         sinkTask.close(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(b);
+        PowerMock.expectLastCall().andThrow(closeException);
 
         PowerMock.replayAll();
 
@@ -890,13 +891,12 @@ public class WorkerSinkTaskTest {
         try {
             workerTask.execute();
             fail();
-        } catch (Throwable t) {
+        } catch (ConnectException e) {
+            assertSame("Exception from put should be the cause", putException, e.getCause());
+            assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
+            assertSame(closeException, e.getSuppressed()[0]);
+        } finally {
             PowerMock.verifyAll();
-            // The exception from close should not shadow the exception from put.
-            assertNotEquals(b, t);
-            assertSame(a, t.getCause());
-            assertTrue(t.getSuppressed().length > 0);
-            assertSame(b, t.getSuppressed()[0]);
         }
     }
 
