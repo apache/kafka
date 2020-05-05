@@ -325,7 +325,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 accessor.writeByteArray(entry.getValue());
             }
 
-            Utils.writeFully(checkpointFileChannel, buf.rewind());
+            buf.rewind();
+
+            Utils.writeFully(checkpointFileChannel, buf);
 
             checkpointFileChannel.truncate(size);
             checkpointFileChannel.force(false);
