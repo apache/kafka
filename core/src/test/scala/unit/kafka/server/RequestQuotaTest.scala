@@ -164,8 +164,16 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values)
-      submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+    for (apiKey <- ApiKeys.values) {
+      apiKey match {
+        case ApiKeys.VOTE | ApiKeys.FIND_QUORUM |
+             ApiKeys.BEGIN_QUORUM_EPOCH | ApiKeys.END_QUORUM_EPOCH |
+             ApiKeys.FETCH_QUORUM_RECORDS =>
+          // Those apis are not implemented yet
+        case _ =>
+          submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+      }
+    }
 
     waitAndCheckResults()
   }
@@ -559,6 +567,40 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
+
+        case ApiKeys.VOTE =>
+          new VoteRequest.Builder(new VoteRequestData()
+            .setCandidateEpoch(1)
+            .setCandidateId(2)
+            .setLastEpoch(0)
+            .setLastEpochEndOffset(10))
+
+        case ApiKeys.BEGIN_QUORUM_EPOCH =>
+          new BeginQuorumEpochRequest.Builder(new BeginQuorumEpochRequestData()
+            .setLeaderId(5)
+            .setLeaderEpoch(2)
+            .setClusterId("cluster"))
+
+        case ApiKeys.END_QUORUM_EPOCH =>
+          new EndQuorumEpochRequest.Builder(new EndQuorumEpochRequestData()
+            .setLeaderId(5)
+            .setLeaderEpoch(2)
+            .setClusterId("cluster")
+            .setReplicaId(10))
+
+        case ApiKeys.FETCH_QUORUM_RECORDS =>
+          new FetchQuorumRecordsRequest.Builder(new FetchQuorumRecordsRequestData()
+              .setFetchOffset(5)
+              .setLastFetchedEpoch(1)
+              .setLeaderEpoch(1)
+              .setReplicaId(10)
+              .setClusterId(1))
+
+        case ApiKeys.FIND_QUORUM =>
+          new FindQuorumRequest.Builder(new FindQuorumRequestData()
+            .setHost("hostname")
+            .setPort(22)
+            .setReplicaId(0))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

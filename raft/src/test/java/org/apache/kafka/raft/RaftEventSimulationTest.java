@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -869,8 +870,12 @@ public class RaftEventSimulationTest {
 
         void deliver(int senderId, RaftResponse.Outbound outbound) {
             int requestId = outbound.requestId();
+            if (outbound.data instanceof FindQuorumResponseData)
+                senderId = -1;
+
             RaftResponse.Inbound inbound = new RaftResponse.Inbound(requestId, outbound.data(), senderId);
             InflightRequest inflightRequest = inflight.remove(requestId);
+
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 

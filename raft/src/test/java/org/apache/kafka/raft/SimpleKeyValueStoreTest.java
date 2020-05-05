@@ -62,14 +62,15 @@ public class SimpleKeyValueStoreTest {
         KafkaRaftClient manager = setupSingleNodeRaftManager();
         manager.initialize(new NoOpStateMachine());
         SimpleKeyValueStore<Integer, Integer> store = new SimpleKeyValueStore<>(manager,
-                new Serdes.IntegerSerde(), new Serdes.IntegerSerde());
+            new Serdes.IntegerSerde(), new Serdes.IntegerSerde());
         store.initialize();
 
         CompletableFuture<OffsetAndEpoch> future = store.put(0, 1);
         manager.poll();
+
         assertTrue(future.isDone());
-        assertEquals(new OffsetAndEpoch(0L, 1), future.get());
+        // The control record takes up one offset.
+        assertEquals(new OffsetAndEpoch(2L, 1), future.get());
         assertEquals(1, store.get(0).intValue());
     }
-
 }

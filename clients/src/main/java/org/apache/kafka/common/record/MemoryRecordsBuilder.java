@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.LeaderChangeMessageData;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
@@ -566,6 +567,21 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             throw new IllegalArgumentException("End transaction marker depends on batch transactional flag being enabled");
         ByteBuffer value = marker.serializeValue();
         return appendControlRecord(timestamp, marker.controlType(), value);
+    }
+
+    /**
+     * Return CRC of the record or null if record-level CRC is not supported for the message format
+     */
+    public Long appendLeaderChangeMessage(long timestamp, LeaderChangeMessageData leaderChangeMessage) {
+        if (partitionLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH) {
+            throw new IllegalArgumentException("Partition leader epoch must be valid, but get " + partitionLeaderEpoch);
+        }
+
+        Struct messageStruct = leaderChangeMessage.toStruct(leaderChangeMessage.highestSupportedVersion());
+        ByteBuffer serializedMessage = ByteBuffer.allocate(messageStruct.sizeOf());
+        messageStruct.writeTo(serializedMessage);
+        serializedMessage.flip();
+        return appendControlRecord(timestamp, ControlRecordType.LEADER_CHANGE, serializedMessage);
     }
 
     /**

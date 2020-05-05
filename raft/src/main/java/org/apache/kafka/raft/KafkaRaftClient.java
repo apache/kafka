@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
 import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindQuorumRequestData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
+import org.apache.kafka.common.message.LeaderChangeMessageData;
+import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -55,6 +57,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * This class implements a Kafkaesque version of the Raft protocol. Leader election
@@ -221,9 +224,27 @@ public class KafkaRaftClient implements RaftClient {
     private void onBecomeLeader(LeaderState state) {
         stateMachine.becomeLeader(quorum.epoch());
         updateLeaderEndOffset(state);
+
+        // Add a control message for faster high watermark advance.
+        appendControlRecord(MemoryRecords.withLeaderChangeMessage(
+            time.milliseconds(),
+            quorum.epoch(),
+            new LeaderChangeMessageData()
+                .setLeaderId(state.election().leaderId())
+                .setVoters(
+                    state.followers().stream().map(
+                        follower -> new Voter().setVoterId(follower)).collect(Collectors.toList())))
+        );
+
         log.assignEpochStartOffset(quorum.epoch(), log.endOffset());
         electionTimer.reset(Long.MAX_VALUE);
         resetConnections();
+    }
+
+    private void appendControlRecord(Records controlRecord) {
+        if (shutdown.get() != null)
+            throw new IllegalStateException("Cannot append records while we are shutting down");
+        log.appendAsLeader(controlRecord, quorum.epoch());
     }
 
     private void maybeBecomeLeader(CandidateState state) throws IOException {
@@ -762,6 +783,7 @@ public class KafkaRaftClient implements RaftClient {
             int requestId = channel.newRequestId();
             ApiMessage request = requestData.get();
             logger.debug("Sending request with id {} to {}: {}", requestId, destinationId, request);
+
             channel.send(new RaftRequest.Outbound(requestId, request, destinationId, currentTimeMs));
             connection.onRequestSent(requestId, time.milliseconds());
             return OptionalInt.of(requestId);
@@ -895,8 +917,10 @@ public class KafkaRaftClient implements RaftClient {
             // This call is a bit annoying, but perhaps justifiable if we need to acquire a lock
             electionTimer.update();
 
-            if (quorum.isVoter() && electionTimer.isExpired())
+            if (quorum.isVoter() && electionTimer.isExpired()) {
+                logger.debug("Become candidate due to election timeout");
                 becomeCandidate();
+            }
 
             maybeSendRequests(electionTimer.currentTimeMs());
             maybeSendOrHandleAppendRequest(electionTimer.currentTimeMs());
@@ -930,9 +954,10 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     /**
-     * Append a set of records to the log. Acknowledgement of this
+     * Append a set of records to the log. Successful completion of the future indicates a success of
+     * the append, with the uncommitted base offset and epoch.
      *
-     * @param records The records to write to the log.
+     * @param records The records to write to the log
      * @return The uncommitted base offset and epoch of the appended records
      */
     @Override

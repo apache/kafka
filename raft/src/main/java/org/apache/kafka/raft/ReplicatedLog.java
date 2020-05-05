@@ -27,13 +27,15 @@ public interface ReplicatedLog {
      * Write a set of records to the local leader log. These messages will either
      * be written atomically in a single batch or the call will fail and raise an
      * exception.
+     *
+     * @return the base offset of the first appended record.
      */
     Long appendAsLeader(Records records, int epoch);
 
     /**
      * Append a set of records that were replicated from the leader. The main
      * difference from appendAsLeader is that we do not need to assign the epoch
-     * or do additional validation
+     * or do additional validation.
      */
     void appendAsFollower(Records records);
 

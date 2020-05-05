@@ -142,8 +142,10 @@ public class QuorumState {
         if (!isVoter(leaderId))
             throw new IllegalArgumentException("Cannot become follower of non-voter " + leaderId);
         boolean transitioned = becomeFollower(epoch, state -> state.acknowledgeLeader(leaderId));
-        if (transitioned)
+        if (transitioned) {
             log.info("Become follower of leader {} in epoch {}", leaderId, epoch);
+        }
+
         return transitioned;
     }
 

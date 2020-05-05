@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.message.LeaderChangeMessageData;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -628,12 +629,34 @@ public class MemoryRecords extends AbstractRecords {
                                                    int partitionLeaderEpoch, long producerId, short producerEpoch,
                                                    EndTransactionMarker marker) {
         boolean isTransactional = true;
-        boolean isControlBatch = true;
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
-                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
+                RecordBatch.NO_SEQUENCE, isTransactional, true, partitionLeaderEpoch,
                 buffer.capacity());
         builder.appendEndTxnMarker(timestamp, marker);
+        builder.close();
+    }
+
+    public static MemoryRecords withLeaderChangeMessage(long timestamp, int leaderEpoch, LeaderChangeMessageData leaderChangeMessage) {
+        // To avoid calling message toStruct multiple times, we supply a fixed message size
+        // for leader change, as it happens rare and the buffer could still grow if not sufficient in
+        // certain edge cases.
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        writeLeaderChangeMessage(buffer, 0L, timestamp, leaderEpoch, leaderChangeMessage);
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static void writeLeaderChangeMessage(ByteBuffer buffer,
+                                                 long initialOffset,
+                                                 long timestamp,
+                                                 int leaderEpoch,
+                                                 LeaderChangeMessageData leaderChangeMessage) {
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+            TimestampType.CREATE_TIME, initialOffset, timestamp,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, true, leaderEpoch, buffer.capacity());
+        builder.appendLeaderChangeMessage(timestamp, leaderChangeMessage);
         builder.close();
     }
 
