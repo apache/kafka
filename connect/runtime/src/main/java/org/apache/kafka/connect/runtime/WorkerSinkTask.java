@@ -400,7 +400,11 @@ class WorkerSinkTask extends WorkerTask {
         } finally {
             if (closing) {
                 log.trace("{} Closing the task before committing the offsets: {}", this, currentOffsets);
-                task.close(currentOffsets.keySet());
+                try {
+                    task.close(currentOffsets.keySet());
+                } catch (Throwable t) {
+                    log.error("{} Closing task failed", this, t);
+                }
             }
         }
 
