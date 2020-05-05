@@ -1451,7 +1451,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("Requested to schedule probing rebalance for {} ms.", encodedNextScheduledRebalanceMs);
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
-            log.trace("No followup rebalance was requested, resetting the rebalance schedule.");
+            log.info("No followup rebalance was requested, resetting the rebalance schedule.");
             nextScheduledRebalanceMs.set(Long.MAX_VALUE);
         }
     }
