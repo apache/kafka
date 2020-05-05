@@ -890,7 +890,7 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         try {
             workerTask.execute();
-            fail();
+            fail("workerTask.execute should have thrown an exception");
         } catch (ConnectException e) {
             PowerMock.verifyAll();
             assertSame("Exception from put should be the cause", putException, e.getCause());
