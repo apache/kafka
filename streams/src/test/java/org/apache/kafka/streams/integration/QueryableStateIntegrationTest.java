@@ -632,7 +632,7 @@ public class QueryableStateIntegrationTest {
         ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
 
-        producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations - 1);
+        producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
         final Thread producerThread = new Thread(producerRunnable);
         kafkaStreams = createCountStream(
             streamConcurrent,
