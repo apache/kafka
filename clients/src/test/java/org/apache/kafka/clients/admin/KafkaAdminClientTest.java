@@ -485,6 +485,27 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testCreateTopicsPartialResponse() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
+                    prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            CreateTopicsResult topicsResult = env.adminClient().createTopics(
+                    asList(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2))),
+                            new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
+                    new CreateTopicsOptions().timeoutMs(10000));
+            topicsResult.values().get("myTopic").get();
+            try {
+                topicsResult.values().get("myTopic2").get();
+                fail("Expected an exception.");
+            } catch (ExecutionException e) {
+                assertTrue("Expected an ExecutionException wrapping an ApiException, but got " + Utils.stackTrace(e),
+                        e.getCause() instanceof ApiException);
+            }
+        }
+    }
+
+    @Test
     public void testCreateTopicsRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
@@ -574,6 +595,27 @@ public class KafkaAdminClientTest {
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteTopicsPartialResponse() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
+                    prepareDeleteTopicsResponse("myTopic", Errors.NONE));
+            Map<String, KafkaFuture<Void>> values = env.adminClient().deleteTopics(asList("myTopic", "myOtherTopic"),
+                    new DeleteTopicsOptions()).values();
+            values.get("myTopic").get();
+
+            try {
+                values.get("myOtherTopic").get();
+                fail("Expected an exception.");
+            } catch (ExecutionException e) {
+                assertTrue("Expected an ExecutionException wrapping an ApiException, but got " + Utils.stackTrace(e),
+                        e.getCause() instanceof ApiException);
+            }
         }
     }
 
