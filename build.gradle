@@ -1152,6 +1152,8 @@ project(':raft') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
