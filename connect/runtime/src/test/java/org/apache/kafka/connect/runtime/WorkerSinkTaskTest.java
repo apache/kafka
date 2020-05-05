@@ -892,11 +892,10 @@ public class WorkerSinkTaskTest {
             workerTask.execute();
             fail();
         } catch (ConnectException e) {
+            PowerMock.verifyAll();
             assertSame("Exception from put should be the cause", putException, e.getCause());
             assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
             assertSame(closeException, e.getSuppressed()[0]);
-        } finally {
-            PowerMock.verifyAll();
         }
     }
 
