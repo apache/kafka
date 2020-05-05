@@ -146,6 +146,12 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
  * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
  * }</pre>
  *
+ * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
+ * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
+ * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
+ * after each input record.
+ *
  * <h2>Processing messages</h2>
  * <p>
  * Your test can supply new input records on any of the topics that the topology's sources consume.
