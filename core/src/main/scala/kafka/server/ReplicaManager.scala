@@ -1089,6 +1089,10 @@ class ReplicaManager(val config: KafkaConfig,
             fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
 
+          // Check if the HW known to the follower is behind the actual HW if a replica selector is defined
+          val followerNeedsHwUpdate = replicaSelectorOpt.isDefined &&
+            partition.getReplica(replicaId).exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
+
           val fetchDataInfo = if (shouldLeaderThrottle(quota, partition, replicaId)) {
             // If the partition is being throttled, simply return an empty set.
             FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
