@@ -1236,7 +1236,7 @@ public class InternalTopologyBuilder {
     }
 
     public boolean hasNoNonGlobalTopology() {
-        return !usesPatternSubscription() && sourceTopicCollection().isEmpty();
+        return sourceTopicNames.isEmpty() && nodeToSourcePatterns.isEmpty();
     }
 
     private boolean isGlobalSource(final String nodeName) {
