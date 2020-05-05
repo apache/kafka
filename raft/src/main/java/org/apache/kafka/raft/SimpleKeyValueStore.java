@@ -83,7 +83,6 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
                     pendingCommit.put(offsetAndEpoch, commitFuture);
                     return commitFuture;
                 }
-
             }
         });
     }
@@ -124,11 +123,16 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
 
     private void withRecords(Records records, BiConsumer<K, V> action) {
         for (RecordBatch batch : records.batches()) {
+            if (batch.isControlBatch()) {
+                continue;
+            }
             for (Record record : batch) {
                 byte[] keyBytes = Utils.toArray(record.key());
                 byte[] valueBytes = Utils.toArray(record.value());
+
                 K key = keySerde.deserializer().deserialize(null, keyBytes);
                 V value = valueSerde.deserializer().deserialize(null, valueBytes);
+
                 action.accept(key, value);
             }
         }
