@@ -163,18 +163,6 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[InvalidRequestException])
-  def testAlterClientQuotasBadUser(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
-  }
-
-  @Test(expected = classOf[InvalidRequestException])
-  def testAlterClientQuotasBadClientId(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
-  }
-
-  @Test(expected = classOf[InvalidRequestException])
   def testAlterClientQuotasBadEntityType(): Unit = {
     val entity = new ClientQuotaEntity(Map(("" -> "name")).asJava)
     alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
