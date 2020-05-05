@@ -119,10 +119,12 @@ public class GlobalKTableEOSIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
-        globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
-                                          Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
-                                                  .withKeySerde(Serdes.Long())
-                                                  .withValueSerde(Serdes.String()));
+        globalTable = builder.globalTable(
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
+                .withKeySerde(Serdes.Long())
+                .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
         foreachAction = results::put;
@@ -166,10 +168,25 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
+
+        final Map<Long, String> expectedState = new HashMap<>();
+        expectedState.put(1L, "F");
+        expectedState.put(2L, "G");
+        expectedState.put(3L, "H");
+        expectedState.put(4L, "I");
+        expectedState.put(5L, "J");
+
+        final Map<Long, String> globalState = new HashMap<>();
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> {
+                globalState.clear();
+                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                return globalState.equals(expectedState);
+            },
             30000,
-            () -> "waiting for data in replicated store; expected 'J'; received: " + replicatedStore.get(5L)
+            () -> "waiting for data in replicated store" +
+                "\n  expected: " + expectedState +
+                "\n  received: " + globalState
         );
 
 
@@ -219,10 +236,25 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
+
+        final Map<Long, String> expectedState = new HashMap<>();
+        expectedState.put(1L, "F");
+        expectedState.put(2L, "G");
+        expectedState.put(3L, "H");
+        expectedState.put(4L, "I");
+        expectedState.put(5L, "J");
+
+        final Map<Long, String> globalState = new HashMap<>();
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> {
+                globalState.clear();
+                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                return globalState.equals(expectedState);
+            },
             30000,
-            () -> "waiting for data in replicated store; expected 'J'; received: " + replicatedStore.get(5L)
+            () -> "waiting for data in replicated store" +
+                "\n  expected: " + expectedState +
+                "\n  received: " + globalState
         );
 
 
@@ -299,11 +331,7 @@ public class GlobalKTableEOSIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 result.clear();
-                final Iterator<KeyValue<Long, String>> it = store.all();
-                while (it.hasNext()) {
-                    final KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
-                }
+                store.all().forEachRemaining(pair -> result.put(pair.key, pair.value));
                 return result.equals(expected);
             },
             30000L,
