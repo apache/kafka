@@ -363,6 +363,8 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User =>
+        throw new InvalidConfigurationException(s"Alternating user configs using AdminClient is not supported yet")
+
       case ConfigType.Client =>
         val oldConfig: Map[String, java.lang.Double] = getClientQuotasConfig(adminClient, entityTypes, entityNames)
 
