@@ -856,6 +856,24 @@ public class JsonConverterTest {
         assertEquals(expected, converted);
     }
 
+    @Test
+    public void testAcceptOptionalNullToConnect() {
+        converter.configure(Collections.singletonMap(ACCEPT_OPTIONAL_NULL_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+        SchemaAndValue converted = converter.toConnectData(TOPIC, "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default-string\"},\"payload\":null}".getBytes());
+        SchemaAndValue expected = new SchemaAndValue(schema, null);
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void testNotAcceptOptionalNullToConnect() {
+        converter.configure(Collections.singletonMap(ACCEPT_OPTIONAL_NULL_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+        SchemaAndValue converted = converter.toConnectData(TOPIC, "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default-string\"},\"payload\":null}".getBytes());
+        SchemaAndValue expected = new SchemaAndValue(schema, "default-string");
+        assertEquals(expected, converted);
+    }
+
     private JsonNode parse(byte[] json) {
         try {
             return objectMapper.readTree(json);

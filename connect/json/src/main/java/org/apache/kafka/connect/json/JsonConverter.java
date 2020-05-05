@@ -660,7 +660,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (schema != null) {
             schemaType = schema.type();
             if (jsonValue == null || jsonValue.isNull()) {
-                if (schema.defaultValue() != null)
+                if (schema.defaultValue() != null && (!schema.isOptional() || !config.acceptOptionalNull()))
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
                     return null;
