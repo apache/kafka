@@ -857,30 +857,29 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-
     @Test
     public void testSinkTasksHandleCloseErrors() throws Exception {
         createTask(initialState);
-
         expectInitializeTask();
         expectTaskGetTopic(true);
 
+        // Put one message through the task to get some offsets to commit
         expectConsumerPoll(1);
         expectConversionAndTransformation(1);
-
         sinkTask.put(EasyMock.anyObject());
         PowerMock.expectLastCall().andVoid();
 
+        // Throw an exception on the next put to trigger shutdown behavior
+        // This exception is the true "cause" of the failure
         expectConsumerPoll(1);
         expectConversionAndTransformation(1);
-
         Throwable a = new RuntimeException();
         sinkTask.put(EasyMock.anyObject());
         PowerMock.expectLastCall().andThrow(a);
 
+        // Throw another exception while closing the task's assignment
         EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
             .andStubReturn(Collections.emptyMap());
-
         Throwable b = new RuntimeException();
         sinkTask.close(EasyMock.anyObject());
         PowerMock.expectLastCall().andThrow(b);
