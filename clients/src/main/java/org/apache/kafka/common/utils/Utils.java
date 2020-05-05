@@ -885,6 +885,12 @@ public final class Utils {
             throw exception;
     }
 
+    @FunctionalInterface
+    public interface QuietClosable extends AutoCloseable {
+        @Override
+        void close();
+    }
+
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */

@@ -256,6 +256,7 @@ public class ErrorHandlingTaskTest {
             // The exception from close should not shadow the exception from put.
             assertNotEquals(b, t);
             assertSame(a, t.getCause());
+            assertSame(b, t.getSuppressed()[0]);
         }
         PowerMock.verifyAll();
     }
