@@ -78,8 +78,6 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertSame;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({WorkerSinkTask.class, WorkerSourceTask.class})
@@ -221,43 +219,6 @@ public class ErrorHandlingTaskTest {
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.close();
 
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testSinkTasksHandleCloseErrors() throws Exception {
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
-        retryWithToleranceOperator.metrics(errorHandlingMetrics);
-        createSinkTask(initialState, retryWithToleranceOperator);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-
-        ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(TOPIC, PARTITION1, FIRST_OFFSET, null, null);
-        EasyMock.expect(consumer.poll(EasyMock.anyObject())).andReturn(records(record1)).anyTimes();
-
-        Throwable a = new RuntimeException();
-        sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andVoid().andThrow(a);
-
-        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
-            .andStubReturn(Collections.emptyMap());
-
-        Throwable b = new RuntimeException();
-        sinkTask.close(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(b);
-
-        PowerMock.replayAll();
-
-        workerSinkTask.initialize(TASK_CONFIG);
-        try {
-            workerSinkTask.execute();
-        } catch (Throwable t) {
-            // The exception from close should not shadow the exception from put.
-            assertNotEquals(b, t);
-            assertSame(a, t.getCause());
-            assertSame(b, t.getSuppressed()[0]);
-        }
         PowerMock.verifyAll();
     }
 

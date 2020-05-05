@@ -86,6 +86,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -854,6 +855,50 @@ public class WorkerSinkTaskTest {
         assertEquals(workerCurrentOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
 
         PowerMock.verifyAll();
+    }
+
+
+    @Test
+    public void testSinkTasksHandleCloseErrors() throws Exception {
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andVoid();
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+
+        Throwable a = new RuntimeException();
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andThrow(a);
+
+        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
+            .andStubReturn(Collections.emptyMap());
+
+        Throwable b = new RuntimeException();
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall().andThrow(b);
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        try {
+            workerTask.execute();
+            fail();
+        } catch (Throwable t) {
+            PowerMock.verifyAll();
+            // The exception from close should not shadow the exception from put.
+            assertNotEquals(b, t);
+            assertSame(a, t.getCause());
+            assertTrue(t.getSuppressed().length > 0);
+            assertSame(b, t.getSuppressed()[0]);
+        }
     }
 
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
