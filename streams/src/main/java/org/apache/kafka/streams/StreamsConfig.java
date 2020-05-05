@@ -828,6 +828,8 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
@@ -1272,9 +1274,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-
-        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         return props;
     }
