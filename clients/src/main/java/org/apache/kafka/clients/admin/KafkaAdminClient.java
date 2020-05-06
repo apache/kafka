@@ -1410,7 +1410,7 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Fail the given future when a response handler expected a result for an entity but no result was present.
      * @param future The future to fail.
-     * @param message The message to fail the future with
+     * @param message The message to fail the future with.
      */
     private void partialResponse(KafkaFutureImpl<?> future, String message) {
         future.completeExceptionally(new ApiException(message));
@@ -2277,8 +2277,7 @@ public class KafkaAdminClient extends AdminClient {
                     for (Map.Entry<TopicPartitionReplica, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
                         TopicPartitionReplica replica = entry.getKey();
                         KafkaFutureImpl<Void> future = entry.getValue();
-                        if (!future.isDone()
-                                && replica.brokerId() == brokerId) {
+                        if (!future.isDone() && replica.brokerId() == brokerId) {
                             partialResponse(future, "The response from broker " + brokerId +
                                     " did not contain a result for replica " + replica);
                         }

@@ -492,7 +492,7 @@ public class KafkaAdminClientTest {
                     prepareCreateTopicsResponse("myTopic", Errors.NONE));
             CreateTopicsResult topicsResult = env.adminClient().createTopics(
                     asList(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2))),
-                            new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
+                           new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(10000));
             topicsResult.values().get("myTopic").get();
             try {
