@@ -69,8 +69,8 @@ public class CircularIterator<T> implements Iterator<T> {
 
     @Override
     public T next() {
-        final T next = this.nextValue;
-        this.nextValue = advance();
+        final T next = nextValue;
+        nextValue = advance();
         return next;
     }
 
@@ -81,10 +81,10 @@ public class CircularIterator<T> implements Iterator<T> {
      * @return The next value in the iterator
      */
     private T advance() {
-        if (!this.iterator.hasNext()) {
-            this.iterator = this.iterable.iterator();
+        if (!iterator.hasNext()) {
+            iterator = iterable.iterator();
         }
-        return this.iterator.next();
+        return iterator.next();
     }
 
     /**
@@ -96,7 +96,7 @@ public class CircularIterator<T> implements Iterator<T> {
      * @return The next value in this {@code Iterator}
      */
     public T peek() {
-        return this.nextValue;
+        return nextValue;
     }
 
     @Override

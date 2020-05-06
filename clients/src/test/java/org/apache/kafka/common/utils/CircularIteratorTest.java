@@ -18,6 +18,7 @@
 package org.apache.kafka.common.utils;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -27,14 +28,14 @@ import org.junit.Test;
 
 public class CircularIteratorTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullCollection() {
-        new CircularIterator<>(null);
+        assertThrows(NullPointerException.class, () -> new CircularIterator<>(null));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyCollection() {
-        new CircularIterator<>(Collections.emptyList());
+        assertThrows(IllegalArgumentException.class, () -> new CircularIterator<>(Collections.emptyList()));
     }
 
     @Test()
