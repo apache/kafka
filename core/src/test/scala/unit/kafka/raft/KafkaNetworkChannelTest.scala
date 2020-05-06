@@ -119,10 +119,10 @@ class KafkaNetworkChannelTest {
       assertEquals(1, inbound.size)
 
       val inboundRequest = inbound.head.asInstanceOf[RaftRequest.Inbound]
-      val requestId = inboundRequest.requestId()
+      val correlationId = inboundRequest.correlationId
 
       val errorResponse = buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST)
-      val outboundResponse = new RaftResponse.Outbound(requestId, errorResponse)
+      val outboundResponse = new RaftResponse.Outbound(correlationId, errorResponse)
       channel.send(outboundResponse)
       channel.receive(1000)
 
@@ -134,10 +134,10 @@ class KafkaNetworkChannelTest {
   private def sendAndAssertErrorResponse(apiKey: ApiKeys,
                                          destinationId: Int,
                                          error: Errors): Unit = {
-    val requestId = channel.newRequestId()
+    val correlationId = channel.newCorrelationId()
     val createdTimeMs = time.milliseconds()
     val apiRequest = buildTestRequest(apiKey)
-    val request = new RaftRequest.Outbound(requestId, apiRequest, destinationId, createdTimeMs)
+    val request = new RaftRequest.Outbound(correlationId, apiRequest, destinationId, createdTimeMs)
 
     channel.send(request)
     val responses = channel.receive(1000).asScala
@@ -145,7 +145,7 @@ class KafkaNetworkChannelTest {
 
     val response = responses.head.asInstanceOf[RaftResponse.Inbound]
     assertEquals(destinationId, response.sourceId)
-    assertEquals(requestId, response.requestId)
+    assertEquals(correlationId, response.correlationId)
     assertEquals(apiKey, ApiKeys.forId(response.data.apiKey))
     assertEquals(error, extractError(response.data))
   }

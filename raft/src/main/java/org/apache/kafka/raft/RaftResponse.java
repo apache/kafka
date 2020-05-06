@@ -19,17 +19,17 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 public abstract class RaftResponse implements RaftMessage {
-    protected final int requestId;
+    protected final int correlationId;
     protected final ApiMessage data;
 
-    protected RaftResponse(int requestId, ApiMessage data) {
-        this.requestId = requestId;
+    protected RaftResponse(int correlationId, ApiMessage data) {
+        this.correlationId = correlationId;
         this.data = data;
     }
 
     @Override
-    public int requestId() {
-        return requestId;
+    public int correlationId() {
+        return correlationId;
     }
 
     @Override
@@ -40,8 +40,8 @@ public abstract class RaftResponse implements RaftMessage {
     public static class Inbound extends RaftResponse {
         private final int sourceId;
 
-        public Inbound(int requestId, ApiMessage data, int sourceId) {
-            super(requestId, data);
+        public Inbound(int correlationId, ApiMessage data, int sourceId) {
+            super(correlationId, data);
             this.sourceId = sourceId;
         }
 
@@ -52,7 +52,7 @@ public abstract class RaftResponse implements RaftMessage {
         @Override
         public String toString() {
             return "Inbound(" +
-                    "requestId=" + requestId +
+                    "correlationId=" + correlationId +
                     ", data=" + data +
                     ", sourceId=" + sourceId +
                     ')';
@@ -67,7 +67,7 @@ public abstract class RaftResponse implements RaftMessage {
         @Override
         public String toString() {
             return "OutboundResponse(" +
-                    "requestId=" + requestId +
+                    "correlationId=" + correlationId +
                     ", data=" + data +
                     ')';
         }

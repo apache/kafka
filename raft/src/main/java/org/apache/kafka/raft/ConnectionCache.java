@@ -24,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
@@ -73,7 +74,7 @@ public class ConnectionCache {
             ConnectionState connection = connectionEntry.getValue();
             if (connection.isReady(currentTimeMs)) {
                 return OptionalInt.of(nodeId);
-            } else if (connection.inFlightRequestId.isPresent()) {
+            } else if (connection.inFlightCorrelationId.isPresent()) {
                 return OptionalInt.empty();
             }
         }
@@ -85,9 +86,13 @@ public class ConnectionCache {
     }
 
     public HostInfo maybeUpdate(int id, HostInfo update) {
-        HostInfo latest = getOrCreate(id).maybeUpdate(update);
-        channel.updateEndpoint(id, latest.address);
-        return latest;
+        ConnectionState connectionState = getOrCreate(id);
+
+        if (connectionState.maybeUpdate(update)) {
+            channel.updateEndpoint(id, update.address);
+        }
+
+        return connectionState.hostInfo;
     }
 
     public Map<Integer, Optional<HostInfo>> allVoters() {
@@ -118,6 +123,20 @@ public class ConnectionCache {
                 ", bootTimestamp=" + bootTimestamp +
                 ")";
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            HostInfo hostInfo = (HostInfo) o;
+            return bootTimestamp == hostInfo.bootTimestamp &&
+                Objects.equals(address, hostInfo.address);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(address, bootTimestamp);
+        }
     }
 
     private enum State {
@@ -132,7 +151,7 @@ public class ConnectionCache {
         private State state = State.READY;
         private long lastSendTimeMs = 0L;
         private long lastFailTimeMs = 0L;
-        private Optional<Long> inFlightRequestId = Optional.empty();
+        private Optional<Long> inFlightCorrelationId = Optional.empty();
 
         public ConnectionState(long id) {
             this.id = id;
@@ -160,45 +179,46 @@ public class ConnectionCache {
             return state == State.READY;
         }
 
-        HostInfo maybeUpdate(HostInfo update) {
+        boolean maybeUpdate(HostInfo update) {
             if (hostInfo == null || hostInfo.bootTimestamp < update.bootTimestamp) {
                 hostInfo = update;
                 reset();
                 log.info("Update connection info for node {} to {}", id, hostInfo);
+                return true;
             }
-            return hostInfo;
+            return false;
         }
 
-        void onResponseError(long requestId, long timeMs) {
-            inFlightRequestId.ifPresent(inflightRequestId -> {
-                if (inflightRequestId == requestId) {
+        void onResponseError(long correlationId, long timeMs) {
+            inFlightCorrelationId.ifPresent(inflightRequestId -> {
+                if (inflightRequestId == correlationId) {
                     lastFailTimeMs = timeMs;
                     state = State.BACKING_OFF;
-                    inFlightRequestId = Optional.empty();
+                    inFlightCorrelationId = Optional.empty();
                 }
             });
         }
 
-        void onResponseReceived(long requestId) {
-            inFlightRequestId.ifPresent(inflightRequestId -> {
-                if (inflightRequestId == requestId) {
+        void onResponseReceived(long correlationId) {
+            inFlightCorrelationId.ifPresent(inflightRequestId -> {
+                if (inflightRequestId == correlationId) {
                     state = State.READY;
-                    inFlightRequestId = Optional.empty();
+                    inFlightCorrelationId = Optional.empty();
                 }
             });
         }
 
-        void onResponse(long requestId, Errors error, long timeMs) {
+        void onResponse(long correlationId, Errors error, long timeMs) {
             if (error != Errors.NONE) {
-                onResponseError(requestId, timeMs);
+                onResponseError(correlationId, timeMs);
             } else {
-                onResponseReceived(requestId);
+                onResponseReceived(correlationId);
             }
         }
 
-        void onRequestSent(long requestId, long timeMs) {
+        void onRequestSent(long correlationId, long timeMs) {
             lastSendTimeMs = timeMs;
-            inFlightRequestId = Optional.of(requestId);
+            inFlightCorrelationId = Optional.of(correlationId);
             state = State.AWAITING_REQUEST;
         }
 
@@ -209,7 +229,7 @@ public class ConnectionCache {
          */
         void reset() {
             state = State.READY;
-            inFlightRequestId = Optional.empty();
+            inFlightCorrelationId = Optional.empty();
         }
     }
 

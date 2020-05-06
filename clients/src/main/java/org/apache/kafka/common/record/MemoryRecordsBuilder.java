@@ -488,6 +488,24 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
+     * Append a control record at the given offset. The control record type must be known or
+     * this method will raise an error.
+     *
+     * @param offset The absolute offset of the record in the log buffer
+     * @param record The record to append
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
+     */
+    public Long appendControlRecordWithOffset(long offset, SimpleRecord record) {
+        short typeId = ControlRecordType.parseTypeId(record.key());
+        ControlRecordType type = ControlRecordType.fromTypeId(typeId);
+        if (type == ControlRecordType.UNKNOWN)
+            throw new IllegalArgumentException("Cannot append record with unknown control record type " + typeId);
+
+        return appendWithOffset(offset, true, record.timestamp(),
+            record.key(), record.value(), record.headers());
+    }
+
+    /**
      * Append a new record at the next sequential offset.
      * @param timestamp The record timestamp
      * @param key The record key
