@@ -17,8 +17,8 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -31,9 +31,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.function.Supplier;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
@@ -234,7 +234,7 @@ public class MemoryRecordsBuilderTest {
             RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
             false, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.appendLeaderChangeMessage(RecordBatch.NO_TIMESTAMP,
-            new LeaderChangeMessageData()
+            new LeaderChangeMessage()
                 .setLeaderId(leaderId)
                 .setVoters(Collections.emptyList()));
     }
@@ -253,7 +253,7 @@ public class MemoryRecordsBuilderTest {
             RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
             false, true, leaderEpoch, buffer.capacity());
         builder.appendLeaderChangeMessage(RecordBatch.NO_TIMESTAMP,
-            new LeaderChangeMessageData()
+            new LeaderChangeMessage()
                 .setLeaderId(leaderId)
                 .setVoters(voters.stream().map(
                     voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList())));
@@ -261,7 +261,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords built = builder.build();
         List<Record> records = TestUtils.toList(built.records());
         assertEquals(1, records.size());
-        LeaderChangeMessageData leaderChangeMessage = ControlRecordUtils.deserialize(records.get(0));
+        LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(records.get(0));
 
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters, leaderChangeMessage.voters().stream().map(Voter::voterId).collect(Collectors.toList()));

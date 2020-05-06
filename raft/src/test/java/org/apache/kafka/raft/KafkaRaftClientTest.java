@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
 import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindQuorumRequestData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -647,7 +647,7 @@ public class KafkaRaftClientTest {
                                            ByteBuffer recordValue) {
         assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(recordKey));
 
-        LeaderChangeMessageData leaderChangeMessage = ControlRecordUtils.deserialize(recordValue);
+        LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(recordValue);
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
             leaderChangeMessage.voters());

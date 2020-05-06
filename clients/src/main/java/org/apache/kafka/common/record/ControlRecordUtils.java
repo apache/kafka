@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
 
@@ -26,20 +26,19 @@ import java.nio.ByteBuffer;
  */
 public class ControlRecordUtils {
 
-    public static LeaderChangeMessageData deserialize(Record record) {
+    public static final short LEADER_CHANGE_SCHEMA_VERSION = new LeaderChangeMessage().highestSupportedVersion();
+
+    public static LeaderChangeMessage deserializeLeaderChangeMessage(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
         if (recordType != ControlRecordType.LEADER_CHANGE) {
             throw new IllegalArgumentException(
                 "Expected LEADER_CHANGE control record type(3), but found " + recordType.toString());
         }
-        return deserialize(record.value().duplicate());
+        return deserializeLeaderChangeMessage(record.value().duplicate());
     }
 
-    public static LeaderChangeMessageData deserialize(ByteBuffer data) {
-        LeaderChangeMessageData leaderChangeMessage = new LeaderChangeMessageData();
-        Struct leaderChangeMessageStruct = LeaderChangeMessageData.SCHEMAS[leaderChangeMessage.highestSupportedVersion()]
-                                               .read(data);
-        leaderChangeMessage.fromStruct(leaderChangeMessageStruct, leaderChangeMessage.highestSupportedVersion());
-        return leaderChangeMessage;
+    public static LeaderChangeMessage deserializeLeaderChangeMessage(ByteBuffer data) {
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
+        return new LeaderChangeMessage(byteBufferAccessor, LEADER_CHANGE_SCHEMA_VERSION);
     }
 }

@@ -19,8 +19,8 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -452,7 +452,7 @@ public class MemoryRecordsTest {
             final int leaderEpoch = 20;
             final int voterId = 6;
 
-            LeaderChangeMessageData leaderChangeMessage = new LeaderChangeMessageData()
+            LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
                 .setLeaderId(leaderId)
                 .setVoters(Collections.singletonList(
                     new Voter().setVoterId(voterId)));
@@ -475,7 +475,7 @@ public class MemoryRecordsTest {
             assertTrue(record.isValid());
             assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(record.key()));
 
-            LeaderChangeMessageData deserializedMessage = ControlRecordUtils.deserialize(record);
+            LeaderChangeMessage deserializedMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);
             assertEquals(leaderId, deserializedMessage.leaderId());
             assertEquals(1, deserializedMessage.voters().size());
             assertEquals(voterId, deserializedMessage.voters().get(0).voterId());

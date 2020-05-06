@@ -26,7 +26,7 @@ import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.{BeginQuorumEpochRequestData, BeginQuorumEpochResponseData, EndQuorumEpochRequestData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteRequestData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchQuorumRecordsResponse, FindQuorumResponse, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchQuorumRecordsResponse, FindQuorumResponse, RequestHeader, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse}
 import org.junit.Assert._
@@ -110,16 +110,19 @@ class KafkaNetworkChannelTest {
 
   @Test
   def testReceiveAndSendInboundRequest(): Unit = {
-    for (apiKey <- RaftApis) {
-      val request = KafkaNetworkChannel.buildRequest(buildTestRequest(apiKey))
-      val responseRef = new AtomicReference[AbstractResponse]()
 
-      channel.postInboundRequest(request.build(), responseRef.set)
+    for (apiKey <- RaftApis) {
+      val request = KafkaNetworkChannel.buildRequest(buildTestRequest(apiKey)).build()
+      val responseRef = new AtomicReference[AbstractResponse]()
+      val correlationId = 15
+      val header = new RequestHeader(apiKey, request.version, "clientId", correlationId)
+
+      channel.postInboundRequest(header, request, responseRef.set)
       val inbound = channel.receive(1000).asScala
       assertEquals(1, inbound.size)
 
       val inboundRequest = inbound.head.asInstanceOf[RaftRequest.Inbound]
-      val correlationId = inboundRequest.correlationId
+      assertEquals(correlationId, inboundRequest.correlationId)
 
       val errorResponse = buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST)
       val outboundResponse = new RaftResponse.Outbound(correlationId, errorResponse)

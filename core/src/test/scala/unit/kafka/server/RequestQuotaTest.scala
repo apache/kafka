@@ -594,7 +594,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setLastFetchedEpoch(1)
               .setLeaderEpoch(1)
               .setReplicaId(10)
-              .setClusterId(1))
+              .setClusterId("cluster"))
 
         case ApiKeys.FIND_QUORUM =>
           new FindQuorumRequest.Builder(new FindQuorumRequestData()

@@ -26,8 +26,8 @@ import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
 import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindQuorumRequestData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -229,7 +229,7 @@ public class KafkaRaftClient implements RaftClient {
         appendControlRecord(MemoryRecords.withLeaderChangeMessage(
             time.milliseconds(),
             quorum.epoch(),
-            new LeaderChangeMessageData()
+            new LeaderChangeMessage()
                 .setLeaderId(state.election().leaderId())
                 .setVoters(
                     state.followers().stream().map(
