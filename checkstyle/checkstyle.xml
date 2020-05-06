@@ -132,7 +132,7 @@
     </module>
     <module name="NPathComplexity">
       <!-- default is 200 -->
-      <property name="max" value="550"/>
+      <property name="max" value="500"/>
     </module>
   </module>
 

@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.eclipse.jetty.util.StringUtil;
+
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -244,12 +246,8 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
-    /**
-     * @link "https://www.eclipse.org/jetty/documentation/current/header-filter.html"
-     * @link "https://www.eclipse.org/jetty/javadoc/9.4.28.v20200408/org/eclipse/jetty/servlets/HeaderFilter.html"
-     **/
     public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
-    public static final String RESPONSE_HTTP_HEADERS_DOC = "Set values for Jetty HTTP response headers";
+    public static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     public static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
 
     /**
@@ -334,7 +332,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
                         Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
                 .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
-                        Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
@@ -410,52 +408,6 @@ public class WorkerConfig extends AbstractConfig {
         logInternalConverterDeprecationWarnings(props);
     }
 
-    public static void validateHttpResponseHeaderConfig(String config) {
-        try {
-            // validate format
-            String[] configTokens = config.trim().split("\\s+", 2);
-            if (configTokens.length != 2) {
-                throw new ConfigException(String.format("Invalid format of header config \"%s\". "
-                        + "Expected: \"[ation] [header name]:[header value]\"", config));
-            }
-
-            // validate action
-            String method = configTokens[0].trim();
-            validateHeaderConfigAction(method);
-
-            // validate header name and header value pair
-            String header = configTokens[1];
-            String[] headerTokens = header.trim().split(":");
-            if (headerTokens.length != 2) {
-                throw new ConfigException(
-                        String.format("Invalid format of header name and header value pair \"%s\". "
-                                + "Expected: \"[header name]:[header value]\"", header));
-            }
-
-            // validate header name
-            String headerName = headerTokens[0].trim();
-            if (headerName.contains(" ")) {
-                throw new ConfigException(String.format("Invalid header name \"%s\". "
-                        + "The \"[header name]\" cannot contain whitespace", headerName));
-            }
-        } catch (ArrayIndexOutOfBoundsException e) {
-            throw new ConfigException(String.format("Invalid header config \"%s\".", config), e);
-        }
-    }
-
-    private static void validateHeaderConfigAction(String action) {
-        /**
-         * The following actions are defined following link.
-         * {@link https://www.eclipse.org/jetty/documentation/current/header-filter.html}
-         **/
-        if (!Arrays.asList("set", "add", "setDate", "addDate")
-                .stream()
-                .anyMatch(action::equalsIgnoreCase)) {
-            throw new ConfigException(String.format("Invalid header config action: \"%s\". "
-                    + "The action need be one of [\"set\", \"add\", \"setDate\", \"addDate\"]", action));
-        }
-    }
-
     private static class AdminListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -483,4 +435,62 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            String strValue = (String) value;
+            if (strValue.isEmpty()) {
+                return;
+            }
+
+            String[] configs = StringUtil.csvSplit(strValue);
+            Arrays.stream(configs).forEach(config -> validateHttpResponseHeaderConfig(config));
+        }
+
+        private static void validateHttpResponseHeaderConfig(String config) {
+            try {
+                // validate format
+                String[] configTokens = config.trim().split("\\s+", 2);
+                if (configTokens.length != 2) {
+                    throw new ConfigException(String.format("Invalid format of header config \"%s\". "
+                            + "Expected: \"[ation] [header name]:[header value]\"", config));
+                }
+
+                // validate action
+                String method = configTokens[0].trim();
+                validateHeaderConfigAction(method);
+
+                // validate header name and header value pair
+                String header = configTokens[1];
+                String[] headerTokens = header.trim().split(":");
+                if (headerTokens.length != 2) {
+                    throw new ConfigException(
+                            String.format("Invalid format of header name and header value pair \"%s\". "
+                                    + "Expected: \"[header name]:[header value]\"", header));
+                }
+
+                // validate header name
+                String headerName = headerTokens[0].trim();
+                if (headerName.isEmpty() || headerName.contains(" ")) {
+                    throw new ConfigException(String.format("Invalid header name \"%s\". "
+                            + "The \"[header name]\" cannot contain whitespace", headerName));
+                }
+            } catch (ArrayIndexOutOfBoundsException e) {
+                throw new ConfigException(String.format("Invalid header config \"%s\".", config), e);
+            }
+        }
+
+        private static void validateHeaderConfigAction(String action) {
+            /**
+             * The following actions are defined following link.
+             * {@link https://www.eclipse.org/jetty/documentation/current/header-filter.html}
+             **/
+            if (!Arrays.asList("set", "add", "setDate", "addDate")
+                    .stream()
+                    .anyMatch(action::equalsIgnoreCase)) {
+                throw new ConfigException(String.format("Invalid header config action: \"%s\". "
+                        + "The action need be one of [\"set\", \"add\", \"setDate\", \"addDate\"]", action));
+            }
+        }
+    }
 }

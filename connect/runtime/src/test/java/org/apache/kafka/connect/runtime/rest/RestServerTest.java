@@ -77,7 +77,9 @@ public class RestServerTest {
 
     @After
     public void tearDown() {
-        server.stop();
+        if (server != null) {
+            server.stop();
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -394,7 +396,7 @@ public class RestServerTest {
     }
 
     @Test
-    public void TestValidCustomizedHttpResponseHeaders() throws IOException  {
+    public void testValidCustomizedHttpResponseHeaders() throws IOException  {
         String headerConfig =
                 "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"";
         Map<String, String> expectedHeaders = new HashMap<>();
@@ -404,7 +406,7 @@ public class RestServerTest {
     }
 
     @Test
-    public void TestDefaultCustomizedHttpResponseHeaders() throws IOException  {
+    public void testDefaultCustomizedHttpResponseHeaders() throws IOException  {
         String headerConfig = "";
         Map<String, String> expectedHeaders = new HashMap<>();
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
@@ -412,50 +414,42 @@ public class RestServerTest {
 
     @Test(expected = ConfigException.class)
     public void testInvalidHeaderConfigFormat() {
-        String headerConfig = "add X-XSS-Protection";
+        String headerConfig = "set add X-XSS-Protection: 1";
         Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put("offset.storage.file.filename", "/tmp");
         workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+    }
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
+    @Test(expected = ConfigException.class)
+    public void testMissedAction() {
+        String headerConfig = "X-Frame-Options: DENY";
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+    }
 
-        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
+    @Test(expected = ConfigException.class)
+    public void testMissedHeaderName() {
+        String headerConfig = "add :DENY";
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+    }
 
-        PowerMock.replayAll();
-
-        server = new RestServer(workerConfig);
-        server.initializeServer();
-        server.initializeResources(herder);
-        server.stop();
+    @Test(expected = ConfigException.class)
+    public void testMissedHeaderValue() {
+        String headerConfig = "add X-Frame-Options";
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
     }
 
     @Test(expected = ConfigException.class)
     public void testInvalidHeaderConfigAction() {
         String headerConfig = "badaction X-XSS-Protection: 1; mode=block";
         Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put("offset.storage.file.filename", "/tmp");
         workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
-
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
-
-        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
-
-        PowerMock.replayAll();
-
-        server = new RestServer(workerConfig);
-        server.initializeServer();
-        server.initializeResources(herder);
-        server.stop();
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
     }
 
     public void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
@@ -463,7 +457,7 @@ public class RestServerTest {
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put("offset.storage.file.filename", "/tmp");
         workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
 
         EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
