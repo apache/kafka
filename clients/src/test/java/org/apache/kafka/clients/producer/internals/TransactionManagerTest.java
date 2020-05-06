@@ -777,8 +777,8 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
-        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId) != null);
         assertTrue(transactionManager.hasPendingOffsetCommits());
 
         runUntil(() -> !transactionManager.hasPendingOffsetCommits());
@@ -797,11 +797,11 @@ public class TransactionManagerTest {
         // It finds the coordinator and then gets a PID.
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, true, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
     }
 
     @Test
@@ -830,7 +830,7 @@ public class TransactionManagerTest {
     public void testUnsupportedInitTransactions() {
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
         assertFalse(transactionManager.hasError());
 
         client.prepareUnsupportedVersionResponse(body -> {
@@ -882,7 +882,7 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId) != null);
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
@@ -916,7 +916,7 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId) != null);
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
@@ -950,7 +950,7 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId) != null);
 
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
         client.prepareResponse(request -> {
@@ -975,22 +975,22 @@ public class TransactionManagerTest {
         // It finds the coordinator and then gets a PID.
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
         prepareInitPidResponse(Errors.NONE, true, producerId, epoch);
         // send pid to coordinator, should get disconnected before receiving the response, and resend the
         // FindCoordinator and InitPid requests.
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
-        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
 
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
         assertFalse(initPidResult.isCompleted());
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(initPidResult::isCompleted);
@@ -1007,22 +1007,22 @@ public class TransactionManagerTest {
         // It finds the coordinator and then gets a PID.
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
         client.disconnect(brokerNode.idString());
         client.blackout(brokerNode, 100);
         // send pid to coordinator. Should get disconnected before the send and resend the FindCoordinator
         // and InitPid requests.
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
         time.sleep(110);  // waiting for the blackout period for the node to expire.
 
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
         assertFalse(initPidResult.isCompleted());
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
 
@@ -1038,18 +1038,18 @@ public class TransactionManagerTest {
         // It finds the coordinator and then gets a PID.
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
         prepareInitPidResponse(Errors.NOT_COORDINATOR, false, producerId, epoch);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
         assertFalse(initPidResult.isCompleted());
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
 
@@ -1078,8 +1078,8 @@ public class TransactionManagerTest {
     public void testTransactionalIdAuthorizationFailureInInitProducerId() {
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
         prepareInitPidResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false, producerId, RecordBatch.NO_PRODUCER_EPOCH);
         runUntil(transactionManager::hasError);
@@ -1896,11 +1896,11 @@ public class TransactionManagerTest {
 
         transactionManager.transitionToAbortableError(new KafkaException());
         sendAddPartitionsToTxnResponse(Errors.NOT_COORDINATOR, tp0, epoch, producerId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -2046,8 +2046,8 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
-        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId) != null);
         assertTrue(transactionManager.hasPendingOffsetCommits());
 
         runUntil(transactionManager::hasPendingOffsetCommits);  // The TxnOffsetCommit failed.
@@ -2213,10 +2213,10 @@ public class TransactionManagerTest {
 //        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
         prepareTxnCommitResponse.run();
 
-        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId));
         sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator
         sender.runOnce();  // send find coordinator for group request
-        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP, consumerGroupId));
         assertTrue(transactionManager.hasPendingOffsetCommits());
         return addOffsetsResult;
     }
@@ -3108,10 +3108,10 @@ public class TransactionManagerTest {
     @Test
     public void testCanBumpEpochDuringCoordinatorDisconnect() {
         doInitTransactions(0, (short) 0);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
         assertTrue(transactionManager.canBumpEpoch());
 
-        apiVersions.remove(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
+        apiVersions.remove(transactionManager.coordinator(CoordinatorType.TRANSACTION, null).idString());
         assertTrue(transactionManager.canBumpEpoch());
     }
 
@@ -3459,8 +3459,8 @@ public class TransactionManagerTest {
     private void doInitTransactions(long producerId, short epoch) {
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
