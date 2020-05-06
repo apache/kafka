@@ -17,12 +17,9 @@
 
 package kafka.security.authorizer
 
-import java.nio.charset.StandardCharsets
-
 import kafka.utils.Json
-import kafka.utils.json.JsonValue
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS, IDEMPOTENT_WRITE, READ, WRITE}
+import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
