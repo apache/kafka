@@ -1379,7 +1379,8 @@ object TestUtils extends Logging {
                                   batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000,
                                   maxBlockMs: Long = 60000,
-                                  deliveryTimeoutMs: Int = 120000) = {
+                                  deliveryTimeoutMs: Int = 120000,
+                                  requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1389,7 +1390,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
     props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
-    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 
