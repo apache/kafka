@@ -239,6 +239,7 @@ import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1408,12 +1409,30 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Fail the given future when a response handler expected a result for an entity but no result was present.
-     * @param future The future to fail.
-     * @param message The message to fail the future with.
+     * Fail futures in the given map which match the given filter and are not done.
+     * Used when a response handler expected a result for some entity but no result was present.
      */
-    private void partialResponse(KafkaFutureImpl<?> future, String message) {
-        future.completeExceptionally(new ApiException(message));
+    private static <K, V> void completeUnrealizedFutures(
+            Map<K, KafkaFutureImpl<V>> futures,
+            Predicate<K> filter,
+            Function<K, String> messageFormatter) {
+        for (Map.Entry<K, KafkaFutureImpl<V>> entry : futures.entrySet()) {
+            K key = entry.getKey();
+            KafkaFutureImpl<V> future = entry.getValue();
+            if (!future.isDone() && filter.test(key)) {
+                future.completeExceptionally(new ApiException(messageFormatter.apply(key)));
+            }
+        }
+    }
+
+    /**
+     * Fail futures in the given map which are not done.
+     * Used when a response handler expected a result for some entity but no result was present.
+     */
+    private static <K, V> void completeUnrealizedFutures(
+            Map<K, KafkaFutureImpl<V>> futures,
+            Function<K, String> messageFormatter) {
+        completeUnrealizedFutures(futures, key -> true, messageFormatter);
     }
 
     @Override
@@ -1493,13 +1512,9 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
-                    if (!future.isDone()) {
-                        partialResponse(future, "The controller response " +
-                                "did not contain a result for topic " + entry.getKey());
-                    }
-                }
+                completeUnrealizedFutures(topicFutures,
+                    topic -> "The controller response " +
+                            "did not contain a result for topic " + topic);
             }
 
             @Override
@@ -1566,13 +1581,9 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
-                    if (!future.isDone()) {
-                        partialResponse(future, "The controller response " +
-                                "did not contain a result for topic " + entry.getKey());
-                    }
-                }
+                completeUnrealizedFutures(topicFutures,
+                    topic -> "The controller response " +
+                            "did not contain a result for topic " + topic);
             }
 
             @Override
@@ -2274,14 +2285,10 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
                     // The server should send back a response for every replica. But do a sanity check anyway.
-                    for (Map.Entry<TopicPartitionReplica, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                        TopicPartitionReplica replica = entry.getKey();
-                        KafkaFutureImpl<Void> future = entry.getValue();
-                        if (!future.isDone() && replica.brokerId() == brokerId) {
-                            partialResponse(future, "The response from broker " + brokerId +
-                                    " did not contain a result for replica " + replica);
-                        }
-                    }
+                    completeUnrealizedFutures(futures,
+                        replica -> replica.brokerId() == brokerId,
+                        replica -> "The response from broker " + brokerId +
+                                " did not contain a result for replica " + replica);
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
