@@ -59,7 +59,7 @@ public class ClientQuotaFilterComponent {
      * @param entityType the entity type the filter component applies to
      */
     public static ClientQuotaFilterComponent ofDefaultEntity(String entityType) {
-        return new ClientQuotaFilterComponent(entityType, Optional.empty());
+        return new ClientQuotaFilterComponent(entityType, null);
     }
 
     /**

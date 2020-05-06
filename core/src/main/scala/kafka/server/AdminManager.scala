@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, Describe
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
@@ -518,8 +518,9 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, alterConfigOps) =>
       try {
         // throw InvalidRequestException if any duplicate keys
-        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry().name())
-          .mapValues(_.size).filter(_._2 > 1).keys.toSet
+        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry.name).filter { case (_, v) =>
+          v.size > 1
+        }.keySet
         if (duplicateKeys.nonEmpty)
           throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
         val nullUpdates = alterConfigOps
@@ -717,8 +718,7 @@ class AdminManager(val config: KafkaConfig,
   private def sanitizeEntityName(entityName: String): String = {
     if (entityName == ConfigEntityName.Default)
       throw new InvalidRequestException(s"Entity name '${ConfigEntityName.Default}' is reserved")
-    warn(s"entityName = $entityName getOrElse = ${Option(entityName).filterNot(_.isEmpty).getOrElse(ConfigEntityName.Default)}")
-    Sanitizer.sanitize(Option(entityName).filterNot(_.isEmpty).getOrElse(ConfigEntityName.Default))
+    Sanitizer.sanitize(Option(entityName).getOrElse(ConfigEntityName.Default))
   }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
@@ -740,6 +740,8 @@ class AdminManager(val config: KafkaConfig,
         case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
         case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
       }
+      if (entityName != null && entityName.isEmpty)
+        throw new InvalidRequestException(s"Empty ${entityType} not supported")
     }
     (user, clientId)
   }
@@ -772,7 +774,7 @@ class AdminManager(val config: KafkaConfig,
   }
 
   def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
-    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean) = {
+    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
 
     def toOption(opt: java.util.Optional[String]): Option[String] =
       if (opt == null)
@@ -796,9 +798,6 @@ class AdminManager(val config: KafkaConfig,
     def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
     val excludeUser = wantExcluded(userComponent)
     val excludeClientId = wantExcluded(clientIdComponent)
-
-    warn(s"clientId = $clientId , sanitizedClientId = $sanitizedClientId")
-    warn(s"exactUser = $exactUser exactCliendId = $exactClientId excludeUser = $excludeUser excludeClientId = $excludeClientId")
 
     val userEntries = if (exactUser && excludeClientId)
       Map(((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)))
@@ -830,8 +829,6 @@ class AdminManager(val config: KafkaConfig,
       }
     else
       Map.empty
-
-    warn(s"user entries = $userEntries client entries = $clientIdEntries both entries = $bothEntries")
 
     def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
       case Some(component) =>
