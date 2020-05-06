@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.message.LeaderChangeMessageData;
-import org.apache.kafka.common.message.LeaderChangeMessageData.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -41,7 +41,7 @@ public class ControlRecordUtilsTest {
     private void testDeserializeRecord(ControlRecordType controlRecordType) {
         final int leaderId = 1;
         final int voterId = 2;
-        LeaderChangeMessageData data = new LeaderChangeMessageData()
+        LeaderChangeMessage data = new LeaderChangeMessage()
                                            .setLeaderId(leaderId)
                                            .setVoters(Collections.singletonList(
                                                new Voter().setVoterId(voterId)));
@@ -56,7 +56,7 @@ public class ControlRecordUtilsTest {
             256, (byte) 0, 0, 0L, 0, ByteBuffer.wrap(keyData),  valueBuffer, null
         );
 
-        LeaderChangeMessageData deserializedData = ControlRecordUtils.deserialize(record);
+        LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
 
         Assert.assertEquals(leaderId, deserializedData.leaderId());
         Assert.assertEquals(Collections.singletonList(
