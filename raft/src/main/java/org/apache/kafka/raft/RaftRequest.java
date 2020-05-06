@@ -19,19 +19,19 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 public abstract class RaftRequest implements RaftMessage {
-    protected final int requestId;
+    protected final int correlationId;
     protected final ApiMessage data;
     protected final long createdTimeMs;
 
-    public RaftRequest(int requestId, ApiMessage data, long createdTimeMs) {
-        this.requestId = requestId;
+    public RaftRequest(int correlationId, ApiMessage data, long createdTimeMs) {
+        this.correlationId = correlationId;
         this.data = data;
         this.createdTimeMs = createdTimeMs;
     }
 
     @Override
-    public int requestId() {
-        return requestId;
+    public int correlationId() {
+        return correlationId;
     }
 
     @Override
@@ -44,14 +44,14 @@ public abstract class RaftRequest implements RaftMessage {
     }
 
     public static class Inbound extends RaftRequest {
-        public Inbound(int requestId, ApiMessage data, long createdTimeMs) {
-            super(requestId, data, createdTimeMs);
+        public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
+            super(correlationId, data, createdTimeMs);
         }
 
         @Override
         public String toString() {
             return "InboundRequest(" +
-                    "requestId=" + requestId +
+                    "correlationId=" + correlationId +
                     ", data=" + data +
                     ", createdTimeMs=" + createdTimeMs +
                     ')';
@@ -61,8 +61,8 @@ public abstract class RaftRequest implements RaftMessage {
     public static class Outbound extends RaftRequest {
         private final int destinationId;
 
-        public Outbound(int requestId, ApiMessage data, int destinationId, long createdTimeMs) {
-            super(requestId, data, createdTimeMs);
+        public Outbound(int correlationId, ApiMessage data, int destinationId, long createdTimeMs) {
+            super(correlationId, data, createdTimeMs);
             this.destinationId = destinationId;
         }
 
@@ -73,7 +73,7 @@ public abstract class RaftRequest implements RaftMessage {
         @Override
         public String toString() {
             return "OutboundRequest(" +
-                    "requestId=" + requestId +
+                    "correlationId=" + correlationId +
                     ", data=" + data +
                     ", createdTimeMs=" + createdTimeMs +
                     ", destinationId=" + destinationId +

@@ -25,14 +25,36 @@ import java.util.List;
  */
 public interface NetworkChannel {
 
-    int newRequestId();
+    /**
+     * Generate a new and unique correlationId for a new request to be sent.
+     */
+    int newCorrelationId();
 
+    /**
+     * Send an outbound message. This could be either an outbound request
+     * (i.e. an instance of {@link org.apache.kafka.raft.RaftRequest.Outbound})
+     * or a response to a request that was received through {@link #receive(long)}
+     * (i.e. an instance of {@link org.apache.kafka.raft.RaftResponse.Outbound}).
+     */
     void send(RaftMessage message);
 
+    /**
+     * Receive inbound messages. These could contain either inbound requests
+     * (i.e. instances of {@link org.apache.kafka.raft.RaftRequest.Inbound})
+     * or responses to outbound requests sent through {@link #send(RaftMessage)}
+     * (i.e. instances of {@link org.apache.kafka.raft.RaftResponse.Inbound}).
+     */
     List<RaftMessage> receive(long timeoutMs);
 
+    /**
+     * Wakeup the channel if it is blocking in {@link #receive(long)}. This will cause
+     * the call to immediately return with whatever messages are available.
+     */
     void wakeup();
 
+    /**
+     * Update connection information for the given id.
+     */
     void updateEndpoint(int id, InetSocketAddress address);
 
 }

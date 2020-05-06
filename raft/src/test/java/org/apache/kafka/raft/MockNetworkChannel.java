@@ -38,7 +38,7 @@ public class MockNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public int newRequestId() {
+    public int newCorrelationId() {
         return requestIdCounter.getAndIncrement();
     }
 
