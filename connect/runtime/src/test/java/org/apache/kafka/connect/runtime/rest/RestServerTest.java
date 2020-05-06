@@ -55,6 +55,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
 import static org.junit.Assert.assertEquals;
@@ -62,10 +63,32 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*"})
 public class RestServerTest {
+    protected static final String WHITESPACE = " \t \n \r ";
+    protected static final List<String> VALID_HEADER_CONFIGS = Arrays.asList(
+            "add \t Cache-Control: no-cache, no-store, must-revalidate",
+            "add \r X-XSS-Protection: 1; mode=block",
+            "\n add Strict-Transport-Security: max-age=31536000; includeSubDomains",
+            "AdD   Strict-Transport-Security:  \r  max-age=31536000;  includeSubDomains",
+            "AdD \t Strict-Transport-Security : \n   max-age=31536000;  includeSubDomains",
+            "add X-Content-Type-Options: \r nosniff"
+    );
+
+    protected static final List<String> INVALID_HEADER_CONFIGS = Arrays.asList(
+            "set \t",
+            "badaction \t X-Frame-Options:DENY",
+            "set add X-XSS-Protection:1",
+            "addX-XSS-Protection",
+            "X-XSS-Protection:",
+            "add set X-XSS-Protection: 1",
+            "add X-XSS-Protection:1 X-XSS-Protection:1 ",
+            "add X-XSS-Protection",
+            "set X-Frame-Options:DENY, add  :no-cache, no-store, must-revalidate "
+            );
 
     @MockStrict
     private Herder herder;
@@ -412,44 +435,18 @@ public class RestServerTest {
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
     }
 
-    @Test(expected = ConfigException.class)
-    public void testInvalidHeaderConfigFormat() {
-        String headerConfig = "set add X-XSS-Protection: 1";
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+    @Test
+    public void testInvalidHeaderConfigs() {
+        for (String config : INVALID_HEADER_CONFIGS) {
+            assertInvalidHeaderConfig(config);
+        }
     }
 
-    @Test(expected = ConfigException.class)
-    public void testMissedAction() {
-        String headerConfig = "X-Frame-Options: DENY";
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testMissedHeaderName() {
-        String headerConfig = "add :DENY";
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testMissedHeaderValue() {
-        String headerConfig = "add X-Frame-Options";
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testInvalidHeaderConfigAction() {
-        String headerConfig = "badaction X-XSS-Protection: 1; mode=block";
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+    @Test
+    public void testValidHeaderConfigs() {
+        for (String config : VALID_HEADER_CONFIGS) {
+            assertValidHeaderConfig(config);
+        }
     }
 
     public void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
@@ -485,6 +482,14 @@ public class RestServerTest {
         }
         response.close();
         server.stop();
+    }
+
+    protected void assertInvalidHeaderConfig(String config) {
+        assertThrows(ConfigException.class, () -> WorkerConfig.validateHttpResponseHeaderConfig(config));
+    }
+
+    protected void assertValidHeaderConfig(String config) {
+        WorkerConfig.validateHttpResponseHeaderConfig(config);
     }
 
     private String executeGet(String host, int port, String endpoint) throws IOException {
