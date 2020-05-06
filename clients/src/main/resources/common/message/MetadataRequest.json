@@ -38,9 +38,11 @@
     ]},
     { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
       "about": "If this is true, the broker may auto-create topics that we requested which do not already exist, if it is configured to do so." },
-    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8+",
+    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8+", "default": "false",
+      "ignorable": true,
       "about": "Whether to include cluster authorized operations." },
-    { "name": "IncludeTopicAuthorizedOperations", "type": "bool", "versions": "8+",
+    { "name": "IncludeTopicAuthorizedOperations", "type": "bool", "versions": "8+", "default": "false",
+      "ignorable": true,
       "about": "Whether to include topic authorized operations." }
   ]
 }
