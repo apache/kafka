@@ -339,8 +339,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     time);
             //校验并得到broker地址
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+            //更新metadata数据
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
+            //创建ChannelBuilder
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            //创建NetworkClient，Kafkaproducer网络I/O的核心
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
                     this.metadata,
@@ -350,6 +353,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                     this.requestTimeoutMs, time);
+            //创建Sender任务
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
@@ -362,6 +366,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     clientId,
                     this.requestTimeoutMs);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+            //封装io线程，将sender任务放入，以守护进程方式启动
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
 
@@ -414,6 +419,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * 异步发送一个记录到topic  相当于send(record, null);
      * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
@@ -423,12 +429,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * 异步发送记录到topic并调用提供的回调当发送已经被确认时
      * Asynchronously send a record to a topic and invoke the provided callback when the send has been acknowledged.
      * <p>
+     * 发送是异步的，一旦记录已被存储在等待被发送记录的缓冲区（MemoryRecords）此方法将立即返回。 这允许并行发送多条记录而不阻塞等待每一个之后的响应。
      * The send is asynchronous and this method will return immediately once the record has been stored in the buffer of
      * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
      * response after each one.
      * <p>
+     *
+     * 发送的结果是一个RecordMetadata指定记录被发送到分区，偏移它被分配和记录的时间戳。
+     * 如果topic是使用的CreateTime，时间戳将是用户提供时间戳或记录发送时间如果用户没有指定记录的时间戳。
+     *  如果LogAppendTime用于topic，时间戳将是kafka broker的本地时间当追加的消息时。
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If
      * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
@@ -436,6 +448,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
      * topic, the timestamp will be the Kafka broker local time when the message is appended.
      * <p>
+     * 自从调用send是异步的返回一个Future存储RecordMeta将会分配这个记录。调用get在这个future将会阻塞直到关联的请求完成然后返回这个record的元数据。
+     * 抛出在发送记录时发生的任何异常。
      * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
      * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
      * get()} on this future will block until the associated request completes and then return the metadata for the record
@@ -478,6 +492,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * }
      * </pre>
      * <p>
+     *     这些callback将会通常只想在生产者的IO线程上，因此应该相当快，否则它们将延迟其他线程的消息发送。如果要执行阻塞或计算量大的回调，
+     *     建议在回调主体中使用自己的{@link java.util.concurrent.Executor}来并行化处理。
      * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
