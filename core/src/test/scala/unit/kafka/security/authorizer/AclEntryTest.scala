@@ -30,19 +30,15 @@ class AclEntryTest {
 
   val AclJson = """{"version": 1, "acls": [{"host": "host1","permissionType": "Deny","operation": "READ", "principal": "User:alice"  },
     {  "host":  "*" ,  "permissionType": "Allow",  "operation":  "Read", "principal": "User:bob"  },
-    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob"},
-    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:\,bob"},
-    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob1\,bob2"}]}"""
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob"}]}"""
 
   @Test
   def testAclJsonConversion(): Unit = {
     val acl1 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
     val acl2 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
     val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
-    val acl4 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "\\,bob"), DENY, "host1", READ)
-    val acl5 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob1\\,bob2"), DENY, "host1", READ)
 
-    val acls = Set[AclEntry](acl1, acl2, acl3, acl4, acl5)
+    val acls = Set[AclEntry](acl1, acl2, acl3)
 
     Assert.assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)))
     Assert.assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
