@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.message.LeaderChangeMessageData;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -35,7 +36,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-import static org.apache.kafka.common.record.ControlRecordUtils.deserialize;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -165,7 +165,7 @@ public class MockLogTest {
     public void testAppendControlRecord() {
         final long initialOffset = 5L;
         final int currentEpoch = 3;
-        LeaderChangeMessageData messageData =  new LeaderChangeMessageData().setLeaderId(0);
+        LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
         log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(
             initialOffset, 2, messageData), currentEpoch);
 
@@ -179,7 +179,7 @@ public class MockLogTest {
         }
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
-            LeaderChangeMessageData deserializedData = deserialize(record);
+            LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
             assertEquals(deserializedData, messageData);
             extractRecords.add(record.value());
         }
