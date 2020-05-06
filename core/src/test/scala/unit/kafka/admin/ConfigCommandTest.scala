@@ -70,6 +70,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--describe"))
   }
 
+  @Test
+  def shouldExitWithNonZeroStatusOnAlterUserConfigWithAdminClient(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "users",
+      "--alter",
+      "--add-config", "a=b,c=d",
+    ))
+  }
+
   private def assertNonZeroStatusExit(args: Array[String]): Unit = {
     var exitStatus: Option[Int] = None
     Exit.setExitProcedure { (status, _) =>
