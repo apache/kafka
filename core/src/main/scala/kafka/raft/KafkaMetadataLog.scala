@@ -75,7 +75,7 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
     log.logStartOffset
   }
 
-  override def truncateTo(offset: Long): Boolean = {
+  override def truncateTo(offset: Long): Unit = {
     log.truncateTo(offset)
   }
 

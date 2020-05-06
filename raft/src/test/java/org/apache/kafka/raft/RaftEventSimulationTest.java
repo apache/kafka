@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.MockLog.LogBatch;
+import org.apache.kafka.raft.MockLog.LogEntry;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -459,7 +461,7 @@ public class RaftEventSimulationTest {
 
     private static class Cluster {
         final Random random;
-        final AtomicInteger requestIdCounter = new AtomicInteger();
+        final AtomicInteger correlationIdCounter = new AtomicInteger();
         final Time time = new MockTime();
         final Set<Integer> voters = new HashSet<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
@@ -614,7 +616,7 @@ public class RaftEventSimulationTest {
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
-            MockNetworkChannel channel = new MockNetworkChannel(requestIdCounter);
+            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
 
             // For the bootstrap server, we use a pretend VIP which internally routes
@@ -677,12 +679,12 @@ public class RaftEventSimulationTest {
     }
 
     private static class InflightRequest {
-        final int requestId;
+        final int correlationId;
         final int sourceId;
         final int destinationId;
 
-        private InflightRequest(int requestId, int sourceId, int destinationId) {
-            this.requestId = requestId;
+        private InflightRequest(int correlationId, int sourceId, int destinationId) {
+            this.correlationId = correlationId;
             this.sourceId = sourceId;
             this.destinationId = destinationId;
         }
@@ -798,38 +800,51 @@ public class RaftEventSimulationTest {
 
     private static class ConsistentCommittedData implements Invariant {
         final Cluster cluster;
-        final List<Integer> committedLog = new ArrayList<>();
+        final Map<Long, Integer> committedSequenceNumbers = new HashMap<>();
 
         private ConsistentCommittedData(Cluster cluster) {
             this.cluster = cluster;
         }
 
-        private Integer parseSequenceNumber(MockLog.LogEntry entry) {
-            ByteBuffer value = entry.record.value().duplicate();
-            return (Integer) Type.INT32.read(value);
+        private int parseSequenceNumber(ByteBuffer value) {
+            return (int) Type.INT32.read(value);
         }
 
-        private void assertCommittedData(KafkaRaftClient manager, MockLog log) {
-            manager.highWatermark().ifPresent(highWatermark -> {
-                List<MockLog.LogEntry> entries = log.readEntries(0L, highWatermark);
-                if (committedLog.size() < entries.size()) {
-                    for (int i = committedLog.size(); i < entries.size(); i++) {
-                        committedLog.add(parseSequenceNumber(entries.get(i)));
-                    }
+        private void assertCommittedData(int nodeId, KafkaRaftClient manager, MockLog log) {
+            OptionalLong highWatermark = manager.highWatermark();
+            if (!highWatermark.isPresent()) {
+                // We cannot do validation if the current high watermark is unknown
+                return;
+            }
+
+            int nextExpectedSequence = 1;
+            for (LogBatch batch : log.readBatches(0L, highWatermark)) {
+                if (batch.isControlBatch) {
+                    continue;
                 }
 
-                for (int i = 0; i < entries.size(); i++) {
-                    Integer previousCommittedSequence = committedLog.get(i);
-                    Integer newCommitteSequence = parseSequenceNumber(entries.get(i));
-                    assertEquals("Committed sequence for a given offset should never change",
-                            previousCommittedSequence, newCommitteSequence);
+                for (LogEntry entry : batch.entries) {
+                    long offset = entry.offset;
+                    assertTrue(offset < highWatermark.getAsLong());
+
+                    int sequence = parseSequenceNumber(entry.record.value().duplicate());
+                    assertEquals("Unexpected sequence found at offset " + offset + " on node " + nodeId,
+                        nextExpectedSequence, sequence);
+
+                    committedSequenceNumbers.putIfAbsent(offset, sequence);
+
+                    int committedSequence = committedSequenceNumbers.get(offset);
+                    assertEquals("Committed sequence at offset " + offset + " changed on node " + nodeId,
+                        committedSequence, sequence);
+
+                    nextExpectedSequence++;
                 }
-            });
+            }
         }
 
         @Override
         public void verify() {
-            cluster.forAllRunning(node -> assertCommittedData(node.manager, node.log));
+            cluster.forAllRunning(node -> assertCommittedData(node.nodeId, node.manager, node.log));
         }
     }
 
@@ -845,9 +860,9 @@ public class RaftEventSimulationTest {
         }
 
         void deliver(int senderId, RaftRequest.Outbound outbound) {
-            int requestId = outbound.requestId();
+            int correlationId = outbound.correlationId();
             int destinationId = outbound.destinationId();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(requestId, outbound.data(),
+            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
                 cluster.time.milliseconds());
 
             final int targetNodeId;
@@ -863,19 +878,18 @@ public class RaftEventSimulationTest {
 
             cluster.nodeIfRunning(targetNodeId).ifPresent(node -> {
                 MockNetworkChannel destChannel = node.channel;
-                inflight.put(requestId, new InflightRequest(requestId, senderId, targetNodeId));
+                inflight.put(correlationId, new InflightRequest(correlationId, senderId, targetNodeId));
                 destChannel.mockReceive(inbound);
             });
         }
 
         void deliver(int senderId, RaftResponse.Outbound outbound) {
-            int requestId = outbound.requestId();
+            int correlationId = outbound.correlationId();
             if (outbound.data instanceof FindQuorumResponseData)
                 senderId = -1;
 
-            RaftResponse.Inbound inbound = new RaftResponse.Inbound(requestId, outbound.data(), senderId);
-            InflightRequest inflightRequest = inflight.remove(requestId);
-
+            RaftResponse.Inbound inbound = new RaftResponse.Inbound(correlationId, outbound.data(), senderId);
+            InflightRequest inflightRequest = inflight.remove(correlationId);
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 

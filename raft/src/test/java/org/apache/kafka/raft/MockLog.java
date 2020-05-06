@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
@@ -30,23 +29,24 @@ import org.apache.kafka.common.record.TimestampType;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MockLog implements ReplicatedLog {
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
-    private final List<LogEntry> log = new ArrayList<>();
+    private final List<LogBatch> log = new ArrayList<>();
     private long highWatermark = 0L;
 
     @Override
-    public boolean truncateTo(long offset) {
-        log.removeIf(entry -> entry.offset >= offset);
+    public void truncateTo(long offset) {
+        log.removeIf(entry -> entry.lastOffset() >= offset);
         epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= offset);
-        return offset < endOffset();
     }
 
     @Override
@@ -90,13 +90,13 @@ public class MockLog implements ReplicatedLog {
     private Optional<LogEntry> lastEntry() {
         if (log.isEmpty())
             return Optional.empty();
-        return Optional.of(log.get(log.size() - 1));
+        return Optional.of(log.get(log.size() - 1).last());
     }
 
     private Optional<LogEntry> firstEntry() {
         if (log.isEmpty())
             return Optional.empty();
-        return Optional.of(log.get(0));
+        return Optional.of(log.get(0).first());
     }
 
     @Override
@@ -109,131 +109,84 @@ public class MockLog implements ReplicatedLog {
         return firstEntry().map(entry -> entry.offset).orElse(0L);
     }
 
-    private List<LogEntry> convert(Records records, OptionalInt nodeEpoch) {
-        long offset = endOffset();
+    private List<LogEntry> buildEntries(RecordBatch batch,
+                                        Function<Record, Long> offsetSupplier) {
         List<LogEntry> entries = new ArrayList<>();
-        for (RecordBatch batch : records.batches()) {
-            final boolean isControlBatch = batch.isControlBatch();
-            for (Record record : batch) {
-                int epoch = nodeEpoch.orElse(batch.partitionLeaderEpoch());
-                Optional<ControlRecordType> controlRecordType =
-                    isControlBatch ? Optional.of(ControlRecordType.parse(record.key().duplicate()))
-                        : Optional.empty();
-                entries.add(new LogEntry(offset,
-                    epoch, new SimpleRecord(record), controlRecordType));
-                offset += 1;
-            }
+        for (Record record : batch) {
+            long offset = offsetSupplier.apply(record);
+            entries.add(new LogEntry(offset, new SimpleRecord(record)));
         }
         return entries;
     }
 
     @Override
     public Long appendAsLeader(Records records, int epoch) {
-        return appendAsLeader(convert(records, OptionalInt.of(epoch)), epoch, endOffset());
+        long baseOffset = endOffset();
+        AtomicLong offsetSupplier = new AtomicLong(baseOffset);
+        for (RecordBatch batch : records.batches()) {
+            List<LogEntry> entries = buildEntries(batch, record -> offsetSupplier.getAndIncrement());
+            appendBatch(new LogBatch(epoch, batch.isControlBatch(), entries));
+        }
+        return baseOffset;
     }
 
     Long appendAsLeader(Collection<SimpleRecord> records, int epoch) {
-        long firstOffset = endOffset();
-        long offset = firstOffset;
+        long baseOffset = endOffset();
+        long offset = baseOffset;
 
         List<LogEntry> entries = new ArrayList<>();
         for (SimpleRecord record : records) {
-            entries.add(LogEntry.with(offset, epoch, record));
+            entries.add(new LogEntry(offset, record));
             offset += 1;
         }
-        return appendAsLeader(entries, epoch, firstOffset);
+        appendBatch(new LogBatch(epoch, false, entries));
+        return baseOffset;
     }
 
-    private Long appendAsLeader(Collection<LogEntry> entries, int epoch, long firstOffset) {
-        if (epoch > lastFetchedEpoch()) {
-            epochStartOffsets.add(new EpochStartOffset(epoch, firstOffset));
+    private Long appendBatch(LogBatch batch) {
+        if (batch.epoch > lastFetchedEpoch()) {
+            epochStartOffsets.add(new EpochStartOffset(batch.epoch, batch.firstOffset()));
         }
-
-        log.addAll(entries);
-        return firstOffset;
-    }
-
-    private void appendAsFollower(Collection<LogEntry> entries) {
-        for (LogEntry entry : entries) {
-            if (entry.epoch > lastFetchedEpoch()) {
-                epochStartOffsets.add(new EpochStartOffset(entry.epoch, entry.offset));
-            }
-        }
-        log.addAll(entries);
+        log.add(batch);
+        return batch.firstOffset();
     }
 
     @Override
     public void appendAsFollower(Records records) {
-        appendAsFollower(convert(records, OptionalInt.empty()));
+        for (RecordBatch batch : records.batches()) {
+            List<LogEntry> entries = buildEntries(batch, Record::offset);
+            appendBatch(new LogBatch(batch.partitionLeaderEpoch(), batch.isControlBatch(), entries));
+        }
     }
 
-    public List<LogEntry> readEntries(long startOffset, long endOffset) {
-        return log.stream().filter(entry -> entry.offset >= startOffset && entry.offset < endOffset)
-                .collect(Collectors.toList());
-    }
-
-    private void writeToBuffer(ByteBuffer buffer, List<LogEntry> entries, int epoch) {
-        LogEntry first = entries.get(0);
-        MemoryRecordsBuilder builder;
-
-        if (first.controlRecordType.isPresent() &&
-                first.controlRecordType.get() == ControlRecordType.LEADER_CHANGE) {
-            final boolean controlBatch = true;
-            builder = MemoryRecords.builder(
-                buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, first.offset, first.record.timestamp(),
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE, false, controlBatch, epoch);
-
-            builder.appendLeaderChangeMessage(first.record.timestamp(),
-                ControlRecordUtils.deserialize(first.record.value().duplicate()));
-            builder.close();
-            entries = entries.subList(1, entries.size());
+    public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
+        long maxOffset = maxOffsetOpt.orElse(endOffset());
+        if (startOffset > maxOffset) {
+            throw new OffsetOutOfRangeException("Requested offset " + startOffset + " is larger than " +
+                "the provided end offset " + maxOffsetOpt);
         }
 
-        if (entries.size() > 0) {
-            LogEntry firstRegularEntry = entries.get(0);
-            builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
-                TimestampType.CREATE_TIME,
-                firstRegularEntry.offset,
-                firstRegularEntry.record.timestamp(),
-                epoch);
-
-            // Skip the first record if it is already being appended as control record.
-            for (LogEntry entry : entries) {
-                builder.appendWithOffset(entry.offset, entry.record);
-            }
-
-            builder.close();
+        if (startOffset == maxOffset) {
+            return Collections.emptyList();
         }
+
+        return log.stream()
+            .filter(batch -> batch.firstOffset() >= startOffset && batch.lastOffset() < maxOffset)
+            .collect(Collectors.toList());
     }
 
     @Override
-    public Records read(long startOffset, OptionalLong endOffset) {
-        List<LogEntry> entries = readEntries(startOffset, endOffset.orElseGet(this::endOffset));
-        if (entries.isEmpty()) {
+    public Records read(long startOffset, OptionalLong maxOffsetOpt) {
+        List<LogBatch> batches = readBatches(startOffset, maxOffsetOpt);
+        if (batches.isEmpty())
             return MemoryRecords.EMPTY;
-        } else {
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
-            int currentEpoch = entries.get(0).epoch;
-            List<LogEntry> epochEntries = new ArrayList<>();
-            for (LogEntry entry: entries) {
-                if (entry.epoch != currentEpoch) {
-                    writeToBuffer(buffer, epochEntries, currentEpoch);
-                    epochEntries.clear();
-                    currentEpoch = entry.epoch;
-                }
-                epochEntries.add(entry);
-            }
 
-            if (!epochEntries.isEmpty())
-                writeToBuffer(buffer, epochEntries, currentEpoch);
-
-            buffer.flip();
-            return MemoryRecords.readableRecords(buffer);
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        for (LogBatch batch : batches) {
+            buffer = batch.writeTo(buffer);
         }
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
     }
 
     @Override
@@ -246,44 +199,77 @@ public class MockLog implements ReplicatedLog {
 
     static class LogEntry {
         final long offset;
-        final int epoch;
         final SimpleRecord record;
-        final Optional<ControlRecordType> controlRecordType;
 
-        private LogEntry(long offset,
-                         int epoch,
-                         SimpleRecord record,
-                         Optional<ControlRecordType> controlRecordType) {
+        LogEntry(long offset, SimpleRecord record) {
             this.offset = offset;
-            this.epoch = epoch;
             this.record = record;
-            this.controlRecordType = controlRecordType;
-        }
-
-        static LogEntry with(long offset, int epoch, SimpleRecord record) {
-            return new LogEntry(offset, epoch, record, Optional.empty());
         }
 
         @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            }
-
-            if (!(other instanceof LogEntry)) {
-                return false;
-            }
-            LogEntry otherEntry = (LogEntry) other;
-
-            return this.offset == otherEntry.offset
-                && this.epoch == otherEntry.epoch
-                && this.record == otherEntry.record
-                && this.controlRecordType == otherEntry.controlRecordType;
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            LogEntry logEntry = (LogEntry) o;
+            return offset == logEntry.offset &&
+                Objects.equals(record, logEntry.record);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(offset, epoch, record, controlRecordType);
+            return Objects.hash(offset, record);
+        }
+    }
+
+    static class LogBatch {
+        final List<LogEntry> entries;
+        final int epoch;
+        final boolean isControlBatch;
+
+        LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+            if (entries.isEmpty())
+                throw new IllegalArgumentException("Empty batches are not supported");
+            this.entries = entries;
+            this.epoch = epoch;
+            this.isControlBatch = isControlBatch;
+        }
+
+        long firstOffset() {
+            return first().offset;
+        }
+
+        LogEntry first() {
+            return entries.get(0);
+        }
+
+        long lastOffset() {
+            return last().offset;
+        }
+
+        LogEntry last() {
+            return entries.get(entries.size() - 1);
+        }
+
+        ByteBuffer writeTo(ByteBuffer buffer) {
+            LogEntry first = first();
+
+            MemoryRecordsBuilder builder = MemoryRecords.builder(
+                buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+                TimestampType.CREATE_TIME, first.offset, first.record.timestamp(),
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE, false,
+                isControlBatch, epoch);
+
+            for (LogEntry entry : entries) {
+                if (isControlBatch) {
+                    builder.appendControlRecordWithOffset(entry.offset, entry.record);
+                } else {
+                    builder.appendWithOffset(entry.offset, entry.record);
+                }
+            }
+
+            builder.close();
+            return builder.buffer();
         }
     }
 

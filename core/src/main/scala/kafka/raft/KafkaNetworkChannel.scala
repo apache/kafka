@@ -75,18 +75,18 @@ class KafkaNetworkChannel(time: Time,
 
   type ResponseHandler = AbstractResponse => Unit
 
-  private val requestIdCounter = new AtomicInteger(0)
+  private val correlationIdCounter = new AtomicInteger(0)
   private val pendingInbound = mutable.Map.empty[Long, ResponseHandler]
   private val undelivered = new ArrayBlockingQueue[RaftMessage](10)
   private val pendingOutbound = new ArrayBlockingQueue[RaftRequest.Outbound](10)
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
-  override def newRequestId(): Int = requestIdCounter.getAndIncrement()
+  override def newCorrelationId(): Int = correlationIdCounter.getAndIncrement()
 
   private def buildClientRequest(req: RaftRequest.Outbound): ClientRequest = {
     val destination = req.destinationId.toString
     val request = buildRequest(req.data)
-    val correlationId = req.requestId
+    val correlationId = req.correlationId
     val createdTimeMs = req.createdTimeMs
     new ClientRequest(destination, request, correlationId, clientId, createdTimeMs, true,
       requestTimeoutMs, null)
@@ -99,7 +99,7 @@ class KafkaNetworkChannel(time: Time,
           throw new KafkaException("Pending outbound queue is full")
 
       case response: RaftResponse.Outbound =>
-        pendingInbound.remove(response.requestId).foreach { onResponseReceived: ResponseHandler =>
+        pendingInbound.remove(response.correlationId).foreach { onResponseReceived: ResponseHandler =>
           onResponseReceived(buildResponse(response.data))
         }
       case _ =>
@@ -117,7 +117,7 @@ class KafkaNetworkChannel(time: Time,
             val apiKey = ApiKeys.forId(request.data.apiKey)
             val disconnectResponse = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
             undelivered.offer(new RaftResponse.Inbound(
-              request.requestId, disconnectResponse, request.destinationId))
+              request.correlationId, disconnectResponse, request.destinationId))
           } else if (client.ready(node, currentTimeMs)) {
             pendingOutbound.poll()
             val clientRequest = buildClientRequest(request)
@@ -131,7 +131,7 @@ class KafkaNetworkChannel(time: Time,
           pendingOutbound.poll()
           val apiKey = ApiKeys.forId(request.data.apiKey)
           val responseData = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
-          val response = new RaftResponse.Inbound(request.requestId, responseData, request.destinationId)
+          val response = new RaftResponse.Inbound(request.correlationId, responseData, request.destinationId)
           if (!undelivered.offer(response))
             throw new KafkaException("Undelivered queue is full")
       }
@@ -236,11 +236,13 @@ class KafkaNetworkChannel(time: Time,
     endpoints.put(id, node)
   }
 
-  def postInboundRequest(request: AbstractRequest, onResponseReceived: ResponseHandler): Unit = {
+  def postInboundRequest(header: RequestHeader,
+                         request: AbstractRequest,
+                         onResponseReceived: ResponseHandler): Unit = {
     val data = requestData(request)
-    val requestId = newRequestId()
-    val req = new RaftRequest.Inbound(requestId, data, time.milliseconds())
-    pendingInbound.put(requestId, onResponseReceived)
+    val correlationId = header.correlationId
+    val req = new RaftRequest.Inbound(correlationId, data, time.milliseconds())
+    pendingInbound.put(correlationId, onResponseReceived)
     if (!undelivered.offer(req))
       throw new KafkaException("Undelivered queue is full")
     wakeup()

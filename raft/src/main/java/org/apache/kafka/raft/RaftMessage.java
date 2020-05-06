@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 public interface RaftMessage {
-    int requestId();
+    int correlationId();
 
     ApiMessage data();
 
