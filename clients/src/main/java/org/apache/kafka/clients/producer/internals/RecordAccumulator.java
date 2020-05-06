@@ -3,16 +3,14 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
-
-import java.util.Iterator;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
@@ -36,19 +34,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 此类充当其累积记录到一个队列MemoryRecords实例被发送到服务器。
+ * 累加器使用的内存和附加呼叫量有限时内存耗尽，除非这种行为是明确禁用会阻止。
  * This class acts as a queue that accumulates records into {@link org.apache.kafka.common.record.MemoryRecords}
  * instances to be sent to the server.
  * <p>
@@ -58,35 +50,46 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class RecordAccumulator {
 
     private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
-
+    //是否已经关闭
     private volatile boolean closed;
+    //刷新进行中
     private final AtomicInteger flushesInProgress;
+    //累加进行中
     private final AtomicInteger appendsInProgress;
+    //每一批消息发送给sender线程的大小
     private final int batchSize;
+    //压缩类型
     private final CompressionType compression;
+    //超过lingerMs时发送给sender线程
     private final long lingerMs;
+    //每次重试需要等到的时间
     private final long retryBackoffMs;
+    //剩余为发送消息
     private final BufferPool free;
     private final Time time;
+    //批量消息
     private final ConcurrentMap<TopicPartition, Deque<RecordBatch>> batches;
+    //不完整批量消息
     private final IncompleteRecordBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
+    // 以下变量仅由发送方线程访问，因此我们不需要保护它们。
     private final Set<TopicPartition> muted;
+
     private int drainIndex;
 
     /**
      * Create a new record accumulator
-     * 
-     * @param batchSize The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
-     * @param totalSize The maximum memory the record accumulator can use.
-     * @param compression The compression codec for the records
-     * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
-     *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
-     *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
+     *
+     * @param batchSize      The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
+     * @param totalSize      The maximum memory the record accumulator can use.
+     * @param compression    The compression codec for the records
+     * @param lingerMs       An artificial delay time to add before declaring a records instance that isn't full ready for
+     *                       sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
+     *                       latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
-     *        exhausting all retries in a short period of time.
-     * @param metrics The metrics
-     * @param time The time instance to use
+     *                       exhausting all retries in a short period of time.
+     * @param metrics        The metrics
+     * @param time           The time instance to use
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
@@ -104,24 +107,39 @@ public final class RecordAccumulator {
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<>();
+        //指标名称
         String metricGrpName = "producer-metrics";
+        //甚于内存大小
         this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        //不完整批记录
         this.incomplete = new IncompleteRecordBatches();
         this.muted = new HashSet<>();
         this.time = time;
+        //注册指标
         registerMetrics(metrics, metricGrpName);
     }
 
+    /**
+     * 注册指标
+     *
+     * @param metrics
+     * @param metricGrpName
+     */
     private void registerMetrics(Metrics metrics, String metricGrpName) {
+        //等待线程指标
         MetricName metricName = metrics.metricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records");
+        //得到free内任务个数
         Measurable waitingThreads = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.queued();
             }
         };
+        //添加进指标
         metrics.addMetric(metricName, waitingThreads);
 
+        //缓存总大小
         metricName = metrics.metricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
+        //得到BufferPool中的总大小
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.totalMemory();
@@ -129,6 +147,7 @@ public final class RecordAccumulator {
         };
         metrics.addMetric(metricName, totalBytes);
 
+        //可用内存
         metricName = metrics.metricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
@@ -137,22 +156,24 @@ public final class RecordAccumulator {
         };
         metrics.addMetric(metricName, availableBytes);
 
+        //内存交换记录
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
         metricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
         bufferExhaustedRecordSensor.add(metricName, new Rate());
     }
 
     /**
+     * 添加一个结果到记录收集器里
      * Add a record to the accumulator, return the append result
      * <p>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
      * <p>
      *
-     * @param tp The topic/partition to which this record is being sent
-     * @param timestamp The timestamp of the record
-     * @param key The key for the record
-     * @param value The value for the record
-     * @param callback The user-supplied callback to execute when the request is complete
+     * @param tp             The topic/partition to which this record is being sent
+     * @param timestamp      The timestamp of the record
+     * @param key            The key for the record
+     * @param value          The value for the record
+     * @param callback       The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      */
     public RecordAppendResult append(TopicPartition tp,
@@ -165,11 +186,15 @@ public final class RecordAccumulator {
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
         try {
+            //检查我们是否有正在进行的批处理
             // check if we have an in-progress batch
             Deque<RecordBatch> dq = getOrCreateDeque(tp);
+            //顺序执行
             synchronized (dq) {
+                //如果producer已经关闭
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
+                //尝试区累加记录
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
                 if (appendResult != null)
                     return appendResult;
@@ -190,7 +215,9 @@ public final class RecordAccumulator {
                     free.deallocate(buffer);
                     return appendResult;
                 }
+                //如果累加结果为null
                 MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
+                //放入同一个批次
                 RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
@@ -206,10 +233,13 @@ public final class RecordAccumulator {
     /**
      * If `RecordBatch.tryAppend` fails (i.e. the record batch is full), close its memory records to release temporary
      * resources (like compression streams buffers).
+     * 如果`RecordBatch.tryAppend`失败（即记录批次已满），靠近它的内存记录，以释放临时资源（如压缩流缓冲）。
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, Deque<RecordBatch> deque) {
+        //得到最后的批次记录
         RecordBatch last = deque.peekLast();
         if (last != null) {
+            //然后尝试区累加数据
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
             if (future == null)
                 last.records.close();
@@ -220,6 +250,7 @@ public final class RecordAccumulator {
     }
 
     /**
+     *
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
@@ -284,15 +315,15 @@ public final class RecordAccumulator {
      * <ol>
      * <li>There is at least one partition that is not backing off its send
      * <li><b>and</b> those partitions are not muted (to prevent reordering if
-     *   {@value org.apache.kafka.clients.producer.ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION}
-     *   is set to one)</li>
+     * {@value org.apache.kafka.clients.producer.ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION}
+     * is set to one)</li>
      * <li><b>and <i>any</i></b> of the following are true</li>
      * <ul>
-     *     <li>The record set is full</li>
-     *     <li>The record set has sat in the accumulator for at least lingerMs milliseconds</li>
-     *     <li>The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions
-     *     are immediately considered ready).</li>
-     *     <li>The accumulator has been closed</li>
+     * <li>The record set is full</li>
+     * <li>The record set has sat in the accumulator for at least lingerMs milliseconds</li>
+     * <li>The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions
+     * are immediately considered ready).</li>
+     * <li>The accumulator has been closed</li>
      * </ul>
      * </ol>
      */
@@ -353,11 +384,11 @@ public final class RecordAccumulator {
     /**
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
-     * 
+     *
      * @param cluster The current cluster metadata
-     * @param nodes The list of node to drain
+     * @param nodes   The list of node to drain
      * @param maxSize The maximum number of bytes to drain
-     * @param now The current unix time in milliseconds
+     * @param now     The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      */
     public Map<Integer, List<RecordBatch>> drain(Cluster cluster,
@@ -419,11 +450,14 @@ public final class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<RecordBatch> getOrCreateDeque(TopicPartition tp) {
+        //根据分区得到对应批记录队列
         Deque<RecordBatch> d = this.batches.get(tp);
         if (d != null)
             return d;
+        //如果不存在则添加
         d = new ArrayDeque<>();
         Deque<RecordBatch> previous = this.batches.putIfAbsent(tp, d);
+        //这里防止锁竞争问题
         if (previous == null)
             return d;
         else
@@ -437,10 +471,10 @@ public final class RecordAccumulator {
         incomplete.remove(batch);
         free.deallocate(batch.records.buffer(), batch.records.initialCapacity());
     }
-    
+
     /**
      * Are there any threads currently waiting on a flush?
-     *
+     * <p>
      * package private for test
      */
     boolean flushInProgress() {
@@ -451,7 +485,7 @@ public final class RecordAccumulator {
     Map<TopicPartition, Deque<RecordBatch>> batches() {
         return Collections.unmodifiableMap(batches);
     }
-    
+
     /**
      * Initiate the flushing of data from the accumulator...this makes all requests immediately ready
      */
@@ -557,7 +591,7 @@ public final class RecordAccumulator {
             this.unknownLeadersExist = unknownLeadersExist;
         }
     }
-    
+
     /*
      * A threadsafe helper class to hold RecordBatches that haven't been ack'd yet
      */
@@ -567,13 +601,13 @@ public final class RecordAccumulator {
         public IncompleteRecordBatches() {
             this.incomplete = new HashSet<RecordBatch>();
         }
-        
+
         public void add(RecordBatch batch) {
             synchronized (incomplete) {
                 this.incomplete.add(batch);
             }
         }
-        
+
         public void remove(RecordBatch batch) {
             synchronized (incomplete) {
                 boolean removed = this.incomplete.remove(batch);
@@ -581,7 +615,7 @@ public final class RecordAccumulator {
                     throw new IllegalStateException("Remove from the incomplete set failed. This should be impossible.");
             }
         }
-        
+
         public Iterable<RecordBatch> all() {
             synchronized (incomplete) {
                 return new ArrayList<>(this.incomplete);

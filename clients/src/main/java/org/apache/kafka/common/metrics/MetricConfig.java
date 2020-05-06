@@ -22,13 +22,19 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Configuration values for metrics
+ * 指标配置值
  */
 public class MetricConfig {
 
+    //上部下部技术
     private Quota quota;
+    //样本
     private int samples;
+    //时间窗口
     private long eventWindow;
+    //时间窗口ms
     private long timeWindowMs;
+    //即表标签集合
     private Map<String, String> tags;
 
     public MetricConfig() {

@@ -18,10 +18,13 @@ package org.apache.kafka.common.metrics;
 
 /**
  * An upper or lower bound for metrics
+ * 上部或下界度量
  */
 public final class Quota {
 
+    //上部
     private final boolean upper;
+    //下部
     private final double bound;
 
     public Quota(double bound, boolean upper) {

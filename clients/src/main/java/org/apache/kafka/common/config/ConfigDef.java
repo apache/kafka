@@ -68,15 +68,17 @@ import java.util.Set;
  */
 public class ConfigDef {
 
+    //没有默认值为""
     public static final Object NO_DEFAULT_VALUE = new String("");
 
+    //配置key的集合
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
     private final List<String> groups = new LinkedList<>();
     private Set<String> configsWithNoParent;
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
-     *
+     * 返回在此{@linkplain ConfigDef}中定义的一组不可修改的属性名称
      * @return new unmodifiable {@link Set} instance containing the keys
      */
     public Set<String> names() {
@@ -84,19 +86,20 @@ public class ConfigDef {
     }
 
     /**
+     * 定义一个新的配置
      * Define a new configuration
-     * @param name          the name of the config parameter
-     * @param type          the type of the config
-     * @param defaultValue  the default value to use if this config isn't present
-     * @param validator     the validator to use in checking the correctness of the config
-     * @param importance    the importance of this config
-     * @param documentation the documentation string for the config
-     * @param group         the group this config belongs to
-     * @param orderInGroup  the order of this config in the group
+     * @param name          the name of the config parameter 配置变量的名称
+     * @param type          the type of the config 配置的类型
+     * @param defaultValue  the default value to use if this config isn't present  如果此配置不存在，则使用的默认值
+     * @param validator     the validator to use in checking the correctness of the config 验证器，用于检查配置的正确性
+     * @param importance    the importance of this config 此配置的重要性
+     * @param documentation the documentation string for the config 配置的文档描述
+     * @param group         the group this config belongs to  此配置所属的组
+     * @param orderInGroup  the order of this config in the group  该配置在组中的顺序
      * @param width         the width of the config
-     * @param displayName   the name suitable for display
-     * @param dependents    the configurations that are dependents of this configuration
-     * @param recommender   the recommender provides valid values given the parent configuration values
+     * @param displayName   the name suitable for display  配置显示名称
+     * @param dependents    the configurations that are dependents of this configuration 依赖于此配置的配置
+     * @param recommender   the recommender provides valid values given the parent configuration values 推荐器在给定父配置值的情况下提供有效值
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
@@ -107,7 +110,9 @@ public class ConfigDef {
         if (group != null && !groups.contains(group)) {
             groups.add(group);
         }
+        //解析出得默认值
         Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+        //添加到configKeys配置中
         configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
         return this;
     }
@@ -403,12 +408,14 @@ public class ConfigDef {
      * the appropriate type (int, string, etc).
      */
     public Map<String, Object> parse(Map<?, ?> props) {
-        // Check all configurations are defined
+        // Check all configurations are defined 校验全部配置是否被定义
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
+        //报错
         if (!undefinedConfigKeys.isEmpty()) {
             String joined = Utils.join(undefinedConfigKeys, ",");
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
+        //解析全部知道的key
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values()) {
@@ -575,6 +582,7 @@ public class ConfigDef {
     }
 
     /**
+     * 根据其期望的类型解析值。
      * Parse a value according to its expected type.
      * @param name  The config name
      * @param value The config value
@@ -588,7 +596,7 @@ public class ConfigDef {
             String trimmed = null;
             if (value instanceof String)
                 trimmed = ((String) value).trim();
-
+            //根据类型来解析对应的配置
             switch (type) {
                 case BOOLEAN:
                     if (value instanceof String) {
@@ -835,10 +843,15 @@ public class ConfigDef {
     }
 
     public static class ConfigKey {
+        //key名称
         public final String name;
+        //key类型
         public final Type type;
+        //文档
         public final String documentation;
+        //默认值
         public final Object defaultValue;
+        //校验器
         public final Validator validator;
         public final Importance importance;
         public final String group;

@@ -25,26 +25,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 一批即将或将要发送的记录。
  * A batch of records that is or will be sent.
- * 
+ * 此类不是线程安全的，修改该类时必须使用外部同步
  * This class is not thread safe and external synchronization must be used when modifying it
  */
 public final class RecordBatch {
 
     private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
 
+    //记录总数
     public int recordCount = 0;
+    //最大记录大小
     public int maxRecordSize = 0;
+    //重试次数
     public volatile int attempts = 0;
+    //创建时间
     public final long createdMs;
+    //耗尽时间
     public long drainedMs;
+    //最后的重试时间
     public long lastAttemptMs;
+    //记录
     public final MemoryRecords records;
+    //topic分区
     public final TopicPartition topicPartition;
+    //生产者请求结果
     public final ProduceRequestResult produceFuture;
+    //最后累加时间
     public long lastAppendTime;
+    //回调
     private final List<Thunk> thunks;
+    //offset计数器
     private long offsetCounter = 0L;
+    //是否重试
     private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
@@ -64,26 +78,31 @@ public final class RecordBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
+        //是否还有空间可以写入
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
             long checksum = this.records.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
+            //得到futureRecordMetadata
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
                                                                    key == null ? -1 : key.length,
                                                                    value == null ? -1 : value.length);
+            //异步回调放入thunks
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
+            //记录总数+1
             this.recordCount++;
+            //返回future
             return future;
         }
     }
 
     /**
      * Complete the request
-     * 
+     * 完成请求
      * @param baseOffset The base offset of the messages assigned by the server
      * @param timestamp The timestamp returned by the broker.
      * @param exception The exception that occurred (or null if the request was successful)
@@ -104,14 +123,17 @@ public final class RecordBatch {
                                                                  thunk.future.checksum(),
                                                                  thunk.future.serializedKeySize(),
                                                                  thunk.future.serializedValueSize());
+                    //元数据传递
                     thunk.callback.onCompletion(metadata, null);
                 } else {
+                    //异常传递
                     thunk.callback.onCompletion(null, exception);
                 }
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
             }
         }
+        //调用生产者
         this.produceFuture.done(topicPartition, baseOffset, exception);
     }
 

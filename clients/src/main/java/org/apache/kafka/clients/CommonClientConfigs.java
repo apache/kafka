@@ -34,6 +34,7 @@ public class CommonClientConfigs {
                                                        + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
                                                        + "servers (you may want more than one, though, in case a server is down).";
 
+    //即使没有看到任何分区领导更改也不会主动发现任何新的代理或分区，我们仍将强制刷新元数据之后的时间（以毫秒为单位）
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
@@ -49,15 +50,19 @@ public class CommonClientConfigs {
     public static final String RECONNECT_BACKOFF_MS_CONFIG = "reconnect.backoff.ms";
     public static final String RECONNECT_BACKOFF_MS_DOC = "The amount of time to wait before attempting to reconnect to a given host. This avoids repeatedly connecting to a host in a tight loop. This backoff applies to all requests sent by the consumer to the broker.";
 
+    //尝试重试对给定主题分区的失败请求之前要等待的时间。这样可以避免在某些失败情况下在紧密循环中重复发送请求。”
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
 
+    //计算指标样本的时间窗口。
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
 
+    //维护以计算指标的样本数
     public static final String METRICS_NUM_SAMPLES_CONFIG = "metrics.num.samples";
     public static final String METRICS_NUM_SAMPLES_DOC = "The number of samples maintained to compute metrics.";
 
+    //用作指标报告者的类列表。实施<code> MetricReporter </ code>接口允许插入将在创建新度量标准时通知的类。始终包含JmxReporter来注册JMX统计信息
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 

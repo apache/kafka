@@ -22,19 +22,21 @@ import org.apache.kafka.common.Cluster;
 
 /**
  * Partitioner Interface
+ * 分区器接口
  */
 
 public interface Partitioner extends Configurable {
 
     /**
+     * 对给定记录完成分区
      * Compute the partition for the given record.
      *
      * @param topic The topic name
-     * @param key The key to partition on (or null if no key)
-     * @param keyBytes The serialized key to partition on( or null if no key)
+     * @param key The key to partition on (or null if no key)key要分区的键（如果没有键，则为null）
+     * @param keyBytes The serialized key to partition on( or null if no key)keyBytes要分区的序列化key（如果没有key，则为null）
      * @param value The value to partition on or null
      * @param valueBytes The serialized value to partition on or null
-     * @param cluster The current cluster metadata
+     * @param cluster The current cluster metadata 当前集群元数据
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster);
 

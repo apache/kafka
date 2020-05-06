@@ -28,6 +28,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * 用于配置一个方便的基类来扩展。
+ * 这个类同时拥有这是提供以及解析原始配置
+ *
  * A convenient base class for configurations to extend.
  * <p>
  * This class holds both the original configuration that was provided as well as the parsed
@@ -36,10 +39,15 @@ public class AbstractConfig {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    /* configs for which values have been requested, used to detect unused configs */
+    /*
+     已请求其值的配置，用于检测未使用的配置
+    configs for which values have been requested, used to detect unused configs */
     private final Set<String> used;
 
-    /* the original values passed in by the user */
+    /*
+    the original values passed in by the user
+    *
+    * */
     private final Map<String, ?> originals;
 
     /* the parsed values */
@@ -48,12 +56,14 @@ public class AbstractConfig {
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
+        //校验原始配置key
         for (Object key : originals.keySet())
             if (!(key instanceof String))
                 throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
+        //配置打印出来列表
         if (doLog)
             logAll();
     }
@@ -163,6 +173,9 @@ public class AbstractConfig {
         return new RecordingMap<>(values);
     }
 
+    /**
+     * 在控制台打印出来配置列表
+     */
     private void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());
@@ -207,6 +220,8 @@ public class AbstractConfig {
     }
 
     /**
+     * 获取由给定配置项规定的给定类的配置实例的列表。
+     * 该配置可以指定空值或空字符串，表示没有配置的实例。 在这两种情况下，这个方法返回一个空列表表示没有配置的实例
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
      * may specify either null or an empty string to indicate no configured instances. In both cases, this method
      * returns an empty list to indicate no configured instances.
@@ -215,6 +230,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
+        //得到配置的类的全路径
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         if (klasses == null)
@@ -222,14 +238,19 @@ public class AbstractConfig {
         for (String klass : klasses) {
             Object o;
             try {
+                //反射得到t的子类
                 o = Utils.newInstance(klass, t);
             } catch (ClassNotFoundException e) {
                 throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
             }
+            //如果o不是t的子类，抛出异常
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
+            //如果o是配置类
             if (o instanceof Configurable)
+                //将配置塞入此类
                 ((Configurable) o).configure(this.originals);
+            //将o强转为t类型
             objects.add(t.cast(o));
         }
         return objects;

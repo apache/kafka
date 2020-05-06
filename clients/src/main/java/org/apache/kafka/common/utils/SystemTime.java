@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 /**
+ * 使用系统时钟和睡眠调用的时间实现
  * A time implementation that uses the system clock and sleep call
  */
 public class SystemTime implements Time {

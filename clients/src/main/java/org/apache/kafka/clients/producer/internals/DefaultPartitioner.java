@@ -29,6 +29,9 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * The default partitioning strategy:
  * <ul>
+ * 如果记录中指定一个分区，使用它如果这个分区在记录中指定就使用它
+ * 如果没有指定分区，但关键是现在选择基于key的散列分区
+ * 如果没有分区或key存在选择在循环方式分区
  * <li>If a partition is specified in the record, use it
  * <li>If no partition is specified but a key is present choose a partition based on a hash of the key
  * <li>If no partition or key is present choose a partition in a round-robin fashion
@@ -66,20 +69,28 @@ public class DefaultPartitioner implements Partitioner {
      * @param cluster The current cluster metadata
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+        //根据topic拿到所有分区
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        //得到分区总数
         int numPartitions = partitions.size();
+        //如果没有指定key
         if (keyBytes == null) {
+            //得到计数器的值,并且自增
             int nextValue = counter.getAndIncrement();
+            //得到可用分区
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+            //如果可用分区大于0
             if (availablePartitions.size() > 0) {
+                //随机值区hash然后对可用分区数量取模
                 int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
+                //然后得到这个分区
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition
                 return DefaultPartitioner.toPositive(nextValue) % numPartitions;
             }
         } else {
-            // hash the keyBytes to choose a partition
+            // hash the keyBytes to choose a partition，对keyhash然后取模
             return DefaultPartitioner.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
         }
     }

@@ -47,6 +47,7 @@ public enum CompressionType {
         }
     }
 
+    //得到对应的压缩类型
     public static CompressionType forName(String name) {
         if (NONE.name.equals(name))
             return NONE;

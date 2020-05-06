@@ -26,8 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 封装一些围绕元数据的逻辑的类。
  * A class encapsulating some of the logic around metadata.
  * <p>
+ *     此类由客户端线程（用于分区）和后台发送者线程共享。
  * This class is shared by the client thread (for partitioning) and the background sender thread.
  * 
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
@@ -37,14 +39,23 @@ public final class Metadata {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
+    //刷新间隔
     private final long refreshBackoffMs;
+    //元数据过期时间
     private final long metadataExpireMs;
+    //版本
     private int version;
+    //上一次刷新
     private long lastRefreshMs;
+    //最后一次成功刷新的时间
     private long lastSuccessfulRefreshMs;
+    //集群
     private Cluster cluster;
+    //是否需要修改
     private boolean needUpdate;
+    //topics
     private final Set<String> topics;
+    //监听器
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
 

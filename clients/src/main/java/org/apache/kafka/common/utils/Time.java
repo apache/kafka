@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 /**
  * An interface abstracting the clock to use in unit testing classes that make use of clock time
+ * 接口抽象测试类，利用时钟时间时钟来使用单位
  */
 public interface Time {
 

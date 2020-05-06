@@ -28,6 +28,9 @@ import org.apache.kafka.common.utils.Utils;
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
  * message size would record a sequence of message sizes using the {@link #record(double)} api and would maintain a set
  * of metrics about request sizes such as the average or max.
+ *
+ * 传感器适用数值的连续序列的一组相关联的度量的。
+ * 例如在消息大小的传感器将记录使用所述消息大小的序列record(double) API和大约请求尺寸如平均或最大将维持一组度量。
  */
 public final class Sensor {
 
