@@ -642,7 +642,8 @@ public class InternalTopologyBuilder {
                         .stream()
                         .map(sourceGroup -> sourceGroup
                                 .stream()
-                                .flatMap(sourceNodeName -> nodeToSourceTopics.get(sourceNodeName).stream())
+                                .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
+                                        Collections.emptyList()).stream())
                                 .collect(Collectors.toSet())
                         ).collect(Collectors.toList());
         for (final Set<String> copartition : allCopartitionedSourceTopics) {
