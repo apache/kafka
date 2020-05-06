@@ -256,7 +256,7 @@ public interface ProcessorContext<K, V> {
      *
      * <p> If it is triggered while processing a record generated not from the source processor (for example,
      * if this method is invoked from the punctuate call), timestamp is defined as the current
-     * task's stream time, which is defined as the largest among all its input stream partition timestamps.
+     * task's stream time, which is defined as the largest timestamp of any record processed by the task.
      *
      * @return the timestamp
      */
