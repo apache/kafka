@@ -606,7 +606,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testBumpTransactionalEpoch(): Unit = {
     val producer = createTransactionalProducer("transactionalProducer",
-      deliveryTimeoutMs = 5000, requestTimeoutMs = 3000)
+      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
     try {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
