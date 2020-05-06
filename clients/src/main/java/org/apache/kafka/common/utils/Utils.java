@@ -892,7 +892,7 @@ public final class Utils {
      * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
      */
     @FunctionalInterface
-    public interface QuietClosable extends AutoCloseable {
+    public interface UncheckedCloseable extends AutoCloseable {
         @Override
         void close();
     }
