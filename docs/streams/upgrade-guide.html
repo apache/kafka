@@ -63,7 +63,7 @@
         and afterwards do second round of rolling bounces to switch to <code>"exactly_once_beta"</code>.
         For a downgrade do the revers: first switch the config from <code>"exactly_once_beta"</code> to
         <code>"exactly_once"</code>to disable the feature on your 2.6.x application.
-        Afterward, you can downgrade you application to a pre 2.6.x version.
+        Afterward, you can downgrade your application to a pre 2.6.x version.
     </p>
 
     <p>
@@ -89,10 +89,10 @@
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
     <p>
         We added a new processing mode that improves application scalability using exactly-once guarantees
-        (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>>).
-        You can enable this new feature be setting the configuration parameter <code>processing.guarantee</code> to the
+        (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>).
+        You can enable this new feature by setting the configuration parameter <code>processing.guarantee</code> to the
         new value <code>"exactly_once_beta"</code>.
-        Note that you need brokers with version 2.5 or newer to use this new feature.
+        Note that you need brokers with version 2.5 or newer to use this feature.
     </p>
 
     <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
