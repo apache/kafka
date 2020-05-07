@@ -258,12 +258,12 @@ public class Fetcher<K, V> implements Closeable {
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
-            // We add the node to the set of nodes with pending fetch requests before sending the
-            // request to the client because the future may have been fulfilled on another thread (e.g. during a
-            // disconnection being handled by the heartbeat thread) which will mean the listener
-            // will be invoked synchronously, and hence the added id would not be removed anymore.
-            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
+            // We add the node to the set of nodes with pending fetch requests before adding the
+            // listenerbecause the future may have been fulfilled on another thread (e.g. during a
+            // disconnection being handled by the heartbeat thread) which will mean the listener
+            // will be invoked synchronously.
+            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
             future.addListener(new RequestFutureListener<ClientResponse>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
