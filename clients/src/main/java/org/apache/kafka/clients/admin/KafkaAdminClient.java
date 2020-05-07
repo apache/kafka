@@ -1468,7 +1468,9 @@ public class KafkaAdminClient extends AdminClient {
                                                 configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
                                                 config.isSensitive(),
                                                 config.readOnly(),
-                                                Collections.emptyList()))
+                                                Collections.emptyList(),
+                                                null,
+                                                null))
                                         .collect(Collectors.toSet()));
                                 topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
                                         result.replicationFactor(),
@@ -1932,7 +1934,8 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(unifiedRequestResources)
-                            .includeSynonyms(options.includeSynonyms());
+                            .includeSynonyms(options.includeSynonyms())
+                            .includeDocumentation(options.includeDocumentation());
                 }
 
                 @Override
@@ -1956,7 +1959,8 @@ public class KafkaAdminClient extends AdminClient {
                             configEntries.add(new ConfigEntry(configEntry.name(),
                                     configEntry.value(), configSource(configEntry.source()),
                                     configEntry.isSensitive(), configEntry.isReadOnly(),
-                                    configSynonyms(configEntry)));
+                                    configSynonyms(configEntry), configType(configEntry.type()),
+                                    configEntry.documentation()));
                         }
                         future.complete(new Config(configEntries));
                     }
@@ -1979,7 +1983,8 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
-                            .includeSynonyms(options.includeSynonyms());
+                            .includeSynonyms(options.includeSynonyms())
+                            .includeDocumentation(options.includeDocumentation());
                 }
 
                 @Override
@@ -1999,7 +2004,7 @@ public class KafkaAdminClient extends AdminClient {
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
                                 configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
-                                configSynonyms(configEntry)));
+                                configSynonyms(configEntry), configType(configEntry.type()), configEntry.documentation()));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }
@@ -2050,6 +2055,46 @@ public class KafkaAdminClient extends AdminClient {
                 throw new IllegalArgumentException("Unexpected config source " + source);
         }
         return configSource;
+    }
+
+    private ConfigEntry.ConfigType configType(DescribeConfigsResponse.ConfigType type) {
+        if (type == null) {
+            return ConfigEntry.ConfigType.UNKNOWN;
+        }
+
+        ConfigEntry.ConfigType configType;
+        switch (type) {
+            case BOOLEAN:
+                configType = ConfigEntry.ConfigType.BOOLEAN;
+                break;
+            case CLASS:
+                configType = ConfigEntry.ConfigType.CLASS;
+                break;
+            case DOUBLE:
+                configType = ConfigEntry.ConfigType.DOUBLE;
+                break;
+            case INT:
+                configType = ConfigEntry.ConfigType.INT;
+                break;
+            case LIST:
+                configType = ConfigEntry.ConfigType.LIST;
+                break;
+            case LONG:
+                configType = ConfigEntry.ConfigType.LONG;
+                break;
+            case PASSWORD:
+                configType = ConfigEntry.ConfigType.PASSWORD;
+                break;
+            case SHORT:
+                configType = ConfigEntry.ConfigType.SHORT;
+                break;
+            case STRING:
+                configType = ConfigEntry.ConfigType.STRING;
+                break;
+            default:
+                configType = ConfigEntry.ConfigType.UNKNOWN;
+        }
+        return configType;
     }
 
     @Override

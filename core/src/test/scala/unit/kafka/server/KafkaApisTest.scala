@@ -256,7 +256,7 @@ class KafkaApisTest {
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
     val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
-    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true)))
+    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true), EasyMock.eq(false)))
         .andReturn(Map(configResource -> config))
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
