@@ -63,21 +63,21 @@ final case class OffloadedSegmentSpec(val sourceBrokerId: Int,
   * @param topicName The name of the topic.
   * @param partitionCount The number of partitions for the topic.
   * @param replicationFactor The replication factor of the topic.
-  * @param segmentSize The size of segment for the topic, in number of records.
-  *                    A fixed, pre-determined size for the segment is important to enforce to ease exercising
-  *                    tiered-storages and reason on expected state in Kafka and tiered-storages.
+  * @param maxBatchCountPerSegment The maximal number of batch in segments of the topic.
+  *                    This allows to obtain a fixed, pre-determined size for the segment, which ease
+  *                    reasoning on the expected states of local and tiered storages.
   * @param properties Configuration of the topic customized for the purpose of tiered-storage tests.
   */
 final case class TopicSpec(val topicName: String,
                            val partitionCount: Int,
                            val replicationFactor: Int,
-                           val segmentSize: Int,
+                           val maxBatchCountPerSegment: Int,
                            val assignment: Option[Map[Int, Seq[Int]]],
                            val properties: Properties = new Properties) {
 
   override def toString: String =
     s"Topic[name=$topicName partition-count=$partitionCount replication-factor=$replicationFactor " +
-    s"segment-size=$segmentSize assignment=$assignment]"
+    s"segment-size=$maxBatchCountPerSegment assignment=$assignment]"
 }
 
 /**
@@ -132,8 +132,8 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
     // much less than the segment size), the number of records which hold in a segment is the multiple of 12
     // defined below.
     //
-    if (spec.segmentSize != -1) {
-      spec.properties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, (12 * spec.segmentSize).toString)
+    if (spec.maxBatchCountPerSegment != -1) {
+      spec.properties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, (12 * spec.maxBatchCountPerSegment).toString)
     }
 
     //
@@ -156,8 +156,11 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
   * @param offloadedSegmentSpecs The segments expected to be offloaded to the second-tier storage.
   * @param recordsToProduce The records to produce per topic-partition.
   */
-final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[OffloadedSegmentSpec]],
-                          val recordsToProduce: Map[TopicPartition, Seq[ProducerRecord[String, String]]])
+final class ProduceAction(val topicPartition: TopicPartition,
+                          val offloadedSegmentSpecs: Seq[OffloadedSegmentSpec],
+                          val recordsToProduce: Seq[ProducerRecord[String, String]],
+                          val batchSize: Int,
+                          val expectedEarliestOffset: Long)
   extends TieredStorageTestAction {
 
   /**
@@ -172,20 +175,20 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     val tieredStorages = context.getTieredStorages
     val localStorages = context.getLocalStorages
 
-    val tieredStorageConditions = offloadedSegmentSpecs.values.flatten.map { spec =>
+    val tieredStorageConditions = offloadedSegmentSpecs.map { spec =>
       expectEvent(tieredStorages.asJava, OFFLOAD_SEGMENT, spec.sourceBrokerId, spec.topicPartition, false)
     }
 
     //
-    // Retrieve the offsets of the next records which would be consumed from the topic-partitions
+    // Retrieve the offset of the next record which would be consumed from the topic-partition
     // before records are produced. This allows to consume only the newly produced records afterwards.
     //
-    val startOffsets = context.nextOffsets(recordsToProduce.keys)
+    val startOffset = context.nextOffset(topicPartition)
 
     //
     // Records are produced here.
     //
-    context.produce(recordsToProduce.values.flatten)
+    context.produce(recordsToProduce, batchSize)
 
     if (!tieredStorageConditions.isEmpty) {
         tieredStorageConditions.reduce(_ and _).waitUntilTrue(offloadWaitTimeoutSec, TimeUnit.SECONDS)
@@ -199,73 +202,55 @@ final class ProduceAction(val offloadedSegmentSpecs: Map[TopicPartition, Seq[Off
     //    in the special case of these integration tests, only the active segment.
     // 2) consume the records and verify they match the produced records.
     //
-    recordsToProduce.foreach {
-      case (topicPartition, producedRecords) =>
-        val topicSpec = context.topicSpec(topicPartition.topic())
-        val expectedEarliestOffset = producedRecords.size - (producedRecords.size % topicSpec.segmentSize) - 1
-
-        localStorages
-          //
-          // Select brokers which are assigned a replica of the topic-partition
-          //
-          .filter(s => context.isAssignedReplica(topicPartition, s.brokerId))
-          //
-          // Filter out inactive brokers, which may still contain log segments we would expect
-          // to be deleted based on the retention configuration.
-          //
-          .filter(s => context.isActive(s.brokerId))
-          //
-          // Wait until the brokers local storage have been cleared from the inactive log segments.
-          //
-          .foreach(_.waitForEarliestOffset(topicPartition, expectedEarliestOffset))
-
-        val startOffset = startOffsets(topicPartition)
-        val consumedRecords = context.consume(topicPartition, producedRecords.length, startOffset)
-        assertThat(consumedRecords, correspondTo(producedRecords, topicPartition))
+    val topicSpec = context.topicSpec(topicPartition.topic())
+    val earliestOffset = if (expectedEarliestOffset != -1L) expectedEarliestOffset else {
+      startOffset + recordsToProduce.size - (recordsToProduce.size % topicSpec.maxBatchCountPerSegment) - 1
     }
+
+    localStorages
+      //
+      // Select brokers which are assigned a replica of the topic-partition
+      //
+      .filter(s => context.isAssignedReplica(topicPartition, s.brokerId))
+      //
+      // Filter out inactive brokers, which may still contain log segments we would expect
+      // to be deleted based on the retention configuration.
+      //
+      .filter(s => context.isActive(s.brokerId))
+      //
+      // Wait until the brokers local storage have been cleared from the inactive log segments.
+      //
+      .foreach(_.waitForEarliestOffset(topicPartition, earliestOffset))
+
+    val consumedRecords = context.consume(topicPartition, recordsToProduce.size, startOffset)
+    assertThat(consumedRecords, correspondTo(recordsToProduce, topicPartition))
 
     //
     // Take a physical snapshot of the second-tier storage, and compare the records found with
     // those of the expected log segments.
     //
-    // TODO: Handle incremental population of the second-tier storage.
-    //       Currently all of records found are considered.
-    //
     val snapshot = context.takeTieredStorageSnapshot()
 
-    offloadedSegmentSpecs.foreach {
-      case (topicPartition: TopicPartition, specs: Seq[OffloadedSegmentSpec]) =>
-        snapshot.getFilesets(topicPartition).asScala
-          //
-          // Snapshot does not sort the filesets by base offset.
-          //
-          .sortWith((x, y) => x.getRecords.get(0).offset() <= y.getRecords.get(0).offset())
-          //
-          // Don't include the records which were stored before our records were produced.
-          //
-          .drop(startOffsets(topicPartition).toInt)
-          // TODO: Add check on size
-          .zip(specs)
-          .foreach {
-            pair => compareRecords(pair._1, pair._2, topicPartition)
-          }
-    }
+    snapshot.getFilesets(topicPartition).asScala
+      //
+      // Snapshot does not sort the filesets by base offset.
+      //
+      .sortWith((x, y) => x.getRecords.get(0).offset() <= y.getRecords.get(0).offset())
+      //
+      // Don't include the records which were stored before our records were produced.
+      //
+      .drop(startOffset.toInt)
+      // TODO: Add check on size
+      .zip(offloadedSegmentSpecs)
+      .foreach {
+        pair => compareRecords(pair._1, pair._2, topicPartition)
+      }
   }
 
   override def describe(output: PrintStream) = {
-    output.println("produce-records:")
-
-    recordsToProduce.foreach {
-      case (topicPartition, records) =>
-        output.println(s"  $topicPartition")
-        records.foreach(record => output.println(s"    ${record}"))
-    }
-
-    offloadedSegmentSpecs.foreach {
-      case (topicPartition, specs) =>
-        output.println(s"  $topicPartition")
-        specs.foreach(spec => output.println(s"    $spec"))
-    }
+    output.println(s"produce-records: $topicPartition")
+    recordsToProduce.foreach(record => output.println(s"    ${record}"))
+    offloadedSegmentSpecs.foreach(spec => output.println(s"    $spec"))
   }
 
   private def compareRecords(fileset: RemoteLogSegmentFileset,
@@ -453,8 +438,14 @@ final class ExpectBrokerInISR(val topicPartition: TopicPartition, replicaId: Int
   */
 @nonthreadsafe
 final class TieredStorageTestBuilder {
-  private var producables: mutable.Map[TopicPartition, mutable.Buffer[ProducerRecord[String, String]]] = mutable.Map()
-  private var offloadables: mutable.Map[TopicPartition, mutable.Buffer[(Int, Int, Int)]] = mutable.Map()
+  private val defaultProducedBatchSize = Integer.MAX_VALUE
+  private val defaultEarliestOffsetExpectedInLogDirectory = -1
+
+  private var producables:
+    mutable.Map[TopicPartition, (mutable.Buffer[ProducerRecord[String, String]], Int, Long)] = mutable.Map()
+
+  private var offloadables:
+    mutable.Map[TopicPartition, mutable.Buffer[(Int, Int, Seq[ProducerRecord[String, String]])]] = mutable.Map()
 
   private var consumables: mutable.Map[TopicPartition, (Long, Int, Int)] = mutable.Map()
   private var fetchables: mutable.Map[TopicPartition, (Int, Int)] = mutable.Map()
@@ -464,10 +455,10 @@ final class TieredStorageTestBuilder {
   def createTopic(topic: String,
                   partitionsCount: Int,
                   replicationFactor: Int,
-                  segmentSize: Int,
+                  maxBatchCountPerSegment: Int,
                   replicaAssignment: Map[Int, Seq[Int]] = Map()): this.type = {
 
-    assert(segmentSize >= 1, s"Segments size for topic ${topic} needs to be >= 1")
+    assert(maxBatchCountPerSegment >= 1, s"Segments size for topic ${topic} needs to be >= 1")
     assert(partitionsCount >= 1, s"Partition count for topic ${topic} needs to be >= 1")
     assert(replicationFactor >= 1, s"Replication factor for topic ${topic} needs to be >= 1")
 
@@ -475,35 +466,51 @@ final class TieredStorageTestBuilder {
     maybeCreateConsumeActions()
 
     val assignment = if (replicaAssignment.isEmpty) None else Some(replicaAssignment)
-    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, segmentSize, assignment))
+    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, maxBatchCountPerSegment, assignment))
     this
   }
 
   def produce(topic: String, partition: Int, keyValues: (String, String)*): this.type = {
     assert(partition >= 0, "Partition must be >= 0")
-    val topicPartition = new TopicPartition(topic, partition)
+    maybeCreateConsumeActions()
 
+    val p = getOrCreateProducable(topic, partition)
     keyValues.foreach {
       case (key, value) =>
-        if (!producables.contains(topicPartition)) {
-          producables += (topicPartition -> mutable.Buffer())
-        }
-
-        producables(topicPartition) += new ProducerRecord[String, String](topic, partition, key, value)
+        p._1 += new ProducerRecord[String, String](topic, partition, key, value)
     }
 
     this
   }
 
+  def withBatchSize(topic: String, partition: Int, batchSize: Int): this.type = {
+    assert(batchSize >= 1, "The size of a batch of produced records must >= 1")
+
+    val p = getOrCreateProducable(topic, partition)
+    producables(new TopicPartition(topic, partition)) = (p._1, batchSize, p._3)
+
+    this
+  }
+
+  def expectEarliestOffsetInLogDirectory(topic: String, partition: Int, earliestOffset: Long): this.type = {
+    assert(earliestOffset >= 0, "Record offset must be >= 0")
+
+    val p = getOrCreateProducable(topic, partition)
+    producables(new TopicPartition(topic, partition)) = (p._1, p._2, earliestOffset)
+
+    this
+  }
+
   def expectSegmentToBeOffloaded(fromBroker: Int, topic: String, partition: Int,
-                                 baseOffset: Int, segmentSize: Int): this.type = {
+                                 baseOffset: Int, keyValues: (String, String)*): this.type = {
 
     val topicPartition = new TopicPartition(topic, partition)
-    val attrs = (fromBroker, baseOffset, segmentSize)
+    val records = keyValues.map { case (key, value) => new ProducerRecord(topic, partition, key, value) }
+    val attrsAndRecords = (fromBroker, baseOffset, records)
 
     offloadables.get(topicPartition) match {
-      case Some(buffer) => buffer += attrs
-      case None => offloadables += topicPartition -> mutable.Buffer(attrs)
+      case Some(buffer) => buffer += attrsAndRecords
+      case None => offloadables += topicPartition -> mutable.Buffer(attrsAndRecords)
     }
 
     this
@@ -521,6 +528,7 @@ final class TieredStorageTestBuilder {
     assert(expectedRecordsFromSecondTier >= 0, "Expected read cannot be < 0")
     assert(expectedRecordsFromSecondTier <= expectedTotalRecord, "Cannot fetch more records than consumed")
 
+    maybeCreateProduceAction()
     val topicPartition = new TopicPartition(topic, partition)
 
     assert(!consumables.contains(topicPartition), s"Consume already in progress for $topicPartition")
@@ -538,14 +546,14 @@ final class TieredStorageTestBuilder {
     this
   }
 
-  def expectFetchFromTieredStorage(fromBroker: Int, topic: String, partition: Int, recordCount: Int): this.type = {
+  def expectFetchFromTieredStorage(fromBroker: Int, topic: String, partition: Int, remoteFetchRequestCount: Int): this.type = {
     assert(partition >= 0, "Partition must be >= 0")
-    assert(recordCount >= 0, "Expected fetch count from tiered storage must be >= 0")
+    assert(remoteFetchRequestCount >= 0, "Expected fetch count from tiered storage must be >= 0")
 
     val topicPartition = new TopicPartition(topic, partition)
 
     assert(!fetchables.contains(topicPartition), s"Consume already in progress for $topicPartition")
-    fetchables += topicPartition -> (fromBroker, recordCount)
+    fetchables += topicPartition -> (fromBroker, remoteFetchRequestCount)
     this
   }
 
@@ -583,27 +591,21 @@ final class TieredStorageTestBuilder {
 
   private def maybeCreateProduceAction(): Unit = {
     if (!producables.isEmpty) {
-      // Creates the map of records to produce. Order of records is preserved at partition level.
-      val recordsToProduce = Map() ++ producables.view.mapValues(Seq() ++ _)
+      producables.foreach {
+        case (topicPartition, (records, batchSize, earliestOffsetInLogDirectory)) =>
+          val recordsToProduce = Seq() ++ records
 
-      /**
-        * Builds a specification of an offloaded segment.
-        * This method modifies this builder's sequence of records to produce.
-        */
-      def makeSpec(topicPartition: TopicPartition, attrs: (Int, Int, Int)): OffloadedSegmentSpec = {
-        attrs match {
-          case (sourceBroker:Int, baseOffset: Int, segmentSize: Int) =>
-            val segments = (0 until segmentSize).map(_ => producables(topicPartition).remove(0))
-            new OffloadedSegmentSpec(sourceBroker, topicPartition, baseOffset, segments)
-        }
+          val offloadedSegmentSpecs =
+            offloadables.getOrElse(topicPartition, mutable.Buffer())
+            .map {
+              case (sourceBroker, baseOffset, records) =>
+                new OffloadedSegmentSpec(sourceBroker, topicPartition, baseOffset, records)
+            }
+
+          actions += new ProduceAction(
+            topicPartition, offloadedSegmentSpecs,recordsToProduce, batchSize, earliestOffsetInLogDirectory)
       }
 
-      // Creates the map of specifications of segments expected to be offloaded.
-      val offloadedSegmentSpecs = Map[TopicPartition, Seq[OffloadedSegmentSpec]]() ++ offloadables.map {
-        case (tp: TopicPartition, attrs: mutable.Buffer[(Int, Int, Int)]) => (tp, attrs.map(makeSpec (tp, _)))
-      }
-
-      actions += new ProduceAction(offloadedSegmentSpecs, recordsToProduce)
       producables = mutable.Map()
       offloadables = mutable.Map()
     }
@@ -620,5 +622,17 @@ final class TieredStorageTestBuilder {
       consumables = mutable.Map()
       fetchables = mutable.Map()
     }
+  }
+
+  private def getOrCreateProducable(topic: String, partition: Int):
+    (mutable.Buffer[ProducerRecord[String, String]], Int, Long) = {
+
+    val topicPartition = new TopicPartition(topic, partition)
+    if (!producables.contains(topicPartition)) {
+      producables +=
+        (topicPartition -> (mutable.Buffer(), defaultProducedBatchSize, defaultEarliestOffsetExpectedInLogDirectory))
+    }
+
+    producables(topicPartition)
   }
 }

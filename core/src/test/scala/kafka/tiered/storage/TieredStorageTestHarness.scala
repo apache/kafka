@@ -31,6 +31,7 @@ import org.junit.{After, Before, Test}
 import unit.kafka.utils.BrokerLocalStorage
 
 import scala.collection.Seq
+import scala.util.{Failure, Success, Try}
 
 /**
   * Base class for integration tests exercising the tiered storage functionality in Apache Kafka.
@@ -99,7 +100,14 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
   def executeTieredStorageTest(): Unit = {
     val builder = new TieredStorageTestBuilder
     writeTestSpecifications(builder)
-    contextOpt.foreach(context => builder.complete().foreach(_.execute(context)))
+
+    Try(builder.complete()) match {
+      case Success(actions) =>
+        contextOpt.foreach(context => actions.foreach(_.execute(context)))
+
+      case Failure(e) =>
+        throw new AssertionError("Could not build test specifications. No test was executed.", e)
+    }
   }
 
   @After

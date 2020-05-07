@@ -66,7 +66,8 @@ final class RecordsKeyValueMatcher[R1, R2, K, V](private val expectedRecords: It
         .appendValue(expectedRecords.size)
         .appendText(", Actual: ")
         .appendValue(actualRecord.size)
-        .appendText(";")
+        .appendText(s"; Records: ${actualRecord.mkString("\n")}")
+        .appendText("; ")
       return false
     }
 

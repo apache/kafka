@@ -52,7 +52,8 @@ object TieredStorageTests {
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
         /*
-         * (A.1) Create a topic which segments contain only one record and produce three.
+         * (A.1) Create a topic which segments contain only one batch and produce three records
+         *       with a batch size of 1.
          *
          *       The topic and broker are configured so that the two rolled segments are picked from
          *       the offloaded to the tiered storage and not present in the first-tier broker storage.
@@ -73,10 +74,11 @@ object TieredStorageTests {
          *                                            |  (k2, v2)         |
          *                                            *-------------------*
          */
-        .createTopic(topicA, partitionsCount = 1, replicationFactor = 1, segmentSize = 1)
+        .createTopic(topicA, partitionsCount = 1, replicationFactor = 1, maxBatchCountPerSegment = 1)
         .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(broker, topicA, p0, baseOffset = 0, segmentSize = 1)
-        .expectSegmentToBeOffloaded(broker, topicA, p0, baseOffset = 1, segmentSize = 1)
+        .withBatchSize(topicA, p0, 1)
+        .expectSegmentToBeOffloaded(broker, topicA, p0, baseOffset = 0, ("k1", "v1"))
+        .expectSegmentToBeOffloaded(broker, topicA, p0, baseOffset = 1, ("k2", "v2"))
 
         /*
          * (A.2) Similar scenario as above, but with segments of two records.
@@ -89,14 +91,22 @@ object TieredStorageTests {
          *         - First-tier storage -            - Second-tier storage -
          *           Log tB-p0                         Log tB-p0
          *          *-------------------*             *-------------------*
-         *          | base offset = 2   |             |  base offset = 0  |
-         *          | (k3, v3)          |             |  (k1, v1)         |
+         *          | base offset = 4   |             |  base offset = 0  |
+         *          | (k5, v5)          |             |  (k1, v1)         |
          *          *-------------------*             |  (k2, v2)         |
          *                                            *-------------------*
+         *                                            *-------------------*
+         *                                            |  base offset = 2  |
+         *                                            |  (k3, v3)         |
+         *                                            |  (k4, v4)         |
+         *                                            *-------------------*
          */
-        .createTopic(topicB, partitionsCount = 1, replicationFactor = 1, segmentSize = 2)
-        .produce(topicB, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(broker, topicB, p0, baseOffset = 0, segmentSize = 2)
+        .createTopic(topicB, partitionsCount = 1, replicationFactor = 1, maxBatchCountPerSegment = 2)
+        .produce(topicB, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"), ("k4", "v4"), ("k5", "v5"))
+        .withBatchSize(topicB, p0, 1)
+        .expectEarliestOffsetInLogDirectory(topicB, p0, 4)
+        .expectSegmentToBeOffloaded(broker, topicB, p0, baseOffset = 0, ("k1", "v1"), ("k2", "v2"))
+        .expectSegmentToBeOffloaded(broker, topicB, p0, baseOffset = 2, ("k3", "v3"), ("k4", "v4"))
 
         /*
          * (A.3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
@@ -112,9 +122,71 @@ object TieredStorageTests {
          */
         .bounce(broker)
         .consume(topicA, p0, fetchOffset = 1, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
-        .consume(topicB, p0, fetchOffset = 1, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
-        .expectFetchFromTieredStorage(broker, topicA, p0, recordCount = 1)
-        .expectFetchFromTieredStorage(broker, topicB, p0, recordCount = 1)
+        .consume(topicB, p0, fetchOffset = 1, expectedTotalRecord = 4, expectedRecordsFromSecondTier = 3)
+        .expectFetchFromTieredStorage(broker, topicA, p0, remoteFetchRequestCount = 1)
+        .expectFetchFromTieredStorage(broker, topicB, p0, remoteFetchRequestCount = 2)
+
+        /*
+         * (A.4) Scenario similar to (A.2) but with records produced as batches of three elements.
+         *
+         *       Note 1: the segment produced with a base offset 4 contains only 1 record, despite a
+         *       max batch count per segment of 2. This is because when the broker is restarted, the
+         *       timestamp of that record is appended to the time index, which only accepts two
+         *       entries. When the batch A is appended to the log, the time index is detected as full
+         *       (because the number of entries >= max-entries - 1), and the segment is rolled over.
+         *
+         *       Note 2: Records with key k1, k2, k3, k4 and k5 are also part of a batch - in that
+         *       case, of size 1.
+         *
+         *       Acceptance:
+         *       -----------
+         *       - For topic B, 4 segments are present in the tiered storage. The fourth segments
+         *         contains two batches of 3 records each. An additional batch is stored in the log
+         *         directory in an active segment.
+         *
+         *          - First-tier storage -            - Second-tier storage -
+         *           Log tB-p0                         Log tB-p0
+         *          *-------------------*             *-------------------*
+         *          | base offset = 11  |             |  base offset = 0  |
+         *          |  ++++++++++++++   |             |  (k1, v1)         |
+         *          |  + (k12, v12) +   |             |  (k2, v2)         |
+         *          |  + (k13, v13) + C |             *-------------------*
+         *          |  + (k14, v14) +   |             *-------------------*
+         *          |  ++++++++++++++   |             |  base offset = 2  |
+         *          *-------------------*             |  (k3, v3)         |
+         *                                            |  (k4, v4)         |
+         *                                            *-------------------*
+         *                                            *-------------------*
+         *                                            |  base offset = 4  |
+         *                                            |  (k5, v5)         |
+         *                                            *-------------------*
+         *                                            *-------------------*
+         *                                            |  base offset = 5  |
+         *                                            |  ++++++++++++++   |
+         *                                            |  +  (k6, v6)  +   |
+         *                                            |  +  (k7, v7)  + A |
+         *                                            |  +  (k8, v8)  +   |
+         *                                            |  ++++++++++++++   |
+         *                                            |  ++++++++++++++   |
+         *                                            |  +  (k9, v9)  +   |
+         *                                            |  + (k10, v10) + B |
+         *                                            |  + (k11, v11) +   |
+         *                                            |  ++++++++++++++   |
+         *                                            *-------------------*
+         */
+        .produce(topicB, p0,
+          ("k6", "v6"), ("k7", "v7"), ("k8", "v8"),        // First batch A
+          ("k9", "v9"), ("k10", "v10"), ("k11", "v11"),    // Second batch B
+          ("k12", "v12"), ("k13", "v13"), ("k14", "v14"))  // Third batch C
+        .withBatchSize(topicB, p0, 3)
+        .expectEarliestOffsetInLogDirectory(topicB, p0, 11)
+        .expectSegmentToBeOffloaded(broker, topicB, p0, baseOffset = 4, ("k5", "v5"))
+        .expectSegmentToBeOffloaded(
+          broker, topicB, p0, baseOffset = 5,
+          ("k6", "v6"), ("k7", "v7"), ("k8", "v8"), ("k9", "v9"), ("k10", "v10"), ("k11", "v11")
+        )
+        .consume(topicB, p0, fetchOffset = 0, expectedTotalRecord = 14, expectedRecordsFromSecondTier = 11)
+        .expectFetchFromTieredStorage(broker, topicB, p0, remoteFetchRequestCount = 4)
     }
   }
 
@@ -149,10 +221,11 @@ object TieredStorageTests {
 
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
-        .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, segmentSize = 1)
+        .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1)
         .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, segmentSize = 1)
-        .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 1, segmentSize = 1)
+        .withBatchSize(topicA, p0, 1)
+        .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, ("k1", "v1"))
+        .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 1, ("k2", "v2"))
 
         /*
          * (B.1) Stop B0 and read remote log segments from the leader replica which is expected
@@ -162,7 +235,7 @@ object TieredStorageTests {
         .stop(broker0)
         .expectLeader(topicA, p0, broker1)
         .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 3, expectedRecordsFromSecondTier = 2)
-        .expectFetchFromTieredStorage(broker1, topicA, p0, recordCount = 2)
+        .expectFetchFromTieredStorage(broker1, topicA, p0, remoteFetchRequestCount = 2)
 
         /*
          * (B.2) Restore previous leader with an empty storage. The active segment is expected to be
@@ -182,7 +255,7 @@ object TieredStorageTests {
         //      is not available for consumption until the metadata for its remote segments have been processed.
         //
         .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 3, expectedRecordsFromSecondTier = 2)
-        .expectFetchFromTieredStorage(broker0, topicA, p0, recordCount = 2)
+        .expectFetchFromTieredStorage(broker0, topicA, p0, remoteFetchRequestCount = 2)
     }
   }
 
@@ -195,18 +268,20 @@ object TieredStorageTests {
       val assignment = Map(p0 -> Seq(leader, follower))
 
       builder
-        .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, segmentSize = 1, assignment)
+        .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1, assignment)
         .produce(topicA, p0, ("k1", "v1"))
 
         .stop(follower)
         .produce(topicA, p0, ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(leader, topicA, p0, baseOffset = 1, segmentSize = 1)
+        .withBatchSize(topicA, p0, 1)
+        .expectSegmentToBeOffloaded(leader, topicA, p0, baseOffset = 1, ("k1", "v1"))
 
         .stop(leader)
         .start(follower)
         .expectLeader(topicA, p0, follower)
         .produce(topicA, p0, ("k4", "v4"), ("k5", "v5"))
-        .expectSegmentToBeOffloaded(follower, topicA, p0, baseOffset = 1, segmentSize = 1)
+        .withBatchSize(topicA, p0, 1)
+        .expectSegmentToBeOffloaded(follower, topicA, p0, baseOffset = 1, ("k2", "v2"))
     }
   }
 
@@ -222,12 +297,12 @@ object TieredStorageTests {
 
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
-        .createTopic("topicA", partitionsCount = 1, replicationFactor = 2, segmentSize = 1)
+        .createTopic("topicA", partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1)
         .expectLeader("topicA", partition = 0, brokerId = 0)
         .expectInIsr("topicA", partition = 0, brokerId = 1)
         .produce("topicA", 0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 0, segmentSize = 1)
-        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 1, segmentSize = 1)
+        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 0, ("k1", "v1"))
+        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 1, ("k2", "v2"))
         .consume("topicA", partition = 0, fetchOffset = 1, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
 
         .stop(brokerId = 1)
@@ -236,7 +311,7 @@ object TieredStorageTests {
         .expectLeader("topicA", partition = 0, brokerId = 0)
         .expectInIsr("topicA", partition = 0, brokerId = 1)
         .consume("topicA", partition = 0, fetchOffset = 0, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
-        .expectFetchFromTieredStorage(fromBroker = 1, "topicA", partition = 0, recordCount = 2)
+        .expectFetchFromTieredStorage(fromBroker = 1, "topicA", partition = 0, remoteFetchRequestCount = 2)
     }
   }
 }

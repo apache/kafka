@@ -21,6 +21,7 @@ package kafka.tiered.storage
 import java.io.PrintStream
 import java.time.Duration
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 import kafka.admin.AdminUtils.assignReplicasToBrokers
 import kafka.admin.BrokerMetadata
@@ -30,6 +31,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG
 import org.apache.kafka.clients.admin.{Admin, AdminClient}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.log.remote.storage.{LocalTieredStorage, LocalTieredStorageHistory, LocalTieredStorageSnapshot}
@@ -67,6 +69,12 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
     producerConfig.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServerString)
     consumerConfig.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServerString)
 
+    //
+    // Set a producer linger of 60 seconds, in order to optimistically generate batches of
+    // records with a pre-determined size.
+    //
+    producerConfig.put(LINGER_MS_CONFIG, TimeUnit.SECONDS.toMillis(60).toString)
+
     val adminConfig = new Properties()
     adminConfig.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServerString)
 
@@ -88,8 +96,19 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
     topicSpecs.synchronized { topicSpecs += spec.topicName -> spec }
   }
 
-  def produce(records: Iterable[ProducerRecord[String, String]]) = {
-    records.foreach(producer.send(_).get())
+  def produce(records: Iterable[ProducerRecord[String, String]], batchSize: Int) = {
+    //
+    // Send the given records trying to honor the batch size. This is attempted
+    // with a large producer linger and the use of an explicit flush every time
+    // the number of a "group" of records reaches the batch size.
+    // Note that "group" does not mean "batch"; the former is the result of a
+    // user-driven behaviour, the latter is a construction internal to the
+    // producer and part of the Kafka's ingestion mechanism.
+    //
+    records.grouped(batchSize).foreach { groupedRecords =>
+      groupedRecords.foreach(producer.send(_))
+      producer.flush()
+    }
   }
 
   def consume(topicPartition: TopicPartition,
@@ -112,15 +131,15 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
       pollAction,
       waitTimeMs = timeoutMs,
       msg = s"Could not consume $numberOfRecords records of $topicPartition from offset $fetchOffset " +
-        s"in $timeoutMs ms. ${records.size} message(s) consumed:$sep ${records.mkString(sep)}")
+        s"in $timeoutMs ms. ${records.size} message(s) consumed:$sep${records.mkString(sep)}")
 
     records
   }
 
-  def nextOffsets(topicPartitions: Iterable[TopicPartition]): Map[TopicPartition, Long] = {
-    consumer.assign(topicPartitions.toList.asJava)
-    consumer.seekToEnd(topicPartitions.toList.asJava)
-    topicPartitions.map(tp => tp -> consumer.position(tp)).toMap
+  def nextOffset(topicPartition: TopicPartition): Long = {
+    consumer.assign(Seq(topicPartition).toList.asJava)
+    consumer.seekToEnd(Seq(topicPartition).toList.asJava)
+    consumer.position(topicPartition)
   }
 
   def bounce(brokerId: Int): Unit = {
