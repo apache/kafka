@@ -416,10 +416,21 @@ public class RestServer {
         }
     }
 
+    /**
+     * Locate a Jetty connector for the standard (non-admin) REST API that uses the given protocol.
+     * @param protocol the protocol for the connector (e.g., "http" or "https").
+     * @return a {@link ServerConnector} for the server that uses the requested protocol, or
+     * {@code null} if none exist.
+     */
     ServerConnector findConnector(String protocol) {
         for (Connector connector : jettyServer.getConnectors()) {
             String connectorName = connector.getName();
-            if (connectorName.startsWith(protocol) && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
+            // We set the names for these connectors when instantiating them, beginning with the
+            // protocol for the connector and then an underscore ("_"). We rely on that format here
+            // when trying to locate a connector with the requested protocol; if the naming format
+            // for the connectors we create is ever changed, we'll need to adjust the logic here
+            // accordingly.
+            if (connectorName.startsWith(protocol + "_") && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
                 return (ServerConnector) connector;
         }
 
