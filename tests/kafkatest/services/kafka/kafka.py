@@ -238,7 +238,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
-    def start(self, add_principals=""):
+    def start(self, add_principals="", use_zk_to_create_topic=False):
         if self.zk_client_secure and not self.zk.zk_client_secure_port:
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         self.open_port(self.security_protocol)
@@ -265,7 +265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     topic_cfg = {}
 
                 topic_cfg["topic"] = topic
-                self.create_topic(topic_cfg)
+                self.create_topic(topic_cfg, use_zk_to_create_topic=use_zk_to_create_topic)
 
     def _ensure_zk_chroot(self):
         self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
@@ -444,7 +444,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         skip_command_config = use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
         return "" if skip_command_config else " --command-config <(echo '%s')" % (self.security_config.client_config())
 
-    def create_topic(self, topic_cfg, node=None):
+    def create_topic(self, topic_cfg, node=None, use_zk_to_create_topic=False):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
         and we care where command gets run.
@@ -456,7 +456,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Creating topic %s with settings %s",
                          topic_cfg["topic"], topic_cfg)
 
-        use_zk_connection = not node.version.topic_command_supports_bootstrap_server
+        use_zk_connection = use_zk_to_create_topic or not node.version.topic_command_supports_bootstrap_server
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
