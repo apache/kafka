@@ -260,7 +260,7 @@ public class Fetcher<K, V> implements Closeable {
             }
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             // We add the node to the set of nodes with pending fetch requests before adding the
-            // listenerbecause the future may have been fulfilled on another thread (e.g. during a
+            // listener because the future may have been fulfilled on another thread (e.g. during a
             // disconnection being handled by the heartbeat thread) which will mean the listener
             // will be invoked synchronously.
             this.nodesWithPendingFetchRequests.add(entry.getKey().id());
@@ -676,8 +676,8 @@ public class Fetcher<K, V> implements Closeable {
             if (completedFetch.nextFetchOffset == position.offset) {
                 List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
 
-                log.trace("Returning fetched records {} at offset {} for assigned partition {}",
-                        partRecords, position, completedFetch.partition);
+                log.trace("Returning {} fetched records at offset {} for assigned partition {}",
+                        partRecords.size(), position, completedFetch.partition);
 
                 if (completedFetch.nextFetchOffset > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
