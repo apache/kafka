@@ -258,12 +258,12 @@ public class Fetcher<K, V> implements Closeable {
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
-            RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
-            // We add the node to the set of nodes with pending fetch requests before adding the
-            // listener because the future may have been fulfilled on another thread (e.g. during a
+            // We add the node to the set of nodes with pending fetch requests before sending the
+            // request to the client because the future may have been fulfilled on another thread (e.g. during a
             // disconnection being handled by the heartbeat thread) which will mean the listener
-            // will be invoked synchronously.
+            // will be invoked synchronously, and hence the added id would not be removed anymore.
             this.nodesWithPendingFetchRequests.add(entry.getKey().id());
+            RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             future.addListener(new RequestFutureListener<ClientResponse>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
@@ -676,13 +676,15 @@ public class Fetcher<K, V> implements Closeable {
             if (completedFetch.nextFetchOffset == position.offset) {
                 List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
 
+                log.trace("Returning fetched records {} at offset {} for assigned partition {}",
+                        partRecords, position, completedFetch.partition);
+
                 if (completedFetch.nextFetchOffset > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
                             completedFetch.nextFetchOffset,
                             completedFetch.lastEpoch,
                             position.currentLeader);
-                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                            "position to {}", position, completedFetch.partition, nextPosition);
+                    log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
                     subscriptions.position(completedFetch.partition, nextPosition);
                 }
 
