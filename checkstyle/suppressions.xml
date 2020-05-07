@@ -186,6 +186,8 @@
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
               files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
+              files="raft[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"

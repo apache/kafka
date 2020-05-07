@@ -41,7 +41,7 @@ public class SimpleKeyValueStoreTest {
         int retryBackoffMs = 100;
         int requestTimeoutMs = 5000;
         Set<Integer> voters = Collections.singleton(localId);
-        ElectionStore store = new MockElectionStore();
+        QuorumStateStore store = new MockQuorumStateStore();
         Time time = new MockTime();
         ReplicatedLog log = new MockLog();
         NetworkChannel channel = new MockNetworkChannel();
