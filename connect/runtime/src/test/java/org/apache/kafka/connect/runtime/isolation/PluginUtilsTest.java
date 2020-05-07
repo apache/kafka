@@ -211,6 +211,13 @@ public class PluginUtilsTest {
     }
 
     @Test
+    public void testConnectorClientConfigRequest() {
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+            "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest"
+        ));
+    }
+
+    @Test
     public void testEmptyPluginUrls() throws Exception {
         assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
     }

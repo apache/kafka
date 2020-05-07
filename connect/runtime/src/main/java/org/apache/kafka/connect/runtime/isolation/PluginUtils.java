@@ -137,7 +137,7 @@ public class PluginUtils {
             + "|storage\\.StringConverter"
             + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
-            + "|connector\\.policy\\.(?!ConnectorClientConfigOverridePolicy$).*"
+            + "|connector\\.policy\\.(?!ConnectorClientConfig(OverridePolicy|Request)$).*"
             + ")"
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
