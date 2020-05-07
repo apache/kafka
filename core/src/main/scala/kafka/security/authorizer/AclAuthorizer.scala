@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -251,7 +251,7 @@ class AclAuthorizer extends Authorizer with Logging {
         } catch {
           case e: Exception =>
             resourceBindingsBeingDeleted.keys.foreach { binding =>
-                deleteExceptions.getOrElseUpdate(binding, apiException(e))
+              deleteExceptions.getOrElseUpdate(binding, apiException(e))
             }
         }
       }
@@ -266,15 +266,15 @@ class AclAuthorizer extends Authorizer with Logging {
 
   @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
-      val aclBindings = new util.ArrayList[AclBinding]()
-      aclCache.foreach { case (resource, versionedAcls) =>
-        versionedAcls.acls.foreach { acl =>
-          val binding = new AclBinding(resource, acl.ace)
-          if (filter.matches(binding))
-            aclBindings.add(binding)
-        }
+    val aclBindings = new util.ArrayList[AclBinding]()
+    aclCache.foreach { case (resource, versionedAcls) =>
+      versionedAcls.acls.foreach { acl =>
+        val binding = new AclBinding(resource, acl.ace)
+        if (filter.matches(binding))
+          aclBindings.add(binding)
       }
-      aclBindings
+    }
+    aclBindings
   }
 
   override def close(): Unit = {
@@ -528,7 +528,7 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: ResourcePattern): Unit = {
-      zkClient.createAclChangeNotification(resource)
+    zkClient.createAclChangeNotification(resource)
   }
 
   private def backoffTime = {

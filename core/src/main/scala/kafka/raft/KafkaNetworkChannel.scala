@@ -22,6 +22,7 @@ import java.util
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
 
+import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
@@ -30,7 +31,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, Node}
 import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResponse}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object KafkaNetworkChannel {
@@ -70,7 +71,7 @@ class KafkaNetworkChannel(time: Time,
                           client: KafkaClient,
                           clientId: String,
                           retryBackoffMs: Int,
-                          requestTimeoutMs: Int) extends NetworkChannel {
+                          requestTimeoutMs: Int) extends NetworkChannel with Logging {
   import KafkaNetworkChannel._
 
   type ResponseHandler = AbstractResponse => Unit
@@ -116,8 +117,11 @@ class KafkaNetworkChannel(time: Time,
             pendingOutbound.poll()
             val apiKey = ApiKeys.forId(request.data.apiKey)
             val disconnectResponse = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
-            undelivered.offer(new RaftResponse.Inbound(
+            val success = undelivered.offer(new RaftResponse.Inbound(
               request.correlationId, disconnectResponse, request.destinationId))
+            if (!success) {
+              throw new KafkaException("Undelivered queue is full")
+            }
           } else if (client.ready(node, currentTimeMs)) {
             pendingOutbound.poll()
             val clientRequest = buildClientRequest(request)

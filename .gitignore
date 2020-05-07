@@ -56,3 +56,4 @@ clients/src/generated-test
 jmh-benchmarks/generated
 jmh-benchmarks/src/main/generated
 streams/src/generated
+raft/src/generated
