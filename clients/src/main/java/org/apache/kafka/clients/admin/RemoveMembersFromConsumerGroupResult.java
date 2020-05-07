@@ -33,14 +33,11 @@ public class RemoveMembersFromConsumerGroupResult {
 
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
     private final Set<MemberToRemove> memberInfos;
-    private final boolean removeAll;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         Set<MemberToRemove> memberInfos,
-                                         Boolean removeAll) {
+                                         Set<MemberToRemove> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
-        this.removeAll = removeAll;
     }
 
     /**
@@ -49,7 +46,7 @@ public class RemoveMembersFromConsumerGroupResult {
      * If not, the first member error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        if (removeAll) {
+        if (removeAll()) {
             final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
             this.future.whenComplete((memberErrors, throwable) -> {
                 if (throwable != null) {
@@ -82,6 +79,9 @@ public class RemoveMembersFromConsumerGroupResult {
      * Returns the selected member future.
      */
     public KafkaFuture<Void> memberResult(MemberToRemove member) {
+        if (removeAll()) {
+            throw new IllegalArgumentException("The method: memberResult is not applicable in 'removeAll' mode");
+        }
         if (!memberInfos.contains(member)) {
             throw new IllegalArgumentException("Member " + member + " was not included in the original request");
         }
@@ -108,5 +108,9 @@ public class RemoveMembersFromConsumerGroupResult {
         } else {
             return false;
         }
+    }
+
+    private boolean removeAll() {
+        return memberInfos.isEmpty();
     }
 }

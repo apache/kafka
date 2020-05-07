@@ -190,7 +190,7 @@ public class StreamsResetter {
         if (!members.isEmpty()) {
             if (options.has(forceOption)) {
                 System.out.println("Force deleting all active members in the group: " + groupId);
-                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(true)).all();
+                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all();
             } else {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "

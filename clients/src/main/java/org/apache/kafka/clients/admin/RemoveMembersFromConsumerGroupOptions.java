@@ -32,16 +32,13 @@ import java.util.Set;
 public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
     private Set<MemberToRemove> members;
-    private boolean removeAll;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
         this.members = new HashSet<>(members);
-        this.removeAll = false;
     }
 
-    public RemoveMembersFromConsumerGroupOptions(Boolean removeAll) {
+    public RemoveMembersFromConsumerGroupOptions() {
         this.members = new HashSet<>();
-        this.removeAll = removeAll;
     }
 
     public Set<MemberToRemove> members() {
@@ -49,6 +46,7 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     }
 
     public boolean removeAll() {
-        return removeAll;
+        return members.isEmpty();
     }
+
 }

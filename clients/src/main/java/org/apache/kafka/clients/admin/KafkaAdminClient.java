@@ -3612,16 +3612,15 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private List<MemberIdentity> getMembersFromGroup(String groupId) {
-        Collection<MemberDescription> members = new ArrayList<>();
+        Collection<MemberDescription> members;
         try {
             members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
         } catch (Throwable ex) {
-            System.out.println("Encounter exception when trying to get members from group: " + groupId);
-            ex.printStackTrace();
+            throw new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex);
         }
 
         List<MemberIdentity> memberToRemove = new ArrayList<>();
-        for (MemberDescription member: members) {
+        for (final MemberDescription member: members) {
             if (member.groupInstanceId().isPresent()) {
                 memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get())
                 );
@@ -3654,7 +3653,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
-        return new RemoveMembersFromConsumerGroupResult(future, options.members(), options.removeAll());
+        return new RemoveMembersFromConsumerGroupResult(future, options.members());
     }
 
     private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>,

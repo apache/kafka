@@ -2452,7 +2452,7 @@ public class KafkaAdminClientTest {
             ));
             final RemoveMembersFromConsumerGroupResult successResult = env.adminClient().removeMembersFromConsumerGroup(
                     groupId,
-                    new RemoveMembersFromConsumerGroupOptions(true)
+                    new RemoveMembersFromConsumerGroupOptions()
             );
             assertNull(successResult.all().get());
         }
