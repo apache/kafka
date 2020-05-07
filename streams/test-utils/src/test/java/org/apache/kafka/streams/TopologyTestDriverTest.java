@@ -73,7 +73,10 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -388,6 +391,19 @@ public class TopologyTestDriverTest {
         return topology;
     }
 
+    private Topology setupTopologyWithInternalTopic() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(SOURCE_TOPIC_1)
+            .selectKey((k, v) -> v)
+            .groupByKey()
+            .count()
+            .toStream()
+            .to(SINK_TOPIC_1);
+
+        return builder.build(config);
+    }
+
     @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
@@ -448,6 +464,26 @@ public class TopologyTestDriverTest {
         } catch (final IllegalArgumentException exception) {
             assertEquals("Unknown topic: " + unknownTopic, exception.getMessage());
         }
+    }
+
+    @Test
+    public void shouldGetSinkTopicNames() {
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+
+        assertThat(testDriver.producedTopicNames(), hasItem(SINK_TOPIC_1));
+    }
+
+    @Test
+    public void shouldGetInternalTopicNames() {
+        testDriver = new TopologyTestDriver(setupTopologyWithInternalTopic(), config);
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+
+        assertThat(testDriver.producedTopicNames(), hasItems(
+            endsWith("-changelog"), endsWith("-repartition")
+        ));
     }
 
     @Test
@@ -1579,19 +1615,19 @@ public class TopologyTestDriverTest {
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addGlobalStore(
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("globule-store"), Serdes.String(), Serdes.String()).withLoggingDisabled(),
-            "globuleSource",
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("global-store"), Serdes.String(), Serdes.String()).withLoggingDisabled(),
+            "globalSource",
             new StringDeserializer(),
             new StringDeserializer(),
-            "globule-topic",
-            "globuleProcessor",
+            "global-topic",
+            "globalProcessor",
             () -> new Processor<String, String>() {
                 private KeyValueStore<String, String> stateStore;
 
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {
-                    stateStore = (KeyValueStore<String, String>) context.getStateStore("globule-store");
+                    stateStore = (KeyValueStore<String, String>) context.getStateStore("global-store");
                 }
 
                 @Override
@@ -1614,23 +1650,23 @@ public class TopologyTestDriverTest {
                         context().forward(key, "recurse-" + value, To.child("recursiveSink"));
                     }
                     context().forward(key, value, To.child("sink"));
-                    context().forward(key, value, To.child("globuleSink"));
+                    context().forward(key, value, To.child("globalSink"));
                 }
             },
             "source"
         );
         topology.addSink("recursiveSink", "input", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
         topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
-        topology.addSink("globuleSink", "globule-topic", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
+        topology.addSink("globalSink", "global-topic", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
 
         try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
             final TestInputTopic<String, String> in = topologyTestDriver.createInputTopic("input", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> globalTopic = topologyTestDriver.createOutputTopic("globule-topic", new StringDeserializer(), new StringDeserializer());
+            final TestOutputTopic<String, String> globalTopic = topologyTestDriver.createOutputTopic("global-topic", new StringDeserializer(), new StringDeserializer());
 
             in.pipeInput("A", "alpha");
 
             // expect the global store to correctly reflect the last update
-            final KeyValueStore<String, String> keyValueStore = topologyTestDriver.getKeyValueStore("globule-store");
+            final KeyValueStore<String, String> keyValueStore = topologyTestDriver.getKeyValueStore("global-store");
             assertThat(keyValueStore, notNullValue());
             assertThat(keyValueStore.get("A"), is("recurse-alpha"));
 
