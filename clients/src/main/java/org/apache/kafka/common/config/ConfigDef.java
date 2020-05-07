@@ -1186,15 +1186,16 @@ public class ConfigDef {
         }
     }
 
-    private static String niceMemoryUnits(long bytes) {
+    static String niceMemoryUnits(long bytes) {
         long value = bytes;
         int i = 0;
-        while (i < 5) {
-            if (value % 1024 != 0) {
+        while (value != 0 && i < 4) {
+            if (value % 1024L == 0) {
+                value /= 1024L;
+                i++;
+            } else {
                 break;
             }
-            value /= 1024;
-            i++;
         }
         switch (i) {
             case 1:
@@ -1210,12 +1211,12 @@ public class ConfigDef {
         }
     }
 
-    private static String niceTimeUnits(long millis) {
+    static String niceTimeUnits(long millis) {
         long value = millis;
         long[] divisors = {1000, 60, 60, 24};
         String[] units = {"second", "minute", "hour", "day"};
         int i = 0;
-        while (i < 4) {
+        while (value != 0 && i < 4) {
             if (value % divisors[i] == 0) {
                 value /= divisors[i];
                 i++;
