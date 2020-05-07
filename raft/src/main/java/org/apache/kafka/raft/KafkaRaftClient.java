@@ -191,7 +191,7 @@ public class KafkaRaftClient implements RaftClient {
     @Override
     public void initialize(DistributedStateMachine stateMachine) throws IOException {
         this.stateMachine = stateMachine;
-        quorum.initialize(log.endOffset());
+        quorum.initialize(new OffsetAndEpoch(log.endOffset(), log.lastFetchedEpoch()));
 
         if (quorum.isLeader()) {
             electionTimer.reset(Long.MAX_VALUE);

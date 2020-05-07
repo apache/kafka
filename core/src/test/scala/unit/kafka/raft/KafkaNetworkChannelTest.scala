@@ -26,7 +26,7 @@ import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.{BeginQuorumEpochRequestData, BeginQuorumEpochResponseData, EndQuorumEpochRequestData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteRequestData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchQuorumRecordsResponse, FindQuorumResponse, RequestHeader, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, RequestHeader}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse}
 import org.junit.Assert._

@@ -91,36 +91,42 @@ public class RaftEventSimulationTest {
             cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 1);
-            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> {
+                try {
+                    return cluster.hasConsistentLeader();
+                } catch (IOException e) {
+                    return false;
+                }
+            });
         }
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeOne() {
+    public void testReplicationNoLeaderChangeQuorumSizeOne() throws IOException {
         testReplicationNoLeaderChange(new QuorumConfig(1));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeTwo() {
+    public void testReplicationNoLeaderChangeQuorumSizeTwo() throws IOException {
         testReplicationNoLeaderChange(new QuorumConfig(2));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeThree() {
+    public void testReplicationNoLeaderChangeQuorumSizeThree() throws IOException {
         testReplicationNoLeaderChange(new QuorumConfig(3, 0));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFour() {
+    public void testReplicationNoLeaderChangeQuorumSizeFour() throws IOException {
         testReplicationNoLeaderChange(new QuorumConfig(4));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFive() {
+    public void testReplicationNoLeaderChangeQuorumSizeFive() throws IOException {
         testReplicationNoLeaderChange(new QuorumConfig(5));
     }
 
-    private void testReplicationNoLeaderChange(QuorumConfig config) {
+    private void testReplicationNoLeaderChange(QuorumConfig config) throws IOException {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -139,36 +145,36 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeThree() {
+    public void testElectionAfterLeaderFailureQuorumSizeThree() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(3, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeThreeAndTwoObservers() {
+    public void testElectionAfterLeaderFailureQuorumSizeThreeAndTwoObservers() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(3, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFour() {
+    public void testElectionAfterLeaderFailureQuorumSizeFour() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(4, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFourAndTwoObservers() {
+    public void testElectionAfterLeaderFailureQuorumSizeFourAndTwoObservers() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(4, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFive() {
+    public void testElectionAfterLeaderFailureQuorumSizeFive() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(5, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFiveAndThreeObservers() {
+    public void testElectionAfterLeaderFailureQuorumSizeFiveAndThreeObservers() throws IOException {
         testElectionAfterLeaderFailure(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderFailure(QuorumConfig config) {
+    private void testElectionAfterLeaderFailure(QuorumConfig config) throws IOException {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
@@ -196,36 +202,36 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThree() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThree() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(3));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThreeAndTwoObservers() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThreeAndTwoObservers() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(3, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFour() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFour() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(4));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFourAndTwoObservers() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFourAndTwoObservers() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(4, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFive() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFive() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFiveAndThreeObservers() {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFiveAndThreeObservers() throws IOException {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderNetworkPartition(QuorumConfig config) {
+    private void testElectionAfterLeaderNetworkPartition(QuorumConfig config) throws IOException {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
@@ -257,16 +263,16 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFive() {
+    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFive() throws IOException {
         testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
-    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFiveAndTwoObservers() {
+    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFiveAndTwoObservers() throws IOException {
         testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5, 2));
     }
 
-    private void testElectionAfterMultiNodeNetworkPartition(QuorumConfig config) {
+    private void testElectionAfterMultiNodeNetworkPartition(QuorumConfig config) throws IOException {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
@@ -455,7 +461,7 @@ public class RaftEventSimulationTest {
     }
 
     private static class PersistentState {
-        final MockElectionStore store = new MockElectionStore();
+        final MockQuorumStateStore store = new MockQuorumStateStore();
         final MockLog log = new MockLog();
     }
 
@@ -533,19 +539,19 @@ public class RaftEventSimulationTest {
                 .allMatch(node -> node.quorum.highWatermark().orElse(0) > offset);
         }
 
-        boolean hasConsistentLeader() {
+        boolean hasConsistentLeader() throws IOException {
             Iterator<RaftNode> iter = running.values().iterator();
             if (!iter.hasNext())
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.read();
+            ElectionState election = first.store.readElectionState();
             if (!election.hasLeader())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.read()))
+                if (!election.equals(next.store.readElectionState()))
                     return false;
             }
 
@@ -573,7 +579,7 @@ public class RaftEventSimulationTest {
                 throw new IllegalArgumentException("Illegal election of observer " + election.leaderId());
 
             nodes.values().forEach(state -> {
-                state.store.write(election);
+                state.store.writeElectionState(election);
                 if (election.hasLeader()) {
                     Optional<OffsetAndEpoch> endOffset = state.log.endOffsetForEpoch(election.epoch);
                     if (!endOffset.isPresent())
@@ -639,7 +645,7 @@ public class RaftEventSimulationTest {
         final KafkaRaftClient manager;
         final MockLog log;
         final MockNetworkChannel channel;
-        final MockElectionStore store;
+        final MockQuorumStateStore store;
         final QuorumState quorum;
         final LogContext logContext;
         DistributedCounter counter;
@@ -648,7 +654,7 @@ public class RaftEventSimulationTest {
                          KafkaRaftClient manager,
                          MockLog log,
                          MockNetworkChannel channel,
-                         MockElectionStore store,
+                         MockQuorumStateStore store,
                          QuorumState quorum,
                          LogContext logContext) {
             this.nodeId = nodeId;
@@ -753,7 +759,11 @@ public class RaftEventSimulationTest {
             for (Map.Entry<Integer, PersistentState> nodeStateEntry : cluster.nodes.entrySet()) {
                 Integer nodeId = nodeStateEntry.getKey();
                 PersistentState state = nodeStateEntry.getValue();
-                nodeEpochs.put(nodeId, state.store.read().epoch);
+                try {
+                    nodeEpochs.put(nodeId, state.store.readElectionState().epoch);
+                } catch (IOException e) {
+                    fail("Unexpected IO exception from state store read" + e);
+                }
             }
         }
 
@@ -763,7 +773,13 @@ public class RaftEventSimulationTest {
                 Integer nodeId = nodeStateEntry.getKey();
                 PersistentState state = nodeStateEntry.getValue();
                 Integer oldEpoch = nodeEpochs.get(nodeId);
-                Integer newEpoch = state.store.read().epoch;
+                final Integer newEpoch;
+                try {
+                    newEpoch = state.store.readElectionState().epoch;
+                } catch (IOException e) {
+                    fail("Unexpected IO exception from state store read" + e);
+                    break;
+                }
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of high watermark detected: " +
                             oldEpoch + " -> " + newEpoch);

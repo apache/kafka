@@ -282,4 +282,11 @@ public class MockLog implements ReplicatedLog {
             this.startOffset = startOffset;
         }
     }
+
+    public void clear() {
+        epochStartOffsets.clear();
+        log.clear();
+        highWatermark = 0L;
+    }
 }
+

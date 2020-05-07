@@ -26,9 +26,9 @@ public class ElectionState {
     private final OptionalInt leaderIdOpt;
     private final OptionalInt votedIdOpt;
 
-    private ElectionState(int epoch,
-                          OptionalInt leaderIdOpt,
-                          OptionalInt votedIdOpt) {
+    ElectionState(int epoch,
+                  OptionalInt leaderIdOpt,
+                  OptionalInt votedIdOpt) {
         this.epoch = epoch;
         this.leaderIdOpt = leaderIdOpt;
         this.votedIdOpt = votedIdOpt;
@@ -60,10 +60,6 @@ public class ElectionState {
         if (nodeId < 0)
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
         return votedIdOpt.orElse(-1) == nodeId;
-    }
-
-    public boolean isFollower(int nodeId) {
-        return !isLeader(nodeId) && !isCandidate(nodeId);
     }
 
     public int leaderId() {
@@ -114,5 +110,4 @@ public class ElectionState {
         result = 31 * result + votedIdOpt.hashCode();
         return result;
     }
-
 }

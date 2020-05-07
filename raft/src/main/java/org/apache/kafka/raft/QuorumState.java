@@ -34,13 +34,13 @@ import java.util.stream.Collectors;
 public class QuorumState {
     public final int localId;
     private final Logger log;
-    private final ElectionStore store;
+    private final QuorumStateStore store;
     private final Set<Integer> voters;
     private EpochState state;
 
     public QuorumState(int localId,
                        Set<Integer> voters,
-                       ElectionStore store,
+                       QuorumStateStore store,
                        LogContext logContext) {
         this.localId = localId;
         this.voters = new HashSet<>(voters);
@@ -48,14 +48,31 @@ public class QuorumState {
         this.log = logContext.logger(QuorumState.class);
     }
 
-    public void initialize(long endOffset) throws IOException {
+    public void initialize(OffsetAndEpoch logEndOffsetAndEpoch) throws IOException {
         // We initialize in whatever state we were in on shutdown. If we were a leader
         // or candidate, probably an election was held, but we will find out about it
         // when we send Vote or BeginEpoch requests.
 
-        ElectionState election = store.read();
-        if (election.isLeader(localId)) {
-            state = new LeaderState(localId, election.epoch, endOffset, voters);
+        ElectionState election;
+        try {
+            election = store.readElectionState();
+        } catch (final IOException e) {
+            // For exceptions during state file loading (missing or not readable),
+            // we could assume the file is corrupted already and should be cleaned up.
+            log.warn("Clear local quorum state store {}", store.toString(), e);
+            store.clear();
+
+            election = ElectionState.withUnknownLeader(0);
+            state = new FollowerState(election.epoch);
+        }
+
+        if (election.epoch < logEndOffsetAndEpoch.epoch) {
+            log.warn("Epoch from quorum-state file is {}, which is " +
+                "smaller than last written epoch {} in the log",
+                election.epoch, logEndOffsetAndEpoch.epoch);
+            becomeUnattachedFollower(logEndOffsetAndEpoch.epoch);
+        } else if (election.isLeader(localId)) {
+            state = new LeaderState(localId, election.epoch, logEndOffsetAndEpoch.offset, voters);
         } else if (election.isCandidate(localId)) {
             state = new CandidateState(localId, election.epoch, voters);
         } else {
@@ -166,7 +183,7 @@ public class QuorumState {
 
         FollowerState followerState = followerStateOrThrow();
         if (func.apply(followerState) || stateChanged) {
-            store.write(followerState.election());
+            store.writeElectionState(followerState.election());
             return true;
         }
         return false;
@@ -181,7 +198,7 @@ public class QuorumState {
         int newEpoch = epoch() + 1;
         log.info("Become candidate in epoch {}", newEpoch);
         CandidateState state = new CandidateState(localId, newEpoch, voters);
-        store.write(state.election());
+        store.writeElectionState(state.election());
         this.state = state;
         return state;
     }
@@ -196,7 +213,7 @@ public class QuorumState {
 
         log.info("Become leader in epoch {}", epoch());
         LeaderState state = new LeaderState(localId, epoch(), epochStartOffset, voters);
-        store.write(state.election());
+        store.writeElectionState(state.election());
         this.state = state;
         return state;
     }
@@ -218,5 +235,4 @@ public class QuorumState {
             return (CandidateState) state;
         throw new IllegalStateException("Expected to be a candidate, but current state is " + state);
     }
-
 }
