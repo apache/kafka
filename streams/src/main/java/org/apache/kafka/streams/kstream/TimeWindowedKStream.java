@@ -178,7 +178,7 @@ public interface TimeWindowedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<Long>> timestampedWindowStore());
+     * ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<Long>>timestampedWindowStore());
      *
      * K key = "some-word";
      * long fromTime = ...;
