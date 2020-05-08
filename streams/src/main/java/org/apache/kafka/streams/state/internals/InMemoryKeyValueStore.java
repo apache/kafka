@@ -121,21 +121,16 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        NavigableMap<Bytes, byte[]> map = this.map.subMap(from, true, to, true);
-        if (direction == ReadDirection.BACKWARD) map = map.descendingMap();
         return new DelegatingPeekingKeyValueIterator<>(
                 name,
-                new InMemoryKeyValueIterator(map.keySet()));
+                new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).keySet(), direction));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
-        if (direction == ReadDirection.BACKWARD) return new DelegatingPeekingKeyValueIterator<>(
+        return new DelegatingPeekingKeyValueIterator<>(
                 name,
-                new InMemoryKeyValueIterator(map.descendingMap().keySet()));
-        else return new DelegatingPeekingKeyValueIterator<>(
-                name,
-                new InMemoryKeyValueIterator(map.keySet()));
+                new InMemoryKeyValueIterator(map.keySet(), direction));
     }
 
     @Override
@@ -158,8 +153,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Set<Bytes> keySet) {
-            this.iter = new TreeSet<>(keySet).iterator();
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final ReadDirection direction) {
+            if (direction == ReadDirection.BACKWARD) this.iter = new TreeSet<>(keySet).descendingIterator();
+            else this.iter = new TreeSet<>(keySet).iterator();
         }
 
         @Override

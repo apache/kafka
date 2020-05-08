@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.After;
 import org.junit.Before;
@@ -185,6 +186,54 @@ public abstract class AbstractKeyValueStoreTest {
         expectedContents.put(0, "zero");
         expectedContents.put(1, "one");
         assertEquals(expectedContents, getContents(store.all()));
+    }
+
+    @Test
+    public void testPutGetRangeBackwards() {
+        // Verify that the store reads and writes correctly ...
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(4, "four");
+        store.put(5, "five");
+        assertEquals(5, driver.sizeOf(store));
+        assertEquals("zero", store.get(0));
+        assertEquals("one", store.get(1));
+        assertEquals("two", store.get(2));
+        assertNull(store.get(3));
+        assertEquals("four", store.get(4));
+        assertEquals("five", store.get(5));
+        // Flush now so that for caching store, we will not skip the deletion following an put
+        store.flush();
+        store.delete(5);
+        assertEquals(4, driver.sizeOf(store));
+
+        // Flush the store and verify all current entries were properly flushed ...
+        store.flush();
+        assertEquals("zero", driver.flushedEntryStored(0));
+        assertEquals("one", driver.flushedEntryStored(1));
+        assertEquals("two", driver.flushedEntryStored(2));
+        assertEquals("four", driver.flushedEntryStored(4));
+        assertNull(driver.flushedEntryStored(5));
+
+        assertFalse(driver.flushedEntryRemoved(0));
+        assertFalse(driver.flushedEntryRemoved(1));
+        assertFalse(driver.flushedEntryRemoved(2));
+        assertFalse(driver.flushedEntryRemoved(4));
+        assertTrue(driver.flushedEntryRemoved(5));
+
+        final HashMap<Integer, String> expectedContents = new HashMap<>();
+        expectedContents.put(2, "two");
+        expectedContents.put(4, "four");
+
+        // Check range iteration ...
+        assertEquals(expectedContents, getContents(store.range(2, 4)));
+        assertEquals(expectedContents, getContents(store.range(2, 6)));
+
+        // Check all iteration ...
+        expectedContents.put(1, "one");
+        expectedContents.put(0, "zero");
+        assertEquals(expectedContents, getContents(store.all(ReadDirection.BACKWARD)));
     }
 
     @Test
@@ -366,6 +415,26 @@ public abstract class AbstractKeyValueStoreTest {
         final List<KeyValue<Integer, String>> expectedReturned =
             Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
         final Iterator<KeyValue<Integer, String>> iterator = store.all();
+
+        while (iterator.hasNext()) {
+            allReturned.add(iterator.next());
+        }
+        assertThat(allReturned, equalTo(expectedReturned));
+
+    }
+
+    @Test
+    public void shouldPutAllBackwards() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+
+        store.putAll(entries);
+
+        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> expectedReturned =
+                Arrays.asList(KeyValue.pair(2, "two"), KeyValue.pair(1, "one"));
+        final Iterator<KeyValue<Integer, String>> iterator = store.all(ReadDirection.BACKWARD);
 
         while (iterator.hasNext()) {
             allReturned.add(iterator.next());

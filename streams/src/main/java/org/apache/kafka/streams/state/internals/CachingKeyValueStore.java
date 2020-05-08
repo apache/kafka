@@ -260,7 +260,7 @@ public class CachingKeyValueStore
     public KeyValueIterator<Bytes, byte[]> all(final ReadDirection direction) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator =
-            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
+            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all(direction));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName, direction);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
