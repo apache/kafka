@@ -222,7 +222,7 @@
         For more information on how this is done inside the brokers and Kafka Streams, see 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>.<br />
 
-        In order to achieve exactly-once semantics when running Kafka Streams applications,
+        To enable exactly-once semantics when running Kafka Streams applications,
         users can simply set the <code>processing.guarantee</code> config value (default value is <b>at_least_once</b>)
         to <b>exactly_once</b> (requires brokers version 0.11.0 or newer) or <b>exactly_once_beta</b> (requires brokers version 2.5 or newer).
         More details can be found in the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html">Kafka Streams Configs</a> section.
