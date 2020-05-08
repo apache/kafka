@@ -50,7 +50,7 @@ class JsonTest {
 
     assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
     val tryRes = Json.tryParseFull("""{"foo":"bar"s}""")
-    tryRes shouldBe a [Left[JsonParseException, Option[JsonValue]]]
+    tryRes shouldBe a [Left[_, Option[JsonValue]]]
 
     val objectNode = new ObjectNode(
       jnf,

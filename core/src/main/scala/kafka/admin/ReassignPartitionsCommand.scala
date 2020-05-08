@@ -1614,6 +1614,8 @@ object ReassignPartitionsCommand extends Logging {
           case None => EarliestVersion
         }
         parsePartitionReassignmentData(version, js)
+      case Right(None) =>
+        throw new AdminCommandFailedException("Couldn't parse JSON content for unknown reason")
       case Left(f) =>
         throw f
     }

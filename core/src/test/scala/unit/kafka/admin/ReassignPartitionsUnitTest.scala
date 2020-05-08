@@ -20,6 +20,7 @@ package kafka.admin
 import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
 
+import com.fasterxml.jackson.core.JsonParseException
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
@@ -640,5 +641,22 @@ class ReassignPartitionsUnitTest {
   def assertStartsWith(prefix: String, str: String): Unit = {
     assertTrue("Expected the string to start with %s, but it was %s".format(prefix, str),
       str.startsWith(prefix))
+  }
+
+  @Test
+  def testPropagateInvalidJsonError(): Unit = {
+    val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
+    try {
+      addTopics(adminClient)
+      assertStartsWith("Unexpected character",
+        assertThrows(
+          classOf[JsonParseException], new ThrowingRunnable {
+            override def run():Unit =
+              executeAssignment(adminClient, false,
+                "{invalid_json")
+          }).getMessage)
+    } finally {
+      adminClient.close()
+    }
   }
 }

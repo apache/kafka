@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
 import scala.collection._
-import scala.util.Try
 import scala.reflect.ClassTag
 
 /**
