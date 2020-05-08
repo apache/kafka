@@ -217,7 +217,7 @@
 
         As of the 2.6.0 release, Kafka Streams supports an improved implementation of exactly-once processing, named "exactly-once beta", 
         which requires broker version 2.5.0 or newer.
-        This implementation is more efficient (i.e., less client and broker resource utilization; like client threads, used network connections etc.)
+        This implementation is more efficient, because it reduces client and broker resource utilization, like client threads and used network connections, 
         and allows for higher throughput and improved scalability.
         To read more details on how this is done inside the brokers and Kafka Streams, readers are recommended to read
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>.<br />
