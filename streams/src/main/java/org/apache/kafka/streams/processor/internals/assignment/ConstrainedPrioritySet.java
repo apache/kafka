@@ -39,7 +39,7 @@ class ConstrainedPrioritySet {
     ConstrainedPrioritySet(final BiFunction<UUID, TaskId, Boolean> constraint,
                            final Function<UUID, Double> weight) {
         this.constraint = constraint;
-        clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(x -> x));
+        clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));
     }
 
     /**
