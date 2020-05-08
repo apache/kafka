@@ -785,7 +785,7 @@
     <p> Metrics using exactly-once semantics: </p>
     <p>
         If <code>"exactly_once"</code> processing is enabled via the <code>processing.guarantee</code> parameter,
-        internally Streams switches from a producer per thread to a producer per task runtime model
+        internally Streams switches from a producer-per-thread to a producer-per-task runtime model.
         (Note: using <code>"exactly_once_beta"</code> does use a producer per thread and thus <code>client.id</code> don't change
         compare to <code>"at_least_once"</code> for this case).
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
