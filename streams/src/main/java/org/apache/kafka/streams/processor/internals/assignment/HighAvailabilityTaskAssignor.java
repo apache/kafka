@@ -76,7 +76,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         assignStatelessActiveTasks(clientStates, diff(TreeSet::new, allTaskIds, statefulTasks));
 
         log.info("Decided on assignment: " +
-                     clients +
+                     clientStates +
                      " with " +
                      (probingRebalanceNeeded ? "" : "no") +
                      " followup probing rebalance.");
