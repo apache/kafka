@@ -471,24 +471,34 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldGetSinkTopicNames() {
+    public void shouldCaptureSinkTopicNamesIfWrittenInto() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
 
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
         assertThat(testDriver.producedTopicNames(), hasItem(SINK_TOPIC_1));
     }
 
     @Test
-    public void shouldGetInternalTopicNames() {
+    public void shouldCaptureInternalTopicNamesIfWrittenInto() {
         testDriver = new TopologyTestDriver(
             setupTopologyWithInternalTopic("table1", "table2", "join"),
             config
         );
 
-        pipeRecord(SOURCE_TOPIC_1, testRecord1);
-        pipeRecord(SOURCE_TOPIC_2, testRecord1);
+        assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
 
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        assertThat(
+            testDriver.producedTopicNames(),
+            equalTo(mkSet(
+                config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-table1-repartition",
+                config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-table1-changelog"
+            ))
+        );
+
+        pipeRecord(SOURCE_TOPIC_2, testRecord1);
         assertThat(
             testDriver.producedTopicNames(),
             equalTo(mkSet(
@@ -503,16 +513,16 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldGetWritesToGlobalTopic() {
+    public void shouldCaptureGlobalTopicNameIfWrittenInto() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable(SOURCE_TOPIC_1, Materialized.as("globalTable"));
         builder.stream(SOURCE_TOPIC_2).to(SOURCE_TOPIC_1);
 
         testDriver = new TopologyTestDriver(builder.build(), config);
 
-        pipeRecord(SOURCE_TOPIC_2, testRecord1);
+        assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
 
-        // add global table
+        pipeRecord(SOURCE_TOPIC_2, testRecord1);
         assertThat(
             testDriver.producedTopicNames(),
             equalTo(Collections.singleton(SOURCE_TOPIC_1))
