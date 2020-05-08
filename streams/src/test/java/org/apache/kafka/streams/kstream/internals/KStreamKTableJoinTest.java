@@ -125,7 +125,7 @@ public class KStreamKTableJoinTest {
         final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
         rekeyedStream.join(tableB, (value1, value2) -> value1 + value2).to("out-one");
         rekeyedStream.join(tableC, (value1, value2) -> value1 + value2).to("out-two");
-        Topology topology = builder.build(props);
+        final Topology topology = builder.build(props);
         assertEquals(expectedTopologyWithGeneratedRepartitionTopicNames, topology.describe().toString());
     }
 
@@ -141,7 +141,7 @@ public class KStreamKTableJoinTest {
 
         rekeyedStream.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join")).to("out-one");
         rekeyedStream.join(tableC, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "second-join")).to("out-two");
-        Topology topology = builder.build(props);
+        final Topology topology = builder.build(props);
         assertEquals(expectedTopologyWithUserProvidedRepartitionTopicNames, topology.describe().toString());
     }
 
