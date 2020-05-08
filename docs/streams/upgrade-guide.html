@@ -58,7 +58,7 @@
         To use this new feature, your brokers must be on version 2.5.x or newer.
         A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
         only possible if the application is on version 2.6.x.
-        Hence, if you want to upgrade your application from an older version and enable this feature,
+        If you want to upgrade your application from an older version and enable this feature,
         you first need to upgrade your application to version 2.6.x staying on <code>"exactly_once"</code>
         and afterwards do second round of rolling bounces to switch to <code>"exactly_once_beta"</code>.
         For a downgrade do the revers: first switch the config from <code>"exactly_once_beta"</code> to
