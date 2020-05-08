@@ -272,7 +272,7 @@
 
     <h4><a id="impl_zknotation" href="#impl_zknotation">Notation</a></h4>
     <p>
-    When an element in a path is denoted [xyz], that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example /topics/[topic] would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as [0...5] to indicate the subdirectories 0, 1, 2, 3, 4. An arrow -> is used to indicate the contents of a znode. For example /hello -> world would indicate a znode /hello containing the value "world".
+    When an element in a path is denoted <code>[xyz]</code>, that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example <code>/topics/[topic]</code> would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as <code>[0...5]</code> to indicate the subdirectories 0, 1, 2, 3, 4. An arrow <code>-></code> is used to indicate the contents of a znode. For example <code>/hello -> world</code> would indicate a znode /hello containing the value "world".
     </p>
 
     <h4><a id="impl_zkbroker" href="#impl_zkbroker">Broker Node Registry</a></h4>
