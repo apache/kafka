@@ -1235,6 +1235,10 @@ public class InternalTopologyBuilder {
         setRegexMatchedTopicToStateStore();
     }
 
+    public boolean hasNoNonGlobalTopology() {
+        return sourceTopicNames.isEmpty() && nodeToSourcePatterns.isEmpty();
+    }
+
     private boolean isGlobalSource(final String nodeName) {
         final NodeFactory nodeFactory = nodeFactories.get(nodeName);
 
