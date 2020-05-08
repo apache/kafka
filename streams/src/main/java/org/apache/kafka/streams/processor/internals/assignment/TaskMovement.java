@@ -75,7 +75,7 @@ final class TaskMovement {
 
         final ConstrainedPrioritySet clientsByTaskLoad = new ConstrainedPrioritySet(
             caughtUpPredicate,
-            (client) -> clientStates.get(client).taskLoad()
+            client -> clientStates.get(client).taskLoad()
         );
 
         final Queue<TaskMovement> taskMovements = new PriorityQueue<>(

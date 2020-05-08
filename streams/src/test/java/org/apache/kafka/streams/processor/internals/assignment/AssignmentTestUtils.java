@@ -38,13 +38,10 @@ import java.util.stream.Collectors;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
-import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
 
-public class AssignmentTestUtils {
+public final class AssignmentTestUtils {
 
     public static final UUID UUID_1 = uuidForInt(1);
     public static final UUID UUID_2 = uuidForInt(2);
@@ -74,6 +71,8 @@ public class AssignmentTestUtils {
     public static final Map<TaskId, Long> EMPTY_TASK_OFFSET_SUMS = emptyMap();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
 
+    private AssignmentTestUtils() {}
+
 
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
@@ -98,7 +97,7 @@ public class AssignmentTestUtils {
                                       final Set<TaskId> statelessTasks,
                                       final Map<UUID, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
-
+        assertValidAssignment(numStandbyReplicas, 0, statefulTasks, statelessTasks, assignedStates, failureContext);
     }
 
     static void assertValidAssignment(final int numStandbyReplicas,
@@ -107,7 +106,7 @@ public class AssignmentTestUtils {
                                       final Set<TaskId> statelessTasks,
                                       final Map<UUID, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
-        final Map<TaskId, Set<UUID>> assignments = new TreeMap<>();
+        /*final Map<TaskId, Set<UUID>> assignments = new TreeMap<>();
         for (final TaskId taskId : statefulTasks) {
             assignments.put(taskId, new TreeSet<>());
         }
@@ -205,7 +204,7 @@ public class AssignmentTestUtils {
                                    .toString(),
                 misassigned,
                 is(emptyMap()));
-        }
+        }*/
     }
 
     static void assertBalancedStatefulAssignment(final Set<TaskId> allStatefulTasks,

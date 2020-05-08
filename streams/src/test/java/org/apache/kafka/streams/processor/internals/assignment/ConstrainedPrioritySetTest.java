@@ -40,7 +40,7 @@ public class ConstrainedPrioritySetTest {
 
     @Test
     public void shouldReturnOnlyClient() {
-        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, (client) -> 1.0);
+        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, client -> 1.0);
         queue.offerAll(singleton(UUID_1));
 
         assertThat(queue.poll(DUMMY_TASK), equalTo(UUID_1));
@@ -49,7 +49,7 @@ public class ConstrainedPrioritySetTest {
 
     @Test
     public void shouldReturnNull() {
-        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysFalse, (client) -> 1.0);
+        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysFalse, client -> 1.0);
         queue.offerAll(singleton(UUID_1));
 
         assertThat(queue.poll(DUMMY_TASK), nullValue());
@@ -59,7 +59,7 @@ public class ConstrainedPrioritySetTest {
     public void shouldReturnLeastLoadedClient() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(
             alwaysTrue,
-            (client) -> (client == UUID_1) ? 3.0 : (client == UUID_2) ? 2.0 : 1.0
+            client -> (client == UUID_1) ? 3.0 : (client == UUID_2) ? 2.0 : 1.0
         );
 
         queue.offerAll(asList(UUID_1, UUID_2, UUID_3));
@@ -72,7 +72,7 @@ public class ConstrainedPrioritySetTest {
 
     @Test
     public void shouldNotRetainDuplicates() {
-        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, (client) -> 1.0);
+        final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, client -> 1.0);
 
         queue.offerAll(singleton(UUID_1));
         queue.offer(UUID_1);
@@ -85,7 +85,7 @@ public class ConstrainedPrioritySetTest {
     public void shouldOnlyReturnValidClients() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(
             (client, task) -> client.equals(UUID_1),
-            (client) -> 1.0
+            client -> 1.0
         );
 
         queue.offerAll(asList(UUID_1, UUID_2));
@@ -98,7 +98,7 @@ public class ConstrainedPrioritySetTest {
     public void shouldApplyPollFilter() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(
             alwaysTrue,
-            (client) -> 1.0
+            client -> 1.0
         );
 
         queue.offerAll(asList(UUID_1, UUID_2));

@@ -21,11 +21,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -36,7 +32,6 @@ import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
@@ -93,7 +88,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                   final SortedSet<TaskId> statefulTasks) {
         Iterator<ClientState> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
-            if (clientStateIterator == null || ! clientStateIterator.hasNext()) {
+            if (clientStateIterator == null || !clientStateIterator.hasNext()) {
                 clientStateIterator = clientStates.values().iterator();
             }
             clientStateIterator.next().assignActive(task);
@@ -113,7 +108,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                   final int numStandbyReplicas) {
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clientStates.get(client).assignedTasks().contains(task),
-            (client) -> clientStates.get(client).taskLoad()
+            client -> clientStates.get(client).taskLoad()
         );
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
