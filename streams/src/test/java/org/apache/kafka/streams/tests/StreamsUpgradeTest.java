@@ -138,7 +138,7 @@ public class StreamsUpgradeTest {
                 usedSubscriptionMetadataVersionPeek = new AtomicInteger();
             }
             configs.remove("test.future.metadata");
-            nextScheduledRebalanceMs = new AssignorConfiguration(configs).getNextScheduledRebalanceMs(configs);
+            nextScheduledRebalanceMs = new AssignorConfiguration(configs).getNextScheduledRebalanceMs();
 
             super.configure(configs);
         }

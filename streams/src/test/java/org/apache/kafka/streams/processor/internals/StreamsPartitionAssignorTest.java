@@ -1274,6 +1274,7 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() {
+        createDefaultMockTaskManager();
         assertThrows(ConfigException.class, () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:j87yhk")));
     }
 
@@ -1804,7 +1805,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getNextScheduledRebalanceMs(props).get(), equalTo(5 * 60 * 1000L));
+        assertThat(assignorConfiguration.getNextScheduledRebalanceMs().get(), equalTo(5 * 60 * 1000L));
     }
 
     @Test
@@ -1815,7 +1816,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getTime(props).milliseconds(), equalTo(Long.MAX_VALUE));
+        assertThat(assignorConfiguration.getTime().milliseconds(), equalTo(Long.MAX_VALUE));
     }
 
     @Test

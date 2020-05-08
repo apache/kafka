@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -47,6 +48,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -82,6 +84,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -1204,6 +1207,33 @@ public class IntegrationTestUtils {
                 }
             }
             Thread.sleep(Math.min(100L, waitTime));
+        }
+    }
+
+    public static class StableAssignmentListener implements AssignmentListener {
+        final AtomicInteger numStableAssignments = new AtomicInteger(0);
+        @Override
+        public void onAssignmentComplete(final boolean stable) {
+            if (stable) {
+                numStableAssignments.incrementAndGet();
+            }
+        }
+
+        public int numStableAssignments() {
+            return numStableAssignments.get();
+        }
+
+        /**
+         * Waits for the number of stable assignments to reach the expected value. Typically this will be the value of
+         * {@link #numStableAssignments()} + 1 just before the rebalance triggering action is taken (eg start new client)
+         */
+        public void waitForNextStableAssignment(final int expectedNumStableAssignments, final long maxWaitMs) throws InterruptedException {
+            waitForCondition(
+                () -> expectedNumStableAssignments == numStableAssignments(),
+                maxWaitMs,
+                () -> "Client did not reach " + expectedNumStableAssignments + " stable assignments on time, " +
+                    "numStableAssignments was " + numStableAssignments()
+            );
         }
     }
 }

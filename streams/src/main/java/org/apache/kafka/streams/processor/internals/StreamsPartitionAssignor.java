@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.Topi
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
@@ -171,6 +172,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
+    private AssignmentListener assignmentListener;
 
     private Supplier<TaskAssignor> taskAssignorSupplier;
 
@@ -185,15 +187,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     public void configure(final Map<String, ?> configs) {
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(configs);
 
-        logPrefix = assignorConfiguration.logPrefix();
+        logPrefix = assignorConfiguration.getLogPrefix();
         log = new LogContext(logPrefix).logger(getClass());
         usedSubscriptionMetadataVersion = assignorConfiguration
-            .configuredMetadataVersion(usedSubscriptionMetadataVersion);
+            .getConfiguredMetadataVersion(usedSubscriptionMetadataVersion);
         taskManager = assignorConfiguration.getTaskManager();
         streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
-        assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
-        nextScheduledRebalanceMs = assignorConfiguration.getNextScheduledRebalanceMs(configs);
-        time = assignorConfiguration.getTime(configs);
+        assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode();
+        nextScheduledRebalanceMs = assignorConfiguration.getNextScheduledRebalanceMs();
+        time = assignorConfiguration.getTime();
         assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
         partitionGrouper = assignorConfiguration.getPartitionGrouper();
         userEndPoint = assignorConfiguration.getUserEndPoint();
@@ -201,8 +203,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         adminClientTimeout = assignorConfiguration.getAdminClientTimeout();
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
-        rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        rebalanceProtocol = assignorConfiguration.getRebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::getTaskAssignor;
+        assignmentListener = assignorConfiguration.getAssignmentListener();
     }
 
     @Override
@@ -913,8 +916,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         if (rebalanceRequired) {
+            assignmentListener.onAssignmentComplete(false);
             log.info("Finished unstable assignment of tasks, a followup rebalance will be scheduled.");
         } else {
+            assignmentListener.onAssignmentComplete(true);
             log.info("Finished stable assignment of tasks, no followup rebalances required.");
         }
 
