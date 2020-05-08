@@ -183,7 +183,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             1.0 * sourceClientState.assignedTasks().size() / sourceClientState.capacity();
         final double skew = assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination;
 
-        if (skew < 1) {
+        if (skew <= 0) {
             return false;
         }
 
@@ -193,9 +193,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             (sourceClientState.assignedTasks().size() - 1.0) / sourceClientState.capacity();
         final double proposedSkew = proposedAssignedTasksPerStreamThreadAtSource - proposedAssignedTasksPerStreamThreadAtDestination;
 
+        if (proposedSkew < 0) {
+            // then the move would only create an imbalance in the other direction.
+            return false;
+        }
         // we should only move a task if doing so would actually improve the skew.
-        // we take the absolute value because moving a task might just "flip" the skew about zero.
-        return Math.abs(proposedSkew) < skew;
+        return proposedSkew < skew;
     }
 
     private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,

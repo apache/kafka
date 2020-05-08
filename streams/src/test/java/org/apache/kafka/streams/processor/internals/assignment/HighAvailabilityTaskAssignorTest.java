@@ -231,7 +231,8 @@ public class HighAvailabilityTaskAssignorTest {
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
-        assertBalancedTasks(clientStates);
+        assertThat(clientState1, hasActiveTasks(6));
+        assertThat(clientState2, hasActiveTasks(3));
     }
 
     @Test
