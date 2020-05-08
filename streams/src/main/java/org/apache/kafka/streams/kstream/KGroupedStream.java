@@ -487,7 +487,7 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, ValueAndTimestamp<VR>> timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, ValueAndTimestamp<VR>>timestampedKeyValueStore());
      * K key = "some-key";
      * ValueAndTimestamp<VR> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
