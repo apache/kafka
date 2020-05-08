@@ -623,52 +623,6 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldAllowConcurrentAccesses() throws Exception {
-        final int numIterations = 500000;
-        final String storeName = "word-count-store";
-        final String windowStoreName = "windowed-word-count-store";
-
-        // send one round of records first to populate the stores
-        ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
-        producerRunnable.run();
-
-        producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
-        final Thread producerThread = new Thread(producerRunnable);
-        kafkaStreams = createCountStream(
-            streamConcurrent,
-            outputTopicConcurrent,
-            outputTopicConcurrentWindowed,
-            storeName,
-            windowStoreName,
-            streamsConfiguration);
-
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-
-        producerThread.start();
-
-        try {
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
-            
-            final ReadOnlyKeyValueStore<String, Long> keyValueStore =
-                IntegrationTestUtils.getStore(storeName + "-" + streamConcurrent, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-            final ReadOnlyWindowStore<String, Long> windowStore =
-                IntegrationTestUtils.getStore(windowStoreName + "-" + streamConcurrent, kafkaStreams, QueryableStoreTypes.windowStore());
-
-            final Map<String, Long> expectedWindowState = new HashMap<>();
-            final Map<String, Long> expectedCount = new HashMap<>();
-            while (producerRunnable.getCurrIteration() < numIterations) {
-                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[0]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore);
-            }
-        } finally {
-            producerRunnable.shutdown();
-            producerThread.interrupt();
-            producerThread.join();
-        }
-    }
-
-    @Test
     public void shouldBeAbleToQueryStateWithZeroSizedCache() throws Exception {
         verifyCanQueryState(0);
     }
