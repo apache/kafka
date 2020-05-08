@@ -215,7 +215,7 @@
         commits on the input topic offsets, updates on the state stores, and writes to the output topics will be completed atomically instead of treating Kafka as an external system that may have side-effects.
         To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.<br />
 
-        As of the 2.6.0 release, Kafka Streams supports an improve implementation of exactly-once processing called "exactly-once beta"
+        As of the 2.6.0 release, Kafka Streams supports an improved implementation of exactly-once processing, named "exactly-once beta", 
         (requires broker version 2.5.0 or newer).
         This implementation is more efficient (i.e., less client and broker resource utilization; like client threads, used network connections etc.)
         and allows for higher throughput and improved scalability.
