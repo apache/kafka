@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -83,6 +84,7 @@ import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -104,7 +106,7 @@ public class KafkaStreamsTest {
     private MockTime time;
 
     private Properties props;
-
+    
     @Mock
     private StateDirectory stateDirectory;
     @Mock
@@ -317,7 +319,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testShouldTransitToNotRunningIfCloseRightAfterCreated() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.close();
 
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
@@ -325,7 +327,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.setStateListener(streamsStateListener);
 
         Assert.assertEquals(0, streamsStateListener.numChanges);
@@ -393,7 +395,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void stateShouldTransitToErrorIfAllThreadsDead() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.setStateListener(streamsStateListener);
 
         Assert.assertEquals(0, streamsStateListener.numChanges);
@@ -457,7 +459,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
@@ -477,7 +479,7 @@ public class KafkaStreamsTest {
     @Test
     public void testStateThreadClose() throws Exception {
         // make sure we have the global state thread running too
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
@@ -514,7 +516,7 @@ public class KafkaStreamsTest {
     @Test
     public void testStateGlobalThreadClose() throws Exception {
         // make sure we have the global state thread running too
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
@@ -542,7 +544,7 @@ public class KafkaStreamsTest {
     public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
 
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
             assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
@@ -556,7 +558,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCloseIsIdempotent() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -567,7 +569,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCannotStartOnceClosed() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         streams.close();
         try {
@@ -582,7 +584,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldNotSetGlobalRestoreListenerAfterStarting() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setGlobalStateRestoreListener(null);
@@ -596,7 +598,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setUncaughtExceptionHandler(null);
@@ -608,7 +610,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setStateListener(null);
@@ -620,7 +622,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldAllowCleanupBeforeStartAndAfterClose() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         try {
             streams.cleanUp();
             streams.start();
@@ -632,7 +634,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowOnCleanupWhileRunning() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -648,46 +650,46 @@ public class KafkaStreamsTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
     @Test
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() {
         // do not use mock time so that it can really elapse
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(Duration.ofMillis(10L)));
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnNegativeTimeoutForClose() {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.close(Duration.ofMillis(-1L));
         }
     }
 
     @Test
     public void shouldNotBlockInCloseForZeroDuration() {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             // with mock time that does not elapse, close would not return if it ever waits on the state transition
             assertFalse(streams.close(Duration.ZERO));
         }
@@ -720,7 +722,7 @@ public class KafkaStreamsTest {
         builder.table("topic", Materialized.as("store"));
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.DEBUG.name());
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -743,7 +745,7 @@ public class KafkaStreamsTest {
         builder.table("topic", Materialized.as("store"));
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.INFO.name());
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -763,7 +765,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         LogCaptureAppender.unregister(appender);
 
         assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
@@ -845,6 +847,49 @@ public class KafkaStreamsTest {
         startStreamsAndCheckDirExists(topology, true);
     }
 
+    @Test
+    public void shouldThrowTopologyExceptionOnEmptyTopology() {
+        try {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException e) {
+            assertThat(
+                e.getMessage(),
+                equalTo("Invalid topology: Topology has no stream threads and no global threads, " +
+                            "must subscribe to at least one source topic or global table."));
+        }
+    }
+
+    @Test
+    public void shouldNotCreateStreamThreadsForGlobalOnlyTopology() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
+
+        assertThat(streams.threads.length, equalTo(0));
+    }
+
+    @Test
+    public void shouldTransitToRunningWithGlobalOnlyTopology() throws InterruptedException {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
+
+        assertThat(streams.threads.length, equalTo(0));
+        assertEquals(streams.state(), KafkaStreams.State.CREATED);
+
+        streams.start();
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.RUNNING,
+            "Streams never started, state is " + streams.state());
+
+        streams.close();
+
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
+            "Streams never stopped.");
+    }
+
     @SuppressWarnings("unchecked")
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,
@@ -885,6 +930,12 @@ public class KafkaStreamsTest {
             globalTopicName + "-processor",
             new MockProcessorSupplier());
         return topology;
+    }
+    
+    private StreamsBuilder getBuilderWithSource() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic");
+        return builder;
     }
 
     private void startStreamsAndCheckDirExists(final Topology topology,
