@@ -161,25 +161,41 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
                     final Set<TaskId> sourceTasks = new TreeSet<>(currentAssignmentAccessor.apply(sourceClientState));
                     final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
-                    while (isSkewed(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
+                    while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
-                        if (!destinationClientState.assignedTasks().contains(taskToMove)) {
+                        final boolean canMove = !destinationClientState.assignedTasks().contains(taskToMove);
+                        if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClientState, taskToMove);
+                            keepBalancing = true;
                         }
-                        keepBalancing = true;
                     }
                 }
             }
         }
     }
 
-    private static boolean isSkewed(final ClientState sourceClientState, final ClientState destinationClientState) {
+    private static boolean shouldMoveATask(final ClientState sourceClientState,
+                                           final ClientState destinationClientState) {
         final double assignedTasksPerStreamThreadAtDestination =
             1.0 * destinationClientState.assignedTasks().size() / destinationClientState.capacity();
         final double assignedTasksPerStreamThreadAtSource =
             1.0 * sourceClientState.assignedTasks().size() / sourceClientState.capacity();
-        return assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination > 1;
+        final double skew = assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination;
+
+        if (skew < 1) {
+            return false;
+        }
+
+        final double proposedAssignedTasksPerStreamThreadAtDestination =
+            (destinationClientState.assignedTasks().size() + 1.0) / destinationClientState.capacity();
+        final double proposedAssignedTasksPerStreamThreadAtSource =
+            (sourceClientState.assignedTasks().size() - 1.0) / sourceClientState.capacity();
+        final double proposedSkew = proposedAssignedTasksPerStreamThreadAtSource - proposedAssignedTasksPerStreamThreadAtDestination;
+
+        // we should only move a task if doing so would actually improve the skew.
+        // we take the absolute value because moving a task might just "flip" the skew about zero.
+        return Math.abs(proposedSkew) < skew;
     }
 
     private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,

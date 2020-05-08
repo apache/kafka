@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.appendClientStates;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
@@ -45,36 +46,29 @@ public class TaskAssignorConvergenceTest {
 
         private static Harness initializeCluster(final int numStatelessTasks,
                                                  final int numStatefulTasks,
-                                                 final int numNodes) {
+                                                 final int numNodes,
+                                                 final Supplier<Integer> partitionCountSupplier) {
             int subtopology = 0;
             final Set<TaskId> statelessTasks = new TreeSet<>();
-            {
-                int partition = 0;
-                for (int i = 0; i < numStatelessTasks; i++) {
-                    statelessTasks.add(new TaskId(subtopology, partition));
-                    if (partition == 4) {
-                        subtopology++;
-                        partition = 0;
-                    } else {
-                        partition++;
-                    }
+            int remainingStatelessTasks = numStatelessTasks;
+            while (remainingStatelessTasks > 0) {
+                final int partitions = Math.min(remainingStatelessTasks, partitionCountSupplier.get());
+                for (int i = 0; i < partitions; i++) {
+                    statelessTasks.add(new TaskId(subtopology, i));
+                    remainingStatelessTasks--;
                 }
+                subtopology++;
             }
 
             final Map<TaskId, Long> statefulTaskEndOffsetSums = new TreeMap<>();
-            {
-                subtopology++;
-                int partition = 0;
-                for (int i = 0; i < numStatefulTasks; i++) {
-                    statefulTaskEndOffsetSums.put(new TaskId(subtopology, partition), 150000L);
-
-                    if (partition == 4) {
-                        subtopology++;
-                        partition = 0;
-                    } else {
-                        partition++;
-                    }
+            int remainingStatefulTasks = numStatefulTasks;
+            while (remainingStatefulTasks > 0) {
+                final int partitions = Math.min(remainingStatefulTasks, partitionCountSupplier.get());
+                for (int i = 0; i < partitions; i++) {
+                    statefulTaskEndOffsetSums.put(new TaskId(subtopology, i), 150000L);
+                    remainingStatefulTasks--;
                 }
+                subtopology++;
             }
 
             final Map<UUID, ClientState> clientStates = new TreeMap<>();
@@ -239,7 +233,7 @@ public class TaskAssignorConvergenceTest {
                                                                 0,
                                                                 1000L);
 
-        final Harness harness = Harness.initializeCluster(1, 1, 1);
+        final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1);
 
         testForConvergence(harness, configs, 1);
         verifyValidAssignment(0, harness);
@@ -248,8 +242,8 @@ public class TaskAssignorConvergenceTest {
 
     @Test
     public void assignmentShouldConvergeAfterAddingNode() {
-        final int numStatelessTasks = 15;
-        final int numStatefulTasks = 13;
+        final int numStatelessTasks = 7;
+        final int numStatefulTasks = 11;
         final int maxWarmupReplicas = 2;
         final int numStandbyReplicas = 0;
 
@@ -258,7 +252,7 @@ public class TaskAssignorConvergenceTest {
                                                                 numStandbyReplicas,
                                                                 1000L);
 
-        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1);
+        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5);
         testForConvergence(harness, configs, 1);
         harness.addNode();
         // we expect convergence to involve moving each task at most once, and we can move "maxWarmupReplicas" number
@@ -270,7 +264,7 @@ public class TaskAssignorConvergenceTest {
 
     @Test
     public void droppingNodesShouldConverge() {
-        final int numStatelessTasks = 15;
+        final int numStatelessTasks = 11;
         final int numStatefulTasks = 13;
         final int maxWarmupReplicas = 2;
         final int numStandbyReplicas = 0;
@@ -280,7 +274,7 @@ public class TaskAssignorConvergenceTest {
                                                                 numStandbyReplicas,
                                                                 1000L);
 
-        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7);
+        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5);
         testForConvergence(harness, configs, 1);
         harness.dropNode();
         // This time, we allow one extra iteration because the
@@ -321,7 +315,12 @@ public class TaskAssignorConvergenceTest {
                                                                     numStandbyReplicas,
                                                                     1000L);
 
-            harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, initialClusterSize);
+            harness = Harness.initializeCluster(
+                numStatelessTasks,
+                numStatefulTasks,
+                initialClusterSize,
+                () -> prng.nextInt(10) + 1
+            );
             testForConvergence(harness, configs, 1);
             verifyValidAssignment(numStandbyReplicas, harness);
             verifyBalancedAssignment(harness);

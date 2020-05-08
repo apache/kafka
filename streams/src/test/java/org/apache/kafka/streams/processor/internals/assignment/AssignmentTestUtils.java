@@ -38,7 +38,10 @@ import java.util.stream.Collectors;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
 
 public final class AssignmentTestUtils {
@@ -97,7 +100,14 @@ public final class AssignmentTestUtils {
                                       final Set<TaskId> statelessTasks,
                                       final Map<UUID, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
-        assertValidAssignment(numStandbyReplicas, 0, statefulTasks, statelessTasks, assignedStates, failureContext);
+        assertValidAssignment(
+            numStandbyReplicas,
+            0,
+            statefulTasks,
+            statelessTasks,
+            assignedStates,
+            failureContext
+        );
     }
 
     static void assertValidAssignment(final int numStandbyReplicas,
@@ -106,7 +116,7 @@ public final class AssignmentTestUtils {
                                       final Set<TaskId> statelessTasks,
                                       final Map<UUID, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
-        /*final Map<TaskId, Set<UUID>> assignments = new TreeMap<>();
+        final Map<TaskId, Set<UUID>> assignments = new TreeMap<>();
         for (final TaskId taskId : statefulTasks) {
             assignments.put(taskId, new TreeSet<>());
         }
@@ -114,51 +124,8 @@ public final class AssignmentTestUtils {
             assignments.put(taskId, new TreeSet<>());
         }
         for (final Map.Entry<UUID, ClientState> entry : assignedStates.entrySet()) {
-            for (final TaskId activeTask : entry.getValue().activeTasks()) {
-                if (assignments.containsKey(activeTask)) {
-                    assignments.get(activeTask).add(entry.getKey());
-                } else {
-                    throw new AssertionError(
-                        new StringBuilder().append("Found an extra active task ")
-                                           .append(activeTask)
-                                           .append(" on client ")
-                                           .append(entry)
-                                           .append(" but expected stateful tasks:")
-                                           .append(statefulTasks)
-                                           .append(" and stateless tasks:")
-                                           .append(statelessTasks)
-                                           .append(failureContext)
-                                           .toString()
-                    );
-                }
-            }
-            for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
-                if (statelessTasks.contains(standbyTask)) {
-                    throw new AssertionError(
-                        new StringBuilder().append("Found a standby task for stateless task ")
-                                           .append(standbyTask)
-                                           .append(" on client ")
-                                           .append(entry)
-                                           .append(" stateless tasks:")
-                                           .append(statelessTasks)
-                                           .append(failureContext)
-                                           .toString()
-                    );
-                } else if (assignments.containsKey(standbyTask)) {
-                    assignments.get(standbyTask).add(entry.getKey());
-                } else {
-                    throw new AssertionError(
-                        new StringBuilder().append("Found an extra standby task ")
-                                           .append(standbyTask)
-                                           .append(" on client ")
-                                           .append(entry)
-                                           .append(" but expected stateful tasks:")
-                                           .append(statefulTasks)
-                                           .append(failureContext)
-                                           .toString()
-                    );
-                }
-            }
+            validateAndAddActiveAssignments(statefulTasks, statelessTasks, failureContext, assignments, entry);
+            validateAndAddStandbyAssignments(statefulTasks, statelessTasks, failureContext, assignments, entry);
         }
 
         final AtomicInteger remainingWarmups = new AtomicInteger(maxWarmupReplicas);
@@ -204,7 +171,66 @@ public final class AssignmentTestUtils {
                                    .toString(),
                 misassigned,
                 is(emptyMap()));
-        }*/
+        }
+    }
+
+    private static void validateAndAddStandbyAssignments(final Set<TaskId> statefulTasks,
+                                                         final Set<TaskId> statelessTasks,
+                                                         final StringBuilder failureContext,
+                                                         final Map<TaskId, Set<UUID>> assignments,
+                                                         final Map.Entry<UUID, ClientState> entry) {
+        for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
+            if (statelessTasks.contains(standbyTask)) {
+                throw new AssertionError(
+                    new StringBuilder().append("Found a standby task for stateless task ")
+                                       .append(standbyTask)
+                                       .append(" on client ")
+                                       .append(entry)
+                                       .append(" stateless tasks:")
+                                       .append(statelessTasks)
+                                       .append(failureContext)
+                                       .toString()
+                );
+            } else if (assignments.containsKey(standbyTask)) {
+                assignments.get(standbyTask).add(entry.getKey());
+            } else {
+                throw new AssertionError(
+                    new StringBuilder().append("Found an extra standby task ")
+                                       .append(standbyTask)
+                                       .append(" on client ")
+                                       .append(entry)
+                                       .append(" but expected stateful tasks:")
+                                       .append(statefulTasks)
+                                       .append(failureContext)
+                                       .toString()
+                );
+            }
+        }
+    }
+
+    private static void validateAndAddActiveAssignments(final Set<TaskId> statefulTasks,
+                                                        final Set<TaskId> statelessTasks,
+                                                        final StringBuilder failureContext,
+                                                        final Map<TaskId, Set<UUID>> assignments,
+                                                        final Map.Entry<UUID, ClientState> entry) {
+        for (final TaskId activeTask : entry.getValue().activeTasks()) {
+            if (assignments.containsKey(activeTask)) {
+                assignments.get(activeTask).add(entry.getKey());
+            } else {
+                throw new AssertionError(
+                    new StringBuilder().append("Found an extra active task ")
+                                       .append(activeTask)
+                                       .append(" on client ")
+                                       .append(entry)
+                                       .append(" but expected stateful tasks:")
+                                       .append(statefulTasks)
+                                       .append(" and stateless tasks:")
+                                       .append(statelessTasks)
+                                       .append(failureContext)
+                                       .toString()
+                );
+            }
+        }
     }
 
     static void assertBalancedStatefulAssignment(final Set<TaskId> allStatefulTasks,
@@ -233,7 +259,8 @@ public final class AssignmentTestUtils {
         }
     }
 
-    static void assertBalancedActiveAssignment(final Map<UUID, ClientState> clientStates, final StringBuilder failureContext) {
+    static void assertBalancedActiveAssignment(final Map<UUID, ClientState> clientStates,
+                                               final StringBuilder failureContext) {
         double maxActive = Double.MIN_VALUE;
         double minActive = Double.MAX_VALUE;
         for (final ClientState clientState : clientStates.values()) {
