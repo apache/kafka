@@ -97,7 +97,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
             String method = credentials.substring(0, space);
             if (!BASIC.equalsIgnoreCase(method)) {
-                log.trace("Request credentials did not use basic authentication; ignoring");
+                log.trace("Request credentials used {} authentication, but only {} supported; ignoring", BASIC, method);
                 return;
             }
 
