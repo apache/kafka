@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.ReadDirection;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -128,6 +129,146 @@ public abstract class AbstractWindowBytesStoreTest {
         assertEquals("five", windowStore.fetch(5, startTime + 5L));
 
         assertEquals(
+                new HashSet<>(Collections.singletonList("zero")),
+                valuesToSet(windowStore.fetch(
+                        0,
+                        ofEpochMilli(startTime + 0 - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0 + WINDOW_SIZE))));
+
+        putSecondBatch(windowStore, startTime, context);
+
+        assertEquals("two+1", windowStore.fetch(2, startTime + 3L));
+        assertEquals("two+2", windowStore.fetch(2, startTime + 4L));
+        assertEquals("two+3", windowStore.fetch(2, startTime + 5L));
+        assertEquals("two+4", windowStore.fetch(2, startTime + 6L));
+        assertEquals("two+5", windowStore.fetch(2, startTime + 7L));
+        assertEquals("two+6", windowStore.fetch(2, startTime + 8L));
+
+        assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime - 2L - WINDOW_SIZE),
+                        ofEpochMilli(startTime - 2L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(Collections.singletonList("two")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime - 1L - WINDOW_SIZE),
+                        ofEpochMilli(startTime - 1L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime - WINDOW_SIZE),
+                        ofEpochMilli(startTime + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1", "two+2")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 1L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 1L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1", "two+2", "two+3")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 2L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 2L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 3L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 3L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4", "two+5")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 4L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 4L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4", "two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 5L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 5L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+1", "two+2", "two+3", "two+4", "two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 6L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 6L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+2", "two+3", "two+4", "two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 7L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 7L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+3", "two+4", "two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 8L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 8L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+4", "two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 9L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 9L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+5", "two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 10L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 10L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(Collections.singletonList("two+6")),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 11L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 11L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                valuesToSet(windowStore.fetch(
+                        2,
+                        ofEpochMilli(startTime + 12L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 12L + WINDOW_SIZE))));
+
+        // Flush the store and verify all current entries were properly flushed ...
+        windowStore.flush();
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
+
+        final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
+
+        assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
+        assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
+        assertEquals(
+                Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
+                entriesByKey.get(2));
+        assertNull(entriesByKey.get(3));
+        assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
+        assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
+        assertNull(entriesByKey.get(6));
+    }
+
+    @Test
+    public void testRangeAndSinglePointFetchBackwards() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        assertEquals("zero", windowStore.fetch(0, startTime));
+        assertEquals("one", windowStore.fetch(1, startTime + 1L));
+        assertEquals("two", windowStore.fetch(2, startTime + 2L));
+        assertEquals("four", windowStore.fetch(4, startTime + 4L));
+        assertEquals("five", windowStore.fetch(5, startTime + 5L));
+
+        assertEquals(
             new HashSet<>(Collections.singletonList("zero")),
             valuesToSet(windowStore.fetch(
                 0,
@@ -148,91 +289,92 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime - 2L - WINDOW_SIZE),
-                ofEpochMilli(startTime - 2L + WINDOW_SIZE))));
+                ofEpochMilli(startTime - 2L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(Collections.singletonList("two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime - 1L - WINDOW_SIZE),
-                ofEpochMilli(startTime - 1L + WINDOW_SIZE))));
+                ofEpochMilli(startTime - 1L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1")),
+            new HashSet<>(asList("two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime - WINDOW_SIZE),
-                ofEpochMilli(startTime + WINDOW_SIZE))));
+                ofEpochMilli(startTime + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1", "two+2")),
+            new HashSet<>(asList("two+2", "two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 1L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 1L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 1L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1", "two+2", "two+3")),
+            new HashSet<>(asList("two+3", "two+2", "two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 2L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 2L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 2L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4")),
+            new HashSet<>(asList("two+4", "two+3", "two+2", "two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 3L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 3L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 3L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4", "two+5")),
+            new HashSet<>(asList("two+5", "two+4", "two+3", "two+2", "two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 4L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 4L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 4L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two", "two+1", "two+2", "two+3", "two+4", "two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5", "two+4", "two+3", "two+2", "two+1", "two")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 5L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 5L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 5L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two+1", "two+2", "two+3", "two+4", "two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5", "two+4", "two+3", "two+2", "two+1")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 6L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 6L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 6L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two+2", "two+3", "two+4", "two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5", "two+4", "two+3", "two+2")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 7L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 7L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 7L + WINDOW_SIZE),
+                ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two+3", "two+4", "two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5", "two+4", "two+3")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 8L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 8L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 8L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two+4", "two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5", "two+4")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 9L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 9L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 9L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
-            new HashSet<>(asList("two+5", "two+6")),
+            new HashSet<>(asList("two+6", "two+5")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 10L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 10L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 10L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(Collections.singletonList("two+6")),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 11L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 11L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 11L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + 12L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 12L + WINDOW_SIZE))));
+                ofEpochMilli(startTime + 12L + WINDOW_SIZE), ReadDirection.BACKWARD)));
 
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
@@ -274,6 +416,24 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldGetAllBackwards() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertEquals(
+                new HashSet<>(asList(five, four, two, one, zero)),
+                toSet(windowStore.all())
+        );
+    }
+
+    @Test
     public void shouldFetchAllInTimeRange() {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
@@ -299,6 +459,33 @@ public abstract class AbstractWindowBytesStoreTest {
         );
     }
 
+
+    @Test
+    public void shouldFetchAllInTimeRangeBackwards() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertEquals(
+                new HashSet<>(asList(four, two, one)),
+                toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4), ReadDirection.BACKWARD))
+        );
+        assertEquals(
+                new HashSet<>(asList(two, one, zero)),
+                toSet(windowStore.fetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3), ReadDirection.BACKWARD))
+        );
+        assertEquals(
+                new HashSet<>(asList(five, four, two, one)),
+                toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5), ReadDirection.BACKWARD))
+        );
+    }
+
     @Test
     public void testFetchRange() {
         final long startTime = SEGMENT_INTERVAL - 4L;
@@ -312,12 +499,91 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
         assertEquals(
-            new HashSet<>(asList(zero, one)),
+                new HashSet<>(asList(zero, one)),
+                toSet(windowStore.fetch(
+                        0,
+                        1,
+                        ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+        );
+        assertEquals(
+                new HashSet<>(Collections.singletonList(one)),
+                toSet(windowStore.fetch(
+                        1,
+                        1,
+                        ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+        );
+        assertEquals(
+                new HashSet<>(asList(one, two)),
+                toSet(windowStore.fetch(
+                        1,
+                        3,
+                        ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+        );
+        assertEquals(
+                new HashSet<>(asList(zero, one, two)),
+                toSet(windowStore.fetch(
+                        0,
+                        5,
+                        ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+        );
+        assertEquals(
+                new HashSet<>(asList(zero, one, two, four, five)),
+                toSet(windowStore.fetch(
+                        0,
+                        5,
+                        ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+        );
+        assertEquals(
+                new HashSet<>(asList(two, four, five)),
+                toSet(windowStore.fetch(
+                        0,
+                        5,
+                        ofEpochMilli(startTime + 2L),
+                        ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+        );
+        assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                toSet(windowStore.fetch(
+                        4,
+                        5,
+                        ofEpochMilli(startTime + 2L),
+                        ofEpochMilli(startTime + WINDOW_SIZE)))
+        );
+        assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                toSet(windowStore.fetch(
+                        0,
+                        3,
+                        ofEpochMilli(startTime + 3L),
+                        ofEpochMilli(startTime + WINDOW_SIZE + 5)))
+        );
+    }
+
+    @Test
+    public void testFetchRangeReversed() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertEquals(
+            new HashSet<>(asList(one, zero)),
             toSet(windowStore.fetch(
                 0,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
             new HashSet<>(Collections.singletonList(one)),
@@ -325,39 +591,44 @@ public abstract class AbstractWindowBytesStoreTest {
                 1,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
-            new HashSet<>(asList(one, two)),
+            new HashSet<>(asList(two, one)),
             toSet(windowStore.fetch(
                 1,
                 3,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
-            new HashSet<>(asList(zero, one, two)),
+            new HashSet<>(asList(two, one, zero)),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
-            new HashSet<>(asList(zero, one, two, four, five)),
+            new HashSet<>(asList(five, four, two, one, zero)),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
-            new HashSet<>(asList(two, four, five)),
+            new HashSet<>(asList(five, four, two)),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
             new HashSet<>(Collections.emptyList()),
@@ -365,7 +636,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 4,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + WINDOW_SIZE)))
+                ofEpochMilli(startTime + WINDOW_SIZE),
+                ReadDirection.BACKWARD))
         );
         assertEquals(
             new HashSet<>(Collections.emptyList()),
@@ -373,7 +645,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 0,
                 3,
                 ofEpochMilli(startTime + 3L),
-                ofEpochMilli(startTime + WINDOW_SIZE + 5)))
+                ofEpochMilli(startTime + WINDOW_SIZE + 5),
+                ReadDirection.BACKWARD))
         );
     }
 
@@ -420,11 +693,17 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(asList("two", "two+1")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 3L - WINDOW_SIZE), ofEpochMilli(startTime + 3L))));
         assertEquals(
+                new HashSet<>(asList("two+1", "two")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 3L - WINDOW_SIZE), ofEpochMilli(startTime + 3L), ReadDirection.BACKWARD)));
+        assertEquals(
             new HashSet<>(asList("two", "two+1", "two+2")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 4L - WINDOW_SIZE), ofEpochMilli(startTime + 4L))));
         assertEquals(
             new HashSet<>(asList("two", "two+1", "two+2", "two+3")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 5L - WINDOW_SIZE), ofEpochMilli(startTime + 5L))));
+        assertEquals(
+                new HashSet<>(asList("two+3", "two+2", "two+1", "two")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 5L - WINDOW_SIZE), ofEpochMilli(startTime + 5L), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(asList("two+1", "two+2", "two+3", "two+4")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 6L - WINDOW_SIZE), ofEpochMilli(startTime + 6L))));
@@ -432,11 +711,17 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(asList("two+2", "two+3", "two+4", "two+5")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 7L - WINDOW_SIZE), ofEpochMilli(startTime + 7L))));
         assertEquals(
+                new HashSet<>(asList("two+5", "two+4", "two+3", "two+2")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 7L - WINDOW_SIZE), ofEpochMilli(startTime + 7L), ReadDirection.BACKWARD)));
+        assertEquals(
             new HashSet<>(asList("two+3", "two+4", "two+5", "two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 8L - WINDOW_SIZE), ofEpochMilli(startTime + 8L))));
         assertEquals(
             new HashSet<>(asList("two+4", "two+5", "two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 9L - WINDOW_SIZE), ofEpochMilli(startTime + 9L))));
+        assertEquals(
+                new HashSet<>(asList("two+6", "two+5", "two+4")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 9L - WINDOW_SIZE), ofEpochMilli(startTime + 9L), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(asList("two+5", "two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 10L - WINDOW_SIZE), ofEpochMilli(startTime + 10L))));
@@ -510,6 +795,10 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime - 1L),
                 ofEpochMilli(startTime - 1L + WINDOW_SIZE))));
         assertEquals(
+                new HashSet<>(Collections.singletonList("two")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime - 1L),
+                        ofEpochMilli(startTime - 1L + WINDOW_SIZE), ReadDirection.BACKWARD)));
+        assertEquals(
             new HashSet<>(asList("two", "two+1")),
             valuesToSet(windowStore
                 .fetch(2, ofEpochMilli(startTime), ofEpochMilli(startTime + WINDOW_SIZE))));
@@ -517,6 +806,10 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(asList("two", "two+1", "two+2")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 1L),
                 ofEpochMilli(startTime + 1L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+2", "two+1", "two")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 1L),
+                        ofEpochMilli(startTime + 1L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(asList("two", "two+1", "two+2", "two+3")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 2L),
@@ -526,6 +819,10 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 3L),
                 ofEpochMilli(startTime + 3L + WINDOW_SIZE))));
         assertEquals(
+                new HashSet<>(asList("two+4", "two+3", "two+2", "two+1")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 3L),
+                        ofEpochMilli(startTime + 3L + WINDOW_SIZE), ReadDirection.BACKWARD)));
+        assertEquals(
             new HashSet<>(asList("two+2", "two+3", "two+4", "two+5")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 4L),
                 ofEpochMilli(startTime + 4L + WINDOW_SIZE))));
@@ -533,6 +830,10 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(asList("two+3", "two+4", "two+5", "two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 5L),
                 ofEpochMilli(startTime + 5L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(asList("two+6", "two+5", "two+4", "two+3")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 5L),
+                        ofEpochMilli(startTime + 5L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(asList("two+4", "two+5", "two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 6L),
@@ -542,6 +843,10 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 7L),
                 ofEpochMilli(startTime + 7L + WINDOW_SIZE))));
         assertEquals(
+                new HashSet<>(asList("two+6", "two+5")),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 7L),
+                        ofEpochMilli(startTime + 7L + WINDOW_SIZE), ReadDirection.BACKWARD)));
+        assertEquals(
             new HashSet<>(Collections.singletonList("two+6")),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 8L),
                 ofEpochMilli(startTime + 8L + WINDOW_SIZE))));
@@ -549,6 +854,10 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 9L),
                 ofEpochMilli(startTime + 9L + WINDOW_SIZE))));
+        assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 9L),
+                        ofEpochMilli(startTime + 9L + WINDOW_SIZE), ReadDirection.BACKWARD)));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(2, ofEpochMilli(startTime + 10L),
