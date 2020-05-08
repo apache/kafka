@@ -122,7 +122,10 @@ public class KafkaOffsetBackingStoreTest {
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
+        settings.put("offset.storage.min.insync.replicas", "3");
+        settings.put("offset.storage.max.message.bytes", "1001");
+        store.configure(new DistributedConfig(settings));
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));

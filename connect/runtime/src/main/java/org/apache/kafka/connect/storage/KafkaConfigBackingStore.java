@@ -453,11 +453,17 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(1).
-                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+
+        Map<String, Object> topicSettings = null;
+        if (config instanceof DistributedConfig) {
+            topicSettings = ((DistributedConfig) config).configStorageTopicSettings();
+        }
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
+                .compacted()
+                .partitions(1)
+                .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
     }

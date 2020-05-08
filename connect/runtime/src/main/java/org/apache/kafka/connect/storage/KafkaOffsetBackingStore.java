@@ -78,11 +78,17 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+
+        Map<String, Object> topicSettings = null;
+        if (config instanceof DistributedConfig) {
+            topicSettings = ((DistributedConfig) config).offsetStorageTopicSettings();
+        }
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
+                .compacted()
+                .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
+                .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminProps);
     }

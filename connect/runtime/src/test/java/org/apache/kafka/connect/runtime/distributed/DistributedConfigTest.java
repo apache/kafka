@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 
@@ -204,5 +205,105 @@ public class DistributedConfigTest {
             settings.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, Integer.toString(i));
             assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
         }
+    }
+
+    @Test
+    public void shouldAllowSettingConfigTopicSettings() {
+        Map<String, String> topicSettings = new HashMap<>();
+        topicSettings.put("foo", "foo value");
+        topicSettings.put("bar", "bar value");
+        topicSettings.put("baz.bim", "100");
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        assertEquals(topicSettings, config.configStorageTopicSettings());
+    }
+
+    @Test
+    public void shouldAllowSettingOffsetTopicSettings() {
+        Map<String, String> topicSettings = new HashMap<>();
+        topicSettings.put("foo", "foo value");
+        topicSettings.put("bar", "bar value");
+        topicSettings.put("baz.bim", "100");
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        assertEquals(topicSettings, config.offsetStorageTopicSettings());
+    }
+
+    @Test
+    public void shouldAllowSettingStatusTopicSettings() {
+        Map<String, String> topicSettings = new HashMap<>();
+        topicSettings.put("foo", "foo value");
+        topicSettings.put("bar", "bar value");
+        topicSettings.put("baz.bim", "100");
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        assertEquals(topicSettings, config.statusStorageTopicSettings());
+    }
+
+    @Test
+    public void shouldRemoveCompactionFromConfigTopicSettings() {
+        Map<String, String> expectedTopicSettings = new HashMap<>();
+        expectedTopicSettings.put("foo", "foo value");
+        expectedTopicSettings.put("bar", "bar value");
+        expectedTopicSettings.put("baz.bim", "100");
+        Map<String, String> topicSettings = new HashMap<>(expectedTopicSettings);
+        topicSettings.put("cleanup.policy", "something-else");
+        topicSettings.put("partitions", "3");
+
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        Map<String, Object> actual = config.configStorageTopicSettings();
+        assertEquals(expectedTopicSettings, actual);
+        assertNotEquals(topicSettings, actual);
+    }
+
+    @Test
+    public void shouldRemoveCompactionFromOffsetTopicSettings() {
+        Map<String, String> expectedTopicSettings = new HashMap<>();
+        expectedTopicSettings.put("foo", "foo value");
+        expectedTopicSettings.put("bar", "bar value");
+        expectedTopicSettings.put("baz.bim", "100");
+        Map<String, String> topicSettings = new HashMap<>(expectedTopicSettings);
+        topicSettings.put("cleanup.policy", "something-else");
+
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        Map<String, Object> actual = config.offsetStorageTopicSettings();
+        assertEquals(expectedTopicSettings, actual);
+        assertNotEquals(topicSettings, actual);
+    }
+
+    @Test
+    public void shouldRemoveCompactionFromStatusTopicSettings() {
+        Map<String, String> expectedTopicSettings = new HashMap<>();
+        expectedTopicSettings.put("foo", "foo value");
+        expectedTopicSettings.put("bar", "bar value");
+        expectedTopicSettings.put("baz.bim", "100");
+        Map<String, String> topicSettings = new HashMap<>(expectedTopicSettings);
+        topicSettings.put("cleanup.policy", "something-else");
+
+        Map<String, String> settings = configs();
+        topicSettings.entrySet().forEach(e -> {
+            settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + e.getKey(), e.getValue());
+        });
+        DistributedConfig config = new DistributedConfig(settings);
+        Map<String, Object> actual = config.statusStorageTopicSettings();
+        assertEquals(expectedTopicSettings, actual);
+        assertNotEquals(topicSettings, actual);
     }
 }
