@@ -133,8 +133,7 @@ public class IntegrationTestUtils {
      *
      * @param streamsConfiguration Streams configuration settings
      */
-    public static void purgeLocalStreamsState(final Properties streamsConfiguration) throws
-        IOException {
+    public static void purgeLocalStreamsState(final Properties streamsConfiguration) throws IOException {
         final String tmpDir = TestUtils.IO_TMP_DIR.getPath();
         final String path = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         if (path != null) {
@@ -151,7 +150,9 @@ public class IntegrationTestUtils {
         cleanStateBeforeTest(cluster, 1, topics);
     }
 
-    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final int partitionCount, final String... topics) {
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
+                                            final int partitionCount,
+                                            final String... topics) {
         try {
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
             for (final String topic : topics) {
@@ -179,8 +180,10 @@ public class IntegrationTestUtils {
      * @param <K>            Key type of the data records
      * @param <V>            Value type of the data records
      */
-    public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time) {
+    public static <K, V> void produceKeyValuesSynchronously(final String topic,
+                                                            final Collection<KeyValue<K, V>> records,
+                                                            final Properties producerConfig,
+                                                            final Time time) {
         produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
@@ -193,8 +196,11 @@ public class IntegrationTestUtils {
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
-    public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Headers headers, final Time time) {
+    public static <K, V> void produceKeyValuesSynchronously(final String topic,
+                                                            final Collection<KeyValue<K, V>> records,
+                                                            final Properties producerConfig,
+                                                            final Headers headers,
+                                                            final Time time) {
         produceKeyValuesSynchronously(topic, records, producerConfig, headers, time, false);
     }
 
@@ -207,8 +213,11 @@ public class IntegrationTestUtils {
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
-    public static <K, V> void produceKeyValuesSynchronously(
-        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions) {
+    public static <K, V> void produceKeyValuesSynchronously(final String topic,
+                                                            final Collection<KeyValue<K, V>> records,
+                                                            final Properties producerConfig,
+                                                            final Time time,
+                                                            final boolean enableTransactions) {
         produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions);
     }
 
@@ -228,7 +237,6 @@ public class IntegrationTestUtils {
                                                             final Headers headers,
                                                             final Time time,
                                                             final boolean enableTransactions) {
-
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             if (enableTransactions) {
                 producer.initTransactions();
@@ -241,7 +249,6 @@ public class IntegrationTestUtils {
             if (enableTransactions) {
                 producer.commitTransaction();
             }
-            producer.flush();
         }
     }
 
@@ -274,7 +281,6 @@ public class IntegrationTestUtils {
                                                                          final Properties producerConfig,
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions) {
-
         produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
     }
 
@@ -294,7 +300,6 @@ public class IntegrationTestUtils {
                                                                          final Headers headers,
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions) {
-
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             if (enableTransactions) {
                 producer.initTransactions();
@@ -306,7 +311,6 @@ public class IntegrationTestUtils {
             if (enableTransactions) {
                 producer.commitTransaction();
             }
-            producer.flush();
         }
     }
 
@@ -323,7 +327,14 @@ public class IntegrationTestUtils {
             final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
             for (final KeyValueTimestamp<K, V> record : toProduce) {
                 final Future<RecordMetadata> f = producer.send(
-                    new ProducerRecord<>(topic, partition.orElse(null), record.timestamp(), record.key(), record.value(), null)
+                    new ProducerRecord<>(
+                        topic,
+                        partition.orElse(null),
+                        record.timestamp(),
+                        record.key(),
+                        record.value(),
+                        null
+                    )
                 );
                 futures.add(f);
             }
@@ -355,11 +366,12 @@ public class IntegrationTestUtils {
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
-    public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
-                                                                                final Collection<KeyValue<K, V>> records,
-                                                                                final Properties producerConfig,
-                                                                                final Long timestamp)
-        throws ExecutionException, InterruptedException {
+    public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(
+        final String topic,
+        final Collection<KeyValue<K, V>> records,
+        final Properties producerConfig,
+        final Long timestamp
+    ) throws Exception {
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             producer.initTransactions();
             for (final KeyValue<K, V> record : records) {
@@ -453,9 +465,11 @@ public class IntegrationTestUtils {
      * @return All the records consumed, or null if no records are consumed
      */
     @SuppressWarnings("WeakerAccess")
-    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(final Properties consumerConfig,
-                                                                                final String topic,
-                                                                                final int expectedNumRecords) throws InterruptedException {
+    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final int expectedNumRecords
+    ) throws Exception {
         return waitUntilMinRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
 
@@ -471,12 +485,19 @@ public class IntegrationTestUtils {
      * @return All the records consumed, or null if no records are consumed
      */
     @SuppressWarnings("WeakerAccess")
-    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(final Properties consumerConfig,
-                                                                                final String topic,
-                                                                                final int expectedNumRecords,
-                                                                                final long waitTime) throws InterruptedException {
+    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final int expectedNumRecords,
+        final long waitTime
+    ) throws Exception {
         final List<ConsumerRecord<K, V>> accumData = new ArrayList<>();
-        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
+        final String reason = String.format(
+            "Did not receive all %d records from topic %s within %d ms",
+            expectedNumRecords,
+            topic,
+            waitTime
+        );
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<ConsumerRecord<K, V>> readData =
@@ -498,9 +519,11 @@ public class IntegrationTestUtils {
      * @param <V>                 Value type of the data records
      * @return All the records consumed, or null if no records are consumed
      */
-    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
-                                                                                  final String topic,
-                                                                                  final int expectedNumRecords) throws InterruptedException {
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final int expectedNumRecords
+    ) throws Exception {
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
 
@@ -516,12 +539,19 @@ public class IntegrationTestUtils {
      * @return All the records consumed, or null if no records are consumed
      * @throws AssertionError    if the given wait time elapses
      */
-    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
-                                                                                  final String topic,
-                                                                                  final int expectedNumRecords,
-                                                                                  final long waitTime) throws InterruptedException {
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final int expectedNumRecords,
+        final long waitTime
+    ) throws Exception {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
-        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
+        final String reason = String.format(
+            "Did not receive all %d records from topic %s within %d ms",
+            expectedNumRecords,
+            topic,
+            waitTime
+        );
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<KeyValue<K, V>> readData =
@@ -544,12 +574,19 @@ public class IntegrationTestUtils {
      * @param <K>                Key type of the data records
      * @param <V>                Value type of the data records
      */
-    public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilMinKeyValueWithTimestampRecordsReceived(final Properties consumerConfig,
-                                                                                                               final String topic,
-                                                                                                               final int expectedNumRecords,
-                                                                                                               final long waitTime) throws InterruptedException {
+    public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilMinKeyValueWithTimestampRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final int expectedNumRecords,
+        final long waitTime
+    ) throws Exception {
         final List<KeyValueTimestamp<K, V>> accumData = new ArrayList<>();
-        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
+        final String reason = String.format(
+            "Did not receive all %d records from topic %s within %d ms",
+            expectedNumRecords,
+            topic,
+            waitTime
+        );
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<KeyValueTimestamp<K, V>> readData =
@@ -571,9 +608,11 @@ public class IntegrationTestUtils {
      * @param <V>                Value type of the data records
      * @return All the mappings consumed, or null if no records are consumed
      */
-    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
-                                                                                    final String topic,
-                                                                                    final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final List<KeyValue<K, V>> expectedRecords
+    ) throws Exception {
         return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT);
     }
 
@@ -587,9 +626,11 @@ public class IntegrationTestUtils {
      * @param <V>                Value type of the data records
      * @return All the mappings consumed, or null if no records are consumed
      */
-    public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilFinalKeyValueTimestampRecordsReceived(final Properties consumerConfig,
-                                                                                                      final String topic,
-                                                                                                      final List<KeyValueTimestamp<K, V>> expectedRecords) throws InterruptedException {
+    public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilFinalKeyValueTimestampRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final List<KeyValueTimestamp<K, V>> expectedRecords
+    ) throws Exception {
         return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT, true);
     }
 
@@ -605,10 +646,12 @@ public class IntegrationTestUtils {
      * @return All the mappings consumed, or null if no records are consumed
      */
     @SuppressWarnings("WeakerAccess")
-    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
-                                                                                    final String topic,
-                                                                                    final List<KeyValue<K, V>> expectedRecords,
-                                                                                    final long waitTime) throws InterruptedException {
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(
+        final Properties consumerConfig,
+        final String topic,
+        final List<KeyValue<K, V>> expectedRecords,
+        final long waitTime
+    ) throws Exception {
         return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, waitTime, false);
     }
 
@@ -617,7 +660,7 @@ public class IntegrationTestUtils {
                                                                            final String topic,
                                                                            final List<T> expectedRecords,
                                                                            final long waitTime,
-                                                                           final boolean withTimestamp) throws InterruptedException {
+                                                                           final boolean withTimestamp) throws Exception {
         final List<T> accumData = new ArrayList<>();
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             final TestCondition valuesRead = () -> {
@@ -630,19 +673,22 @@ public class IntegrationTestUtils {
                 accumData.addAll(readData);
 
                 // filter out all intermediate records we don't want
-                final List<T> accumulatedActual = accumData.stream().filter(expectedRecords::contains).collect(Collectors.toList());
+                final List<T> accumulatedActual = accumData
+                    .stream()
+                    .filter(expectedRecords::contains)
+                    .collect(Collectors.toList());
 
                 // still need to check that for each key, the ordering is expected
                 final Map<K, List<T>> finalAccumData = new HashMap<>();
                 for (final T kv : accumulatedActual) {
                     finalAccumData.computeIfAbsent(
-                        (K) (withTimestamp ? ((KeyValueTimestamp) kv).key() : ((KeyValue) kv).key),
+                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
                         key -> new ArrayList<>()).add(kv);
                 }
                 final Map<K, List<T>> finalExpected = new HashMap<>();
                 for (final T kv : expectedRecords) {
                     finalExpected.computeIfAbsent(
-                        (K) (withTimestamp ? ((KeyValueTimestamp) kv).key() : ((KeyValue) kv).key),
+                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
                         key -> new ArrayList<>()).add(kv);
                 }
 
@@ -668,8 +714,7 @@ public class IntegrationTestUtils {
      */
     public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
                                                                 final String topic,
-                                                                final int expectedNumRecords) throws InterruptedException {
-
+                                                                final int expectedNumRecords) throws Exception {
         return waitUntilMinValuesRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
 
@@ -686,9 +731,14 @@ public class IntegrationTestUtils {
     public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
                                                                 final String topic,
                                                                 final int expectedNumRecords,
-                                                                final long waitTime) throws InterruptedException {
+                                                                final long waitTime) throws Exception {
         final List<V> accumData = new ArrayList<>();
-        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
+        final String reason = String.format(
+            "Did not receive all %d records from topic %s within %d ms",
+            expectedNumRecords,
+            topic,
+            waitTime
+        );
         try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
             retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<V> readData =
@@ -759,7 +809,7 @@ public class IntegrationTestUtils {
      * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
      */
     public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList,
-                                                           final Duration timeout) throws InterruptedException {
+                                                           final Duration timeout) throws Exception {
         final Lock stateLock = new ReentrantLock();
         final Condition stateUpdate = stateLock.newCondition();
         final Map<KafkaStreams, State> stateMap = new HashMap<>();
@@ -808,8 +858,10 @@ public class IntegrationTestUtils {
 
                 final long millisRemaining = expectedEnd - System.currentTimeMillis();
                 if (millisRemaining <= 0) {
-                    fail("Application did not reach a RUNNING state for all streams instances. Non-running instances: " +
-                        nonRunningStreams);
+                    fail(
+                        "Application did not reach a RUNNING state for all streams instances. " +
+                            "Non-running instances: " + nonRunningStreams
+                    );
                 }
 
                 stateUpdate.await(millisRemaining, TimeUnit.MILLISECONDS);
@@ -829,7 +881,7 @@ public class IntegrationTestUtils {
      */
     public static void waitForApplicationState(final List<KafkaStreams> streamsList,
                                                final State state,
-                                               final Duration timeout) throws InterruptedException {
+                                               final Duration timeout) throws Exception {
         retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
             final Map<KafkaStreams, State> streamsToStates = streamsList
                 .stream()
@@ -840,8 +892,13 @@ public class IntegrationTestUtils {
                 .filter(entry -> entry.getValue() != state)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-            final String reason = String.format("Expected all streams instances in %s to be %s within %d ms, but the following were not: %s",
-                streamsList, state, timeout.toMillis(), wrongStateMap);
+            final String reason = String.format(
+                "Expected all streams instances in %s to be %s within %d ms, but the following were not: %s",
+                streamsList,
+                state,
+                timeout.toMillis(),
+                wrongStateMap
+            );
             assertThat(reason, wrongStateMap.isEmpty());
         });
     }
@@ -874,8 +931,11 @@ public class IntegrationTestUtils {
     public static void waitForEmptyConsumerGroup(final Admin adminClient,
                                                  final String applicationId,
                                                  final long timeoutMs) throws Exception {
-        TestUtils.waitForCondition(new IntegrationTestUtils.ConsumerGroupInactiveCondition(adminClient, applicationId), timeoutMs,
-            "Test consumer group " + applicationId + " still active even after waiting " + timeoutMs + " ms.");
+        TestUtils.waitForCondition(
+            new IntegrationTestUtils.ConsumerGroupInactiveCondition(adminClient, applicationId),
+            timeoutMs,
+            "Test consumer group " + applicationId + " still active even after waiting " + timeoutMs + " ms."
+        );
     }
 
     private static StateListener getStateListener(final KafkaStreams streams) {
@@ -891,11 +951,10 @@ public class IntegrationTestUtils {
     public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
                                                        final String topic,
                                                        final List<KeyValueTimestamp<K, V>> expected) {
-
         final List<ConsumerRecord<K, V>> results;
         try {
             results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
-        } catch (final InterruptedException e) {
+        } catch (final Exception e) {
             throw new RuntimeException(e);
         }
 
@@ -919,7 +978,7 @@ public class IntegrationTestUtils {
         final List<ConsumerRecord<String, Long>> results;
         try {
             results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
-        } catch (final InterruptedException e) {
+        } catch (final Exception e) {
             throw new RuntimeException(e);
         }
 
@@ -943,8 +1002,10 @@ public class IntegrationTestUtils {
         final K recordKey = record.key();
         final V recordValue = record.value();
         final long recordTimestamp = record.timestamp();
-        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with timestamp=" + expectedTimestamp +
-                                                            " but was <" + recordKey + ", " + recordValue + "> with timestamp=" + recordTimestamp);
+        final AssertionError error = new AssertionError(
+            "Expected <" + expectedKey + ", " + expectedValue + "> with timestamp=" + expectedTimestamp +
+                " but was <" + recordKey + ", " + recordValue + "> with timestamp=" + recordTimestamp
+        );
         if (recordKey != null) {
             if (!recordKey.equals(expectedKey)) {
                 throw error;
@@ -1079,7 +1140,9 @@ public class IntegrationTestUtils {
         return new KafkaConsumer<>(filtered);
     }
 
-    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
+    public static KafkaStreams getStartedStreams(final Properties streamsConfig,
+                                                 final StreamsBuilder builder,
+                                                 final boolean clean) {
         final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
         if (clean) {
             driver.cleanUp();
@@ -1090,21 +1153,21 @@ public class IntegrationTestUtils {
 
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
-                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+                                 final QueryableStoreType<S> storeType) throws Exception {
         return getStore(DEFAULT_TIMEOUT, storeName, streams, storeType);
     }
 
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
                                  final boolean enableStaleQuery,
-                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+                                 final QueryableStoreType<S> storeType) throws Exception {
         return getStore(DEFAULT_TIMEOUT, storeName, streams, enableStaleQuery, storeType);
     }
 
     public static <S> S getStore(final long waitTime,
                                  final String storeName,
                                  final KafkaStreams streams,
-                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+                                 final QueryableStoreType<S> storeType) throws Exception {
         return getStore(waitTime, storeName, streams, false, storeType);
     }
 
@@ -1112,7 +1175,7 @@ public class IntegrationTestUtils {
                                  final String storeName,
                                  final KafkaStreams streams,
                                  final boolean enableStaleQuery,
-                                 final QueryableStoreType<S> storeType) throws InterruptedException {
+                                 final QueryableStoreType<S> storeType) throws Exception {
         final StoreQueryParameters<S> param = enableStaleQuery ?
             StoreQueryParameters.fromNameAndType(storeName, storeType).enableStaleStores() :
             StoreQueryParameters.fromNameAndType(storeName, storeType);
@@ -1120,15 +1183,14 @@ public class IntegrationTestUtils {
     }
 
     public static <S> S getStore(final KafkaStreams streams,
-                                 final StoreQueryParameters<S> param) throws InterruptedException {
+                                 final StoreQueryParameters<S> param) throws Exception {
         return getStore(DEFAULT_TIMEOUT, streams, param);
     }
 
     public static <S> S getStore(final long waitTime,
                                  final KafkaStreams streams,
-                                 final StoreQueryParameters<S> param) throws InterruptedException {
+                                 final StoreQueryParameters<S> param) throws Exception {
         final long expectedEnd = System.currentTimeMillis() + waitTime;
-
         while (true) {
             try {
                 return streams.store(param);

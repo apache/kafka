@@ -807,7 +807,7 @@ public class KStreamRepartitionIntegrationTest {
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
                                                  final Deserializer<V> valueSerializer,
-                                                 final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
+                                                 final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
