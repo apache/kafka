@@ -787,7 +787,7 @@
         If <code>"exactly_once"</code> processing is enabled via the <code>processing.guarantee</code> parameter,
         internally Streams switches from a producer-per-thread to a producer-per-task runtime model.
         Using <code>"exactly_once_beta"</code> does use a producer-per-thread, so <code>client.id</code> doesn't change,
-        compare to <code>"at_least_once"</code> for this case).
+        compared with <code>"at_least_once"</code> for this case).
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
     </p>
