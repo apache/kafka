@@ -419,9 +419,11 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
       "--delete-config", "request_percentage") ++ userArgs ++ clientIdArgs)
 
-    val entity = new ClientQuotaEntity(Seq(
-      userEntity.map(ClientQuotaEntity.USER -> _), clientIdEntity.map(ClientQuotaEntity.CLIENT_ID -> _)
-    ).flatten.toMap.asJava)
+    // Explicitly populate a HashMap to ensure nulls are recorded properly.
+    val entityMap = new java.util.HashMap[String, String]
+    userEntity.foreach(u => entityMap.put(ClientQuotaEntity.USER, u))
+    clientIdEntity.foreach(c => entityMap.put(ClientQuotaEntity.CLIENT_ID, c))
+    val entity = new ClientQuotaEntity(entityMap)
 
     var describedConfigs = false
     val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]

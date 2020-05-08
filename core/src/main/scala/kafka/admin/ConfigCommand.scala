@@ -377,7 +377,11 @@ object ConfigCommand extends Config {
           }
         }
         val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
-        val entity = new ClientQuotaEntity(alterEntityTypes.zip(alterEntityNames).toMap.asJava)
+
+        // Explicitly populate a HashMap to ensure nulls are recorded properly.
+        val alterEntityMap = new java.util.HashMap[String, String]
+        alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
+        val entity = new ClientQuotaEntity(alterEntityMap)
 
         val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
         val alterOps = (configsToBeAddedMap.map { case (key, value) =>
