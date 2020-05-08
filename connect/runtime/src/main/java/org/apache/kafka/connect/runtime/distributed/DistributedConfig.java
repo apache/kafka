@@ -18,9 +18,12 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigDef.LambdaValidator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.util.TopicAdmin;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
@@ -177,6 +180,15 @@ public class DistributedConfig extends WorkerConfig {
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
     public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
 
+    private static final Validator REPLICATION_FACTOR_VALIDATOR = LambdaValidator.with(
+        (name, value) -> validateReplicationFactor(name, (short) value),
+        () -> "Positive number, or -1 to use the broker's default"
+    );
+    private static final Validator PARTITIONS_VALIDATOR = LambdaValidator.with(
+        (name, value) -> validatePartitions(name, (int) value),
+        () -> "Positive number, or -1 to use the broker's default"
+    );
+
     @SuppressWarnings("unchecked")
     private static final ConfigDef CONFIG = baseConfigDef()
             .define(GROUP_ID_CONFIG,
@@ -276,13 +288,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
                     ConfigDef.Type.INT,
                     25,
-                    atLeast(1),
+                    PARTITIONS_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
             .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
                     (short) 3,
-                    atLeast(1),
+                    REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
             .define(CONFIG_TOPIC_CONFIG,
@@ -292,7 +304,7 @@ public class DistributedConfig extends WorkerConfig {
             .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
                     (short) 3,
-                    atLeast(1),
+                    REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
             .define(STATUS_STORAGE_TOPIC_CONFIG,
@@ -302,13 +314,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(STATUS_STORAGE_PARTITIONS_CONFIG,
                     ConfigDef.Type.INT,
                     5,
-                    atLeast(1),
+                    PARTITIONS_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
             .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
                     (short) 3,
-                    atLeast(1),
+                    REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
             .define(CONNECT_PROTOCOL_CONFIG,
@@ -436,6 +448,20 @@ public class DistributedConfig extends WorkerConfig {
             KeyGenerator.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
             throw new ConfigException(configName, algorithm, e.getMessage());
+        }
+    }
+
+    private static void validatePartitions(String configName, int factor) {
+        if (factor != TopicAdmin.NO_PARTITIONS && factor < 1) {
+            throw new ConfigException(configName, factor,
+                    "Number of partitions must be positive, or -1 to use the broker's default");
+        }
+    }
+
+    private static void validateReplicationFactor(String configName, short factor) {
+        if (factor != TopicAdmin.NO_REPLICATION_FACTOR && factor < 1) {
+            throw new ConfigException(configName, factor,
+                    "Replication factor must be positive, or -1 to use the broker's default");
         }
     }
 }

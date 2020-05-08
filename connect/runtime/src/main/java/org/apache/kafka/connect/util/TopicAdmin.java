@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -42,6 +43,9 @@ import java.util.concurrent.ExecutionException;
  * Utility to simplify creating and managing topics via the {@link Admin}.
  */
 public class TopicAdmin implements AutoCloseable {
+
+    public static final int NO_PARTITIONS = -1;
+    public static final short NO_REPLICATION_FACTOR = -1;
 
     private static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     private static final String CLEANUP_POLICY_COMPACT = "compact";
@@ -55,8 +59,8 @@ public class TopicAdmin implements AutoCloseable {
      */
     public static class NewTopicBuilder {
         private String name;
-        private int numPartitions;
-        private short replicationFactor;
+        private Integer numPartitions = null;
+        private Short replicationFactor = null;
         private Map<String, String> configs = new HashMap<>();
 
         NewTopicBuilder(String name) {
@@ -66,22 +70,52 @@ public class TopicAdmin implements AutoCloseable {
         /**
          * Specify the desired number of partitions for the topic.
          *
-         * @param numPartitions the desired number of partitions; must be positive
+         * @param numPartitions the desired number of partitions; must be positive, or -1 to
+         *                      signify using the broker's default
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder partitions(int numPartitions) {
+            if (numPartitions == NO_PARTITIONS) {
+                return defaultPartitions();
+            }
             this.numPartitions = numPartitions;
+            return this;
+        }
+
+        /**
+         * Specify the topic's number of partition should be the broker configuration for
+         * {@code num.partitions}.
+         *
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder defaultPartitions() {
+            this.numPartitions = null;
             return this;
         }
 
         /**
          * Specify the desired replication factor for the topic.
          *
-         * @param replicationFactor the desired replication factor; must be positive
+         * @param replicationFactor the desired replication factor; must be positive, or -1 to
+         *                          signify using the broker's default
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder replicationFactor(short replicationFactor) {
+            if (replicationFactor == NO_REPLICATION_FACTOR) {
+                return defaultReplicationFactor();
+            }
             this.replicationFactor = replicationFactor;
+            return this;
+        }
+
+        /**
+         * Specify the replication factor for the topic should be the broker configurations for
+         * {@code default.replication.factor}.
+         *
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder defaultReplicationFactor() {
+            this.replicationFactor = null;
             return this;
         }
 
@@ -142,7 +176,11 @@ public class TopicAdmin implements AutoCloseable {
          * @return the topic description; never null
          */
         public NewTopic build() {
-            return new NewTopic(name, numPartitions, replicationFactor).configs(configs);
+            return new NewTopic(
+                    name,
+                    Optional.ofNullable(numPartitions),
+                    Optional.ofNullable(replicationFactor)
+            ).configs(configs);
         }
     }
 
@@ -159,6 +197,7 @@ public class TopicAdmin implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TopicAdmin.class);
     private final Map<String, Object> adminConfig;
     private final Admin admin;
+    private final boolean logCreation;
 
     /**
      * Create a new topic admin component with the given configuration.
@@ -171,8 +210,14 @@ public class TopicAdmin implements AutoCloseable {
 
     // visible for testing
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(adminConfig, adminClient, true);
+    }
+
+    // visible for testing
+    TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
         this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
+        this.logCreation = logCreation;
     }
 
    /**
@@ -227,7 +272,9 @@ public class TopicAdmin implements AutoCloseable {
             String topic = entry.getKey();
             try {
                 entry.getValue().get();
-                log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                if (logCreation) {
+                    log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                }
                 newlyCreatedTopicNames.add(topic);
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();

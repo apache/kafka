@@ -105,4 +105,104 @@ public class DistributedConfigTest {
             algorithms.add(algorithms.remove(0));
         }
     }
+
+    @Test
+    public void shouldAllowNegativeOneAndPositiveForPartitions() {
+        Map<String, String> settings = configs();
+        settings.put(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, "-1");
+        settings.put(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG, "-1");
+        new DistributedConfig(configs());
+        settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+        settings.remove(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG);
+
+        for (int i = 1; i != 100; ++i) {
+            settings.put(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            new DistributedConfig(settings);
+            settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+
+            settings.put(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            new DistributedConfig(settings);
+        }
+    }
+
+    @Test
+    public void shouldNotAllowZeroPartitions() {
+        Map<String, String> settings = configs();
+        settings.put(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, "0");
+        assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+        settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+
+        settings.put(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG, "0");
+        assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+    }
+
+    @Test
+    public void shouldNotAllowNegativePartitionsLessThanNegativeOne() {
+        Map<String, String> settings = configs();
+        for (int i = -2; i > -100; --i) {
+            settings.put(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+            settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+
+            settings.put(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+        }
+    }
+
+    @Test
+    public void shouldAllowNegativeOneAndPositiveForReplicationFactor() {
+        Map<String, String> settings = configs();
+        settings.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "-1");
+        settings.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "-1");
+        settings.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "-1");
+        new DistributedConfig(configs());
+        settings.remove(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG);
+        settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+        settings.remove(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG);
+
+        for (int i = 1; i != 100; ++i) {
+            settings.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, Integer.toString(i));
+            new DistributedConfig(settings);
+            settings.remove(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG);
+
+            settings.put(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            new DistributedConfig(settings);
+            settings.remove(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG);
+
+            settings.put(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG, Integer.toString(i));
+            new DistributedConfig(settings);
+        }
+    }
+
+    @Test
+    public void shouldNotAllowZeroReplicationFactor() {
+        Map<String, String> settings = configs();
+        settings.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "0");
+        assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+        settings.remove(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG);
+
+        settings.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "0");
+        assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+        settings.remove(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG);
+
+        settings.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "0");
+        assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+    }
+
+    @Test
+    public void shouldNotAllowNegativeReplicationFactorLessThanNegativeOne() {
+        Map<String, String> settings = configs();
+        for (int i = -2; i > -100; --i) {
+            settings.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, Integer.toString(i));
+            assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+            settings.remove(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG);
+
+            settings.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, Integer.toString(i));
+            assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+            settings.remove(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG);
+
+            settings.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, Integer.toString(i));
+            assertThrows(ConfigException.class, () -> new DistributedConfig(settings));
+        }
+    }
 }
