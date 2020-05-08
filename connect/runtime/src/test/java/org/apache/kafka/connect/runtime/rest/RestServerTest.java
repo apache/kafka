@@ -75,7 +75,11 @@ public class RestServerTest {
             "\n add Strict-Transport-Security: max-age=31536000; includeSubDomains",
             "AdD   Strict-Transport-Security:  \r  max-age=31536000;  includeSubDomains",
             "AdD \t Strict-Transport-Security : \n   max-age=31536000;  includeSubDomains",
-            "add X-Content-Type-Options: \r nosniff"
+            "add X-Content-Type-Options: \r nosniff",
+            "Set \t X-Frame-Options: \t Deny\n ",
+            "seT \t X-Cache-Info: \t not cacheable\n ",
+            "seTDate \t Expires: \r 31540000000",
+            "adDdate \n Last-Modified: \t 0"
     );
 
     protected static final List<String> INVALID_HEADER_CONFIGS = Arrays.asList(
@@ -467,21 +471,26 @@ public class RestServerTest {
         PowerMock.replayAll();
 
         server = new RestServer(workerConfig);
-        server.initializeServer();
-        server.initializeResources(herder);
-        HttpRequest request = new HttpGet("/connectors");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
-        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
-        if (!headerConfig.isEmpty()) {
-            expectedHeaders.forEach((k, v) ->
-                    Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
-        } else {
-            Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
+        try {
+            server.initializeServer();
+            server.initializeResources(herder);
+            HttpRequest request = new HttpGet("/connectors");
+            try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
+                HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+                try (CloseableHttpResponse response = httpClient.execute(httpHost, request)) {
+                    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+                    if (!headerConfig.isEmpty()) {
+                        expectedHeaders.forEach((k, v) ->
+                                Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
+                    } else {
+                        Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
+                    }
+                }
+            }
+        } finally {
+            server.stop();
+            server = null;
         }
-        response.close();
-        server.stop();
     }
 
     protected void assertInvalidHeaderConfig(String config) {

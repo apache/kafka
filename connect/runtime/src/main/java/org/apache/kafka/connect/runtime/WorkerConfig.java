@@ -412,13 +412,7 @@ public class WorkerConfig extends AbstractConfig {
         logInternalConverterDeprecationWarnings(props);
     }
 
-    @Override
-    public String toString() {
-        return "Comma-separated header rules, where each header rule is of the form "
-                + "'[action] [header name]:[header value]' and optionally surrounded by double quotes "
-                + "if any part of a header rule contains a comma";
-    }
-
+    // Visible for testing
     public static void validateHttpResponseHeaderConfig(String config) {
         try {
             // validate format
@@ -452,7 +446,8 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
-    public static void validateHeaderConfigAction(String action) {
+    // Visible for testing
+    static void validateHeaderConfigAction(String action) {
         if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
             throw new ConfigException(String.format("Invalid header config action: '%s'. "
                     + "Expected one of %s", action, HEADER_ACTIONS));
@@ -496,6 +491,13 @@ public class WorkerConfig extends AbstractConfig {
 
             String[] configs = StringUtil.csvSplit(strValue); // handles and removed surrounding quotes
             Arrays.stream(configs).forEach(WorkerConfig::validateHttpResponseHeaderConfig);
+        }
+
+        @Override
+        public String toString() {
+            return "Comma-separated header rules, where each header rule is of the form "
+                    + "'[action] [header name]:[header value]' and optionally surrounded by double quotes "
+                    + "if any part of a header rule contains a comma";
         }
     }
 }
