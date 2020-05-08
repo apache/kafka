@@ -58,8 +58,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     /**
      * Put a key-value pair into the window with given window start timestamp
      * <p>
-     * If serialized value bytes are null it is treated as delete. Note that as an optimization, deletes will be
-     * skipped in the case of an underlying store that allows duplicates.
+     * If serialized value bytes are null it is treated as delete. Note that deletes will be
+     * ignored in the case of an underlying store that retains duplicates.
      *
      * @param key The key to associate the value to
      * @param value The value; can be null
