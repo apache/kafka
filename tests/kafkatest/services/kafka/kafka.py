@@ -537,17 +537,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
 
-    def alter_message_format(self, topic, msg_format_version, node=None):
+    def alter_message_format(self, topic, msg_format_version, node=None, command_config=None):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
 
         cmd = fix_opts_for_new_jvm(node)
 
-        # TO-DO: may add admin config for security
         if node.version.config_command_supports_bootstrap_server():
             cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
                    (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, msg_format_version)
+            if not command_config is None:
+                cmd = "--command-config " + command_config
         else:
             cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
                   (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
@@ -555,7 +556,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def set_unclean_leader_election(self, topic, value=True, node=None):
+    def set_unclean_leader_election(self, topic, value=True, node=None, command_config=None):
         if node is None:
             node = self.nodes[0]
         if value is True:
@@ -565,10 +566,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
 
-        # TO-DO: may add admin config for security
         if node.version.config_command_supports_bootstrap_server():
             cmd += "%s --bootstrap-server %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
                    (self.path.script("kafka-configs.sh", node), self.bootstrap_servers(self.security_protocol), topic, str(value).lower())
+            if not command_config is None:
+                cmd = "--command-config " + command_config
         else:
             cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
                   (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
