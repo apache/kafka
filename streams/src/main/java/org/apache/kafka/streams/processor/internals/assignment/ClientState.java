@@ -345,7 +345,7 @@ public class ClientState {
 
     private void assertNotAssigned(final TaskId task) {
         if (standbyTasks.contains(task) || activeTasks.contains(task)) {
-            throw new IllegalArgumentException("Tried to assign standby task " + task + ", but it is already assigned: " + this);
+            throw new IllegalArgumentException("Tried to assign task " + task + ", but it is already assigned: " + this);
         }
     }
 
