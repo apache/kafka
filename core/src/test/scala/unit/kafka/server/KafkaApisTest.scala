@@ -41,10 +41,12 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
@@ -151,20 +153,14 @@ class KafkaApisTest {
         1, true, true)
     )
 
-    EasyMock.expect(authorizer.authorize(
-      requestContext, expectedActions.asJava
-    )).andReturn(
-      Seq(AuthorizationResult.ALLOWED).asJava
-    ).once()
+    EasyMock.expect(authorizer.authorize(requestContext, expectedActions.asJava))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
 
     EasyMock.replay(authorizer)
 
     val result = createKafkaApis(authorizer = Some(authorizer)).authorize(
-      requestContext,
-      operation,
-      resourceType,
-      resourceName,
-    )
+      requestContext, operation, resourceType, resourceName)
 
     verify(authorizer)
 
@@ -207,17 +203,140 @@ class KafkaApisTest {
 
     EasyMock.replay(authorizer)
 
-    val result = createKafkaApis(authorizer = Some(authorizer)).filterAuthorized(
+    val result = createKafkaApis(authorizer = Some(authorizer)).filterByAuthorized(
       requestContext,
       operation,
       resourceType,
       // Duplicate resource names should not trigger multiple calls to authorize
       Seq(resourceName1, resourceName2, resourceName1, resourceName3)
-    )
+    )(identity)
 
     verify(authorizer)
 
     assertEquals(Set(resourceName1, resourceName3), result)
+  }
+
+  @Test
+  def testDescribeConfigsWithAuthorizer(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.DESCRIBE_CONFIGS
+    val resourceType = ResourceType.TOPIC
+    val resourceName = "topic-1"
+    val requestHeader = new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion,
+      clientId, 0)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    // Verify that authorize is only called once
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(expectedActions.asJava)))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    expectNoThrottling()
+
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
+    val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList)
+    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true)))
+        .andReturn(Map(configResource -> config))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
+      adminManager)
+
+    val resourceToConfigNames = Map[ConfigResource, util.Collection[String]](
+      configResource -> Collections.emptyList[String])
+    val request = buildRequest(new DescribeConfigsRequest(requestHeader.apiVersion,
+      resourceToConfigNames.asJava, true))
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeConfigsRequest(request)
+
+    verify(authorizer, adminManager)
+  }
+
+  @Test
+  def testAlterConfigsWithAuthorizer(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.ALTER_CONFIGS
+    val resourceType = ResourceType.TOPIC
+    val resourceName = "topic-1"
+    val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
+      clientId, 0)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    // Verify that authorize is only called once
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(expectedActions.asJava)))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    expectNoThrottling()
+
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
+    EasyMock.expect(adminManager.alterConfigs(anyObject(), EasyMock.eq(false)))
+      .andReturn(Map(configResource -> ApiError.NONE))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
+      adminManager)
+
+    val configs = Map(
+      configResource -> new AlterConfigsRequest.Config(
+        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
+    val request = buildRequest(new AlterConfigsRequest.Builder(configs.asJava, false)
+      .build(requestHeader.apiVersion))
+    createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
+
+    verify(authorizer, adminManager)
+  }
+
+  @Test
+  def testIncrementalAlterConfigsWithAuthorizer(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val operation = AclOperation.ALTER_CONFIGS
+    val resourceType = ResourceType.TOPIC
+    val resourceName = "topic-1"
+    val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
+      ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
+
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    // Verify that authorize is only called once
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(expectedActions.asJava)))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    expectNoThrottling()
+
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
+    EasyMock.expect(adminManager.incrementalAlterConfigs(anyObject(), EasyMock.eq(false)))
+      .andReturn(Map(configResource -> ApiError.NONE))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
+      adminManager)
+
+    val requestData = new IncrementalAlterConfigsRequestData()
+    val alterResource = new IncrementalAlterConfigsRequestData.AlterConfigsResource()
+      .setResourceName(configResource.name)
+      .setResourceType(configResource.`type`.id)
+    alterResource.configs.add(new AlterableConfig()
+      .setName("foo")
+      .setValue("bar"))
+    requestData.resources.add(alterResource)
+
+    val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData)
+      .build(requestHeader.apiVersion))
+    createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+
+    verify(authorizer, adminManager)
   }
 
   @Test
@@ -1836,7 +1955,6 @@ class KafkaApisTest {
     channel.buffer.getInt() // read the size
     ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version))
     val struct = api.responseSchema(request.version).read(channel.buffer)
-    println(struct)
     AbstractResponse.parseResponse(api, struct, request.version)
   }
 

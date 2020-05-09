@@ -123,9 +123,8 @@ class AdminManager(val config: KafkaConfig,
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
           // this follows the existing logic in TopicCommand
-          topic.assignments.forEach {
-            case assignment => assignments(assignment.partitionIndex()) =
-              assignment.brokerIds().asScala.map(a => a: Int)
+          topic.assignments.forEach { assignment =>
+            assignments(assignment.partitionIndex) = assignment.brokerIds.asScala.map(a => a: Int)
           }
           assignments
         }
@@ -481,7 +480,7 @@ class AdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
-  private def alterLogLevelConfigs(alterConfigOps: List[AlterConfigOp]): Unit = {
+  private def alterLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
     alterConfigOps.foreach { alterConfigOp =>
       val loggerName = alterConfigOp.configEntry().name()
       val logLevel = alterConfigOp.configEntry().value()
@@ -514,7 +513,7 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  def incrementalAlterConfigs(configs: Map[ConfigResource, List[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
         // throw InvalidRequestException if any duplicate keys
@@ -575,7 +574,7 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  private def validateLogLevelConfigs(alterConfigOps: List[AlterConfigOp]): Unit = {
+  private def validateLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
     def validateLoggerNameExists(loggerName: String): Unit = {
       if (!Log4jController.loggerExists(loggerName))
         throw new ConfigException(s"Logger $loggerName does not exist!")
@@ -604,7 +603,7 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  private def prepareIncrementalConfigs(alterConfigOps: List[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+  private def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
 
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
       val configKey = configKeys(configName)
