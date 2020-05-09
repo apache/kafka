@@ -84,6 +84,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
@@ -139,6 +142,7 @@ public class WorkerTest extends ThreadedTest {
     @Mock private ExecutorService executorService;
     @MockNice private ConnectorConfig connectorConfig;
     private String mockFileProviderTestId;
+    private Map<String, String> connectorProps;
 
     @Before
     public void setup() {
@@ -176,6 +180,8 @@ public class WorkerTest extends ThreadedTest {
         defaultConsumerConfigs
             .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
+        // Some common defaults. They might change on individual tests
+        connectorProps = anyConnectorConfigMap();
         PowerMock.mockStatic(Plugins.class);
     }
 
@@ -190,11 +196,7 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(sourceConnector);
         EasyMock.expect(sourceConnector.version()).andReturn("1.0");
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
 
         EasyMock.expect(sourceConnector.version()).andReturn("1.0");
 
@@ -205,7 +207,7 @@ public class WorkerTest extends ThreadedTest {
 
         sourceConnector.initialize(anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
-        sourceConnector.start(props);
+        sourceConnector.start(connectorProps);
         EasyMock.expectLastCall();
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
@@ -230,10 +232,10 @@ public class WorkerTest extends ThreadedTest {
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         try {
-            worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+            worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
             fail("Should have thrown exception when trying to add connector with same name.");
         } catch (ConnectException e) {
             // expected
@@ -268,11 +270,7 @@ public class WorkerTest extends ThreadedTest {
         expectStartStorage();
         expectFileConfigProvider();
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "java.util.HashMap"); // Bad connector class name
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "java.util.HashMap"); // Bad connector class name
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString()))
@@ -294,7 +292,7 @@ public class WorkerTest extends ThreadedTest {
         worker.start();
 
         assertStatistics(worker, 0, 0);
-        assertFalse(worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED));
+        assertFalse(worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED));
 
         assertStartupStatistics(worker, 1, 1, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -318,11 +316,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(plugins.newConnector("WorkerTestConnector")).andReturn(sinkConnector);
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTestConnector");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTestConnector");
 
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(sinkConnector))
@@ -330,7 +324,7 @@ public class WorkerTest extends ThreadedTest {
                 .times(2);
         sinkConnector.initialize(anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
-        sinkConnector.start(props);
+        sinkConnector.start(connectorProps);
         EasyMock.expectLastCall();
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
@@ -357,7 +351,7 @@ public class WorkerTest extends ThreadedTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         assertStatistics(worker, 1, 0);
         assertStartupStatistics(worker, 1, 0, 0, 0);
@@ -384,11 +378,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(plugins.newConnector("WorkerTest")).andReturn(sinkConnector);
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTest");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTest");
 
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(sinkConnector))
@@ -396,7 +386,7 @@ public class WorkerTest extends ThreadedTest {
                 .times(2);
         sinkConnector.initialize(anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
-        sinkConnector.start(props);
+        sinkConnector.start(connectorProps);
         EasyMock.expectLastCall();
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
@@ -423,7 +413,7 @@ public class WorkerTest extends ThreadedTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         assertStatistics(worker, 1, 0);
 
@@ -465,11 +455,8 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(sinkConnector);
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
 
-        Map<String, String> props = new HashMap<>();
-        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
+        connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
 
         EasyMock.expect(sinkConnector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(sinkConnector))
@@ -477,7 +464,7 @@ public class WorkerTest extends ThreadedTest {
                 .times(3);
         sinkConnector.initialize(anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
-        sinkConnector.start(props);
+        sinkConnector.start(connectorProps);
         EasyMock.expectLastCall();
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
@@ -510,16 +497,16 @@ public class WorkerTest extends ThreadedTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
         assertStatistics(worker, 1, 0);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         try {
-            worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+            worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED);
             fail("Should have thrown exception when trying to add connector with same name.");
         } catch (ConnectException e) {
             // expected
         }
-        Map<String, String> connProps = new HashMap<>(props);
+        Map<String, String> connProps = new HashMap<>(connectorProps);
         connProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "2");
         ConnectorConfig connConfig = new SinkConnectorConfig(plugins, connProps);
         List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, connConfig);
@@ -1357,6 +1344,8 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
     }
 

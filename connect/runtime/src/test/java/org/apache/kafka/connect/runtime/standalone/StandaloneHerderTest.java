@@ -81,6 +81,9 @@ import java.util.concurrent.TimeUnit;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -540,8 +543,9 @@ public class StandaloneHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         EasyMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
+        EasyMock.expect(worker.isTopicCreationEnabled()).andReturn(true);
         // Generate same task config, which should result in no additional action to restart tasks
-        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig)))
+        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .andReturn(singletonList(taskConfig(SourceSink.SOURCE)));
         worker.isSinkConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall().andReturn(false);
@@ -629,13 +633,16 @@ public class StandaloneHerderTest {
     private void expectAdd(SourceSink sourceSink) {
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
-            new SourceConnectorConfig(plugins, connectorProps) :
+            new SourceConnectorConfig(plugins, connectorProps, true) :
             new SinkConnectorConfig(plugins, connectorProps);
 
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                               EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         EasyMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
+        if (sourceSink == SourceSink.SOURCE) {
+            EasyMock.expect(worker.isTopicCreationEnabled()).andReturn(true);
+        }
 
         ConnectorInfo connInfo = new ConnectorInfo(CONNECTOR_NAME, connectorProps, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
             SourceSink.SOURCE == sourceSink ? ConnectorType.SOURCE : ConnectorType.SINK);
@@ -687,8 +694,12 @@ public class StandaloneHerderTest {
         Class<? extends Connector> connectorClass = sourceSink == SourceSink.SINK ? BogusSinkConnector.class : BogusSourceConnector.class;
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
-        if (sourceSink == SourceSink.SINK)
+        if (sourceSink == SourceSink.SINK) {
             props.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
+        } else {
+            props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+            props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        }
         return props;
     }
 
