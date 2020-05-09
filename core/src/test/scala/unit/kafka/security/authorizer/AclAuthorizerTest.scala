@@ -22,6 +22,8 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
+import java.lang.management.ManagementFactory
+import javax.management.ObjectName
 
 import kafka.Kafka
 import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
@@ -44,6 +46,7 @@ import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.junit.Assert._
@@ -97,6 +100,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
       Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+
+    setupAuthorizerMetrics()
   }
 
   @After
@@ -913,6 +918,59 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     })
   }
 
+  @Test
+  def testAuthorizeTotalAcls(): Unit = {
+    var totalAcls = aclAuthorizer.totalAcls
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "a_other", LITERAL))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "a_other", PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID() + "-zzz", PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fooo-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fo-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fop-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fon-" + UUID.randomUUID(), PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fon-", PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED))
+    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", LITERAL))
+    addAcls(aclAuthorizer, Set(allowReadAcl), prefixedResource)
+    totalAcls = aclAuthorizer.totalAcls
+    assertEquals(totalAcls, getAclAuthorizerMetric("acls-total-count"), 0.0)
+    removeAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fon-" + UUID.randomUUID(), PREFIXED))
+    removeAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "fon-", PREFIXED))
+    removeAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED))
+    removeAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", LITERAL))
+    removeAcls(aclAuthorizer, Set(allowReadAcl), prefixedResource)
+    totalAcls = aclAuthorizer.totalAcls
+    assertEquals(totalAcls, getAclAuthorizerMetric("acls-total-count"), 0.0)
+  }
+
+  @Test
+  def testAuthorizationRate(): Unit = {
+    val count = 10
+    val resource1 = new ResourcePattern(TOPIC, "foo1" + UUID.randomUUID(), LITERAL)
+    addAcls(aclAuthorizer, Set(denyReadAcl), resource1)
+    assertEquals(0.0, getAclAuthorizerMetric("authorization-denied-rate-per-minute"), 0.0d)
+    assertEquals(0.0, getAclAuthorizerMetric("authorization-allowed-rate-per-minute"), 0.0d)
+    assertEquals(0.0, getAclAuthorizerMetric("authorization-request-rate-per-minute"), 0.0d)
+    for (i <- 1 to count) {
+      authorize(aclAuthorizer, requestContext, READ, resource1)
+    }
+    TimeUnit.SECONDS.sleep(30)
+    assertTrue(getAclAuthorizerMetric("authorization-denied-rate-per-minute") > 5)
+
+    addAcls(aclAuthorizer, Set(allowReadAcl), resource)
+    for (i <- 1 to count) {
+      authorize(aclAuthorizer, requestContext, READ, resource)
+    }
+    for (i <- 1 to count) {
+      authorize(aclAuthorizer, requestContext, READ, resource1)
+    }
+    TimeUnit.SECONDS.sleep(30)
+    assertTrue(getAclAuthorizerMetric("authorization-allowed-rate-per-minute") > 5)
+    assertTrue(getAclAuthorizerMetric("authorization-request-rate-per-minute") > 10)
+  }
+
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
     aclAuthorizer.close()
 
@@ -1028,5 +1086,21 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       }
       file.getAbsolutePath
     } finally writer.close()
+  }
+
+  private def setupAuthorizerMetrics(): Unit = {
+    val mBeanName = "kafka.server:type=kafka.security.authorizer.metrics"
+    val server = ManagementFactory.getPlatformMBeanServer()
+    val metrics = new Metrics
+    aclAuthorizer.setupAuthorizerMetrics(metrics)
+    val reporter = new JmxReporter("kafka.server")
+    metrics.addReporter(reporter)
+    assertTrue(server.isRegistered(new ObjectName(mBeanName)))
+  }
+
+  private def getAclAuthorizerMetric(attribute: String): Double = {
+    val mBeanName = "kafka.server:type=kafka.security.authorizer.metrics"
+    val name = new ObjectName(mBeanName)
+    ManagementFactory.getPlatformMBeanServer().getAttribute(name, attribute).asInstanceOf[Double]
   }
 }
