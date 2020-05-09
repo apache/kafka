@@ -76,6 +76,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+
 
 /**
  * <p>
@@ -249,25 +251,18 @@ public class Worker {
             final WorkerConnector workerConnector;
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-                final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                log.info("Creating connector {} of type {}", connName, connClass);
-                final Connector connector = plugins.newConnector(connClass);
-
+                // By the time we arrive here, CONNECTOR_CLASS_CONFIG has been validated already
+                // Getting this value from the unparsed map will allow us to instantiate the
+                // right config (source or sink)
+                final String connClassProp = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                log.info("Creating connector {} of type {}", connName, connClassProp);
+                final Connector connector = plugins.newConnector(connClassProp);
                 final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
-                    offsetBackingStore,
-                    connName,
-                    internalKeyConverter,
-                    internalValueConverter
-                );
-                workerConnector = new WorkerConnector(
-                    connName,
-                    connector,
-                    ctx,
-                    metrics,
-                    statusListener,
-                    offsetReader
-                );
+                        offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
+                workerConnector = new WorkerConnector(connName, connector, ctx, metrics, statusListener, offsetReader);
+                final ConnectorConfig connConfig = workerConnector.isSinkConnector()
+                        ? new SinkConnectorConfig(plugins, connProps)
+                        : new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 savedLoader = plugins.compareAndSwapLoaders(connector);
                 workerConnector.initialize(connConfig);
@@ -526,14 +521,16 @@ public class Worker {
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
+            SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
+                    connConfig.originalsStrings(), config.topicCreationEnable());
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
+            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, sourceConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
@@ -815,6 +812,16 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    /**
+     * Returns whether this worker is configured to allow source connectors to create the topics
+     * that they use with custom configurations, if these topics don't already exist.
+     *
+     * @return true if topic creation by source connectors is allowed; false otherwise
+     */
+    public boolean isTopicCreationEnabled() {
+        return config.getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
 
     /**
