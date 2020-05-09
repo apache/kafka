@@ -413,7 +413,7 @@ public class WorkerConfig extends AbstractConfig {
     }
 
     // Visible for testing
-    public static void validateHttpResponseHeaderConfig(String config) {
+    static void validateHttpResponseHeaderConfig(String config) {
         try {
             // validate format
             String[] configTokens = config.trim().split("\\s+", 2);
