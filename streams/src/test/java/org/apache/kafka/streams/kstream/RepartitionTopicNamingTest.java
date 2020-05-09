@@ -162,7 +162,7 @@ public class RepartitionTopicNamingTest {
     }
 
     @Test
-    public void shouldNotReuseRepartitionNodeWithUnamedRepartitionTopics() {
+    public void shouldReuseRepartitionNodeWithUnamedRepartitionTopics() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
                                                                      .selectKey((k, v) -> k)
@@ -170,17 +170,17 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count().toStream().to("output-one");
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count().toStream().to("output-two");
         final String topologyString = builder.build().describe().toString();
-        assertThat(2, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertThat(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern), is(1));
     }
 
     @Test
-    public void shouldNotReuseRepartitionNodeWithUnamedRepartitionTopicsKGroupedTable() {
+    public void shouldReuseRepartitionNodeWithUnamedRepartitionTopicsKGroupedTable() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedTable<String, String> kGroupedTable = builder.<String, String>table("topic").groupBy(KeyValue::pair);
         kGroupedTable.count().toStream().to("output-count");
         kGroupedTable.reduce((v, v2) -> v2, (v, v2) -> v2).toStream().to("output-reduce");
         final String topologyString = builder.build().describe().toString();
-        assertThat(2, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertThat(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern), is(1));
     }
 
     @Test

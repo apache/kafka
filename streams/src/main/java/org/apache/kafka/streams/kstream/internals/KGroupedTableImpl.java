@@ -79,7 +79,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final String repartitionTopic = (userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : materialized.storeName())
             + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        if (repartitionGraphNode == null || userProvidedRepartitionTopicName == null) {
+        if (repartitionGraphNode == null) {
             repartitionGraphNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
         }
 

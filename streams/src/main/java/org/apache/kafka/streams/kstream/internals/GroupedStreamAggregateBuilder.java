@@ -85,10 +85,8 @@ class GroupedStreamAggregateBuilder<K, V> {
             sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
 
             // First time through we need to create a repartition node.
-            // Any subsequent calls to GroupedStreamAggregateBuilder#build we check if
-            // the user has provided a name for the repartition topic, is so we re-use
-            // the existing repartition node, otherwise we create a new one.
-            if (repartitionNode == null || userProvidedRepartitionTopicName == null) {
+            // Otherwise we'll reuse the repartition node.
+            if (repartitionNode == null) {
                 repartitionNode = repartitionNodeBuilder.build();
             }
 
