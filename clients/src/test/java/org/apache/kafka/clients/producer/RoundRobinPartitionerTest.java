@@ -124,5 +124,35 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
-    }    
+    }
+
+    @Test
+    public void testRoundRobinForNewBatch() {
+        final String topicA = "topicA";
+
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES));
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+
+        int part = 0;
+        final Map<Integer, Integer>  newPartitionCount = new HashMap<>();
+        Partitioner partitioner = new RoundRobinPartitioner();
+        for (int i = 0; i < 30; ++i) {
+            part = partitioner.partition(topicA, null, null, null, null, testCluster);
+            Integer count = newPartitionCount.get(part);
+            if (null == count)
+                count = 0;
+            newPartitionCount.put(part, count + 1);
+        }
+
+        assertEquals(10, newPartitionCount.get(0).intValue());
+        assertEquals(10, newPartitionCount.get(1).intValue());
+        assertEquals(10, newPartitionCount.get(2).intValue());
+        partitioner.onNewBatch (topicA, testCluster, part);
+        partitioner.partition("topicA", null, null, null, null, testCluster);
+        assertEquals(10, newPartitionCount.get(0).intValue());
+        assertEquals(10, newPartitionCount.get(1).intValue());
+        assertEquals(10, newPartitionCount.get(2).intValue());
+    }
 }
