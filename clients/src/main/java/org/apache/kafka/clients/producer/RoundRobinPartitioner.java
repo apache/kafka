@@ -76,8 +76,7 @@ public class RoundRobinPartitioner implements Partitioner {
     @Override
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         synchronized (topicCounterMap) {
-            AtomicInteger counter = topicCounterMap.get(topic);
-            topicCounterMap.put(topic, new AtomicInteger(counter.decrementAndGet()));
+            topicCounterMap.computeIfPresent(topic, (k, v) -> new AtomicInteger(v.decrementAndGet()));
         }
     }
 
