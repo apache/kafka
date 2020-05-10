@@ -22,7 +22,8 @@ public enum ClientDnsLookup {
 
     DEFAULT("default"),
     USE_ALL_DNS_IPS("use_all_dns_ips"),
-    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only");
+    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only"),
+    USE_FIRST_DNS_IPS("use_first_dns_ips");
 
     private String clientDnsLookup;
 
