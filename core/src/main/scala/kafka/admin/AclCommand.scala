@@ -35,7 +35,6 @@ import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.jdk.CollectionConverters._
-import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.io.StdIn
 
@@ -223,7 +222,7 @@ object AclCommand extends Logging {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
           authorizer.createAcls(null,aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
-            result.exception.asScala.foreach { exception =>
+            result.exception.ifPresent { exception =>
               println(s"Error while adding ACLs: ${exception.getMessage}")
               println(Utils.stackTrace(exception))
             }
@@ -283,12 +282,12 @@ object AclCommand extends Logging {
         authorizer.deleteAcls(null, aclBindingFilters)
       }
       result.asScala.map(_.toCompletableFuture.get).foreach { result =>
-        result.exception.asScala.foreach { exception =>
+        result.exception.ifPresent { exception =>
           println(s"Error while removing ACLs: ${exception.getMessage}")
           println(Utils.stackTrace(exception))
         }
         result.aclBindingDeleteResults.forEach { deleteResult =>
-          deleteResult.exception.asScala.foreach { exception =>
+          deleteResult.exception.ifPresent { exception =>
             println(s"Error while removing ACLs: ${exception.getMessage}")
             println(Utils.stackTrace(exception))
           }

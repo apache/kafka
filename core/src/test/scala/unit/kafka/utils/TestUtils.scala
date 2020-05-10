@@ -67,7 +67,6 @@ import org.scalatest.Assertions.fail
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -1721,7 +1720,7 @@ object TestUtils extends Logging {
     authorizer.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
-        result.exception.asScala.foreach { e => throw e }
+        result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     waitAndVerifyAcls(
