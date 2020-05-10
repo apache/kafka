@@ -507,6 +507,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldAddClientConfig(): Unit = {
+    testShouldAddClientConfig(Some("test-user-1"), Some("test-client-1"))
+    testShouldAddClientConfig(Some("test-user-2"), Some(null))
+    testShouldAddClientConfig(Some("test-user-3"), None)
+    testShouldAddClientConfig(Some(null), Some("test-client-2"))
+    testShouldAddClientConfig(Some(null), Some(null))
+    testShouldAddClientConfig(Some(null), None)
+    testShouldAddClientConfig(None, Some("test-client-3"))
+    testShouldAddClientConfig(None, Some(null))
+  }
+
+  @Test
   def shouldAddTopicConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
