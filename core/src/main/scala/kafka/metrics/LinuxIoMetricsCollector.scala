@@ -27,11 +27,12 @@ import scala.jdk.CollectionConverters._
 /**
  * Retrieves Linux /proc/self/io metrics.
  */
-class LinuxIoMetricsCollector(val procPath: String, val time: Time, val logger: Logger) {
+class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logger) {
   import LinuxIoMetricsCollector._
   var lastUpdateMs = -1L
   var cachedReadBytes = 0L
   var cachedWriteBytes = 0L
+  val path = Paths.get(procRoot, "self", "io")
 
   def readBytes(): Long = this.synchronized {
     val curMs = time.milliseconds()
@@ -67,7 +68,7 @@ class LinuxIoMetricsCollector(val procPath: String, val time: Time, val logger: 
     try {
       cachedReadBytes = -1
       cachedWriteBytes = -1
-      val lines = Files.readAllLines(Paths.get(procPath, "self", "io")).asScala
+      val lines = Files.readAllLines(path).asScala
       lines.foreach(line => {
         if (line.startsWith(READ_BYTES_PREFIX)) {
           cachedReadBytes = line.substring(READ_BYTES_PREFIX.size).toLong
@@ -79,14 +80,19 @@ class LinuxIoMetricsCollector(val procPath: String, val time: Time, val logger: 
       true
     } catch {
       case t: Throwable => {
-        logger.warn("LinuxIoMetricsCollector: unable to update metrics", t)
+        logger.warn("Unable to update IO metrics", t)
         false
       }
     }
   }
 
   def usable(): Boolean = {
-    updateValues(time.milliseconds())
+    if (path.toFile().exists()) {
+      updateValues(time.milliseconds())
+    } else {
+      logger.debug(s"disabling IO metrics collection because ${path} does not exist.")
+      false
+    }
   }
 }
 
