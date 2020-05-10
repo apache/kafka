@@ -131,6 +131,46 @@ public final class MessageTest {
                 setAllowAutoTopicCreation(false).
                 setIncludeClusterAuthorizedOperations(false).
                 setIncludeTopicAuthorizedOperations(false));
+        // The true values for the authorized operation fields are preserved
+        testAllMessageRoundTripsFromVersion(
+                (short) 8,
+                new MetadataRequestData()
+                  .setTopics(null)
+                  .setAllowAutoTopicCreation(true)
+                  .setIncludeClusterAuthorizedOperations(true)
+                  .setIncludeTopicAuthorizedOperations(true));
+        // The true values for the authorized operation fields are ignored
+        testAllMessageRoundTripsBetweenVersions(
+                (short) 1,
+                (short) 8,
+                new MetadataRequestData()
+                  .setTopics(null)
+                  .setAllowAutoTopicCreation(true)
+                  .setIncludeClusterAuthorizedOperations(true)
+                  .setIncludeTopicAuthorizedOperations(true),
+                new MetadataRequestData()
+                  .setTopics(null)
+                  .setAllowAutoTopicCreation(true));
+    }
+
+    @Test
+    public void testDescribeGroupsVersions() throws Exception {
+        // The true value for the authorized operation field is preserved
+        testAllMessageRoundTripsFromVersion(
+                (short) 3,
+                new DescribeGroupsRequestData()
+                  .setGroups(Collections.emptyList())
+                  .setIncludeAuthorizedOperations(true));
+        // The true value for the authorized operation field is ignored
+        testAllMessageRoundTripsBeforeVersion(
+                (short) 3,
+                new DescribeGroupsRequestData()
+                  .setGroups(Collections.emptyList())
+                  .setIncludeAuthorizedOperations(true),
+                new DescribeGroupsRequestData()
+                  .setGroups(Collections.emptyList())
+                  .setIncludeAuthorizedOperations(false));
+
     }
 
     @Test
