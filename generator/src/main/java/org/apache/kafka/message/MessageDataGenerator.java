@@ -2187,9 +2187,9 @@ public final class MessageDataGenerator {
                 cond.ifShouldNotBeNull(() -> {
                     String newArrayName =
                         String.format("new%s", field.capitalizedCamelCaseName());
-                    buffer.printf("%s %s = new %s();%n",
+                    buffer.printf("%s %s = new %s(%s.size());%n",
                         fieldConcreteJavaType(field), newArrayName,
-                        fieldConcreteJavaType(field));
+                        fieldConcreteJavaType(field), target.sourceVariable());
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     buffer.printf("for (%s _element : %s) {%n",
                         getBoxedJavaType(arrayType.elementType()), target.sourceVariable());
