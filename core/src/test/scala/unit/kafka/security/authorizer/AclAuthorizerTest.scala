@@ -986,7 +986,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       .map(_.toCompletableFuture.get)
       .forall { result =>
         result.exception.asScala.foreach { e => throw e }
-        result.aclBindingDeleteResults.asScala.foreach { r =>
+        result.aclBindingDeleteResults.forEach { r =>
           r.exception.asScala.foreach { e => throw e }
         }
         result.aclBindingDeleteResults.asScala.exists(_.exception.asScala.isEmpty)

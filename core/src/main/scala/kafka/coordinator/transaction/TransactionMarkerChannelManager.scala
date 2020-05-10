@@ -177,7 +177,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def retryLogAppends(): Unit = {
     val txnLogAppendRetries: java.util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
-    txnLogAppendRetries.asScala.foreach { txnLogAppend =>
+    txnLogAppendRetries.forEach { txnLogAppend =>
       debug(s"Retry appending $txnLogAppend transaction log")
       tryAppendToLog(txnLogAppend)
     }

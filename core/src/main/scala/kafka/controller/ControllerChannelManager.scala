@@ -554,7 +554,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                         (response: AbstractResponse): Unit = {
       val stopReplicaResponse = response.asInstanceOf[StopReplicaResponse]
       val partitionErrorsForDeletingTopics = mutable.Map.empty[TopicPartition, Errors]
-      stopReplicaResponse.partitionErrors.asScala.foreach { pe =>
+      stopReplicaResponse.partitionErrors.forEach { pe =>
         val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
         if (controllerContext.isTopicDeletionInProgress(pe.topicName) &&
             isPartitionDeleted(tp)) {

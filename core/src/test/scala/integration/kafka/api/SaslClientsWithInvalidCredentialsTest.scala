@@ -138,7 +138,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       try {
         val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
         assertEquals(1, response.size)
-        response.asScala.foreach { case (topic, description) =>
+        response.forEach { (topic, description) =>
           assertEquals(numPartitions, description.partitions.size)
         }
       } catch {

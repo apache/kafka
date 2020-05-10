@@ -1173,7 +1173,7 @@ object TestUtils extends Logging {
       .build()
 
     val sslProps = new Properties()
-    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
+    sslConfigs.forEach { (k, v) => sslProps.put(k, v) }
     sslProps
   }
 
@@ -1449,7 +1449,7 @@ object TestUtils extends Logging {
   // Collect the current positions for all partition in the consumers current assignment.
   def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
@@ -1458,7 +1458,7 @@ object TestUtils extends Logging {
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
 
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       if (committed.contains(topicPartition))
         consumer.seek(topicPartition, committed(topicPartition))
       else

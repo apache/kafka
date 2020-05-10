@@ -1870,7 +1870,7 @@ class SocketServerTest {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
         }
       } finally {
-        super.channels.asScala.foreach(allChannels += _.id)
+        super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
         cachedCompletedReceives.update(super.completedReceives.asScala.toBuffer)
         cachedCompletedSends.update(super.completedSends.asScala)

@@ -157,7 +157,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def acls(filter: AclBindingFilter): Map[Resource, Set[Acl]] = {
     val result = mutable.Map[Resource, mutable.Set[Acl]]()
-    aclAuthorizer.acls(filter).asScala.foreach { binding =>
+    aclAuthorizer.acls(filter).forEach { binding =>
       val resource = AuthorizerWrapper.convertToResource(binding.pattern)
       val acl = AuthorizerWrapper.convertToAcl(binding.entry)
       result.getOrElseUpdate(resource, mutable.Set()).add(acl)

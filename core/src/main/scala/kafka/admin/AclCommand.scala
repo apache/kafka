@@ -287,7 +287,7 @@ object AclCommand extends Logging {
           println(s"Error while removing ACLs: ${exception.getMessage}")
           println(Utils.stackTrace(exception))
         }
-        result.aclBindingDeleteResults.asScala.foreach { deleteResult =>
+        result.aclBindingDeleteResults.forEach { deleteResult =>
           deleteResult.exception.asScala.foreach { exception =>
             println(s"Error while removing ACLs: ${exception.getMessage}")
             println(Utils.stackTrace(exception))
@@ -444,20 +444,20 @@ object AclCommand extends Logging {
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
+      opts.options.valuesOf(opts.topicOpt).forEach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
 
     if (patternType == PatternType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
       resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
+      opts.options.valuesOf(opts.groupOpt).forEach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
 
     if (opts.options.has(opts.transactionalIdOpt))
-      opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
+      opts.options.valuesOf(opts.transactionalIdOpt).forEach(transactionalId =>
         resourceFilters += new ResourcePatternFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, patternType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
+      opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")

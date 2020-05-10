@@ -100,7 +100,7 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
 
         val configs = new Properties()
-        topic.configs.asScala.foreach { entry =>
+        topic.configs.forEach { entry =>
           configs.setProperty(entry.name, entry.value)
         }
         LogConfig.validate(configs)
@@ -123,7 +123,7 @@ class AdminManager(val config: KafkaConfig,
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
           // this follows the existing logic in TopicCommand
-          topic.assignments.asScala.foreach {
+          topic.assignments.forEach {
             case assignment => assignments(assignment.partitionIndex()) =
               assignment.brokerIds().asScala.map(a => a: Int)
           }
@@ -133,7 +133,7 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            adminZkClient.validateTopicCreate(topic.name(), assignments, configs)
+            adminZkClient.validateTopicCreate(topic.name, assignments, configs)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -148,7 +148,7 @@ class AdminManager(val config: KafkaConfig,
               }.asJava
             }
             val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs.asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            topic.configs.forEach(config => javaConfigs.put(config.name, config.value))
             policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
               javaAssignments, javaConfigs))
 
@@ -529,7 +529,7 @@ class AdminManager(val config: KafkaConfig,
         if (nullUpdates.nonEmpty)
           throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
 
-        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
+        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
@@ -582,11 +582,11 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
-      val loggerName = alterConfigOp.configEntry().name()
+      val loggerName = alterConfigOp.configEntry.name
       alterConfigOp.opType() match {
         case OpType.SET =>
           validateLoggerNameExists(loggerName)
-          val logLevel = alterConfigOp.configEntry().value()
+          val logLevel = alterConfigOp.configEntry.value
           if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
             val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
             throw new ConfigException(
@@ -614,29 +614,29 @@ class AdminManager(val config: KafkaConfig,
     }
 
     alterConfigOps.foreach { alterConfigOp =>
-      val configPropName = alterConfigOp.configEntry().name()
+      val configPropName = alterConfigOp.configEntry.name
       alterConfigOp.opType() match {
-        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
-        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
         case OpType.APPEND => {
-          if (!listType(alterConfigOp.configEntry().name(), configKeys))
-            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
             .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
             .getOrElse("")
             .split(",").toList
-          val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
-          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
         }
         case OpType.SUBTRACT => {
-          if (!listType(alterConfigOp.configEntry().name(), configKeys))
-            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry().name()))
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
             .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
             .getOrElse("")
             .split(",").toList
-          val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
-          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
         }
       }
     }
@@ -733,7 +733,7 @@ class AdminManager(val config: KafkaConfig,
 
     var user: Option[String] = None
     var clientId: Option[String] = None
-    entity.entries.asScala.foreach { case (entityType, entityName) =>
+    entity.entries.forEach { (entityType, entityName) =>
       val sanitizedEntityName = Some(sanitizeEntityName(entityName))
       entityType match {
         case ClientQuotaEntity.USER => user = sanitizedEntityName
@@ -753,7 +753,7 @@ class AdminManager(val config: KafkaConfig,
   def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
     var userComponent: Option[ClientQuotaFilterComponent] = None
     var clientIdComponent: Option[ClientQuotaFilterComponent] = None
-    filter.components.asScala.foreach { component =>
+    filter.components.forEach { component =>
       component.entityType match {
         case ClientQuotaEntity.USER =>
           if (userComponent.isDefined)
