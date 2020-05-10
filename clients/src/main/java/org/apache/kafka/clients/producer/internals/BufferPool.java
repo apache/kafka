@@ -43,8 +43,11 @@ import org.apache.kafka.common.utils.Time;
  */
 public final class BufferPool {
 
+    //池总内存大虾皮
     private final long totalMemory;
+    //bytebuffer的大小
     private final int poolableSize;
+    //锁
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
@@ -54,6 +57,7 @@ public final class BufferPool {
     private final Sensor waitTime;
 
     /**
+     * 创建一个缓冲池
      * Create a new buffer pool
      * 
      * @param memory The maximum amount of memory that this buffer pool can allocate
@@ -79,6 +83,7 @@ public final class BufferPool {
     }
 
     /**
+     * 申请给定大小的buffer。这个方法是阻塞的如果没有足够的内存和bufferpool配置的阻塞模式
      * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool
      * is configured with blocking mode.
      * 
@@ -90,6 +95,7 @@ public final class BufferPool {
      *         forever)
      */
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
+        //如果大小超过来buffer池的总大小，抛出异常
         if (size > this.totalMemory)
             throw new IllegalArgumentException("Attempt to allocate " + size
                                                + " bytes, but there is a hard limit of "
@@ -98,49 +104,65 @@ public final class BufferPool {
 
         this.lock.lock();
         try {
+            //申请poolableSize大的bytebuffer并且free不为null
             // check if we have a free buffer of the right size pooled
             if (size == poolableSize && !this.free.isEmpty())
+                //返回第一个bytebuffer对象
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
+            //计算空闲大小
             int freeListSize = this.free.size() * this.poolableSize;
+            //如果可用内存+空闲的bytebuffer大小大于等于申请的大小
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
+                //计算出全部可用内存
                 freeUp(size);
+                //然后可用内存减去size大小
                 this.availableMemory -= size;
                 lock.unlock();
+                //重新申请新的ByteBuffer，size大小的
                 return ByteBuffer.allocate(size);
             } else {
+                //如果可用内存不够
                 // we are out of memory and will have to block
                 int accumulated = 0;
                 ByteBuffer buffer = null;
+                //创建Condition等待
                 Condition moreMemory = this.lock.newCondition();
+                //得到最大阻塞时间
                 long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
+                //将Condition放入waiters队列中
                 this.waiters.addLast(moreMemory);
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
+                //如果可用内存小于size就进行递归
                 while (accumulated < size) {
+                    //得到开始时间
                     long startWaitNs = time.nanoseconds();
                     long timeNs;
                     boolean waitingTimeElapsed;
                     try {
+                        //等到remainingTimeToBlockNs
                         waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
                         this.waiters.remove(moreMemory);
                         throw e;
                     } finally {
+                        //得到结束时间
                         long endWaitNs = time.nanoseconds();
+                        //记录等待时间
                         timeNs = Math.max(0L, endWaitNs - startWaitNs);
                         this.waitTime.record(timeNs, time.milliseconds());
                     }
-
+                    //如果等到时间超时，抛出异常
                     if (waitingTimeElapsed) {
                         this.waiters.remove(moreMemory);
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
                     }
-
+                    //减去唤醒的时间计算剩余等待时间
                     remainingTimeToBlockNs -= timeNs;
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
@@ -190,6 +212,7 @@ public final class BufferPool {
      */
     private void freeUp(int size) {
         while (!this.free.isEmpty() && this.availableMemory < size)
+            //计算出全部空闲byteBuffer的容量
             this.availableMemory += this.free.pollLast().capacity();
     }
 

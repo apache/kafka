@@ -31,6 +31,7 @@ public final class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
     private volatile TopicPartition topicPartition;
+    //第一条消息分配的offset，可以根据此offset来判断自身在此recordbatch中的相对偏移量
     private volatile long baseOffset = -1L;
     private volatile RuntimeException error;
 
@@ -38,6 +39,7 @@ public final class ProduceRequestResult {
     }
 
     /**
+     * 标志这个请求已经完成并且是否来所有线程等待它的完成
      * Mark this request as complete and unblock any threads waiting on its completion.
      * @param topicPartition The topic and partition to which this record set was sent was sent
      * @param baseOffset The base offset assigned to the record
@@ -47,17 +49,21 @@ public final class ProduceRequestResult {
         this.topicPartition = topicPartition;
         this.baseOffset = baseOffset;
         this.error = error;
+        //计数器+1
         this.latch.countDown();
     }
 
     /**
+     * 请求等待它的完成
      * Await the completion of this request
      */
     public void await() throws InterruptedException {
+        //计数器等待
         latch.await();
     }
 
     /**
+     * 根据时间去等待
      * Await the completion of this request (up to the given time interval)
      * @param timeout The maximum time to wait
      * @param unit The unit for the max time
@@ -89,6 +95,7 @@ public final class ProduceRequestResult {
     }
 
     /**
+     * 是否还有请求为完成
      * Has the request completed?
      */
     public boolean completed() {

@@ -25,20 +25,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * nodes、topics和分区集合在kafka集群的一个表示
  * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
  */
 public final class Cluster {
 
     private final boolean isBootstrapConfigured;
+    //集群节点集合
     private final List<Node> nodes;
+    //
     private final Set<String> unauthorizedTopics;
+    //TopicPartition和PartitionInfo的映射关系
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    //记录topic名称和PartitionInfo的映射关系，根据topic名称查询其中全部分区的详细信息
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    //topic与PartitionInfo的映射关系，List<PartitionInfo>存放的分区必须是leader副本的partition
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
+    //Node与PartitionInfo的映射关系，根据节点Id可以查询其上分布的全部分区详情
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
+    //BrokerID和Node之间的对应关系
     private final Map<Integer, Node> nodesById;
 
     /**
+     * 创建一个新的集群对象
      * Create a new cluster with the given nodes and partitions
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
@@ -60,11 +69,13 @@ public final class Cluster {
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
         this.nodesById = new HashMap<>();
+        //nodesById数据初始化
         for (Node node : nodes)
             this.nodesById.put(node.id(), node);
 
         // index the partitions by topic/partition for quick lookup
         this.partitionsByTopicPartition = new HashMap<>(partitions.size());
+        //初始化TopicPartition和PartitionInfo的映射
         for (PartitionInfo p : partitions)
             this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
 
@@ -92,16 +103,19 @@ public final class Cluster {
         for (Map.Entry<String, List<PartitionInfo>> entry : partsForTopic.entrySet()) {
             String topic = entry.getKey();
             List<PartitionInfo> partitionList = entry.getValue();
+            //topic和全部分区映射
             this.partitionsByTopic.put(topic, Collections.unmodifiableList(partitionList));
             List<PartitionInfo> availablePartitions = new ArrayList<>();
             for (PartitionInfo part : partitionList) {
                 if (part.leader() != null)
                     availablePartitions.add(part);
             }
+            //leader副本所在分区初始化
             this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
         }
         this.partitionsByNode = new HashMap<>(partsForNode.size());
         for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
+            //node节点和PartitionInfo映射
             this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
@@ -115,6 +129,7 @@ public final class Cluster {
     }
 
     /**
+     * 创建一个bootstrap的集群
      * Create a "bootstrap" cluster using the given list of host/ports
      * @param addresses The addresses
      * @return A cluster for these hosts/ports

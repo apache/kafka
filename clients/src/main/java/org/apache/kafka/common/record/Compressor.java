@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.record;
 
-import java.lang.reflect.Constructor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -47,13 +47,14 @@ public class Compressor {
         }
     }
 
+    //通过反射获取SnappyOutputStream压缩
     // dynamically load the snappy and lz4 classes to avoid runtime dependency if we are not using compression
     // caching constructors to avoid invoking of Class.forName method for each batch
     private static MemoizingConstructorSupplier snappyOutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.xerial.snappy.SnappyOutputStream")
-                .getConstructor(OutputStream.class, Integer.TYPE);
+                    .getConstructor(OutputStream.class, Integer.TYPE);
         }
     });
 
@@ -61,7 +62,7 @@ public class Compressor {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
-                .getConstructor(OutputStream.class);
+                    .getConstructor(OutputStream.class);
         }
     });
 
@@ -69,7 +70,7 @@ public class Compressor {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.xerial.snappy.SnappyInputStream")
-                .getConstructor(InputStream.class);
+                    .getConstructor(InputStream.class);
         }
     });
 
@@ -77,17 +78,24 @@ public class Compressor {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
-                .getConstructor(InputStream.class, Boolean.TYPE);
+                    .getConstructor(InputStream.class, Boolean.TYPE);
         }
     });
 
+    //压缩类型
     private final CompressionType type;
+    //追加数据流
     private final DataOutputStream appendStream;
+    //buffer流，写入数据超过容量时会自动扩容
     private final ByteBufferOutputStream bufferStream;
+    //初始化偏移量
     private final int initPos;
 
+    //写入不压缩字节数
     public long writtenUncompressed;
+    //记录个数
     public long numRecords;
+    //压缩速度
     public float compressionRate;
     public long maxTimestamp;
 
@@ -140,8 +148,8 @@ public class Compressor {
             buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET_V1, valueSize);
             // compute and fill the crc at the beginning of the message
             long crc = Record.computeChecksum(buffer,
-                initPos + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET,
-                pos - initPos - Records.LOG_OVERHEAD - Record.MAGIC_OFFSET);
+                    initPos + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET,
+                    pos - initPos - Records.LOG_OVERHEAD - Record.MAGIC_OFFSET);
             Utils.writeUnsignedInt(buffer, initPos + Records.LOG_OVERHEAD + Record.CRC_OFFSET, crc);
             // reset the position
             buffer.position(pos);
@@ -149,7 +157,7 @@ public class Compressor {
             // update the compression ratio
             this.compressionRate = (float) buffer.position() / this.writtenUncompressed;
             TYPE_TO_RATE[type.id] = TYPE_TO_RATE[type.id] * COMPRESSION_RATE_DAMPING_FACTOR +
-                compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
+                    compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
         }
     }
 
@@ -203,6 +211,7 @@ public class Compressor {
     public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
                           int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
+        //得到校验和
         long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
         byte attributes = Record.computeAttributes(type);
         putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
@@ -211,6 +220,7 @@ public class Compressor {
 
     /**
      * Put a record as uncompressed into the underlying stream
+     *
      * @return CRC of the record
      */
     public long putRecord(long timestamp, byte[] key, byte[] value) {
@@ -244,6 +254,7 @@ public class Compressor {
 
     public static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, int bufferSize) {
         try {
+            //根据类型压缩对应的DataOutputStream
             switch (type) {
                 case NONE:
                     return new DataOutputStream(buffer);
@@ -251,6 +262,7 @@ public class Compressor {
                     return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
                 case SNAPPY:
                     try {
+                        //引入外部依赖包需要根据反射new
                         OutputStream stream = (OutputStream) snappyOutputStreamSupplier.get().newInstance(buffer, bufferSize);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
@@ -258,6 +270,7 @@ public class Compressor {
                     }
                 case LZ4:
                     try {
+                        //减少依赖包，从外部引入依赖包，反射生成对象
                         OutputStream stream = (OutputStream) lz4OutputStreamSupplier.get().newInstance(buffer);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {

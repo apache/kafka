@@ -3,22 +3,14 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -26,6 +18,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
@@ -33,7 +26,6 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -50,7 +42,16 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
+ * 后台线程处理生产者请求发送到kafka集群。该线程发出元数据请求以更新其对群集的视图，然后将生产请求发送到适当的节点。
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
  */
@@ -58,43 +59,57 @@ public class Sender implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(Sender.class);
 
-    /* the state of each nodes connection */
+    /* the state of each nodes connection
+    * 每个节点连接的状态
+    kafka客户端
+    */
     private final KafkaClient client;
 
-    /* the record accumulator that batches records */
+    /*
+     the record accumulator that batches records
+      记录类机器批量记录
+      */
     private final RecordAccumulator accumulator;
 
     /* the metadata for the client */
     private final Metadata metadata;
 
     /* the flag indicating whether the producer should guarantee the message order on the broker or not. */
+    //指示生产者是否应保证broker上的消息顺序的标志。
     private final boolean guaranteeMessageOrder;
 
     /* the maximum request size to attempt to send to the server */
+    //最大请求数量大小可以尝试发送到服务端
     private final int maxRequestSize;
 
     /* the number of acknowledgements to request from the server */
+    //要从服务器请求的ack数量
     private final short acks;
 
     /* the number of times to retry a failed request before giving up */
+    //放弃之前重试失败请求的次数
     private final int retries;
 
     /* the clock instance used for getting the time */
     private final Time time;
 
     /* true while the sender thread is still running */
+    //当sender线程仍然在运行时为true
     private volatile boolean running;
 
     /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
+    //是否强制关闭，获取全部未发送和发送中的消息
     private volatile boolean forceClose;
 
     /* metrics */
     private final SenderMetrics sensors;
 
     /* param clientId of the client */
+    //客户端id
     private String clientId;
 
     /* the max time to wait for the server to respond to the request*/
+    //等待服务器响应请求的最长时间
     private final int requestTimeout;
 
     public Sender(KafkaClient client,
@@ -126,8 +141,10 @@ public class Sender implements Runnable {
      * The main run loop for the sender thread
      */
     public void run() {
+        //开始执行kafka produer io线程
         log.debug("Starting Kafka producer I/O thread.");
 
+        //运行io线程
         // main loop, runs until close is called
         while (running) {
             try {
@@ -164,40 +181,50 @@ public class Sender implements Runnable {
     }
 
     /**
+     * 运行一次发送
      * Run a single iteration of sending
-     * 
-     * @param now
-     *            The current POSIX time in milliseconds
+     *
+     * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
+        //获取当前集群信息无阻塞
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
+        // “方法获取集群中符合发送消息条件的节点集合”
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
+
+        //如果不知道任何分区的leader副本，则强制更新元数据
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (result.unknownLeadersExist)
             this.metadata.requestUpdate();
 
+        //移除全部节点因为还需准备发送
         // remove any nodes we aren't ready to send to
         Iterator<Node> iter = result.readyNodes.iterator();
+        //不准备超时
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
+            //通过NetWorkClient检查该node是否准备就绪，如果为准备就绪就移除，并且计算出下次一次为准备超时时间
             if (!this.client.ready(node, now)) {
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
             }
         }
 
-        // create produce requests
+        // create produce requests 转换数据，将KafkaProducer所需的ConcurrentMap<TopicPartition, Deque<RecordBatch>>转换为Map<NodeId，List<RecordBatch>>
         Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
-                                                                         result.readyNodes,
-                                                                         this.maxRequestSize,
-                                                                         now);
+                result.readyNodes,
+                this.maxRequestSize,
+                now);
+        //消息是否按照分区顺序发送
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
+            //遍历舒徐
             for (List<RecordBatch> batchList : batches.values()) {
                 for (RecordBatch batch : batchList)
+                    //将发送批次的分区信息添加到正在发送的分区list muted中
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
@@ -253,14 +280,14 @@ public class Sender implements Runnable {
         int correlationId = response.request().request().header().correlationId();
         if (response.wasDisconnected()) {
             log.trace("Cancelled request {} due to node {} being disconnected", response, response.request()
-                                                                                                  .request()
-                                                                                                  .destination());
+                    .request()
+                    .destination());
             for (RecordBatch batch : batches.values())
                 completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
             log.trace("Received produce response from node {} with correlation id {}",
-                      response.request().request().destination(),
-                      correlationId);
+                    response.request().request().destination(),
+                    correlationId);
             // if we have a response, parse it
             if (response.hasResponse()) {
                 ProduceResponse produceResponse = new ProduceResponse(response.responseBody());
@@ -273,7 +300,7 @@ public class Sender implements Runnable {
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(response.request().request().destination(),
-                                                produceResponse.getThrottleTime());
+                        produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
@@ -284,22 +311,22 @@ public class Sender implements Runnable {
 
     /**
      * Complete or retry the given batch of records.
-     * 
-     * @param batch The record batch
-     * @param error The error (or null if none)
-     * @param baseOffset The base offset assigned to the records if successful
-     * @param timestamp The timestamp returned by the broker for this batch
+     *
+     * @param batch         The record batch
+     * @param error         The error (or null if none)
+     * @param baseOffset    The base offset assigned to the records if successful
+     * @param timestamp     The timestamp returned by the broker for this batch
      * @param correlationId The correlation id for the request
-     * @param now The current POSIX time stamp in milliseconds
+     * @param now           The current POSIX time stamp in milliseconds
      */
     private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
-                     correlationId,
-                     batch.topicPartition,
-                     this.retries - batch.attempts - 1,
-                     error);
+                    correlationId,
+                    batch.topicPartition,
+                    this.retries - batch.attempts - 1,
+                    error);
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
         } else {
@@ -351,8 +378,8 @@ public class Sender implements Runnable {
         }
         ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
         RequestSend send = new RequestSend(Integer.toString(destination),
-                                           this.client.nextRequestHeader(ApiKeys.PRODUCE),
-                                           request.toStruct());
+                this.client.nextRequestHeader(ApiKeys.PRODUCE),
+                request.toStruct());
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());

@@ -19,25 +19,31 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Configurable;
 
 /**
+ *
  * A plugin interface that allows you to intercept (and possibly mutate) the records received by the producer before
  * they are published to the Kafka cluster.
+ * 一个插件接口运行你拦截接收记录通过producer在推送到kafka集群之前
  * <p>
  * This class will get producer config properties via <code>configure()</code> method, including clientId assigned
  * by KafkaProducer if not specified in the producer config. The interceptor implementation needs to be aware that it will be
  * sharing producer config namespace with other interceptors and serializers, and ensure that there are no conflicts.
  * <p>
+ *    ProducerInterceptor抛出的异常将会被捕获，日志记录，但是不会进一步传播
  * Exceptions thrown by ProducerInterceptor methods will be caught, logged, but not propagated further. As a result, if
  * the user configures the interceptor with the wrong key and value type parameters, the producer will not throw an exception,
  * just log the errors.
  * <p>
+ *     必须保证其实现为线程安全的
  * ProducerInterceptor callbacks may be called from multiple threads. Interceptor implementation must ensure thread-safety, if needed.
  */
 public interface ProducerInterceptor<K, V> extends Configurable {
     /**
+     * 调用来自KafkaProducer的send和KafkaProducer#send(ProducerRecord, Callback)方法，在key和value序列化之前并且分区是被分配的，如果分配是没有指定在ProducerRecord
      * This is called from {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)} and
      * {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord, Callback)} methods, before key and value
      * get serialized and partition is assigned (if partition is not specified in ProducerRecord).
      * <p>
+     *     这个方法运行修改记录，一个新的记录将会被返回
      * This method is allowed to modify the record, in which case, the new record will be returned. The implication of modifying
      * key/value is that partition assignment (if not specified in ProducerRecord) will be done based on modified key/value,
      * not key/value from the client. Consequently, key and value transformation done in onSend() needs to be consistent:
@@ -65,9 +71,11 @@ public interface ProducerInterceptor<K, V> extends Configurable {
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record);
 
     /**
+     * 当即了发送到服务端收到ack后，或者当发送的记录失败在得到发送服务器之前
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
      * it gets sent to the server.
      * <p>
+     *     通常调用仅仅在用户callback之前，另外在send抛出一个异常时
      * This method is generally called just before the user callback is called, and in additional cases when <code>KafkaProducer.send()</code>
      * throws an exception.
      * <p>

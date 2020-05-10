@@ -512,16 +512,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
         ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        //拦截后的记录，已经用户的callback函数，在经过真正的处理逻辑
         return doSend(interceptedRecord, callback);
     }
 
     /**
+     * 异步发送记录到topic的实现，
      * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
+            //首先确保该主题的元数据可用
             // first make sure the metadata for the topic is available
             long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
@@ -545,19 +548,26 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             //基于key 分区
             int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
+            //序列化后大小
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
+            //校验大小是否超过配置，max.request.size和buffer.memory
             ensureValidRecordSize(serializedSize);
+            //得到TopicPartition
             tp = new TopicPartition(record.topic(), partition);
+            //如果记录没有时间戳就新生成
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
+            //得到回调方法
             Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
-            //记录累积
+            //积累到积累类机器中
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, interceptCallback, remainingWaitMs);
+            //如果batchIsFull或者新的batch已经创建，唤醒sender线程，如果最后一个recordBath满了或者队列不止一个recordBath
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
+            //然后结果的future
             return result.future;
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
@@ -595,6 +605,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * 等待群集元数据（包括给定主题的分区）可用。
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
@@ -602,22 +613,31 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private long waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
         // add topic to metadata topic list if it is not there already.
+        //如果topic不在元数据中加入其中,下次更新会从服务端获取指定topic的元数据
         if (!this.metadata.containsTopic(topic))
             this.metadata.add(topic);
 
+        //得到当前记录该topic的分区信息，如果不为null，返回0，第一个分区
         if (metadata.fetch().partitionsForTopic(topic) != null)
             return 0;
-
+        //记录开始时间
         long begin = time.milliseconds();
+        //最大等待时间
         long remainingWaitMs = maxWaitMs;
+        //如果topic内不存在分区
         while (metadata.fetch().partitionsForTopic(topic) == null) {
             log.trace("Requesting metadata update for topic {}.", topic);
+            //更新元数据信息，返回当前版本
             int version = metadata.requestUpdate();
+            //唤醒io线程，由sender线程更新metadata中保存的Kafka集群元数据
             sender.wakeup();
+            //等待更新元数据
             metadata.awaitUpdate(version, remainingWaitMs);
+            //是否超时
             long elapsed = time.milliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            //topic是否需要授权
             if (metadata.fetch().unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
@@ -629,11 +649,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
+        //如果大约最大请求大小配置
         if (size > this.maxRequestSize)
             throw new RecordTooLargeException("The message is " + size +
                                               " bytes when serialized which is larger than the maximum request size you have configured with the " +
                                               ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
                                               " configuration.");
+        //如果大于单个消息的缓冲区大小
         if (size > this.totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
                                               " bytes when serialized which is larger than the total memory buffer you have configured with the " +
@@ -847,6 +869,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * 生产者请求完成时调用的回调。 它反过来调用用户提供的回调（如有）和通知生产者拦截器有关请求的完成
      * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
      * notifies producer interceptors about the request completion.
      */

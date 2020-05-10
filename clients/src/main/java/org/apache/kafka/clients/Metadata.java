@@ -39,15 +39,16 @@ public final class Metadata {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
-    //刷新间隔
+    //两次发出更新Cluster保存的元数据信息的最小时间差，默认为100ms。这是为了防止更新操作过于频繁而造成网络阻塞和增加服务端压力。
+    // 在Kafka中与重试操作有关的操作中，都有这种“退避（backoff）时间”设计的身影。
     private final long refreshBackoffMs;
-    //元数据过期时间
+    //每隔多久，更新一次。默认是300x1000，5分钟
     private final long metadataExpireMs;
-    //版本
+    //类似乐观锁，Kafka集群元数据每更新成功一次，version字段就递增1。通过新旧版本号比较来确定集群元数据是否更新
     private int version;
-    //上一次刷新
+    //记录上一次更新元数据的时间戳
     private long lastRefreshMs;
-    //最后一次成功刷新的时间
+    //上一次成功刷新的时间
     private long lastSuccessfulRefreshMs;
     //集群
     private Cluster cluster;
@@ -55,12 +56,14 @@ public final class Metadata {
     private boolean needUpdate;
     //topics
     private final Set<String> topics;
-    //监听器
+    //自定义Metadata监听实现Metadata. Listener.onMetadataUpdate()方法即可，
+    // 在更新Metadata中的cluster字段之前，会通知listener集合中全部Listener对象。
     private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
 
     /**
      * Create a metadata instance with reasonable defaults
+     * 创建合理的默认元数据实例
      */
     public Metadata() {
         this(100L, 60 * 60 * 1000L);
@@ -86,6 +89,7 @@ public final class Metadata {
     }
 
     /**
+     * 获取当前集群信息无阻塞
      * Get the current cluster info without blocking
      */
     public synchronized Cluster fetch() {
@@ -93,6 +97,7 @@ public final class Metadata {
     }
 
     /**
+     * 添加主题中的元数据维护
      * Add the topic to maintain in the metadata
      */
     public synchronized void add(String topic) {
@@ -100,6 +105,7 @@ public final class Metadata {
     }
 
     /**
+     * 下一次更新集群信息是最大的时间目前的信息将过期，目前的信息可​​更新的时间（即退避时间已经过去）; 如果更新已请求，那么到期时间是现在
      * The next time to update the cluster info is the maximum of the time the current info will expire and the time the
      * current info can be updated (i.e. backoff time has elapsed); If an update has been request then the expiry time
      * is now
@@ -111,6 +117,7 @@ public final class Metadata {
     }
 
     /**
+     * 请求当前集群的元数据信息的更新，更新之前返回当前版本
      * Request an update of the current cluster metadata info, return the current version before the update
      */
     public synchronized int requestUpdate() {
@@ -119,6 +126,7 @@ public final class Metadata {
     }
 
     /**
+     * 得到是否正在发送更新请求
      * Check whether an update has been explicitly requested.
      * @return true if an update was requested, false otherwise
      */
@@ -127,6 +135,7 @@ public final class Metadata {
     }
 
     /**
+     * 等待元数据更新，直到目前的版本是比我们所知道的最后一个版本更大
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
@@ -135,10 +144,15 @@ public final class Metadata {
         }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
+        //如果当前版本小于等于上一个版本，开始递归请求
         while (this.version <= lastVersion) {
+            //如果最大等待时间不等于0
             if (remainingWaitMs != 0)
+                //线程等待remainingWaitMs后,作则交给Sender线程去完成
                 wait(remainingWaitMs);
+            //计算耗时
             long elapsed = System.currentTimeMillis() - begin;
+            //如果耗时大于等于最大等待时间抛出超时
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             remainingWaitMs = maxWaitMs - elapsed;

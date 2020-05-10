@@ -77,7 +77,7 @@ public class DefaultPartitioner implements Partitioner {
         if (keyBytes == null) {
             //得到计数器的值,并且自增
             int nextValue = counter.getAndIncrement();
-            //得到可用分区
+            //得到可用分区leader副本分区
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             //如果可用分区大于0
             if (availablePartitions.size() > 0) {

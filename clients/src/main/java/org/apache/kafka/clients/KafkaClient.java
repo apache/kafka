@@ -129,6 +129,7 @@ public interface KafkaClient extends Closeable {
     public RequestHeader nextRequestHeader(ApiKeys key, short version);
 
     /**
+     * 唤醒客户端如果它当前阻塞等待I / O
      * Wake up the client if it is currently blocked waiting for I/O
      */
     public void wakeup();

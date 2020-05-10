@@ -63,7 +63,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
         ProducerRecord<K, V> interceptRecord = record;
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
+                //使用拦截器发送记录
                 interceptRecord = interceptor.onSend(interceptRecord);
+                //异常捕获不处理
             } catch (Exception e) {
                 // do not propagate interceptor exception, log and continue calling other interceptors
                 // be careful not to throw exception from here
@@ -77,6 +79,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
     }
 
     /**
+     * 当服务端已经被确认时调用这个方法
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
      * it gets sent to the server. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
      * method for each interceptor.
@@ -99,6 +102,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
     }
 
     /**
+     * 当发送记录失败时调用
      * This method is called when sending the record fails in {@link ProducerInterceptor#onSend
      * (ProducerRecord)} method. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
      * method for each interceptor

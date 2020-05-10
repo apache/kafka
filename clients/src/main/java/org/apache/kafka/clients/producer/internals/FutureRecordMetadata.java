@@ -3,28 +3,30 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.kafka.clients.producer.RecordMetadata;
 
 /**
  * The future result of a record send
  */
 public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
+    //对应的消息所在的producerFuture
     private final ProduceRequestResult result;
+    //记录消息在RecordBatch的offset
     private final long relativeOffset;
     private final long timestamp;
     private final long checksum;
@@ -48,12 +50,15 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     @Override
     public RecordMetadata get() throws InterruptedException, ExecutionException {
+        //等待请求完成
         this.result.await();
+        //返回异常或者RecordMetadata
         return valueOrError();
     }
 
     @Override
     public RecordMetadata get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        //根据特定时间去等待
         boolean occurred = this.result.await(timeout, unit);
         if (!occurred)
             throw new TimeoutException("Timeout after waiting for " + TimeUnit.MILLISECONDS.convert(timeout, unit) + " ms.");
@@ -66,12 +71,12 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         else
             return value();
     }
-    
+
     RecordMetadata value() {
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
-                                  this.timestamp, this.checksum, this.serializedKeySize, this.serializedValueSize);
+                this.timestamp, this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
-    
+
     public long relativeOffset() {
         return this.relativeOffset;
     }

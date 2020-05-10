@@ -14,6 +14,7 @@ package org.apache.kafka.common;
 
 /**
  * Information about a topic-partition.
+ * 一个topic分区的相关信息
  */
 public class PartitionInfo {
 
