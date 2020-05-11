@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -23,13 +29,9 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.junit.Ignore;
 import org.junit.Test;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -212,6 +214,187 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
                 ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
             );
         }
+    }
+
+
+
+    @Test(expected = ConfigException.class)
+    public void wrongPredicateType() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", TestConnector.class.getName());
+        new ConnectorConfig(MOCK_PLUGINS, props);
+    }
+
+    @Test
+    public void singleConditionalTransform() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("transforms.a.negate", "true");
+        props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", TestPredicate.class.getName());
+        props.put("predicates.my-pred.int", "84");
+        assertPredicatedTransform(props, true);
+    }
+
+    @Test
+    public void predicateNegationDefaultsToFalse() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", TestPredicate.class.getName());
+        props.put("predicates.my-pred.int", "84");
+        assertPredicatedTransform(props, false);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void abstractPredicate() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", AbstractTestPredicate.class.getName());
+        props.put("predicates.my-pred.int", "84");
+        assertPredicatedTransform(props, false);
+    }
+
+    private void assertPredicatedTransform(Map<String, String> props, boolean expectedNegated) {
+        final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
+        final List<Transformation<R>> transformations = config.transformations();
+        assertEquals(1, transformations.size());
+        assertTrue(transformations.get(0) instanceof PredicatedTransformation);
+        PredicatedTransformation<?> predicated = (PredicatedTransformation<?>) transformations.get(0);
+
+        assertEquals(expectedNegated, predicated.negate);
+
+        assertTrue(predicated.delegate instanceof ConnectorConfigTest.SimpleTransformation);
+        assertEquals(42, ((SimpleTransformation<?>) predicated.delegate).magicNumber);
+
+        assertTrue(predicated.predicate instanceof ConnectorConfigTest.TestPredicate);
+        assertEquals(84, ((TestPredicate<?>) predicated.predicate).param);
+
+        predicated.close();
+
+        assertEquals(0, ((SimpleTransformation<?>) predicated.delegate).magicNumber);
+        assertEquals(0, ((TestPredicate<?>) predicated.predicate).param);
+    }
+
+    @Test
+    public void misconfiguredPredicate() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("transforms.a.negate", "true");
+        props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", TestPredicate.class.getName());
+        props.put("predicates.my-pred.int", "79");
+        try {
+            new ConnectorConfig(MOCK_PLUGINS, props);
+            fail();
+        } catch (ConfigException e) {
+            assertTrue(e.getMessage().contains("Value must be at least 80"));
+        }
+    }
+
+    @Ignore("Is this really an error. There's no actual need for the predicates config (unlike transforms where it defines the order).")
+    @Test(expected = ConfigException.class)
+    public void missingPredicates() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        //props.put("predicates", "my-pred");
+        props.put("predicates.my-pred.type", TestPredicate.class.getName());
+        props.put("predicates.my-pred.int", "84");
+        new ConnectorConfig(MOCK_PLUGINS, props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void missingPredicateConfig() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.predicate", "my-pred");
+        props.put("predicates", "my-pred");
+        //props.put("predicates.my-pred.type", TestPredicate.class.getName());
+        //props.put("predicates.my-pred.int", "84");
+        new ConnectorConfig(MOCK_PLUGINS, props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void negatedButNoPredicate() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", SimpleTransformation.class.getName());
+        props.put("transforms.a.magic.number", "42");
+        props.put("transforms.a.negate", "true");
+        new ConnectorConfig(MOCK_PLUGINS, props);
+    }
+
+    static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
+
+        int param;
+
+        public TestPredicate() { }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef().define("int", ConfigDef.Type.INT, 80, ConfigDef.Range.atLeast(80), ConfigDef.Importance.MEDIUM,
+                    "A test parameter");
+        }
+
+        @Override
+        public boolean test(R record) {
+            return false;
+        }
+
+        @Override
+        public void close() {
+            param = 0;
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            param = Integer.parseInt((String) configs.get("int"));
+        }
+    }
+
+    static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
+
+        public AbstractTestPredicate() { }
+
     }
 
     public static abstract class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
