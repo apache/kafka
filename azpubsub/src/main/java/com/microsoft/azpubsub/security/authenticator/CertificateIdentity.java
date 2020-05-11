@@ -26,4 +26,9 @@ public class CertificateIdentity {
     public void addScope(String scope) {
         this.scopes.add(scope);
     }
+
+    @Override
+    public String toString() {
+        return String.format("Principal Name: %s; Scopes: %s", principalName, scopes);
+    }
 }
