@@ -1409,30 +1409,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Fail futures in the given map which match the given filter and are not done.
+     * Fail futures in the given stream which are not done.
      * Used when a response handler expected a result for some entity but no result was present.
      */
     private static <K, V> void completeUnrealizedFutures(
-            Map<K, KafkaFutureImpl<V>> futures,
-            Predicate<K> filter,
+            Stream<Map.Entry<K, KafkaFutureImpl<V>>> futures,
             Function<K, String> messageFormatter) {
-        for (Map.Entry<K, KafkaFutureImpl<V>> entry : futures.entrySet()) {
-            K key = entry.getKey();
-            KafkaFutureImpl<V> future = entry.getValue();
-            if (!future.isDone() && filter.test(key)) {
-                future.completeExceptionally(new ApiException(messageFormatter.apply(key)));
-            }
-        }
-    }
-
-    /**
-     * Fail futures in the given map which are not done.
-     * Used when a response handler expected a result for some entity but no result was present.
-     */
-    private static <K, V> void completeUnrealizedFutures(
-            Map<K, KafkaFutureImpl<V>> futures,
-            Function<K, String> messageFormatter) {
-        completeUnrealizedFutures(futures, key -> true, messageFormatter);
+        futures.filter(entry -> !entry.getValue().isDone()).forEach(entry ->
+                entry.getValue().completeExceptionally(new ApiException(messageFormatter.apply(entry.getKey()))));
     }
 
     @Override
@@ -1512,9 +1496,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                completeUnrealizedFutures(topicFutures,
-                    topic -> "The controller response " +
-                            "did not contain a result for topic " + topic);
+                completeUnrealizedFutures(topicFutures.entrySet().stream(),
+                    topic -> "The controller response did not contain a result for topic " + topic);
             }
 
             @Override
@@ -1581,9 +1564,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                completeUnrealizedFutures(topicFutures,
-                    topic -> "The controller response " +
-                            "did not contain a result for topic " + topic);
+                completeUnrealizedFutures(topicFutures.entrySet().stream(),
+                    topic -> "The controller response did not contain a result for topic " + topic);
             }
 
             @Override
@@ -2271,7 +2253,8 @@ public class KafkaAdminClient extends AdminClient {
                     AlterReplicaLogDirsResponse response = (AlterReplicaLogDirsResponse) abstractResponse;
                     for (AlterReplicaLogDirTopicResult topicResult: response.data().results()) {
                         for (AlterReplicaLogDirPartitionResult partitionResult: topicResult.partitions()) {
-                            TopicPartitionReplica replica = new TopicPartitionReplica(topicResult.topicName(), partitionResult.partitionIndex(), brokerId);
+                            TopicPartitionReplica replica = new TopicPartitionReplica(
+                                    topicResult.topicName(), partitionResult.partitionIndex(), brokerId);
                             KafkaFutureImpl<Void> future = futures.get(replica);
                             if (future == null) {
                                 log.warn("The partition {} in the response from broker {}} is not in the request",
@@ -2285,8 +2268,8 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
                     // The server should send back a response for every replica. But do a sanity check anyway.
-                    completeUnrealizedFutures(futures,
-                        replica -> replica.brokerId() == brokerId,
+                    completeUnrealizedFutures(
+                        futures.entrySet().stream().filter(entry -> entry.getKey().brokerId() == brokerId),
                         replica -> "The response from broker " + brokerId +
                                 " did not contain a result for replica " + replica);
                 }
