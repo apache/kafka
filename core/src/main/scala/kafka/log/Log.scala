@@ -498,7 +498,7 @@ class Log(@volatile private var _dir: File,
 
     def newLeaderEpochFileCache(): LeaderEpochFileCache = {
       val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-      new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+      new LeaderEpochFileCache(topicPartition, () => logEndOffset, checkpointFile)
     }
 
     if (recordVersion.precedes(RecordVersion.V2)) {

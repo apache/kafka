@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -32,40 +31,43 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 public class StickyTaskAssignor implements TaskAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
-    private final Map<UUID, ClientState> clients;
-    private final Set<TaskId> allTaskIds;
-    private final Set<TaskId> standbyTaskIds;
+    private Map<UUID, ClientState> clients;
+    private Set<TaskId> allTaskIds;
+    private Set<TaskId> standbyTaskIds;
     private final Map<TaskId, UUID> previousActiveTaskAssignment = new HashMap<>();
     private final Map<TaskId, Set<UUID>> previousStandbyTaskAssignment = new HashMap<>();
-    private final TaskPairs taskPairs;
-    private final int numStandbyReplicas;
+    private TaskPairs taskPairs;
 
     private final boolean mustPreserveActiveTaskAssignment;
 
-    public StickyTaskAssignor(final Map<UUID, ClientState> clients,
-                              final Set<TaskId> allTaskIds,
-                              final Set<TaskId> standbyTaskIds,
-                              final AssignmentConfigs configs,
-                              final boolean mustPreserveActiveTaskAssignment) {
+    public StickyTaskAssignor() {
+        this(false);
+    }
+
+    StickyTaskAssignor(final boolean mustPreserveActiveTaskAssignment) {
+        this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
+    }
+
+    @Override
+    public boolean assign(final Map<UUID, ClientState> clients,
+                          final Set<TaskId> allTaskIds,
+                          final Set<TaskId> standbyTaskIds,
+                          final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
         this.standbyTaskIds = standbyTaskIds;
-        numStandbyReplicas = configs.numStandbyReplicas;
-        this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
         mapPreviousTaskAssignment(clients);
-    }
 
-    @Override
-    public boolean assign() {
         assignActive();
-        assignStandby(numStandbyReplicas);
+        assignStandby(configs.numStandbyReplicas);
         return false;
     }
 

@@ -44,7 +44,6 @@ import org.junit.runners.Parameterized;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -54,8 +53,8 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.junit.Assert.assertFalse;
 
 
@@ -101,7 +100,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + "-test";
+        final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
@@ -159,7 +158,7 @@ public class EOSUncleanShutdownIntegrationTest {
             // the state directory should still exist with the empty checkpoint file
             assertFalse(stateDir.exists());
 
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 }

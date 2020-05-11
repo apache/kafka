@@ -134,7 +134,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
         }
 
         @Override
-        public void init(final ProcessorContext<Void, Void> context) {
+        public void init(final ProcessorContext context) {
             parentGetter.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }

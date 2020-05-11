@@ -176,7 +176,7 @@ public class TransactionManager {
             this.inflightBatchesBySequence = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
         }
 
-        public void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
+        void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
             TreeSet<ProducerBatch> newInflights = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
             for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
                 resetSequence.accept(inflightBatch);
@@ -509,13 +509,9 @@ public class TransactionManager {
         return producerIdAndEpoch;
     }
 
-    boolean hasProducerId(long producerId) {
-        return producerIdAndEpoch.producerId == producerId;
-    }
-
-    boolean matchesProducerIdAndEpoch(ProducerBatch batch) {
+    boolean producerIdOrEpochNotMatch(ProducerBatch batch) {
         ProducerIdAndEpoch idAndEpoch = this.producerIdAndEpoch;
-        return idAndEpoch.producerId == batch.producerId() && idAndEpoch.epoch == batch.producerEpoch();
+        return idAndEpoch.producerId != batch.producerId() || idAndEpoch.epoch != batch.producerEpoch();
     }
 
     /**
@@ -691,7 +687,7 @@ public class TransactionManager {
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
 
-        if (!matchesProducerIdAndEpoch(batch) && !hasInflightBatches(batch.topicPartition)) {
+        if (producerIdOrEpochNotMatch(batch) && !hasInflightBatches(batch.topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
             topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
@@ -723,7 +719,7 @@ public class TransactionManager {
             return;
         }
 
-        if (!matchesProducerIdAndEpoch(batch)) {
+        if (producerIdOrEpochNotMatch(batch)) {
             log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producerId has been reset internally", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
@@ -1140,13 +1136,14 @@ public class TransactionManager {
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
-
-
     private TxnRequestHandler addPartitionsToTransactionHandler() {
         pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
         newPartitionsInTransaction.clear();
-        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, new ArrayList<>(pendingPartitionsInTransaction));
+        AddPartitionsToTxnRequest.Builder builder =
+            new AddPartitionsToTxnRequest.Builder(transactionalId,
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                new ArrayList<>(pendingPartitionsInTransaction));
         return new AddPartitionsToTxnHandler(builder);
     }
 

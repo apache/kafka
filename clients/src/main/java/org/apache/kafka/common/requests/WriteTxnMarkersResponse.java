@@ -107,10 +107,11 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Map<TopicPartition, Errors> allErrors : errors.values()) {
-            for (Errors error : allErrors.values())
-                updateErrorCounts(errorCounts, error);
-        }
+        errors.values().forEach(allErrors ->
+            allErrors.values().forEach(error ->
+                updateErrorCounts(errorCounts, error)
+            )
+        );
         return errorCounts;
     }
 

@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,7 +108,7 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override

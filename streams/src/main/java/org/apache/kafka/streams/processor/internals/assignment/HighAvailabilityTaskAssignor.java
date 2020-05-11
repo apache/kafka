@@ -16,49 +16,48 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentUtils.taskIsCaughtUpOnClientOrNoCaughtUpClientsExist;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.SortedMap;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
+import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    private final Map<UUID, ClientState> clientStates;
-    private final Map<UUID, Integer> clientsToNumberOfThreads;
-    private final SortedSet<UUID> sortedClients;
+    private Map<UUID, ClientState> clientStates;
+    private Map<UUID, Integer> clientsToNumberOfThreads;
+    private SortedSet<UUID> sortedClients;
 
-    private final Set<TaskId> allTasks;
-    private final SortedSet<TaskId> statefulTasks;
-    private final SortedSet<TaskId> statelessTasks;
+    private Set<TaskId> allTasks;
+    private SortedSet<TaskId> statefulTasks;
+    private SortedSet<TaskId> statelessTasks;
 
-    private final AssignmentConfigs configs;
+    private AssignmentConfigs configs;
 
-    private final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
-    private final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
+    private SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates;
+    private Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients;
 
-    public HighAvailabilityTaskAssignor(final Map<UUID, ClientState> clientStates,
-                                        final Set<TaskId> allTasks,
-                                        final Set<TaskId> statefulTasks,
-                                        final AssignmentConfigs configs) {
+    @Override
+    public boolean assign(final Map<UUID, ClientState> clientStates,
+                          final Set<TaskId> allTasks,
+                          final Set<TaskId> statefulTasks,
+                          final AssignmentConfigs configs) {
         this.configs = configs;
         this.clientStates = clientStates;
         this.allTasks = allTasks;
@@ -77,33 +76,30 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         statefulTasksToRankedCandidates =
             buildClientRankingsByTask(statefulTasks, clientStates, configs.acceptableRecoveryLag);
         tasksToCaughtUpClients = tasksToCaughtUpClients(statefulTasksToRankedCandidates);
-    }
 
-    @Override
-    public boolean assign() {
-        if (shouldUsePreviousAssignment()) {
-            assignPreviousTasksToClientStates();
-            return false;
-        }
 
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
 
-        final boolean followupRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
+        final boolean probingRebalanceNeeded = assignStatefulActiveTasks(tasksToRemainingStandbys);
 
         assignStandbyReplicaTasks(tasksToRemainingStandbys);
 
         assignStatelessActiveTasks();
 
-        return followupRebalanceNeeded;
+        log.info("Decided on assignment: " +
+                     clientStates +
+                     " with " +
+                     (probingRebalanceNeeded ? "" : "no") +
+                     " followup probing rebalance.");
+        return probingRebalanceNeeded;
     }
 
     private boolean assignStatefulActiveTasks(final Map<TaskId, Integer> tasksToRemainingStandbys) {
         final Map<UUID, List<TaskId>> statefulActiveTaskAssignment = new DefaultBalancedAssignor().assign(
             sortedClients,
             statefulTasks,
-            clientsToNumberOfThreads,
-            configs.balanceFactor
+            clientsToNumberOfThreads
         );
 
         return assignTaskMovements(
@@ -157,50 +153,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * @return true iff all active tasks with caught-up client are assigned to one of them, and all tasks are assigned
-     */
-    boolean previousAssignmentIsValid() {
-        final Set<TaskId> unassignedActiveTasks = new HashSet<>(allTasks);
-        final Map<TaskId, Integer> unassignedStandbyTasks =
-            configs.numStandbyReplicas == 0 ?
-                Collections.emptyMap() :
-                new HashMap<>(statefulTasksToRankedCandidates.keySet().stream()
-                                  .collect(Collectors.toMap(task -> task, task -> configs.numStandbyReplicas)));
-
-        for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
-            final UUID client = clientEntry.getKey();
-            final ClientState state = clientEntry.getValue();
-            final Set<TaskId> prevActiveTasks = state.prevActiveTasks();
-
-            // Verify that this client was caught-up on all stateful active tasks
-            for (final TaskId activeTask : prevActiveTasks) {
-                if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(activeTask, client, tasksToCaughtUpClients)) {
-                    return false;
-                }
-            }
-            if (!unassignedActiveTasks.containsAll(prevActiveTasks)) {
-                return false;
-            }
-            unassignedActiveTasks.removeAll(prevActiveTasks);
-
-            for (final TaskId task : state.prevStandbyTasks()) {
-                final Integer remainingStandbys = unassignedStandbyTasks.get(task);
-                if (remainingStandbys != null) {
-                    if (remainingStandbys == 1) {
-                        unassignedStandbyTasks.remove(task);
-                    } else {
-                        unassignedStandbyTasks.put(task, remainingStandbys - 1);
-                    }
-                } else {
-                    return false;
-                }
-            }
-
-        }
-        return unassignedActiveTasks.isEmpty() && unassignedStandbyTasks.isEmpty();
-    }
-
-    /**
      * Compute the balance factor as the difference in stateful active task count per thread between the most and
      * least loaded clients
      */
@@ -223,30 +175,4 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         return maxActiveStatefulTasksPerThreadCount - minActiveStatefulTasksPerThreadCount;
     }
-
-    /**
-     * Determines whether to use the new proposed assignment or just return the group's previous assignment. The
-     * previous assignment will be chosen and returned iff all of the following are true:
-     *   1) it satisfies the state constraint, ie all tasks with caught up clients are assigned to one of those clients
-     *   2) it satisfies the balance factor
-     *   3) there are no unassigned tasks (eg due to a client that dropped out of the group)
-     *   4) there are no warmup tasks
-     */
-    private boolean shouldUsePreviousAssignment() {
-        if (previousAssignmentIsValid()) {
-            final int previousAssignmentBalanceFactor =
-                computeBalanceFactor(clientStates.values(), statefulTasks);
-            return previousAssignmentBalanceFactor <= configs.balanceFactor;
-        } else {
-            return false;
-        }
-    }
-
-    private void assignPreviousTasksToClientStates() {
-        for (final ClientState clientState : clientStates.values()) {
-            clientState.assignActiveTasks(clientState.prevActiveTasks());
-            clientState.assignStandbyTasks(clientState.prevStandbyTasks());
-        }
-    }
-
 }

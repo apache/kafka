@@ -20,7 +20,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 
@@ -30,7 +29,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
 
-    private ProcessorContext<Object, Object> context;
+    private InternalProcessorContext context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
@@ -99,7 +98,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        processAtSourceSensor.record();
+        processAtSourceSensor.record(1.0d, context.currentSystemTimeMs());
     }
 
     /**

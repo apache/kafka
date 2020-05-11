@@ -255,7 +255,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowBrokersListWithVerifyOption(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--broker-list", "100,101",
       "--reassignment-json-file", "myfile.json")
@@ -265,7 +265,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowThrottleWithVerifyOption(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--throttle", "100",
       "--reassignment-json-file", "myfile.json")
@@ -275,7 +275,7 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldNotAllowTopicsOptionWithVerify(): Unit = {
     val args = Array(
-      "--zookeeper", "localhost:1234",
+      "--bootstrap-server", "localhost:1234",
       "--verify",
       "--reassignment-json-file", "myfile.json",
       "--topics-to-move-json-file", "myfile.json")

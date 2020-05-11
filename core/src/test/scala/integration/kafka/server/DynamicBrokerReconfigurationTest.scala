@@ -63,6 +63,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -1324,6 +1325,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }.mkString(",")
   }
 
+  @nowarn("cat=deprecation")
   private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
@@ -1350,6 +1352,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     assertTrue(s"Advertised listener update not propagated by controller: $endpoints", altered)
   }
 
+  @nowarn("cat=deprecation")
   private def alterConfigsOnServer(server: KafkaServer, props: Properties): Unit = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
@@ -1358,6 +1361,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
   }
 
+  @nowarn("cat=deprecation")
   private def alterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
@@ -1408,13 +1412,21 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     sslStoreProps.put(KafkaConfig.PasswordEncoderSecretProp, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
 
-    val args = Array("--zookeeper", kafkaConfig.zkConnect,
-      "--alter", "--add-config", sslStoreProps.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-      "--entity-type", "brokers",
-      "--entity-name", kafkaConfig.brokerId.toString)
-    ConfigCommand.main(args)
+    val entityType = ConfigType.Broker
+    val entityName = kafkaConfig.brokerId.toString
 
+    val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     val passwordEncoder = createPasswordEncoder(kafkaConfig, kafkaConfig.passwordEncoderSecret)
+
+    if (passwordConfigs.nonEmpty) {
+      passwordConfigs.foreach { configName =>
+        val encodedValue = passwordEncoder.encode(new Password(sslStoreProps.getProperty(configName)))
+        sslStoreProps.setProperty(configName, encodedValue)
+      }
+    }
+    sslStoreProps.remove(KafkaConfig.PasswordEncoderSecretProp)
+    adminZkClient.changeConfigs(entityType, entityName, sslStoreProps)
+
     val brokerProps = adminZkClient.fetchEntityConfig("brokers", kafkaConfig.brokerId.toString)
     assertEquals(4, brokerProps.size)
     assertEquals(sslProperties.get(SSL_KEYSTORE_TYPE_CONFIG),

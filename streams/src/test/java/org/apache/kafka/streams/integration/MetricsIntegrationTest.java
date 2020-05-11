@@ -47,8 +47,10 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -57,6 +59,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -69,8 +72,6 @@ public class MetricsIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final long timeout = 60000;
-
-    private final static String APPLICATION_ID_VALUE = "stream-metrics-test";
 
     // Metric group
     private static final String STREAM_CLIENT_NODE_METRICS = "stream-metrics";
@@ -222,12 +223,21 @@ public class MetricsIntegrationTest {
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
 
+    private String appId;
+
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
+
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        appId = "app-" + safeTestName;
+
         streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID_VALUE);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -483,7 +493,7 @@ public class MetricsIntegrationTest {
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(APPLICATION_ID_VALUE));
+        assertThat(metricsList.get(0).metricValue(), is(appId));
     }
 
     private void checkClientLevelMetrics() {

@@ -329,10 +329,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to a user-defined endpoint that can be used for state store discovery and interactive queries on this KafkaStreams instance.";
 
-    /** {@code balance.factor} */
-    public static final String BALANCE_FACTOR_CONFIG = "balance.factor";
-    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of stateful (and total) active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
-
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -462,7 +458,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code probing.rebalance.interval.ms} */
     public static final String PROBING_REBALANCE_INTERVAL_MS_CONFIG = "probing.rebalance.interval.ms";
     private static final String PROBING_REBALANCE_INTERVAL_MS_DOC = "The maximum time to wait before triggering a rebalance to probe for warmup replicas that have finished warming up and are ready to become active. Probing rebalances " +
-                                                                        "will continue to be triggered until the assignment is balanced according to the " + BALANCE_FACTOR_CONFIG + ". Must be at least 1 minute.";
+                                                                        "will continue to be triggered until the assignment is balanced. Must be at least 1 minute.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -681,12 +677,6 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
-            .define(BALANCE_FACTOR_CONFIG,
-                    Type.INT,
-                    1,
-                    atLeast(1),
-                    Importance.LOW,
-                    BALANCE_FACTOR_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                     Type.INT,
                     1000,
@@ -838,6 +828,8 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
@@ -868,6 +860,11 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
+        // This is settable in the main Streams config, but it's a private API for now
+        public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
+
+        // These are not settable in the main Streams config; they are set by the StreamThread to pass internal
+        // state into the assignor.
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
         public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
         public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
@@ -1277,9 +1274,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-
-        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         return props;
     }
