@@ -104,19 +104,6 @@ public class FollowerState implements EpochState {
         return leaderIdOpt.getAsInt();
     }
 
-    public int votedId() {
-        if (hasLeader()) {
-            throw new IllegalArgumentException("Cannot access votedId of epoch " + epoch +
-                    " since we already have a leader");
-        }
-        if (!votedIdOpt.isPresent()) {
-            throw new IllegalArgumentException("Cannot access votedId of epoch " + epoch +
-                    " because we have not voted");
-
-        }
-        return votedIdOpt.getAsInt();
-    }
-
     public boolean hasVoted() {
         return votedIdOpt.isPresent();
     }

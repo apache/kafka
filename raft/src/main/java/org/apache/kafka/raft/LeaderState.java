@@ -30,7 +30,7 @@ public class LeaderState implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
     private OptionalLong highWatermark = OptionalLong.empty();
-    private Map<Integer, FollowerState> followers = new HashMap<>();
+    private Map<Integer, ReplicaState> voterReplicaStates = new HashMap<>();
 
     protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
         this.localId = localId;
@@ -39,7 +39,7 @@ public class LeaderState implements EpochState {
 
         for (int voterId : voters) {
             boolean hasEndorsedLeader = voterId == localId;
-            followers.put(voterId, new FollowerState(voterId, hasEndorsedLeader, OptionalLong.empty()));
+            this.voterReplicaStates.put(voterId, new ReplicaState(voterId, hasEndorsedLeader, OptionalLong.empty()));
         }
     }
 
@@ -59,12 +59,12 @@ public class LeaderState implements EpochState {
     }
 
     public Set<Integer> followers() {
-        return followers.keySet().stream().filter(id -> id != localId).collect(Collectors.toSet());
+        return voterReplicaStates.keySet().stream().filter(id -> id != localId).collect(Collectors.toSet());
     }
 
     public Set<Integer> nonEndorsingFollowers() {
         Set<Integer> nonEndorsing = new HashSet<>();
-        for (FollowerState state : followers.values()) {
+        for (ReplicaState state : voterReplicaStates.values()) {
             if (!state.hasEndorsedLeader)
                 nonEndorsing.add(state.nodeId);
         }
@@ -73,10 +73,11 @@ public class LeaderState implements EpochState {
 
     private boolean updateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
-        ArrayList<FollowerState> followersByFetchOffset = new ArrayList<>(this.followers.values());
-        Collections.sort(followersByFetchOffset);
-        int indexOfHw = followers.size() / 2 - (followers.size() % 2 == 0 ? 1 : 0);
-        OptionalLong highWatermarkUpdateOpt = followersByFetchOffset.get(indexOfHw).endOffset;
+        ArrayList<ReplicaState> followersByDescendingFetchOffset = new ArrayList<>(this.voterReplicaStates.values());
+        Collections.sort(followersByDescendingFetchOffset);
+        int indexOfHw = voterReplicaStates.size() / 2;
+        OptionalLong highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
+
         if (highWatermarkUpdateOpt.isPresent()) {
             // When a leader is first elected, it cannot know the high watermark of the previous
             // leader. In order to avoid exposing a non-monotonically increasing value, we have
@@ -91,7 +92,7 @@ public class LeaderState implements EpochState {
     }
 
     public boolean updateEndOffset(int remoteNodeId, long endOffset) {
-        FollowerState state = ensureValidFollower(remoteNodeId);
+        ReplicaState state = ensureValidVoter(remoteNodeId);
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset > endOffset)
                 throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + remoteNodeId);
@@ -102,12 +103,12 @@ public class LeaderState implements EpochState {
     }
 
     public void addEndorsementFrom(int remoteNodeId) {
-        FollowerState followerState = ensureValidFollower(remoteNodeId);
-        followerState.hasEndorsedLeader = true;
+        ReplicaState replicaState = ensureValidVoter(remoteNodeId);
+        replicaState.hasEndorsedLeader = true;
     }
 
-    private FollowerState ensureValidFollower(int remoteNodeId) {
-        FollowerState state = followers.get(remoteNodeId);
+    private ReplicaState ensureValidVoter(int remoteNodeId) {
+        ReplicaState state = voterReplicaStates.get(remoteNodeId);
         if (state == null)
             throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
         return state;
@@ -117,29 +118,29 @@ public class LeaderState implements EpochState {
         return updateEndOffset(localId, endOffset);
     }
 
-    private static class FollowerState implements Comparable<FollowerState> {
+    private static class ReplicaState implements Comparable<ReplicaState> {
         final int nodeId;
         boolean hasEndorsedLeader;
         OptionalLong endOffset;
 
-        public FollowerState(int nodeId,
-                             boolean hasEndorsedLeader,
-                             OptionalLong endOffset) {
+        public ReplicaState(int nodeId,
+                            boolean hasEndorsedLeader,
+                            OptionalLong endOffset) {
             this.nodeId = nodeId;
             this.hasEndorsedLeader = hasEndorsedLeader;
             this.endOffset = endOffset;
         }
 
         @Override
-        public int compareTo(FollowerState that) {
-            if (this.endOffset == that.endOffset)
+        public int compareTo(ReplicaState that) {
+            if (this.endOffset.equals(that.endOffset))
                 return Integer.compare(this.nodeId, that.nodeId);
             else if (!this.endOffset.isPresent())
-                return -1;
-            else if (!that.endOffset.isPresent())
                 return 1;
+            else if (!that.endOffset.isPresent())
+                return -1;
             else
-                return Long.compare(this.endOffset.getAsLong(), that.endOffset.getAsLong());
+                return Long.compare(that.endOffset.getAsLong(), this.endOffset.getAsLong());
         }
     }
 
