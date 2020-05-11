@@ -53,7 +53,7 @@ import static org.junit.Assume.assumeTrue;
 
 public class RaftEventSimulationTest {
     private static final int ELECTION_TIMEOUT_MS = 1000;
-    private static final int ELECTION_JITTER_MS = 0;
+    private static final int ELECTION_JITTER_MS = 10;
     private static final int RETRY_BACKOFF_MS = 50;
     private static final int REQUEST_TIMEOUT_MS = 500;
 
@@ -632,7 +632,8 @@ public class RaftEventSimulationTest {
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time,
                 new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
-                ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, logContext);
+                ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
+                logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();

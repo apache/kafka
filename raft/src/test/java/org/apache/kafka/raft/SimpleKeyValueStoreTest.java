@@ -25,6 +25,7 @@ import org.junit.Test;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -54,7 +55,8 @@ public class SimpleKeyValueStoreTest {
 
         return new KafkaRaftClient(channel, log, quorum, time,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
-            electionTimeoutMs, electionJitterMs, retryBackoffMs, requestTimeoutMs, logContext);
+            electionTimeoutMs, electionJitterMs, retryBackoffMs, requestTimeoutMs, logContext,
+            new Random());
     }
 
     @Test
