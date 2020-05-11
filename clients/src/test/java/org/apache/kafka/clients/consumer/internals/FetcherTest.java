@@ -3279,9 +3279,7 @@ public class FetcherTest {
                 Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
-                    fetchedRecords.entrySet().forEach(entry -> {
-                        TopicPartition tp = entry.getKey();
-                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
+                    fetchedRecords.forEach((tp, records) -> {
                         assertEquals(2, records.size());
                         long nextOffset = nextFetchOffsets.get(tp);
                         assertEquals(nextOffset, records.get(0).offset());

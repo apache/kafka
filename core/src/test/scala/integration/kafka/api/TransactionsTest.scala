@@ -170,7 +170,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     // even if we seek to the end, we should not be able to see the undecided data
     assertEquals(2, readCommittedConsumer.assignment.size)
     readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
-    readCommittedConsumer.assignment.asScala.foreach { tp =>
+    readCommittedConsumer.assignment.forEach { tp =>
       assertEquals(1L, readCommittedConsumer.position(tp))
     }
 

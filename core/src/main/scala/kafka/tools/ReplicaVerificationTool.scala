@@ -414,7 +414,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     }
 
     if (fetchResponse != null) {
-      fetchResponse.responseData.asScala.foreach { case (tp, partitionData) =>
+      fetchResponse.responseData.forEach { (tp, partitionData) =>
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
     } else {

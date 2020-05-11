@@ -67,7 +67,6 @@ import org.scalatest.Assertions.fail
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -1173,7 +1172,7 @@ object TestUtils extends Logging {
       .build()
 
     val sslProps = new Properties()
-    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
+    sslConfigs.forEach { (k, v) => sslProps.put(k, v) }
     sslProps
   }
 
@@ -1449,7 +1448,7 @@ object TestUtils extends Logging {
   // Collect the current positions for all partition in the consumers current assignment.
   def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
@@ -1458,7 +1457,7 @@ object TestUtils extends Logging {
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
 
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       if (committed.contains(topicPartition))
         consumer.seek(topicPartition, committed(topicPartition))
       else
@@ -1721,7 +1720,7 @@ object TestUtils extends Logging {
     authorizer.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
-        result.exception.asScala.foreach { e => throw e }
+        result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     waitAndVerifyAcls(
