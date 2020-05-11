@@ -860,7 +860,14 @@ public class StreamThread extends Thread {
                           taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            committed = taskManager.commitAll();
+            committed = taskManager.commit(
+                taskManager.tasks()
+                    .values()
+                    .stream()
+                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                    .collect(Collectors.toSet())
+            );
+
             if (committed > 0) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
