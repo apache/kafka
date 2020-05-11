@@ -71,7 +71,7 @@ import org.apache.kafka.server.authorizer.Action
 import org.apache.kafka.server.authorizer.AuthorizationResult
 import org.apache.kafka.server.authorizer.Authorizer
 import org.easymock.EasyMock._
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
@@ -168,7 +168,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def testFilterAuthorized(): Unit = {
+  def testFilterByAuthorized(): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
 
     val operation = AclOperation.WRITE
@@ -192,14 +192,16 @@ class KafkaApisTest {
     )
 
     EasyMock.expect(authorizer.authorize(
-      requestContext, expectedActions.asJava
-    )).andReturn(
-      Seq(
-        AuthorizationResult.ALLOWED,
-        AuthorizationResult.DENIED,
-        AuthorizationResult.ALLOWED
-      ).asJava
-    ).once()
+      EasyMock.eq(requestContext), matchSameElements(expectedActions.asJava)
+    )).andAnswer { () =>
+      val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
+      actions.map { action =>
+        if (Set(resourceName1, resourceName3).contains(action.resourcePattern.name))
+          AuthorizationResult.ALLOWED
+        else
+          AuthorizationResult.DENIED
+      }.asJava
+    }.once()
 
     EasyMock.replay(authorizer)
 
@@ -214,6 +216,20 @@ class KafkaApisTest {
     verify(authorizer)
 
     assertEquals(Set(resourceName1, resourceName3), result)
+  }
+
+  /**
+   * Returns true if the elements in both lists are the same irrespective of ordering.
+   */
+  private def matchSameElements[T](list: util.List[T]): util.List[T] = {
+    EasyMock.reportMatcher(new IArgumentMatcher {
+      def matches(argument: Any): Boolean = argument match {
+        case s: util.List[_] => s.asScala.toSet == list.asScala.toSet
+        case _ => false
+      }
+      def appendTo(buffer: StringBuffer): Unit = buffer.append(s"list($list)")
+    })
+    null
   }
 
   @Test
@@ -239,7 +255,7 @@ class KafkaApisTest {
     expectNoThrottling()
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList)
+    val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
     EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true)))
         .andReturn(Map(configResource -> config))
 
