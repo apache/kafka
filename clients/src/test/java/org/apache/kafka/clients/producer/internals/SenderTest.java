@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
@@ -23,6 +24,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -265,8 +267,13 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000,  ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
-            serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
+        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
+            400,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Features.emptySupportedFeatures(),
+            Optional.empty(),
+            Optional.empty()
+        ).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());

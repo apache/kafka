@@ -1568,6 +1568,36 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     createRecursive(path, data = null, throwIfPathExists = false)
   }
 
+  // Visible for testing.
+  def createFeatureZNode(nodeContents: FeatureZNode): Unit = {
+    val createRequest = CreateRequest(
+      FeatureZNode.path,
+      FeatureZNode.encode(nodeContents),
+      defaultAcls(FeatureZNode.path),
+      CreateMode.PERSISTENT)
+    val response = retryRequestUntilConnected(createRequest)
+    response.maybeThrow
+  }
+
+  // Visible for testing.
+  def updateFeatureZNode(nodeContents: FeatureZNode): Unit = {
+    val setRequest = SetDataRequest(
+      FeatureZNode.path,
+      FeatureZNode.encode(nodeContents),
+      ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setRequest)
+    response.maybeThrow
+  }
+
+  // Visible for testing.
+  def deleteFeatureZNode(): Unit = {
+    val deleteRequest = DeleteRequest(
+      FeatureZNode.path,
+      ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(deleteRequest)
+    response.maybeThrow
+  }
+
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {
     val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition),
       ConsumerOffset.encode(offset), ZkVersion.MatchAnyVersion)

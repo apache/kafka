@@ -17,14 +17,22 @@
 
 package org.apache.kafka.common.requests;
 
+import java.util.Optional;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.VersionRange;
+import org.apache.kafka.common.feature.VersionLevelRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -37,7 +45,12 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(10, RecordBatch.MAGIC_VALUE_V1);
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.emptySupportedFeatures(),
+            Optional.empty(),
+            Optional.empty());
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
     }
@@ -49,7 +62,12 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            AbstractResponse.DEFAULT_THROTTLE_TIME,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Features.emptySupportedFeatures(),
+            Optional.empty(),
+            Optional.empty());
         assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
     }
@@ -78,6 +96,38 @@ public class ApiVersionsResponseTest {
             }
         }
     }
+
+    @Test
+    public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.supportedFeatures(new HashMap<String, VersionRange>() {{
+                put("feature", new VersionRange(1, 4));
+            }}),
+            Optional.of(
+                Features.finalizedFeatures(new HashMap<String, VersionLevelRange>() {{
+                    put("feature", new VersionLevelRange(2, 3));
+                }})
+            ),
+            Optional.of(10L));
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(10, response.throttleTimeMs());
+
+        assertEquals(1, response.data.supportedFeatures().size());
+        SupportedFeatureKey sKey = response.data.supportedFeatures().find("feature");
+        assertNotNull(sKey);
+        assertEquals(1, sKey.minVersion());
+        assertEquals(4, sKey.maxVersion());
+
+        assertEquals(1, response.data.finalizedFeatures().size());
+        FinalizedFeatureKey fKey = response.data.finalizedFeatures().find("feature");
+        assertNotNull(fKey);
+        assertEquals(2, fKey.minVersionLevel());
+        assertEquals(3, fKey.maxVersionLevel());
+
+        assertEquals(10, response.data.finalizedFeaturesEpoch());
+    }
     
     private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
         for (final ApiVersionsResponseKey version : response.data.apiKeys()) {
@@ -92,6 +142,4 @@ public class ApiVersionsResponseTest {
         }
         return apiKeys;
     }
-
-
 }

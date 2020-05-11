@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
+import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV1}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -175,6 +175,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config).getOrElse(new ZKClientConfig())
   private var _zkClient: KafkaZkClient = null
+
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))).toMap
@@ -182,12 +183,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
 
+  private var _featureChangeListener: FinalizedFeatureChangeListener = null
+
   def clusterId: String = _clusterId
 
   // Visible for testing
   private[kafka] def zkClient = _zkClient
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
+
+  private[kafka] def featureChangeListener = _featureChangeListener
 
   newGauge("BrokerState", () => brokerState.currentState)
   newGauge("ClusterId", () => clusterId)
@@ -220,6 +225,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* setup zookeeper */
         initZkClient(time)
+
+        /* initialize features */
+        _featureChangeListener = new FinalizedFeatureChangeListener(_zkClient)
+        if (config.interBrokerProtocolVersion >= KAFKA_2_6_IV1) {
+          // The feature versioning system (KIP-584) is active only when:
+          // config.interBrokerProtocolVersion is >= KAFKA_2_6_IV1.
+          _featureChangeListener.initOrThrow(60000)
+        }
 
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
@@ -472,7 +485,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     )
 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    BrokerInfo(Broker(config.brokerId, updatedEndpoints, config.rack), config.interBrokerProtocolVersion, jmxPort)
+    BrokerInfo(
+      Broker(config.brokerId, updatedEndpoints, config.rack, SupportedFeatures.get),
+      config.interBrokerProtocolVersion,
+      jmxPort)
   }
 
   /**
@@ -689,6 +705,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (zkClient != null)
           CoreUtils.swallow(zkClient.close(), this)
+
+        if (featureChangeListener != null) {
+          CoreUtils.swallow(featureChangeListener.close(), this)
+        }
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)

@@ -22,7 +22,7 @@ import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_6_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -33,6 +33,8 @@ import kafka.utils.Json
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.feature.{Features, VersionLevelRange, VersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -81,17 +83,27 @@ object BrokerIdsZNode {
 object BrokerInfo {
 
   /**
-   * Create a broker info with v4 json format (which includes multiple endpoints and rack) if
-   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   * - Create a broker info with v5 json format if the apiVersion is 2.6.x or above.
+   * - Create a broker info with v4 json format (which includes multiple endpoints and rack) if
+   *   the apiVersion is 0.10.0.X or above but lesser than 2.6.x.
+   * - Register the broker with v2 json format otherwise.
    *
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
    *
-   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
-   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above
+   * without having to upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in
+   * any case).
    */
   def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
-    // see method documentation for the reason why we do this
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    val version = {
+      if (apiVersion >= KAFKA_0_10_0_IV1) {
+        if (apiVersion >= KAFKA_2_6_IV1)
+          5
+        else
+          4
+      } else
+        2
+    }
     BrokerInfo(broker, version, jmxPort)
   }
 
@@ -111,6 +123,7 @@ object BrokerIdZNode {
   private val JmxPortKey = "jmx_port"
   private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
   private val TimestampKey = "timestamp"
+  private val FeaturesKey = "features"
 
   def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
 
@@ -120,7 +133,7 @@ object BrokerIdZNode {
    * The JSON format includes a top level host and port for compatibility with older clients.
    */
   def encode(version: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
-             rack: Option[String]): Array[Byte] = {
+             rack: Option[String], features: Features[VersionRange]): Array[Byte] = {
     val jsonMap = collection.mutable.Map(VersionKey -> version,
       HostKey -> host,
       PortKey -> port,
@@ -135,6 +148,10 @@ object BrokerIdZNode {
         endPoint.listenerName.value -> endPoint.securityProtocol.name
       }.toMap.asJava)
     }
+
+    if (version >= 5) {
+      jsonMap += (FeaturesKey -> features.serialize)
+    }
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
@@ -146,7 +163,7 @@ object BrokerIdZNode {
     val plaintextEndpoint = broker.endPoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
       new EndPoint(null, -1, null, null))
     encode(brokerInfo.version, plaintextEndpoint.host, plaintextEndpoint.port, broker.endPoints, brokerInfo.jmxPort,
-      broker.rack)
+      broker.rack, broker.features)
   }
 
   /**
@@ -185,7 +202,7 @@ object BrokerIdZNode {
     *   "rack":"dc1"
     * }
     *
-    * Version 4 (current) JSON schema for a broker is:
+    * Version 4 JSON schema for a broker is:
     * {
     *   "version":4,
     *   "host":"localhost",
@@ -195,6 +212,19 @@ object BrokerIdZNode {
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
     *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1"
+    * }
+    *
+    * Version 5 (current) JSON schema for a broker is:
+    * {
+    *   "version":5,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+    *   "rack":"dc1",
+    *   "features": {"feature": {"min_version": 1, "max_version": 5}}
     * }
     */
   def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
@@ -225,7 +255,12 @@ object BrokerIdZNode {
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
-        BrokerInfo(Broker(id, endpoints, rack), version, jmxPort)
+        val features = FeatureZNode.asJavaMap(brokerInfo
+          .get(FeaturesKey)
+          .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
+          .getOrElse(Map()))
+        BrokerInfo(
+          Broker(id, endpoints, rack, deserializeSupportedFeatures(features)), version, jmxPort)
       case Left(e) =>
         throw new KafkaException(s"Failed to parse ZooKeeper registration for broker $id: " +
           s"${new String(jsonBytes, UTF_8)}", e)
@@ -742,6 +777,90 @@ object DelegationTokenInfoZNode {
   def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
   def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
   def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
+}
+
+object FeatureZNodeStatus extends Enumeration {
+  val Disabled, Enabled = Value
+
+  def withNameOpt(value: Int): Option[Value] = {
+    values.find(_.id == value)
+  }
+}
+
+case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[VersionLevelRange]) {
+}
+
+object FeatureZNode {
+  private val VersionKey = "version"
+  private val StatusKey = "status"
+  private val FeaturesKey = "features"
+
+  // Version0 contains 'version', 'status' and 'features' keys.
+  val Version0 = 0
+  val CurrentVersion = Version0
+
+  def path = "/feature"
+
+  def asJavaMap(scalaMap: Map[String, Map[String, Long]]): util.Map[String, util.Map[String, java.lang.Long]] = {
+    scalaMap
+      .view.mapValues(_.view.mapValues(scalaLong => java.lang.Long.valueOf(scalaLong)).toMap.asJava)
+      .toMap
+      .asJava
+  }
+
+  def encode(featureZNode: FeatureZNode): Array[Byte] = {
+    val jsonMap = collection.mutable.Map(
+      VersionKey -> CurrentVersion,
+      StatusKey -> featureZNode.status.id,
+      FeaturesKey -> featureZNode.features.serialize)
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+
+  def decode(jsonBytes: Array[Byte]): FeatureZNode = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(js) =>
+        val featureInfo = js.asJsonObject
+        val version = featureInfo(VersionKey).to[Int]
+        if (version < Version0 || version > CurrentVersion) {
+          throw new KafkaException(s"Unsupported version: $version of feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+
+        val featuresMap = featureInfo
+          .get(FeaturesKey)
+          .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
+        if (featuresMap.isEmpty) {
+          throw new KafkaException("Features map can not be absent in: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+        val features = asJavaMap(featuresMap.get)
+
+        val statusInt = featureInfo
+          .get(StatusKey)
+          .flatMap(_.to[Option[Int]])
+        if (statusInt.isEmpty) {
+          throw new KafkaException("Status can not be absent in feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+        val status = FeatureZNodeStatus.withNameOpt(statusInt.get)
+        if (status.isEmpty) {
+          throw new KafkaException("Malformed status found in feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+
+        var finalizedFeatures: Features[VersionLevelRange] = null
+        try {
+          finalizedFeatures = deserializeFinalizedFeatures(features)
+        } catch {
+          case e: Exception => throw new KafkaException(
+            "Unable to deserialize finalized features: " + features, e)
+        }
+        FeatureZNode(status.get, finalizedFeatures)
+      case Left(e) =>
+        throw new KafkaException(s"Failed to parse feature information: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
 }
 
 object ZkData {
