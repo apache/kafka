@@ -115,6 +115,8 @@ public class LeaderStateTest {
         assertEquals(OptionalLong.of(15L), state.highWatermark());
         state.updateEndOffset(node2, 20L);
         assertEquals(OptionalLong.of(20L), state.highWatermark());
+        state.updateEndOffset(node1, 20L);
+        assertEquals(OptionalLong.of(20L), state.highWatermark());
     }
 
 }

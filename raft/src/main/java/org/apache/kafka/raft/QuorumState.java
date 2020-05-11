@@ -78,8 +78,8 @@ public class QuorumState {
         } else {
             state = new FollowerState(election.epoch);
             if (election.hasLeader()) {
-                becomeFollower(election.epoch, election.leaderId());
-            } else if (election.hasVoted() && election.votedId() != localId) {
+                becomeFetchingFollower(election.epoch, election.leaderId());
+            } else if (election.hasVoted()) {
                 becomeVotedFollower(election.epoch, election.votedId());
             } else {
                 becomeUnattachedFollower(election.epoch);
@@ -145,6 +145,12 @@ public class QuorumState {
         return transitioned;
     }
 
+    /**
+     * Grant a vote to a candidate and become a follower for this epoch. We will remain in this
+     * state until either the election timeout expires or a leader is elected. In particular,
+     * we do not begin fetching until the election has concluded and {@link #becomeFetchingFollower(int, int)}
+     * is invoked.
+     */
     public boolean becomeVotedFollower(int epoch, int candidateId) throws IOException {
         if (!isVoter(candidateId))
             throw new IllegalArgumentException("Cannot become follower of non-voter " + candidateId);
@@ -155,7 +161,10 @@ public class QuorumState {
         return transitioned;
     }
 
-    public boolean becomeFollower(int epoch, int leaderId) throws IOException {
+    /**
+     * Become a follower of an elected leader so that we can begin fetching.
+     */
+    public boolean becomeFetchingFollower(int epoch, int leaderId) throws IOException {
         if (!isVoter(leaderId))
             throw new IllegalArgumentException("Cannot become follower of non-voter " + leaderId);
         boolean transitioned = becomeFollower(epoch, state -> state.acknowledgeLeader(leaderId));
