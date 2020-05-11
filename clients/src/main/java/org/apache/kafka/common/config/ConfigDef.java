@@ -1199,13 +1199,13 @@ public class ConfigDef {
         }
         switch (i) {
             case 1:
-                return " (=" + value + "KiB)";
+                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
             case 2:
-                return " (=" + value + "MiB)";
+                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
             case 3:
-                return " (=" + value + "GiB)";
+                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
             case 4:
-                return " (=" + value + "TiB)";
+                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
             default:
                 return "";
         }
@@ -1225,7 +1225,7 @@ public class ConfigDef {
             }
         }
         if (i > 0) {
-            return " (=" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
+            return " (" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
         }
         return "";
     }
