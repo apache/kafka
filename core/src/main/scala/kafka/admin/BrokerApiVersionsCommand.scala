@@ -118,7 +118,7 @@ object BrokerApiVersionsCommand {
         case t: Throwable =>
           error("admin-client-network-thread exited", t)
       } finally {
-        pendingFutures.asScala.foreach { future =>
+        pendingFutures.forEach { future =>
           try {
             future.raise(Errors.UNKNOWN_SERVER_ERROR)
           } catch {

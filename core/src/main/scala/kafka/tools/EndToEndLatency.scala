@@ -109,7 +109,7 @@ object EndToEndLatency {
       .map(p => new TopicPartition(p.topic(), p.partition())).asJava
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
-    consumer.assignment().asScala.foreach(consumer.position)
+    consumer.assignment.forEach(consumer.position(_))
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)

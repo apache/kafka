@@ -532,7 +532,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
-        newConfig.valuesFromThisConfig.keySet.asScala.foreach(customConfigs.remove)
+        newConfig.valuesFromThisConfig.keySet.forEach(customConfigs.remove(_))
         reconfigurables.foreach {
           case listenerReconfigurable: ListenerReconfigurable =>
             processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
@@ -589,7 +589,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                     newCustomConfigs: util.Map[String, Object],
                                     validateOnly: Boolean): Unit = {
     val newConfigs = new util.HashMap[String, Object]
-    allNewConfigs.asScala.foreach { case (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
+    allNewConfigs.forEach { (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)
     try {
       reconfigurable.validateReconfiguration(newConfigs)
@@ -652,7 +652,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
     val currentLogConfig = logManager.currentDefaultConfig
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
-    newConfig.valuesFromThisConfig.asScala.foreach { case (k, v) =>
+    newConfig.valuesFromThisConfig.forEach { (k, v) =>
       if (DynamicLogConfig.ReconfigurableConfigs.contains(k) && v != null) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
           newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
@@ -686,7 +686,7 @@ class DynamicThreadPool(server: KafkaServer) extends BrokerReconfigurable {
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    newConfig.values.asScala.foreach { case (k, v) =>
+    newConfig.values.forEach { (k, v) =>
       if (DynamicThreadPool.ReconfigurableConfigs.contains(k)) {
         val newValue = v.asInstanceOf[Int]
         val oldValue = currentValue(k)
@@ -785,10 +785,10 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
   private def createReporters(reporterClasses: util.List[String],
                               updatedConfigs: util.Map[String, _]): Unit = {
     val props = new util.HashMap[String, AnyRef]
-    updatedConfigs.asScala.foreach { case (k, v) => props.put(k, v.asInstanceOf[AnyRef]) }
+    updatedConfigs.forEach { (k, v) => props.put(k, v.asInstanceOf[AnyRef]) }
     propsOverride.foreach { case (k, v) => props.put(k, v) }
     val reporters = dynamicConfig.currentKafkaConfig.getConfiguredInstances(reporterClasses, classOf[MetricsReporter], props)
-    reporters.asScala.foreach { reporter =>
+    reporters.forEach { reporter =>
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
     }

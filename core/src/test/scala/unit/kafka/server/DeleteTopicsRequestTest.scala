@@ -53,7 +53,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala.find(_._1 != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.data.responses.asScala}", error.isEmpty)
-    request.data.topicNames.asScala.foreach { topic =>
+    request.data.topicNames.forEach { topic =>
       validateTopicIsDeleted(topic)
     }
   }

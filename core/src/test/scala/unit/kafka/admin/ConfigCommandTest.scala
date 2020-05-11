@@ -772,7 +772,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val resource = entry.getKey
         val config = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        config.entries.forEach { e => brokerConfigs.put(e.name, e.value) }
         alterResult
       }
     }

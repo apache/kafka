@@ -96,12 +96,12 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controlPlaneMetricMap = mutable.Map[String, KafkaMetric]()
     val dataPlaneMetricMap = mutable.Map[String, KafkaMetric]()
-    servers.head.metrics.metrics().values().asScala.foreach { kafkaMetric =>
-      if (kafkaMetric.metricName().tags().values().contains("CONTROLLER")) {
+    servers.head.metrics.metrics.values.forEach { kafkaMetric =>
+      if (kafkaMetric.metricName.tags.values.contains("CONTROLLER")) {
         controlPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
       }
-      if (kafkaMetric.metricName().tags().values().contains("PLAINTEXT")) {
-        dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
+      if (kafkaMetric.metricName.tags.values.contains("PLAINTEXT")) {
+        dataPlaneMetricMap.put(kafkaMetric.metricName.name, kafkaMetric)
       }
     }
     assertEquals(1e-0, controlPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
