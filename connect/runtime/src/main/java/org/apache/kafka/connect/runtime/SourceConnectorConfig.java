@@ -26,9 +26,12 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.EXCLUDE_REGEX_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 
@@ -54,12 +57,12 @@ public class SourceConnectorConfig extends ConnectorConfig {
         }
     }
 
-    private static ConfigDef config = ConnectorConfig.configDef();
+    private static ConfigDef config = SourceConnectorConfig.configDef();
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
 
     public static ConfigDef configDef() {
         int orderInGroup = 0;
-        return new ConfigDef(config)
+        return new ConfigDef(ConnectorConfig.configDef())
                 .define(TOPIC_CREATION_GROUPS_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(),
                         ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ConfigDef.LambdaValidator.with(
                             (name, value) -> {
@@ -105,7 +108,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
             String configGroup = TOPIC_CREATION_GROUP + ": " + alias;
             newDef.embed(prefix, configGroup, 0, TopicCreationConfig.configDef(
                     configGroup,
-                    defaultGroupConfig.getInt(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG),
+                    defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG),
                     defaultGroupConfig.getInt(defaultGroupPrefix + PARTITIONS_CONFIG)));
         });
         return newDef;
@@ -113,7 +116,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
 
     @Override
     public Object get(String key) {
-        return enrichedSourceConfig.get(key);
+        return enrichedSourceConfig != null ? enrichedSourceConfig.get(key) : super.get(key);
+
     }
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
@@ -126,6 +130,35 @@ public class SourceConnectorConfig extends ConnectorConfig {
         } else {
             enrichedSourceConfig = null;
         }
+    }
+
+    public List<String> topicCreationInclude(String group) {
+        return getList(TOPIC_CREATION_PREFIX + group + '.' + INCLUDE_REGEX_CONFIG);
+    }
+
+    public List<String> topicCreationExclude(String group) {
+        return getList(TOPIC_CREATION_PREFIX + group + '.' + EXCLUDE_REGEX_CONFIG);
+    }
+
+    public Short topicCreationReplicationFactor(String group) {
+        return getShort(TOPIC_CREATION_PREFIX + group + '.' + REPLICATION_FACTOR_CONFIG);
+    }
+
+    public Integer topicCreationPartitions(String group) {
+        return getInt(TOPIC_CREATION_PREFIX + group + '.' + PARTITIONS_CONFIG);
+    }
+
+    public Map<String, Object> topicCreationOtherConfigs(String group) {
+        if (enrichedSourceConfig == null) {
+            return Collections.emptyMap();
+        }
+        return enrichedSourceConfig.originalsWithPrefix(TOPIC_CREATION_PREFIX + group + '.').entrySet().stream()
+                .filter(e -> {
+                    String key = e.getKey();
+                    return !(INCLUDE_REGEX_CONFIG.equals(key) || EXCLUDE_REGEX_CONFIG.equals(key)
+                            || REPLICATION_FACTOR_CONFIG.equals(key) || PARTITIONS_CONFIG.equals(key));
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public static void main(String[] args) {

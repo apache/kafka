@@ -60,6 +60,7 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +78,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
 
 /**
@@ -533,11 +535,22 @@ public class Worker {
             Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, sourceConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+            TopicAdmin admin;
+            Map<String, NewTopicCreationGroup> topicCreationGroups;
+            if (config.topicCreationEnable()) {
+                Map<String, Object> adminProps = adminConfigs(id, "connector-adminclient-" + id, config,
+                        sourceConfig, connectorClass, connectorClientConfigOverridePolicy);
+                admin = new TopicAdmin(adminProps);
+                topicCreationGroups = NewTopicCreationGroup.configuredGroups(sourceConfig);
+            } else {
+                admin = null;
+                topicCreationGroups = null;
+            }
 
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator, herder.statusBackingStore());
+                    headerConverter, transformationChain, producer, admin, topicCreationGroups,
+                    offsetReader, offsetWriter, config, configState, metrics, loader, time, retryWithToleranceOperator, herder.statusBackingStore());
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -617,6 +630,7 @@ public class Worker {
     }
 
     static Map<String, Object> adminConfigs(ConnectorTaskId id,
+                                            String defaultClientId,
                                             WorkerConfig config,
                                             ConnectorConfig connConfig,
                                             Class<? extends Connector> connectorClass,
@@ -634,6 +648,7 @@ public class Worker {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
             Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
         adminProps.putAll(nonPrefixedWorkerConfigs);
 
         // Admin client-specific overrides in the worker config
@@ -690,7 +705,8 @@ public class Worker {
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
-            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            // By leaving default client id empty the admin client will get the default at instantiation time
+            Map<String, Object> adminProps = adminConfigs(id, "", config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }

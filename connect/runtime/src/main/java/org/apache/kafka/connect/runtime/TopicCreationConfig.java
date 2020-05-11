@@ -55,7 +55,7 @@ public class TopicCreationConfig {
             + "other group defined in topic.creation.groups this config is optional and if it's "
             + "missing it gets the value the default group";
 
-    private static ConfigDef.LambdaValidator minusOneOrPositive = ConfigDef.LambdaValidator.with(
+    private static ConfigDef.LambdaValidator minusOneOrPositiveInt = ConfigDef.LambdaValidator.with(
         (name, value) -> {
             if (!(value instanceof Integer)) {
                 throw new ConfigException(name, value, "Value is not of type Integer");
@@ -68,7 +68,20 @@ public class TopicCreationConfig {
         () -> "-1 or [1,...]"
     );
 
-    public static ConfigDef configDef(String group, int defaultReplicationFactor, int defaultParitionCount) {
+    private static ConfigDef.LambdaValidator minusOneOrPositiveShort = ConfigDef.LambdaValidator.with(
+        (name, value) -> {
+            if (!(value instanceof Short)) {
+                throw new ConfigException(name, value, "Value is not of type Integer");
+            }
+            short num = (short) value;
+            if (num != -1 && num < 1) {
+                throw new ConfigException(name, num, "Value must be -1 or at least 1");
+            }
+        },
+        () -> "-1 or [1,...]"
+    );
+
+    public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultParitionCount) {
         int orderInGroup = 0;
         // TODO: add more specific validation
         ConfigDef configDef = new ConfigDef();
@@ -81,12 +94,12 @@ public class TopicCreationConfig {
                         new ConfigDef.NonNullValidator(), ConfigDef.Importance.LOW,
                         EXCLUDE_REGEX_DOC, group, ++orderInGroup, ConfigDef.Width.LONG,
                         "Exclusion Topic Pattern for " + group)
-                .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
-                        defaultReplicationFactor, minusOneOrPositive,
+                .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT,
+                        defaultReplicationFactor, minusOneOrPositiveShort,
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + group)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        defaultParitionCount, minusOneOrPositive,
+                        defaultParitionCount, minusOneOrPositiveInt,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + group);
         return configDef;
@@ -104,12 +117,12 @@ public class TopicCreationConfig {
                         new ConfigDef.NonNullValidator(), ConfigDef.Importance.LOW,
                         EXCLUDE_REGEX_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup, ConfigDef.Width.LONG,
                         "Exclusion Topic Pattern for " + DEFAULT_TOPIC_CREATION_GROUP)
-                .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
-                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositive,
+                .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT,
+                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositiveShort,
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + DEFAULT_TOPIC_CREATION_GROUP)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositive,
+                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositiveInt,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + DEFAULT_TOPIC_CREATION_GROUP);
         return configDef;
