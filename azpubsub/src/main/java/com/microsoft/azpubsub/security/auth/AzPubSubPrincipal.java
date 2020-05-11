@@ -8,9 +8,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
  * AzPubSub Principal holding role
  */
 public class AzPubSubPrincipal extends KafkaPrincipal {
-    public static final String CERTIFICATE_TYPE = "Certificate";
-    public static final String ROLE_TYPE = "Role";
-
     private Set<String> roles;
 
     public AzPubSubPrincipal(String principalType, String name, Set<String> roles) {

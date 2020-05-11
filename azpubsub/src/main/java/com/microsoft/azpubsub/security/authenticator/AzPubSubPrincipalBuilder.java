@@ -6,7 +6,6 @@ import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
@@ -55,7 +54,7 @@ public class AzPubSubPrincipalBuilder extends DefaultKafkaPrincipalBuilder imple
             SSLSession sslSession = ((SslAuthenticationContext) context).session();
             CertificateIdentity identity = this.certificateIdentifier.getIdentity(sslSession);
             return new AzPubSubPrincipal(
-                    AzPubSubPrincipal.CERTIFICATE_TYPE,
+                    AzPubSubPrincipal.USER_TYPE,
                     identity.principalName(),
                     identity.scope()
                 );
@@ -64,7 +63,7 @@ public class AzPubSubPrincipalBuilder extends DefaultKafkaPrincipalBuilder imple
             if (OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslServer.getMechanismName())) {
                 AzPubSubOAuthBearerToken token = (AzPubSubOAuthBearerToken)saslServer.getNegotiatedProperty(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token");
                 return new AzPubSubPrincipal(
-                        AzPubSubPrincipal.ROLE_TYPE,
+                        AzPubSubPrincipal.USER_TYPE,
                         token.principalName(),
                         token.scope()
                     );
