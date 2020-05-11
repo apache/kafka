@@ -199,7 +199,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     @SuppressWarnings("resource")
     @Test
     public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
-        inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
         expectLastCall();
         init();
 
@@ -211,6 +210,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertFalse(metered.putIfDifferentValues(key,
                                                  newValueAndTimestamp,
                                                  encodedOldValue));
+        verify(inner);
     }
 
     @SuppressWarnings("resource")
@@ -227,6 +227,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make("value", 95L);
         assertTrue(metered.putIfDifferentValues(key, outOfOrderValueAndTimestamp, encodedOldValue));
+        verify(inner);
     }
 
     @Test

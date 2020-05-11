@@ -76,7 +76,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
             return maybeMeasureLatency(
                 () -> {
                     final byte[] newSerializedValue = serdes.rawValue(newValue);
-                    if (ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, newSerializedValue)) {
+                    if (ValueAndTimestampSerializer.compareValuesAndCheckForIncreasingTimestamp(oldSerializedValue, newSerializedValue)) {
                         return false;
                     } else {
                         wrapped().put(keyBytes(key), newSerializedValue);

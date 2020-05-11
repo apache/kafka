@@ -60,7 +60,7 @@ public class ValueAndTimestampSerializerTest {
         final byte[] oldSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, oldValueAndTimestamp);
         final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP + 1);
         final byte[] newSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, newValueAndTimestamp);
-        assertTrue(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, newSerializedValue));
+        assertTrue(ValueAndTimestampSerializer.compareValuesAndCheckForIncreasingTimestamp(oldSerializedValue, newSerializedValue));
     }
 
     @Test
@@ -71,7 +71,7 @@ public class ValueAndTimestampSerializerTest {
         final byte[] oldSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, oldValueAndTimestamp);
         final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP - 1);
         final byte[] outOfOrderSerializedValue = STRING_SERDE.serializer().serialize(TOPIC, outOfOrderValueAndTimestamp);
-        assertFalse(ValueAndTimestampSerializer.maskTimestampAndCompareValues(oldSerializedValue, outOfOrderSerializedValue));
+        assertFalse(ValueAndTimestampSerializer.compareValuesAndCheckForIncreasingTimestamp(oldSerializedValue, outOfOrderSerializedValue));
     }
 
     @Test

@@ -58,7 +58,7 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
      *              if the timestamp of right is less than left (indicating out of order record)
      *         false otherwise
      */
-    public static boolean maskTimestampAndCompareValues(final byte[] left, final byte[] right) {
+    public static boolean compareValuesAndCheckForIncreasingTimestamp(final byte[] left, final byte[] right) {
         if (left == right) {
             return true;
         }
