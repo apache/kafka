@@ -133,11 +133,6 @@ public class OptimizedKTableIntegrationTest {
             kafkaStreams1WasFirstActive = false;
         }
 
-        // Assert that no restore has occurred, ensures that when we check later that the restore
-        // notification actually came from after the rebalance.
-        assertThat(listener.startOffset, is(equalTo(0L)));
-        assertThat(listener.totalNumRestored, is(equalTo(0L)));
-
         // Assert that the current value in store reflects all messages being processed
         assertThat(kafkaStreams1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
 
