@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -43,7 +44,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    public void makeReady(final Map<String, InternalTopicConfig> topics) {
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         for (final InternalTopicConfig topic : topics.values()) {
             final String topicName = topic.name();
             final int numberOfPartitions = topic.numberOfPartitions().get();
@@ -56,6 +57,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
             restoreConsumer.updatePartitions(topicName, partitions);
         }
+        return Collections.emptySet();
     }
 
     @Override
