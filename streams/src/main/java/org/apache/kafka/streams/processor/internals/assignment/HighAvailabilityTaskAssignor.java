@@ -17,10 +17,12 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +36,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.diff;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.buildClientRankingsByTask;
-import static org.apache.kafka.streams.processor.internals.assignment.RankedClient.tasksToCaughtUpClients;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
@@ -49,11 +49,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates =
-            buildClientRankingsByTask(statefulTasks, clients, configs.acceptableRecoveryLag);
-
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients =
-            tasksToCaughtUpClients(statefulTasksToRankedCandidates);
+            tasksToCaughtUpClients(statefulTasks, clients, configs.acceptableRecoveryLag);
 
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
@@ -63,7 +60,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         assignStandbyReplicaTasks(
             tasksToRemainingStandbys,
             clientStates,
-            statefulTasksToRankedCandidates,
+            statefulTasks,
             configs.numStandbyReplicas
         );
 
@@ -104,7 +101,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private static void assignStandbyReplicaTasks(final Map<TaskId, Integer> tasksToRemainingStandbys,
                                                   final TreeMap<UUID, ClientState> clientStates,
-                                                  final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates,
+                                                  final Set<TaskId> statefulTasks,
                                                   final int numStandbyReplicas) {
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clientStates.get(client).hasAssignedTask(task),
@@ -112,7 +109,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         );
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
-        for (final TaskId task : statefulTasksToRankedCandidates.keySet()) {
+        for (final TaskId task : statefulTasks) {
             int numRemainingStandbys = tasksToRemainingStandbys.get(task);
             while (numRemainingStandbys > 0) {
                 final UUID client = standbyTaskClientsByTaskLoad.poll(task);
@@ -213,4 +210,24 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
     }
 
+    private static Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients(final Set<TaskId> statefulTasks,
+                                                                       final Map<UUID, ClientState> clientStates,
+                                                                       final long acceptableRecoveryLag) {
+        final Map<TaskId, SortedSet<UUID>> taskToCaughtUpClients = new HashMap<>();
+
+        for (final TaskId task : statefulTasks) {
+
+            for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
+                final UUID client = clientEntry.getKey();
+                final long taskLag = clientEntry.getValue().lagFor(task);
+                if (taskLag == Task.LATEST_OFFSET) {
+                    taskToCaughtUpClients.computeIfAbsent(task, ignored -> new TreeSet<>()).add(client);
+                } else if (taskLag <= acceptableRecoveryLag) {
+                    taskToCaughtUpClients.computeIfAbsent(task, ignored -> new TreeSet<>()).add(client);
+                }
+            }
+        }
+
+        return taskToCaughtUpClients;
+    }
 }

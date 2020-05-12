@@ -335,7 +335,7 @@ public class ClientState {
             ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
             ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
             ") capacity: " + capacity +
-            " assigned: " + (activeTasks.size() + standbyTasks.size()) +
+            " assigned: " + assignedTaskCount() +
             "]";
     }
 
