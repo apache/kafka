@@ -394,14 +394,14 @@ private[log] object LogValidator extends Logging {
 
           uncompressedSizeInBytes += record.sizeInBytes()
           if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-            // inner records offset should always be continuous
+            // Some older clients do not implement the V1 internal offsets correctly.
+            // Historically the broker handled this by rewriting the batches rather
+            // than rejecting the request. We must continue this handling here to avoid
+            // breaking these clients.
             val expectedOffset = expectedInnerOffset.getAndIncrement()
-            if (record.offset != expectedOffset) {
-              brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-              throw new RecordValidationException(
-                new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition."),
-                List(new RecordError(batchIndex)))
-            }
+            if (record.offset != expectedOffset)
+              inPlaceAssignment = false
+
             if (record.timestamp > maxTimestamp)
               maxTimestamp = record.timestamp
           }
