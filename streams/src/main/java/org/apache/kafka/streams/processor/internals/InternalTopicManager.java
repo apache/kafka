@@ -102,10 +102,11 @@ public class InternalTopicManager {
 
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
-        final Set<String> newlyCreatedTopics = validateTopics(topicsNotReady, topics);
+        final Set<String> newlyCreatedTopics = new HashSet<>();
 
         while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
+            newlyCreatedTopics.addAll(topicsNotReady);
 
             if (!topicsNotReady.isEmpty()) {
                 final Set<NewTopic> newTopics = new HashSet<>();
