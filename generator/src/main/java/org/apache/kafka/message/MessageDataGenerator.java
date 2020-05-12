@@ -54,7 +54,7 @@ public final class MessageDataGenerator {
         schemaGenerator.generateSchemas(message);
         messageFlexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
-            message.name() + "Data",
+            message.generatedClassName(),
             message.struct(),
             message.struct().versions());
         headerGenerator.generate();

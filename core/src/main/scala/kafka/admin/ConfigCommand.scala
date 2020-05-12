@@ -362,21 +362,26 @@ object ConfigCommand extends Config {
         ).asJavaCollection
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
-      case ConfigType.User =>
-      case ConfigType.Client =>
-        val oldConfig: Map[String, java.lang.Double] = getClientQuotasConfig(adminClient, entityTypes, entityNames)
+      case ConfigType.User | ConfigType.Client =>
+        val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
 
         val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
         if (invalidConfigs.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val entity = new ClientQuotaEntity(opts.entityTypes.map { entType =>
+        val alterEntityTypes = entityTypes.map { entType =>
           entType match {
             case ConfigType.User => ClientQuotaEntity.USER
             case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
             case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
           }
-        }.zip(opts.entityNames).toMap.asJava)
+        }
+        val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
+
+        // Explicitly populate a HashMap to ensure nulls are recorded properly.
+        val alterEntityMap = new java.util.HashMap[String, String]
+        alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
+        val entity = new ClientQuotaEntity(alterEntityMap)
 
         val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
         val alterOps = (configsToBeAddedMap.map { case (key, value) =>
@@ -480,8 +485,18 @@ object ConfigCommand extends Config {
   private def describeClientQuotasConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
     getAllClientQuotasConfigs(adminClient, entityTypes, entityNames).foreach { case (entity, entries) =>
       val entityEntries = entity.entries.asScala
-      val entityStr = (entityEntries.get(ClientQuotaEntity.USER).map(u => s"user-principal '${u}'") ++
-        entityEntries.get(ClientQuotaEntity.CLIENT_ID).map(c => s"client-id '${c}'")).mkString(", ")
+
+      def entitySubstr(entityType: String): Option[String] =
+        entityEntries.get(entityType).map { name =>
+          val typeStr = entityType match {
+            case ClientQuotaEntity.USER => "user-principal"
+            case ClientQuotaEntity.CLIENT_ID => "client-id"
+          }
+          if (name != null) s"${typeStr} '${name}'"
+          else s"the default ${typeStr}"
+        }
+
+      val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++ entitySubstr(ClientQuotaEntity.CLIENT_ID)).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
       println(s"Configs for ${entityStr} are ${entriesStr}")
     }
@@ -501,7 +516,11 @@ object ConfigCommand extends Config {
         case Some(_) => throw new IllegalArgumentException(s"Unexpected entity type ${entityTypeOpt.get}")
         case None => throw new IllegalArgumentException("More entity names specified than entity types")
       }
-      entityNameOpt.map(ClientQuotaFilterComponent.ofEntity(entityType, _)).getOrElse(ClientQuotaFilterComponent.ofEntityType(entityType))
+      entityNameOpt match {
+        case Some("") => ClientQuotaFilterComponent.ofDefaultEntity(entityType)
+        case Some(name) => ClientQuotaFilterComponent.ofEntity(entityType, name)
+        case None => ClientQuotaFilterComponent.ofEntityType(entityType)
+      }
     }
 
     adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala

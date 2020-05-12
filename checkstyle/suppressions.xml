@@ -156,7 +156,7 @@
               files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
-              files="(KTableImpl|StreamsPartitionAssignor.java)"/>
+              files="(KTableImpl|StreamsPartitionAssignor|EosBetaUpgradeIntegrationTest).java"/>
 
     <suppress checks="ParameterNumber"
               files="StreamTask.java"/>
@@ -176,12 +176,16 @@
               files="StreamThread.java"/>
     <suppress checks="CyclomaticComplexity"
               files="TaskManager.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="EosBetaUpgradeIntegrationTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="StreamsPartitionAssignor.java"/>
+    <suppress checks="JavaNCSS"
+              files="EosBetaUpgradeIntegrationTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AssignorConfiguration|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
+              files="(AssignorConfiguration|EosBetaUpgradeIntegrationTest|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
 
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>

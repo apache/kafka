@@ -279,7 +279,6 @@ public class EosIntegrationTest {
         for (final Long key : allKeys) {
             assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
         }
-
     }
 
     private void addAllKeys(final Set<Long> allKeys, final List<KeyValue<Long, Long>> records) {
@@ -847,7 +846,7 @@ public class EosIntegrationTest {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws InterruptedException {
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws Exception {
         final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
             .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);

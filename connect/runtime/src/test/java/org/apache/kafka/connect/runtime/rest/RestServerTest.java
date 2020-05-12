@@ -174,6 +174,14 @@ public class RestServerTest {
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
+
+        // correct listener is chosen when https listener is configured before http listener and advertised listener is http
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
     }
 
     @Test

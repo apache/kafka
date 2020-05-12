@@ -22,17 +22,18 @@ import java.util.Properties
 import javax.security.auth.login.Configuration
 
 import scala.collection.Seq
-
-import kafka.admin.ConfigCommand
 import kafka.security.minikdc.MiniKdc
-import kafka.server.KafkaConfig
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
+import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.client.ZKClientConfig
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -148,12 +149,24 @@ trait SaslSetup {
   }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
-    val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")
-    val args = Array("--zookeeper", zkConnect,
-      "--alter", "--add-config", credentials.mkString(","),
-      "--entity-type", "users",
-      "--entity-name", userName)
-    ConfigCommand.main(args)
+    val zkClientConfig = new ZKClientConfig()
+    val zkClient = KafkaZkClient(
+      zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = Some(zkClientConfig))
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    val entityType = ConfigType.User
+    val entityName = userName
+    val configs = adminZkClient.fetchEntityConfig(entityType, entityName)
+
+    ScramMechanism.values().foreach(mechanism => {
+      val credential = new ScramFormatter(mechanism).generateCredential(password, 4096)
+      val credentialString = ScramCredentialUtils.credentialToString(credential)
+      configs.setProperty(mechanism.mechanismName, credentialString)
+    })
+
+    adminZkClient.changeConfigs(entityType, entityName, configs)
+    zkClient.close()
   }
 
 }

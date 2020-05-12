@@ -504,7 +504,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       }
     } else {
       val quotaMetricName = clientRateMetricName(Map.empty)
-      allMetrics.asScala.foreach { case (metricName, metric) =>
+      allMetrics.forEach { (metricName, metric) =>
         if (metricName.name == quotaMetricName.name && metricName.group == quotaMetricName.group) {
           val metricTags = metricName.tags
           Option(quotaLimit(metricTags)).foreach { newQuota =>
