@@ -167,6 +167,7 @@ public class EosBetaUpgradeIntegrationTest {
     }
 
     @Test
+    @Ignore
     public void shouldUpgradeFromEosAlphaToEosBeta() throws Exception {
         // We use two KafkaStreams clients that we upgrade from eos-alpha to eos-beta. During the upgrade,
         // we ensure that there are pending transaction and verify that data is processed correctly.
