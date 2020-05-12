@@ -369,9 +369,12 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // 2 segments are created during restoration.
         assertEquals(2, bytesStore.getSegments().size());
 
-        // Bulk loading is enabled during recovery.
+        // Bulk loading should not be enabled in restoreInternal().
+        // It should be toggled in onRestoreStart and onRestoreEnd inside RocksDBSegmentsBatchingRestoreCallback.
+        // Otherwise for stand-by tasks, once bulk loading is enabled, it might never be disabled which leads to
+        // steadily increasing open file descriptors in RocksDB since compaction will never happen in bulk loading.
         for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(1 << 30));
+            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(4));
         }
 
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();

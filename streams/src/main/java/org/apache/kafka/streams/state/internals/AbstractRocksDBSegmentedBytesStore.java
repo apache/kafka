@@ -36,10 +36,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
@@ -49,7 +47,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
-    private Set<S> bulkLoadSegments;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -185,8 +182,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(this.context, observedStreamTime);
 
-        bulkLoadSegments = new HashSet<>(segments.allSegments());
-
         // register and possibly restore the state from the logs
         context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
 
@@ -248,17 +243,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
-                // This handles the case that state store is moved to a new client and does not
-                // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
-                // will only close the database and open it again with bulk loading enabled.
-                if (!bulkLoadSegments.contains(segment)) {
-                    segment.toggleDbForBulkLoading(true);
-                    // If the store does not exist yet, the getOrCreateSegmentIfLive will call openDB that
-                    // makes the open flag for the newly created store.
-                    // if the store does exist already, then toggleDbForBulkLoading will make sure that
-                    // the store is already open here.
-                    bulkLoadSegments = new HashSet<>(segments.allSegments());
-                }
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(record, batch);
