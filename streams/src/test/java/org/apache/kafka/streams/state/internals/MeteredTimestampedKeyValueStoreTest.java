@@ -199,7 +199,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     @SuppressWarnings("resource")
     @Test
     public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
-        expectLastCall();
         init();
 
         metered.put(key, valueAndTimestamp);
