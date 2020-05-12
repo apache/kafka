@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
@@ -31,23 +32,26 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     private final TaskManager taskManager;
     private final StreamThread streamThread;
     private final Logger log;
+    private final AtomicInteger assignmentErrorCode;
 
     StreamsRebalanceListener(final Time time,
                              final TaskManager taskManager,
                              final StreamThread streamThread,
-                             final Logger log) {
+                             final Logger log,
+                             final AtomicInteger assignmentErrorCode) {
         this.time = time;
         this.taskManager = taskManager;
         this.streamThread = streamThread;
         this.log = log;
+        this.assignmentErrorCode = assignmentErrorCode;
     }
 
     @Override
     public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
         // NB: all task management is already handled by:
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
-        if (streamThread.getAssignmentErrorCode() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-            log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
+        if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+            log.error("Received error code {} - shutdown", assignmentErrorCode.get());
             streamThread.shutdown();
         } else {
             streamThread.setState(State.PARTITIONS_ASSIGNED);

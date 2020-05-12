@@ -528,22 +528,22 @@ class StreamsUpgradeTest(Test):
                         log_monitor.wait_until("Sent a version 8 subscription and got version 7 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 7 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
-                        log_monitor.wait_until("Detected that the assignor requested a rebalance. Rejoining the consumer group to trigger a new rebalance.",
+                        log_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
                                                timeout_sec=60,
-                                               err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
+                                               err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
                     else:
                         first_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
                                                        timeout_sec=60,
                                                        err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(first_other_node.account))
-                        first_other_monitor.wait_until("Detected that the assignor requested a rebalance. Rejoining the consumer group to trigger a new rebalance.",
+                        first_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
                                                        timeout_sec=60,
-                                                       err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
+                                                       err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
                         second_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
                                                         timeout_sec=60,
                                                         err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(second_other_node.account))
-                        second_other_monitor.wait_until("Detected that the assignor requested a rebalance. Rejoining the consumer group to trigger a new rebalance.",
+                        second_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
                                                         timeout_sec=60,
-                                                        err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
+                                                        err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
 
                     # version probing should trigger second rebalance
                     # now we check that after consecutive rebalances we have synchronized generation
