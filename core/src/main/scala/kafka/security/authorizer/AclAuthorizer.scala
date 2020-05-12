@@ -26,6 +26,7 @@ import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import kafka.zk._
+import org.apache.kafka.common.Monitorable
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -114,7 +115,7 @@ object AclAuthorizer {
   }
 }
 
-class AclAuthorizer extends Authorizer with Logging {
+class AclAuthorizer extends Authorizer with Logging with Monitorable {
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
@@ -172,8 +173,11 @@ class AclAuthorizer extends Authorizer with Logging {
     loadCache()
   }
 
+  override def monitor(metrics: Metrics): Unit = {
+    authorizerMetrics = new AuthorizerMetrics(metrics)
+  }
+
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
-    authorizerMetrics = new AuthorizerMetrics(serverInfo.metrics())
     serverInfo.endpoints.asScala.map { endpoint =>
       endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
   }
