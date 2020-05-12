@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
@@ -601,6 +602,35 @@ public class UtilsTest {
     }
 
     @Test
+    public void testUnionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> union = union(TreeSet::new, oneSet);
+
+        assertThat(union, is(mkSet("a", "b", "c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = union(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e", "x", "y", "z")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfNone() {
+        final Set<String> union = union(TreeSet::new);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
     public void testIntersection() {
         final Set<String> oneSet = mkSet("a", "b", "c");
         final Set<String> anotherSet = mkSet("c", "d", "e");
@@ -608,6 +638,38 @@ public class UtilsTest {
 
         assertThat(intersection, is(mkSet("c")));
         assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> intersection = intersection(TreeSet::new, oneSet);
+
+        assertThat(intersection, is(mkSet("a", "b", "c")));
+        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet);
+
+        assertThat(union, is(mkSet("c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testDisjointIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
     }
 
     @Test
