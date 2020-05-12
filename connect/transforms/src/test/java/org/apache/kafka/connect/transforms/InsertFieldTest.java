@@ -112,6 +112,21 @@ public class InsertFieldTest {
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
     }
 
+    @Test
+    public void schemalessInsertTimestamp() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("timestamp.field", "timestamp_field?");
+
+        xform.configure(props);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, null, null, Collections.singletonMap("magic", 42L), 123L);
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(123L, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
+    }
+
 
     @Test
     public void insertConfiguredFieldsIntoTombstoneEventWithoutSchemaLeavesValueUnchanged() {
