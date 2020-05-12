@@ -127,7 +127,7 @@ public class RestoreIntegrationTest {
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
-        createStateForRestoration(INPUT_STREAM);
+        createStateForRestoration(INPUT_STREAM, 0);
         setCommittedOffset(INPUT_STREAM, offsetLimitDelta);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
@@ -143,7 +143,7 @@ public class RestoreIntegrationTest {
         builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
-                    if (numReceived.incrementAndGet() == 2 * offsetLimitDelta) {
+                    if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
                         shutdownLatch.countDown();
                     }
                 });
@@ -190,8 +190,8 @@ public class RestoreIntegrationTest {
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
-        createStateForRestoration(APPID + "-store-changelog");
-        createStateForRestoration(INPUT_STREAM);
+        createStateForRestoration(APPID + "-store-changelog", 0);
+        createStateForRestoration(INPUT_STREAM, 10000);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
@@ -345,7 +345,7 @@ public class RestoreIntegrationTest {
         public void close() { }
     }
 
-    private void createStateForRestoration(final String changelogTopic) {
+    private void createStateForRestoration(final String changelogTopic, final int startingOffset) {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
@@ -353,7 +353,8 @@ public class RestoreIntegrationTest {
                      new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
 
             for (int i = 0; i < numberOfKeys; i++) {
-                producer.send(new ProducerRecord<>(changelogTopic, i, i));
+                final int offset = startingOffset + i;
+                producer.send(new ProducerRecord<>(changelogTopic, offset, offset));
             }
         }
     }
