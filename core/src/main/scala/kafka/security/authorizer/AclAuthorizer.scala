@@ -26,7 +26,6 @@ import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import kafka.zk._
-import org.apache.kafka.common.Monitorable
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -115,7 +114,7 @@ object AclAuthorizer {
   }
 }
 
-class AclAuthorizer extends Authorizer with Logging with Monitorable {
+class AclAuthorizer extends Authorizer with Logging {
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
