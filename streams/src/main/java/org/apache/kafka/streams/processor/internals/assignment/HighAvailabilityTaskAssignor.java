@@ -97,7 +97,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         balanceTasksOverThreads(
             clientStates,
             ClientState::activeTasks,
-            ClientState::unAssignActive,
+            ClientState::unassignActive,
             ClientState::assignActive
         );
     }
@@ -136,7 +136,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         balanceTasksOverThreads(
             clientStates,
             ClientState::standbyTasks,
-            ClientState::unAssignStandby,
+            ClientState::unassignStandby,
             ClientState::assignStandby
         );
     }

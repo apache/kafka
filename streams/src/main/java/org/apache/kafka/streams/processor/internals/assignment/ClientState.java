@@ -120,7 +120,7 @@ public class ClientState {
         activeTasks.add(task);
     }
 
-    void unAssignActive(final TaskId task) {
+    void unassignActive(final TaskId task) {
         if (!activeTasks.contains(task)) {
             throw new IllegalArgumentException("Tried to unassign active task " + task + ", but it is not currently assigned: " + this);
         }
@@ -132,7 +132,7 @@ public class ClientState {
         standbyTasks.add(task);
     }
 
-    void unAssignStandby(final TaskId task) {
+    void unassignStandby(final TaskId task) {
         if (!standbyTasks.contains(task)) {
             throw new IllegalArgumentException("Tried to unassign standby task " + task + ", but it is not currently assigned: " + this);
         }

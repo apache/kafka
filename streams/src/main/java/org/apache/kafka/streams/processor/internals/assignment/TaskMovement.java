@@ -139,21 +139,21 @@ final class TaskMovement {
         sourceClientState.assignActive(task);
 
         if (remainingWarmupReplicas.getAndDecrement() > 0) {
-            destinationClientState.unAssignActive(task);
+            destinationClientState.unassignActive(task);
             destinationClientState.assignStandby(task);
         } else {
             // we have no more standbys or warmups to hand out, so we have to try and move it
             // to the destination in a follow-on rebalance
-            destinationClientState.unAssignActive(task);
+            destinationClientState.unassignActive(task);
         }
     }
 
     private static void swapStandbyAndActive(final TaskId task,
                                              final ClientState sourceClientState,
                                              final ClientState destinationClientState) {
-        sourceClientState.unAssignStandby(task);
+        sourceClientState.unassignStandby(task);
         sourceClientState.assignActive(task);
-        destinationClientState.unAssignActive(task);
+        destinationClientState.unassignActive(task);
         destinationClientState.assignStandby(task);
     }
 
