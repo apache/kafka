@@ -264,7 +264,7 @@ public final class AssignmentTestUtils {
         double maxActive = Double.MIN_VALUE;
         double minActive = Double.MAX_VALUE;
         for (final ClientState clientState : clientStates.values()) {
-            final double activeTaskLoad = 1.0 * clientState.activeTaskCount() / clientState.capacity();
+            final double activeTaskLoad = clientState.activeTaskLoad();
             maxActive = Math.max(maxActive, activeTaskLoad);
             minActive = Math.min(minActive, activeTaskLoad);
         }

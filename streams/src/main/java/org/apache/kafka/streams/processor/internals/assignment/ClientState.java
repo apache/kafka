@@ -115,16 +115,56 @@ public class ClientState {
             capacity);
     }
 
+    int capacity() {
+        return capacity;
+    }
+
+    public void incrementCapacity() {
+        capacity++;
+    }
+
+    boolean reachedCapacity() {
+        return assignedTaskCount() >= capacity;
+    }
+
+    public Set<TaskId> activeTasks() {
+        return unmodifiableSet(activeTasks);
+    }
+
+    public int activeTaskCount() {
+        return activeTasks.size();
+    }
+
+    double activeTaskLoad() {
+        return ((double) activeTaskCount()) / capacity;
+    }
+
+    public void assignActiveTasks(final Collection<TaskId> tasks) {
+        activeTasks.addAll(tasks);
+    }
+
     void assignActive(final TaskId task) {
         assertNotAssigned(task);
         activeTasks.add(task);
     }
 
-    void unassignActive(final TaskId task) {
+    public void unassignActive(final TaskId task) {
         if (!activeTasks.contains(task)) {
             throw new IllegalArgumentException("Tried to unassign active task " + task + ", but it is not currently assigned: " + this);
         }
         activeTasks.remove(task);
+    }
+
+    public Set<TaskId> standbyTasks() {
+        return unmodifiableSet(standbyTasks);
+    }
+
+    boolean hasStandbyTask(final TaskId taskId) {
+        return standbyTasks.contains(taskId);
+    }
+
+    int standbyTaskCount() {
+        return standbyTasks.size();
     }
 
     void assignStandby(final TaskId task) {
@@ -139,52 +179,61 @@ public class ClientState {
         standbyTasks.remove(task);
     }
 
-    public void assignActiveTasks(final Collection<TaskId> tasks) {
-        activeTasks.addAll(tasks);
+    Set<TaskId> assignedTasks() {
+        // Since we're copying it, it's not strictly necessary to make it unmodifiable also.
+        // I'm just trying to prevent subtle bugs if we write code that thinks it can update
+        // the assignment by updating the returned set.
+        return unmodifiableSet(
+            union(
+                () -> new HashSet<>(activeTasks.size() + standbyTasks.size()),
+                activeTasks,
+                standbyTasks
+            )
+        );
     }
 
-    public Set<TaskId> activeTasks() {
-        return unmodifiableSet(activeTasks);
+    public int assignedTaskCount() {
+        return activeTaskCount() + standbyTaskCount();
     }
 
-    public Set<TaskId> standbyTasks() {
-        return unmodifiableSet(standbyTasks);
+    double assignedTaskLoad() {
+        return ((double) assignedTaskCount()) / capacity;
+    }
+
+    boolean hasAssignedTask(final TaskId taskId) {
+        return activeTasks.contains(taskId) || standbyTasks.contains(taskId);
     }
 
     Set<TaskId> prevActiveTasks() {
         return unmodifiableSet(prevActiveTasks);
     }
 
-    Set<TaskId> prevStandbyTasks() {
-        return unmodifiableSet(prevStandbyTasks);
-    }
-
-    public Map<TopicPartition, String> ownedPartitions() {
-        return unmodifiableMap(ownedPartitions);
-    }
-
-    public int assignedTaskCount() {
-        return assignedTasks().size();
-    }
-
-    public void incrementCapacity() {
-        capacity++;
-    }
-
-    public int activeTaskCount() {
-        return activeTasks.size();
-    }
-
-    int standbyTaskCount() {
-        return standbyTasks.size();
+    private void addPreviousActiveTask(final TaskId task) {
+        prevActiveTasks.add(task);
     }
 
     void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
     }
 
+    Set<TaskId> prevStandbyTasks() {
+        return unmodifiableSet(prevStandbyTasks);
+    }
+
+    private void addPreviousStandbyTask(final TaskId task) {
+        prevStandbyTasks.add(task);
+    }
+
     void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
         prevStandbyTasks.addAll(standbyTasks);
+    }
+
+    Set<TaskId> previousAssignedTasks() {
+        return union(() -> new HashSet<>(prevActiveTasks.size() + prevStandbyTasks.size()), prevActiveTasks, prevStandbyTasks);
+    }
+
+    public Map<TopicPartition, String> ownedPartitions() {
+        return unmodifiableMap(ownedPartitions);
     }
 
     public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
@@ -252,26 +301,6 @@ public class ClientState {
         }
     }
 
-    public void removeFromAssignment(final TaskId task) {
-        activeTasks.remove(task);
-    }
-
-    boolean reachedCapacity() {
-        return assignedTasks().size() >= capacity;
-    }
-
-    int capacity() {
-        return capacity;
-    }
-
-    double activeTaskLoad() {
-        return ((double) activeTaskCount()) / capacity;
-    }
-
-    double taskLoad() {
-        return ((double) assignedTaskCount()) / capacity;
-    }
-
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }
@@ -297,8 +326,17 @@ public class ClientState {
         }
     }
 
-    boolean hasAssignedTask(final TaskId taskId) {
-        return assignedTasks().contains(taskId);
+    @Override
+    public String toString() {
+        return "[activeTasks: (" + activeTasks +
+            ") standbyTasks: (" + standbyTasks +
+            ") prevActiveTasks: (" + prevActiveTasks +
+            ") prevStandbyTasks: (" + prevStandbyTasks +
+            ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
+            ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
+            ") capacity: " + capacity +
+            " assigned: " + (activeTasks.size() + standbyTasks.size()) +
+            "]";
     }
 
     private void initializePrevActiveTasksFromOwnedPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap) {
@@ -335,39 +373,9 @@ public class ClientState {
         }
     }
 
-    private void addPreviousActiveTask(final TaskId task) {
-        prevActiveTasks.add(task);
-    }
-
-    private void addPreviousStandbyTask(final TaskId task) {
-        prevStandbyTasks.add(task);
-    }
-
     private void assertNotAssigned(final TaskId task) {
         if (standbyTasks.contains(task) || activeTasks.contains(task)) {
             throw new IllegalArgumentException("Tried to assign task " + task + ", but it is already assigned: " + this);
         }
-    }
-
-    @Override
-    public String toString() {
-        return "[activeTasks: (" + activeTasks +
-            ") standbyTasks: (" + standbyTasks +
-            ") prevActiveTasks: (" + prevActiveTasks +
-            ") prevStandbyTasks: (" + prevStandbyTasks +
-            ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
-            ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
-            ") capacity: " + capacity +
-            " assigned: " + (activeTasks.size() + standbyTasks.size()) +
-            "]";
-    }
-
-    // Visible for testing
-    Set<TaskId> assignedTasks() {
-        return union(() -> new HashSet<>(activeTasks.size() + standbyTasks.size()), activeTasks, standbyTasks);
-    }
-
-    Set<TaskId> previousAssignedTasks() {
-        return union(() -> new HashSet<>(prevActiveTasks.size() + prevStandbyTasks.size()), prevActiveTasks, prevStandbyTasks);
     }
 }

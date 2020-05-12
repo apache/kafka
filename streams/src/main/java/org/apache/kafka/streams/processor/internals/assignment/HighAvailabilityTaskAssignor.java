@@ -107,8 +107,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                   final SortedMap<TaskId, SortedSet<RankedClient>> statefulTasksToRankedCandidates,
                                                   final int numStandbyReplicas) {
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, task) -> !clientStates.get(client).assignedTasks().contains(task),
-            client -> clientStates.get(client).taskLoad()
+            (client, task) -> !clientStates.get(client).hasAssignedTask(task),
+            client -> clientStates.get(client).assignedTaskLoad()
         );
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
@@ -163,7 +163,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
-                        final boolean canMove = !destinationClientState.assignedTasks().contains(taskToMove);
+                        final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
                         if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClientState, taskToMove);
@@ -177,20 +177,16 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private static boolean shouldMoveATask(final ClientState sourceClientState,
                                            final ClientState destinationClientState) {
-        final double assignedTasksPerStreamThreadAtDestination =
-            1.0 * destinationClientState.assignedTasks().size() / destinationClientState.capacity();
-        final double assignedTasksPerStreamThreadAtSource =
-            1.0 * sourceClientState.assignedTasks().size() / sourceClientState.capacity();
-        final double skew = assignedTasksPerStreamThreadAtSource - assignedTasksPerStreamThreadAtDestination;
+        final double skew = sourceClientState.assignedTaskLoad() - destinationClientState.assignedTaskLoad();
 
         if (skew <= 0) {
             return false;
         }
 
         final double proposedAssignedTasksPerStreamThreadAtDestination =
-            (destinationClientState.assignedTasks().size() + 1.0) / destinationClientState.capacity();
+            (destinationClientState.assignedTaskCount() + 1.0) / destinationClientState.capacity();
         final double proposedAssignedTasksPerStreamThreadAtSource =
-            (sourceClientState.assignedTasks().size() - 1.0) / sourceClientState.capacity();
+            (sourceClientState.assignedTaskCount() - 1.0) / sourceClientState.capacity();
         final double proposedSkew = proposedAssignedTasksPerStreamThreadAtSource - proposedAssignedTasksPerStreamThreadAtDestination;
 
         if (proposedSkew < 0) {
@@ -205,11 +201,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                    final Iterable<TaskId> statelessTasks) {
         final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> true,
-            client -> {
-                final ClientState clientState = clientStates.get(client);
-                final double activeTaskLoad = 1.0 * clientState.activeTasks().size() / clientState.capacity();
-                return activeTaskLoad;
-            }
+            client -> clientStates.get(client).activeTaskLoad()
         );
         statelessActiveTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 

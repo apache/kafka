@@ -75,7 +75,7 @@ final class TaskMovement {
 
         final ConstrainedPrioritySet clientsByTaskLoad = new ConstrainedPrioritySet(
             caughtUpPredicate,
-            client -> clientStates.get(client).taskLoad()
+            client -> clientStates.get(client).assignedTaskLoad()
         );
 
         final Queue<TaskMovement> taskMovements = new PriorityQueue<>(
@@ -102,7 +102,7 @@ final class TaskMovement {
         for (final TaskMovement movement : taskMovements) {
             final UUID standbySourceClient = clientsByTaskLoad.poll(
                 movement.task,
-                c -> clientStates.get(c).standbyTasks().contains(movement.task)
+                c -> clientStates.get(c).hasStandbyTask(movement.task)
             );
             if (standbySourceClient == null) {
                 // there's not a caught-up standby available to take over the task, so we'll schedule a warmup instead
