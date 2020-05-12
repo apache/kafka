@@ -34,7 +34,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
-import org.apache.kafka.common.message.{DescribeConfigsRequestData, DescribeConfigsResponseData}
+import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -44,7 +44,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
@@ -668,36 +668,7 @@ class AdminManager(val config: KafkaConfig,
   private def brokerSynonyms(name: String): List[String] = {
     DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
   }
-
-  private def brokerDocumentation(name: String): String = {
-    config.documentationOf(name)
-  }
-
-  private def configResponseType(configType: Option[ConfigDef.Type]): DescribeConfigsResponse.ConfigType = {
-    if (configType.isEmpty)
-      DescribeConfigsResponse.ConfigType.UNKNOWN
-    else configType.get match {
-      case ConfigDef.Type.BOOLEAN => DescribeConfigsResponse.ConfigType.BOOLEAN
-      case ConfigDef.Type.STRING => DescribeConfigsResponse.ConfigType.STRING
-      case ConfigDef.Type.INT => DescribeConfigsResponse.ConfigType.INT
-      case ConfigDef.Type.SHORT => DescribeConfigsResponse.ConfigType.SHORT
-      case ConfigDef.Type.LONG => DescribeConfigsResponse.ConfigType.LONG
-      case ConfigDef.Type.DOUBLE => DescribeConfigsResponse.ConfigType.DOUBLE
-      case ConfigDef.Type.LIST => DescribeConfigsResponse.ConfigType.LIST
-      case ConfigDef.Type.CLASS => DescribeConfigsResponse.ConfigType.CLASS
-      case ConfigDef.Type.PASSWORD => DescribeConfigsResponse.ConfigType.PASSWORD
-      case _ => DescribeConfigsResponse.ConfigType.UNKNOWN
-    }
-  }
-
-  private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
-    if (configType != null)
-      configType
-    else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
-  }
-
+  
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponseData.DescribeConfigsSynonym] = {
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
@@ -753,7 +724,7 @@ class AdminManager(val config: KafkaConfig,
       case _ => ConfigDef.convertToString(value, configEntryType.orNull)
     }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
-        .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
+        .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id())
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
     val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
