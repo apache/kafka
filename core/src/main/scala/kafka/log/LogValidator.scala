@@ -414,6 +414,10 @@ private[log] object LogValidator extends Logging {
                 if (record.timestamp > maxTimestamp)
                   maxTimestamp = record.timestamp
 
+                // Some older clients do not implement the V1 internal offsets correctly.
+                // Historically the broker handled this by rewriting the batches rather
+                // than rejecting the request. We must continue this handling here to avoid
+                // breaking these clients.
                 if (record.offset != expectedOffset)
                   inPlaceAssignment = false
               }

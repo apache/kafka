@@ -78,7 +78,7 @@ class LogValidatorTest {
         }
       } else {
         val result = validateMessages(invalidRecords, magicValue, CompressionType.GZIP, CompressionType.GZIP)
-        assertEquals(0 until 20, result.validatedRecords.records.asScala.map(_.offset))
+        assertEquals(0 until numRecords, result.validatedRecords.records.asScala.map(_.offset))
       }
     }
 
