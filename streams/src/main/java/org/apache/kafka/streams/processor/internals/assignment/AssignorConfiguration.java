@@ -110,7 +110,7 @@ public final class AssignorConfiguration {
         }
     }
 
-    public AtomicInteger getAssignmentErrorCode() {
+    public AtomicInteger assignmentErrorCode() {
         final Object ai = internalConfigs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
         if (ai == null) {
             final KafkaException fatalException = new KafkaException("assignmentErrorCode is not specified");
@@ -128,7 +128,7 @@ public final class AssignorConfiguration {
         return (AtomicInteger) ai;
     }
 
-    public AtomicLong getNextScheduledRebalanceMs() {
+    public AtomicLong nextScheduledRebalanceMs() {
         final Object al = internalConfigs.get(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
         if (al == null) {
             final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
@@ -147,7 +147,7 @@ public final class AssignorConfiguration {
         return (AtomicLong) al;
     }
 
-    public Time getTime() {
+    public Time time() {
         final Object t = internalConfigs.get(InternalConfig.TIME);
         if (t == null) {
             final KafkaException fatalException = new KafkaException("time is not specified");
@@ -166,11 +166,11 @@ public final class AssignorConfiguration {
         return (Time) t;
     }
 
-    public TaskManager getTaskManager() {
+    public TaskManager taskManager() {
         return taskManager;
     }
 
-    public StreamsMetadataState getStreamsMetadataState() {
+    public StreamsMetadataState streamsMetadataState() {
         final Object o = internalConfigs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
         if (o == null) {
             final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
@@ -189,7 +189,7 @@ public final class AssignorConfiguration {
         return (StreamsMetadataState) o;
     }
 
-    public RebalanceProtocol getRebalanceProtocol() {
+    public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
             switch (upgradeFrom) {
@@ -213,11 +213,11 @@ public final class AssignorConfiguration {
         return RebalanceProtocol.COOPERATIVE;
     }
 
-    public String getLogPrefix() {
+    public String logPrefix() {
         return logPrefix;
     }
 
-    public int getConfiguredMetadataVersion(final int priorVersion) {
+    public int configuredMetadataVersion(final int priorVersion) {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
             switch (upgradeFrom) {
@@ -254,14 +254,14 @@ public final class AssignorConfiguration {
     }
 
     @SuppressWarnings("deprecation")
-    public org.apache.kafka.streams.processor.PartitionGrouper getPartitionGrouper() {
+    public org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper() {
         return streamsConfig.getConfiguredInstance(
             StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
             org.apache.kafka.streams.processor.PartitionGrouper.class
         );
     }
 
-    public String getUserEndPoint() {
+    public String userEndPoint() {
         final String configuredUserEndpoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (configuredUserEndpoint != null && !configuredUserEndpoint.isEmpty()) {
             try {
@@ -288,27 +288,27 @@ public final class AssignorConfiguration {
         }
     }
 
-    public Admin getAdminClient() {
+    public Admin adminClient() {
         return adminClient;
     }
 
-    public int getAdminClientTimeout() {
+    public int adminClientTimeout() {
         return streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
     }
 
-    public InternalTopicManager getInternalTopicManager() {
+    public InternalTopicManager internalTopicManager() {
         return new InternalTopicManager(adminClient, streamsConfig);
     }
 
-    public CopartitionedTopicsEnforcer getCopartitionedTopicsEnforcer() {
+    public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {
         return new CopartitionedTopicsEnforcer(logPrefix);
     }
 
-    public AssignmentConfigs getAssignmentConfigs() {
+    public AssignmentConfigs assignmentConfigs() {
         return new AssignmentConfigs(streamsConfig);
     }
 
-    public TaskAssignor getTaskAssignor() {
+    public TaskAssignor taskAssignor() {
         try {
             return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
         } catch (final ClassNotFoundException e) {
@@ -319,7 +319,7 @@ public final class AssignorConfiguration {
         }
     }
 
-    public AssignmentListener getAssignmentListener() {
+    public AssignmentListener assignmentListener() {
         final Object o = internalConfigs.get(InternalConfig.ASSIGNMENT_LISTENER);
         if (o == null) {
             return stable -> { };

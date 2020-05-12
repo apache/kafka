@@ -187,25 +187,25 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     public void configure(final Map<String, ?> configs) {
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(configs);
 
-        logPrefix = assignorConfiguration.getLogPrefix();
+        logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
         usedSubscriptionMetadataVersion = assignorConfiguration
-            .getConfiguredMetadataVersion(usedSubscriptionMetadataVersion);
-        taskManager = assignorConfiguration.getTaskManager();
-        streamsMetadataState = assignorConfiguration.getStreamsMetadataState();
-        assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode();
-        nextScheduledRebalanceMs = assignorConfiguration.getNextScheduledRebalanceMs();
-        time = assignorConfiguration.getTime();
-        assignmentConfigs = assignorConfiguration.getAssignmentConfigs();
-        partitionGrouper = assignorConfiguration.getPartitionGrouper();
-        userEndPoint = assignorConfiguration.getUserEndPoint();
-        adminClient = assignorConfiguration.getAdminClient();
-        adminClientTimeout = assignorConfiguration.getAdminClientTimeout();
-        internalTopicManager = assignorConfiguration.getInternalTopicManager();
-        copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
-        rebalanceProtocol = assignorConfiguration.getRebalanceProtocol();
-        taskAssignorSupplier = assignorConfiguration::getTaskAssignor;
-        assignmentListener = assignorConfiguration.getAssignmentListener();
+            .configuredMetadataVersion(usedSubscriptionMetadataVersion);
+        taskManager = assignorConfiguration.taskManager();
+        streamsMetadataState = assignorConfiguration.streamsMetadataState();
+        assignmentErrorCode = assignorConfiguration.assignmentErrorCode();
+        nextScheduledRebalanceMs = assignorConfiguration.nextScheduledRebalanceMs();
+        time = assignorConfiguration.time();
+        assignmentConfigs = assignorConfiguration.assignmentConfigs();
+        partitionGrouper = assignorConfiguration.partitionGrouper();
+        userEndPoint = assignorConfiguration.userEndPoint();
+        adminClient = assignorConfiguration.adminClient();
+        adminClientTimeout = assignorConfiguration.adminClientTimeout();
+        internalTopicManager = assignorConfiguration.internalTopicManager();
+        copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
+        rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        taskAssignorSupplier = assignorConfiguration::taskAssignor;
+        assignmentListener = assignorConfiguration.assignmentListener();
     }
 
     @Override
