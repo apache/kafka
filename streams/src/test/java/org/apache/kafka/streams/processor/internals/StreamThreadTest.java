@@ -541,7 +541,7 @@ public class StreamThreadTest {
         }
 
         AtomicLong nextRebalanceMs() {
-            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS);
+            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
         }
     }
 

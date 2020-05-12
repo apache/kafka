@@ -47,7 +47,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
@@ -86,6 +85,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -200,7 +200,7 @@ public class StreamsPartitionAssignorTest {
     private final Class<? extends TaskAssignor> taskAssignor;
 
     private final AtomicInteger assignmentError = new AtomicInteger();
-    private final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+    private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     private final MockTime time = new MockTime();
 
     private Map<String, Object> configProps() {
@@ -211,7 +211,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
         configurationMap.put(InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
-        configurationMap.put(InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
+        configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
         configurationMap.put(InternalConfig.TIME, time);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
@@ -1360,7 +1360,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldTriggerRebalanceOnHostInfoChange() {
+    public void shouldTriggerImmediateRebalanceOnHostInfoChange() {
         final Map<HostInfo, Set<TopicPartition>> oldHostState = mkMap(
             mkEntry(new HostInfo("localhost", 9090), mkSet(t1p0, t1p1)),
             mkEntry(new HostInfo("otherhost", 9090), mkSet(t2p0, t2p1))
@@ -1376,14 +1376,44 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(createAssignment(oldHostState), null);
 
-        assertThat(assignmentError.get(), is(AssignorError.REBALANCE_NEEDED.code()));
+        assertThat(nextScheduledRebalanceMs.get(), is(0L));
 
-        partitionAssignor.setAssignmentErrorCode(AssignorError.NONE.code());
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
 
-        assertThat(assignmentError.get(), is(AssignorError.NONE.code()));
+        assertThat(nextScheduledRebalanceMs.get(), is(Long.MAX_VALUE));
+    }
 
-        EasyMock.verify(taskManager);
+    @Test
+    public void shouldTriggerImmediateRebalanceOnTasksRevoked() {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+
+        subscriptions.put(CONSUMER_1,
+                          new Subscription(
+                              Collections.singletonList("topic1"),
+                              getInfo(UUID_1, allTasks, EMPTY_TASKS).encode(),
+                              asList(t1p0, t1p1, t1p2))
+        );
+        subscriptions.put(CONSUMER_2,
+                          new Subscription(
+                              Collections.singletonList("topic1"),
+                              getInfo(UUID_1, EMPTY_TASKS, allTasks).encode(),
+                              emptyList())
+        );
+
+        createMockTaskManager(allTasks, allTasks);
+        configurePartitionAssignorWith(singletonMap(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 0L));
+
+        final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        // Verify at least one partition was revoked
+        assertThat(assignment.get(CONSUMER_1).partitions(), not(allTasks));
+        assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
+
+        partitionAssignor.onAssignment(assignment.get(CONSUMER_2), null);
+
+        assertThat(nextScheduledRebalanceMs.get(), is(0L));
     }
 
     @Test
@@ -1768,13 +1798,13 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldGetNextProbingRebalanceMs() {
-        nextProbingRebalanceMs.set(5 * 60 * 1000L);
+        nextScheduledRebalanceMs.set(5 * 60 * 1000L);
 
         createDefaultMockTaskManager();
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getNextProbingRebalanceMs(props).get(), equalTo(5 * 60 * 1000L));
+        assertThat(assignorConfiguration.getNextScheduledRebalanceMs(props).get(), equalTo(5 * 60 * 1000L));
     }
 
     @Test
