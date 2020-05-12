@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -40,6 +42,7 @@ final class ClusterConnectionStates {
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
+    private Set<String> connectingNodes;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, LogContext logContext) {
         this.log = logContext.logger(ClusterConnectionStates.class);
@@ -47,6 +50,7 @@ final class ClusterConnectionStates {
         this.reconnectBackoffMaxMs = reconnectBackoffMaxMs;
         this.reconnectBackoffMaxExp = Math.log(this.reconnectBackoffMaxMs / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<>();
+        this.connectingNodes = new HashSet<>();
     }
 
     /**
@@ -140,6 +144,7 @@ final class ClusterConnectionStates {
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
             this.reconnectBackoffInitMs, host, clientDnsLookup));
+        connectingNodes.add(id);
     }
 
     /**
@@ -161,6 +166,7 @@ final class ClusterConnectionStates {
         nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
+        connectingNodes.remove(id);
     }
 
     /**
@@ -355,6 +361,21 @@ final class ClusterConnectionStates {
         if (state == null)
             throw new IllegalStateException("No entry found for connection " + id);
         return state;
+    }
+
+    // TODO: Javadoc
+    public Set<String> connectingNodes() {
+        return this.connectingNodes;
+    }
+
+    // TODO: Javadoc
+    public long lastConnectAttemptMs(String id) {
+        return this.nodeState.get(id).lastConnectAttemptMs;
+    }
+
+    // TODO: Javadoc
+    public long failedAttempts(String id) {
+        return this.nodeState.get(id).failedAttempts;
     }
 
     /**

@@ -92,6 +92,9 @@ public class CommonClientConfigs {
         Utils.join(SecurityProtocol.names(), ", ") + ".";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
+    public static final String CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = "connections.setup.timeout.ms";
+    public static final String CONNECTIONS_SETUP_TIMEOUT_MS_DOC = "The configuration controls the maximum amount of time the client will wait for socket channels finish connecting. The connection will be closed if it is not built before the timeout elapses.";
+
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
     public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
 

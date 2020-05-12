@@ -286,21 +286,7 @@ object BrokerApiVersionsCommand {
         channelBuilder,
         logContext)
 
-      val networkClient = new NetworkClient(
-        selector,
-        metadata,
-        clientId,
-        DefaultMaxInFlightRequestsPerConnection,
-        DefaultReconnectBackoffMs,
-        DefaultReconnectBackoffMax,
-        DefaultSendBufferBytes,
-        DefaultReceiveBufferBytes,
-        requestTimeoutMs,
-        ClientDnsLookup.DEFAULT,
-        time,
-        true,
-        new ApiVersions,
-        logContext)
+      val networkClient = new NetworkClient(selector, metadata, clientId, DefaultMaxInFlightRequestsPerConnection, DefaultReconnectBackoffMs, DefaultReconnectBackoffMax, DefaultSendBufferBytes, DefaultReceiveBufferBytes, requestTimeoutMs, 10*1000, ClientDnsLookup.DEFAULT, time, true, new ApiVersions, logContext)
 
       val highLevelClient = new ConsumerNetworkClient(
         logContext,
