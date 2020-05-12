@@ -1169,7 +1169,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
 
   // Listener counts and configs are synchronized on `counts`
   private val listenerCounts = mutable.Map[ListenerName, Int]()
-  private val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
+  private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
 
   def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
