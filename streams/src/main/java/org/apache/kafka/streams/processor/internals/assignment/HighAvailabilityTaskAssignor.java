@@ -49,23 +49,16 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients =
-            tasksToCaughtUpClients(statefulTasks, clients, configs.acceptableRecoveryLag);
-
-        final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> configs.numStandbyReplicas));
-
         assignActiveStatefulTasks(clientStates, statefulTasks);
 
         assignStandbyReplicaTasks(
-            tasksToRemainingStandbys,
             clientStates,
             statefulTasks,
             configs.numStandbyReplicas
         );
 
         final boolean probingRebalanceNeeded = assignTaskMovements(
-            tasksToCaughtUpClients,
+            tasksToCaughtUpClients(statefulTasks, clientStates, configs.acceptableRecoveryLag),
             clientStates,
             configs.maxWarmupReplicas
         );
@@ -99,10 +92,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         );
     }
 
-    private static void assignStandbyReplicaTasks(final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                  final TreeMap<UUID, ClientState> clientStates,
+    private static void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                                   final Set<TaskId> statefulTasks,
                                                   final int numStandbyReplicas) {
+        final Map<TaskId, Integer> tasksToRemainingStandbys =
+            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbyReplicas));
+
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clientStates.get(client).hasAssignedTask(task),
             client -> clientStates.get(client).assignedTaskLoad()
@@ -220,9 +215,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
                 final UUID client = clientEntry.getKey();
                 final long taskLag = clientEntry.getValue().lagFor(task);
-                if (taskLag == Task.LATEST_OFFSET) {
-                    taskToCaughtUpClients.computeIfAbsent(task, ignored -> new TreeSet<>()).add(client);
-                } else if (taskLag <= acceptableRecoveryLag) {
+                if (taskLag == Task.LATEST_OFFSET || taskLag <= acceptableRecoveryLag) {
                     taskToCaughtUpClients.computeIfAbsent(task, ignored -> new TreeSet<>()).add(client);
                 }
             }
