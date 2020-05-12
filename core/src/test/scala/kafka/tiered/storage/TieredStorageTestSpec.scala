@@ -330,7 +330,7 @@ final class ConsumeAction(val topicPartition: TopicPartition,
       // than the consumer fetch offset, no record would be consumed from that storage.
       //
       if (expectedFromSecondTierCount > 0) {
-        fail(s"Could not find any record with offset >= $fetchOffset from the second-tier storage.")
+        fail(s"Could not find any record with offset >= $fetchOffset from tier storage.")
       }
       return
     }
@@ -361,7 +361,9 @@ final class ConsumeAction(val topicPartition: TopicPartition,
     val events = history.getEvents(FETCH_SEGMENT, topicPartition).asScala
     val eventsInScope = latestEventSoFar.map(e => events.filter(_.isAfter(e))).getOrElse(events)
 
-    assertEquals(remoteFetchSpec.count, eventsInScope.size)
+    assertEquals(s"Number of fetch requests from broker ${remoteFetchSpec.sourceBrokerId} to the " +
+      s"tier storage does not match the expected value for topic-partition ${remoteFetchSpec.topicPartition}",
+      remoteFetchSpec.count, eventsInScope.size)
   }
 
   override def describe(output: PrintStream): Unit = {
@@ -438,8 +440,8 @@ final class ExpectBrokerInISR(val topicPartition: TopicPartition, replicaId: Int
   */
 @nonthreadsafe
 final class TieredStorageTestBuilder {
-  private val defaultProducedBatchSize = Integer.MAX_VALUE
-  private val defaultEarliestOffsetExpectedInLogDirectory = -1
+  private val defaultProducedBatchSize = 1
+  private val defaultEarliestOffsetExpectedInLogDirectory = 0
 
   private var producables:
     mutable.Map[TopicPartition, (mutable.Buffer[ProducerRecord[String, String]], Int, Long)] = mutable.Map()

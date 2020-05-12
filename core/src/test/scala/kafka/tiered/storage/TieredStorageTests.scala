@@ -20,7 +20,7 @@ package kafka.tiered.storage
 
 import java.util.Optional
 
-import kafka.tiered.storage.TieredStorageTests.{CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest, OffloadAndConsumeFromLeaderTest}
+import kafka.tiered.storage.TieredStorageTests.{CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest, OffloadAndConsumeFromFollowerTest, OffloadAndConsumeFromLeaderTest}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
@@ -34,7 +34,8 @@ import scala.compat.java8.OptionConverters._
 
 @SuiteClasses(Array[Class[_]](
   classOf[OffloadAndConsumeFromLeaderTest],
-  classOf[CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest]
+  classOf[CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest],
+  classOf[OffloadAndConsumeFromFollowerTest]
 ))
 @RunWith(classOf[Suite])
 object TieredStorageTests {
@@ -51,6 +52,7 @@ object TieredStorageTests {
 
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
+
         /*
          * (A.1) Create a topic which segments contain only one batch and produce three records
          *       with a batch size of 1.
@@ -221,11 +223,13 @@ object TieredStorageTests {
 
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
+
         .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1)
         .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
         .withBatchSize(topicA, p0, 1)
         .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, ("k1", "v1"))
         .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 1, ("k2", "v2"))
+        .expectEarliestOffsetInLogDirectory(topicA, p0, 2)
 
         /*
          * (B.1) Stop B0 and read remote log segments from the leader replica which is expected
@@ -249,7 +253,7 @@ object TieredStorageTests {
         //
         // TODO There is a race condition here. If consumption happens "too soon" and the remote log metadata
         //      manager has not been given enough time to update the remote log metadata, only the
-        //      segments from the first-tier storage will be found in B0. We need to mechanism to deterministically
+        //      segments from the local storage will be found in B0. We need to mechanism to deterministically
         //      initiate consumption once we know metadata are up-to-date in the restarted broker. Alternatively,
         //      we can evaluate if a stronger consistency is wished on broker restart such that a log
         //      is not available for consumption until the metadata for its remote segments have been processed.
@@ -285,10 +289,13 @@ object TieredStorageTests {
     }
   }
 
-  //
-  // TODO: fetch from follower not implemented.
-  //
+  /**
+    * Test Case (D):
+    *
+    *   Fetch from a follower backed by a fetch to the tier storage.
+    */
   final class OffloadAndConsumeFromFollowerTest extends TieredStorageTestHarness {
+    private val (leader, follower, topicA, p0) = (0, 1, "topicA", 0)
 
     override protected def brokerCount: Int = 2
 
@@ -297,21 +304,22 @@ object TieredStorageTests {
 
     override protected def writeTestSpecifications(builder: TieredStorageTestBuilder): Unit = {
       builder
-        .createTopic("topicA", partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1)
-        .expectLeader("topicA", partition = 0, brokerId = 0)
-        .expectInIsr("topicA", partition = 0, brokerId = 1)
-        .produce("topicA", 0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 0, ("k1", "v1"))
-        .expectSegmentToBeOffloaded(fromBroker = 0, "topicA", partition = 0, baseOffset = 1, ("k2", "v2"))
-        .consume("topicA", partition = 0, fetchOffset = 1, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
 
-        .stop(brokerId = 1)
-        .eraseBrokerStorage(brokerId = 1)
-        .start(brokerId = 1)
-        .expectLeader("topicA", partition = 0, brokerId = 0)
-        .expectInIsr("topicA", partition = 0, brokerId = 1)
-        .consume("topicA", partition = 0, fetchOffset = 0, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
-        .expectFetchFromTieredStorage(fromBroker = 1, "topicA", partition = 0, remoteFetchRequestCount = 2)
+        /**
+          * Two segments with one single-record batch each are offloaded by the leader.
+          * Records are consumed from the offset 1 from the follower.
+          *
+          * Acceptance:
+          * -----------
+          * Two records are read and one segment with base offset 1 is retrieved from the tier storage.
+          */
+        .createTopic(topicA, partitionsCount = 1, replicationFactor = 2, maxBatchCountPerSegment = 1)
+        .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
+        .expectSegmentToBeOffloaded(leader, topicA, p0, baseOffset = 0, ("k1", "v1"))
+        .expectSegmentToBeOffloaded(leader, topicA, p0, baseOffset = 1, ("k2", "v2"))
+        .expectEarliestOffsetInLogDirectory(topicA, p0, 2)
+        .consume(topicA, p0, fetchOffset = 1, expectedTotalRecord = 2, expectedRecordsFromSecondTier = 1)
+        .expectFetchFromTieredStorage(follower, topicA, 0, 1)
     }
   }
 }
