@@ -1303,7 +1303,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             if (changed) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
-                if (isLeader()) {
+                if (isLeader() || (leaderUrl() != null && leaderUrl().startsWith("NOTUSED"))) {
                     configBackingStore.putTaskConfigs(connName, rawTaskProps);
                     cb.onCompletion(null, null);
                 } else {
