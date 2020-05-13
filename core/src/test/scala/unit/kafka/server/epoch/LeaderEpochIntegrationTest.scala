@@ -28,7 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.common.utils.{LogContext, SystemTime}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
