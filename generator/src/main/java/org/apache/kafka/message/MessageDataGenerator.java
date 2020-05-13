@@ -204,7 +204,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
         generateHashSetFindAllMethod(className, struct);
         buffer.printf("%n");
-        generateDuplicateMethod(className, struct);
+        generateCollectionDuplicateMethod(className, struct);
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -276,7 +276,7 @@ public final class MessageDataGenerator {
             collect(Collectors.joining(", "));
     }
 
-    private void generateDuplicateMethod(String className, StructSpec struct) {
+    private void generateCollectionDuplicateMethod(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.LIST_CLASS);
         buffer.printf("public %s duplicate() {%n", collectionType(className));
         buffer.incrementIndent();
