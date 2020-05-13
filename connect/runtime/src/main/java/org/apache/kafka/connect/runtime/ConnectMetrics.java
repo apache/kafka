@@ -85,7 +85,7 @@ public class ConnectMetrics {
         metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         if (config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG) != null) {
             metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID,
-                    (String) config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG));
+                    config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG).toString());
         }
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 

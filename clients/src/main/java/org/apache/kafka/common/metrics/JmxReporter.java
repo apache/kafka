@@ -68,10 +68,10 @@ public class JmxReporter implements MetricsReporter {
     public JmxReporter() {
     }
 
-    @Deprecated
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
      */
+    @Deprecated
     public JmxReporter(String prefix) {
         this.prefix = prefix;
     }
@@ -320,7 +320,9 @@ public class JmxReporter implements MetricsReporter {
     }
 
     @Override
-    public void contextChange(MetricsContext metricsContext) {
-        this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+    public synchronized void contextChange(MetricsContext metricsContext) {
+        if (this.prefix == null || this.prefix.isEmpty()) {
+            this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+        }
     }
 }

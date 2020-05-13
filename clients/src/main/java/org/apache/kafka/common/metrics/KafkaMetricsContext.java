@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A implementation of MetricsContext, it encapsulates required metrics context properties for Kafka
+ * A implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
  */
 public class KafkaMetricsContext implements MetricsContext {
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
@@ -30,24 +30,25 @@ public class KafkaMetricsContext implements MetricsContext {
      */
     private Map<String, String> metadata = new HashMap<>();
 
-    public KafkaMetricsContext() {
-    }
-
+    /**
+     * Create a MetricsContext with namespace, no service or client properties
+     * @param namespace value for _namespace key
+     */
     public KafkaMetricsContext(String namespace) {
-        metadata.put(MetricsContext.NAMESPACE, namespace);
+        this(namespace, new HashMap<>());
     }
 
     /**
-     *
+     * Create a MetricsContext with namespace, service or client properties
      * @param namespace value for _namespace key
-     * @param properties key/value pairs passed in from client/service properties file
+     * @param properties key/value pairs of service or client properties
      */
     public KafkaMetricsContext(String namespace, Map<String, Object> properties) {
         metadata.put(MetricsContext.NAMESPACE, namespace);
         //add properties start with metrics.context from properties file
         for (String key : properties.keySet()) {
             if (key.startsWith(METRICS_CONTEXT_PREFIX)) {
-                metadata.put(key.substring(METRICS_CONTEXT_PREFIX.length()), (String) properties.get(key));
+                metadata.put(key.substring(METRICS_CONTEXT_PREFIX.length()), properties.get(key).toString());
             }
         }
     }

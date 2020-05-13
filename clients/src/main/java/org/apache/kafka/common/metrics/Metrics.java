@@ -141,7 +141,7 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
-        this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext());
+        this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext(""));
     }
 
     /**
