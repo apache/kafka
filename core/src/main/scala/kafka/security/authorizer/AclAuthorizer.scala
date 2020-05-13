@@ -39,7 +39,8 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.collection.{mutable, Seq}
+import scala.annotation.nowarn
+import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
@@ -249,7 +250,7 @@ class AclAuthorizer extends Authorizer with Logging {
           }
         } catch {
           case e: Exception =>
-            resourceBindingsBeingDeleted.foreach { case (binding, index) =>
+            resourceBindingsBeingDeleted.keys.foreach { binding =>
                 deleteExceptions.getOrElseUpdate(binding, apiException(e))
             }
         }
@@ -263,6 +264,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
+  @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
       val aclBindings = new util.ArrayList[AclBinding]()
       aclCache.foreach { case (resource, versionedAcls) =>
@@ -342,6 +344,7 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
+  @nowarn("cat=deprecation")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // save aclCache reference to a local val to get a consistent view of the cache during acl updates.
     val aclCacheSnapshot = aclCache

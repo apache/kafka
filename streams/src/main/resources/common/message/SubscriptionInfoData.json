@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "name": "SubscriptionInfo",
+  "name": "SubscriptionInfoData",
   "validVersions": "1-7",
   "fields": [
     {

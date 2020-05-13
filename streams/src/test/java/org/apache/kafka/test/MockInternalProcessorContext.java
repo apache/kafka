@@ -32,19 +32,28 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class MockInternalProcessorContext
-    extends MockProcessorContext
-    implements InternalProcessorContext<Object, Object> {
+public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
-    private ProcessorNode<?, ?> currentNode;
+    private ProcessorNode currentNode;
     private RecordCollector recordCollector;
+    private long currentSystemTimeMs;
 
     public MockInternalProcessorContext() {
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
+    }
+
+    @Override
+    public void setSystemTimeMs(long timeMs) {
+        currentSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return currentSystemTimeMs;
     }
 
     @Override
@@ -69,12 +78,12 @@ public class MockInternalProcessorContext
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
+    public void setCurrentNode(final ProcessorNode currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode currentNode() {
         return currentNode;
     }
 

@@ -97,7 +97,7 @@ private[scala] object FunctionsCompatConversions {
       val innerTransformer = supplier.get()
       new Transformer[K, V, JIterable[VO]] {
         override def transform(key: K, value: V): JIterable[VO] = innerTransformer.transform(key, value).asJava
-        override def init(context: ProcessorContext[Object, Object]): Unit = innerTransformer.init(context)
+        override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
         override def close(): Unit = innerTransformer.close()
       }
     }
@@ -108,7 +108,7 @@ private[scala] object FunctionsCompatConversions {
       val innerTransformer = supplier.get()
       new ValueTransformer[V, JIterable[VO]] {
         override def transform(value: V): JIterable[VO] = innerTransformer.transform(value).asJava
-        override def init(context: ProcessorContext[Void, Void]): Unit = innerTransformer.init(context)
+        override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
         override def close(): Unit = innerTransformer.close()
       }
     }
@@ -120,7 +120,7 @@ private[scala] object FunctionsCompatConversions {
       val innerTransformer = supplier.get()
       new ValueTransformerWithKey[K, V, JIterable[VO]] {
         override def transform(key: K, value: V): JIterable[VO] = innerTransformer.transform(key, value).asJava
-        override def init(context: ProcessorContext[Void, Void]): Unit = innerTransformer.init(context)
+        override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
         override def close(): Unit = innerTransformer.close()
       }
     }

@@ -107,7 +107,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       sensor().checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
+        trace(s"$replicationType: Quota violated for sensor (${sensor().name}), metric: (${qve.metric.metricName}), " +
+          s"metric-value: (${qve.value}), bound: (${qve.bound})")
         return true
     }
     false
@@ -133,7 +134,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long): Unit = {
-    sensor().record(value, time.milliseconds(), false)
+    sensor().record(value.toDouble, time.milliseconds(), false)
   }
 
   /**

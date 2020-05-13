@@ -514,7 +514,7 @@ public final class RecordAccumulator {
                     // 0 could be written before earlier batches complete, which would cause out of sequence errors
                     ProducerBatch firstInFlightBatch = transactionManager.nextBatchBySequence(tp);
 
-                    if (firstInFlightBatch != null && !transactionManager.matchesProducerIdAndEpoch(firstInFlightBatch)) {
+                    if (firstInFlightBatch != null && transactionManager.producerIdOrEpochNotMatch(firstInFlightBatch)) {
                         return true;
                     }
                 }

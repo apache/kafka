@@ -30,6 +30,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Assert, Before, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -46,6 +47,7 @@ abstract class AuthorizationAdmin {
 // Note: this test currently uses the deprecated SimpleAclAuthorizer to ensure we have test coverage
 // It must be replaced with the new AclAuthorizer when SimpleAclAuthorizer is removed
 class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
+  @nowarn("cat=deprecation")
   val authorizationAdmin: AuthorizationAdmin = new LegacyAuthorizationAdmin
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 
@@ -100,7 +102,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertEquals(7, getAcls(AclBindingFilter.ANY).size)
     val results = client.createAcls(List(acl2, acl3).asJava)
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
-    results.values.values().asScala.foreach(value => value.get)
+    results.values.values.forEach(value => value.get)
     val aclUnknown = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)

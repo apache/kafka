@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -47,8 +49,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
-import org.rocksdb.Filter;
 import org.rocksdb.Cache;
+import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.Statistics;
@@ -61,8 +63,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
@@ -84,6 +86,7 @@ public class RocksDBStoreTest {
     final static String METRICS_SCOPE = "metrics-scope";
 
     private File dir;
+    private final Time time = new MockTime();
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
@@ -102,7 +105,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             new StreamsConfig(props));
         rocksDBStore = getRocksDBStore();
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
     }
 
     @After
@@ -143,7 +146,7 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsDebug() {
-        final RocksDBStore store = getRocksDBStoreWithRocksDBMetricsRecorder();
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
         reset(metricsRecorder);
         metricsRecorder.addStatistics(
@@ -152,9 +155,10 @@ public class RocksDBStoreTest {
         );
         replay(metricsRecorder);
 
-        store.openDB(context);
+        rocksDBStore.openDB(context);
 
         verify(metricsRecorder);
+        reset(metricsRecorder);
     }
 
     @Test
@@ -172,13 +176,15 @@ public class RocksDBStoreTest {
     @Test
     public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsDebug() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.DEBUG);
-        rocksDBStore.openDB(context);
-        reset(metricsRecorder);
-        metricsRecorder.removeStatistics(DB_NAME);
-        replay(metricsRecorder);
-
-        rocksDBStore.close();
+        try {
+            context = getProcessorContext(RecordingLevel.DEBUG);
+            rocksDBStore.openDB(context);
+            reset(metricsRecorder);
+            metricsRecorder.removeStatistics(DB_NAME);
+            replay(metricsRecorder);
+        } finally {
+            rocksDBStore.close();
+        }
 
         verify(metricsRecorder);
     }
@@ -186,12 +192,14 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.INFO);
-        rocksDBStore.openDB(context);
-        reset(metricsRecorder);
-        replay(metricsRecorder);
-
-        rocksDBStore.close();
+        try {
+            context = getProcessorContext(RecordingLevel.INFO);
+            rocksDBStore.openDB(context);
+            reset(metricsRecorder);
+            replay(metricsRecorder);
+        } finally {
+            rocksDBStore.close();
+        }
 
         verify(metricsRecorder);
     }
@@ -549,7 +557,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
 
         enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);
@@ -591,7 +599,7 @@ public class RocksDBStoreTest {
     public void shouldVerifyThatMetricsGetMeasurementsFromRocksDB() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger();
+        final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST);

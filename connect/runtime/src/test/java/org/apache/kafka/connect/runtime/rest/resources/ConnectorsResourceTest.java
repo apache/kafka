@@ -76,6 +76,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestClient.class)
@@ -901,6 +902,22 @@ public class ConnectorsResourceTest {
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCompleteOrForwardWithErrorAndNoForwardUrl() throws Throwable {
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
+        String leaderUrl = null;
+        expectAndCallbackException(cb, new NotLeaderException("not leader", leaderUrl));
+
+        PowerMock.replayAll();
+
+        ConnectRestException e = assertThrows(ConnectRestException.class, () -> {
+            connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        });
+        assertTrue(e.getMessage().contains("no known leader URL"));
         PowerMock.verifyAll();
     }
 

@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -49,20 +51,28 @@ public class AssignmentTestUtils {
     public static final TaskId TASK_2_1 = new TaskId(2, 1);
     public static final TaskId TASK_2_2 = new TaskId(2, 2);
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
-    public static final TaskId TASK_3_4 = new TaskId(3, 4);
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
+    public static final List<TaskId> EMPTY_TASK_LIST = emptyList();
     public static final Map<TaskId, Long> EMPTY_TASK_OFFSET_SUMS = emptyMap();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
+
+
+    static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
+        final Map<UUID, ClientState> clientStates = new HashMap<>();
+        int nthState = 1;
+        for (final ClientState state : states) {
+            clientStates.put(uuidForInt(nthState), state);
+            ++nthState;
+        }
+        return clientStates;
+    }
 
     /**
      * Builds a UUID by repeating the given number n. For valid n, it is guaranteed that the returned UUIDs satisfy
      * the same relation relative to others as their parameter n does: iff n < m, then uuidForInt(n) < uuidForInt(m)
-     *
-     * @param n an integer between 1 and 7
-     * @return the UUID created by repeating the digit n in the UUID format
      */
-    static UUID uuidForInt(final Integer n) {
+    static UUID uuidForInt(final int n) {
         return new UUID(0, n);
     }
 }

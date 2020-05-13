@@ -47,6 +47,12 @@ public class ProcessorNodeMetrics {
     private static final String SUPPRESSION_EMIT_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + SUPPRESSION_EMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
+    private static final String IDEMPOTENT_UPDATE_SKIP = "idempotent-update-skip";
+    private static final String IDEMPOTENT_UPDATE_SKIP_DESCRIPTION = "skipped idempotent updates";
+    private static final String IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION;
+    private static final String IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION =
+            RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
     private static final String PROCESS = "process";
     private static final String PROCESS_DESCRIPTION = "calls to process";
     private static final String PROCESS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PROCESS_DESCRIPTION;
@@ -103,6 +109,22 @@ public class ProcessorNodeMetrics {
             SUPPRESSION_EMIT,
             SUPPRESSION_EMIT_RATE_DESCRIPTION,
             SUPPRESSION_EMIT_TOTAL_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
+    }
+
+    public static Sensor skippedIdempotentUpdatesSensor(final String threadId,
+            final String taskId,
+            final String processorNodeId,
+            final StreamsMetricsImpl streamsMetrics) {
+        return throughputSensor(
+            threadId,
+            taskId,
+            processorNodeId,
+            IDEMPOTENT_UPDATE_SKIP,
+            IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION,
+            IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION,
             RecordingLevel.DEBUG,
             streamsMetrics
         );

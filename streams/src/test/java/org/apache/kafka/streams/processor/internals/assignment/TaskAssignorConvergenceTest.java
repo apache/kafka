@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.hamcrest.MatcherAssert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Map;
@@ -233,7 +232,6 @@ public class TaskAssignorConvergenceTest {
     @Test
     public void staticAssignmentShouldConvergeWithTheFirstAssignment() {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 2,
                                                                 0,
                                                                 1000L);
@@ -252,7 +250,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -266,7 +263,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void droppingNodesShouldConverge() {
         final int numStatelessTasks = 15;
@@ -275,7 +271,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -290,7 +285,6 @@ public class TaskAssignorConvergenceTest {
         verifyValidAssignment(numStandbyReplicas, harness);
     }
 
-    @Ignore // Adding this failing test before adding the code that fixes it
     @Test
     public void randomClusterPerturbationsShouldConverge() {
         // do as many tests as we can in 10 seconds
@@ -317,7 +311,6 @@ public class TaskAssignorConvergenceTest {
             final int numberOfEvents = prng.nextInt(10) + 1;
 
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                    1,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
                                                                     1000L);
@@ -419,11 +412,12 @@ public class TaskAssignorConvergenceTest {
             iteration++;
             harness.prepareForNextRebalance();
             harness.recordBefore(iteration);
-            rebalancePending = new HighAvailabilityTaskAssignor(
-                harness.clientStates, allTasks,
+            rebalancePending = new HighAvailabilityTaskAssignor().assign(
+                harness.clientStates,
+                allTasks,
                 harness.statefulTaskEndOffsetSums.keySet(),
                 configs
-            ).assign();
+            );
             harness.recordAfter(iteration, rebalancePending);
         }
 
