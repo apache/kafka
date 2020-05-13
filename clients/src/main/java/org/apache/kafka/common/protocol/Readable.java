@@ -33,6 +33,8 @@ public interface Readable {
     double readDouble();
     void readArray(byte[] arr);
     int readUnsignedVarint();
+    int readVarint();
+    long readVarlong();
     ByteBuffer readByteBuffer(int length);
 
     default String readString(int length) {
