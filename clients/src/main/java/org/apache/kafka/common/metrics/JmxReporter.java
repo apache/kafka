@@ -61,14 +61,14 @@ public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
-    private String prefix;
+    private String prefix = "";
     private final Map<String, KafkaMbean> mbeans = new HashMap<>();
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
-        this("");
     }
 
+    @Deprecated
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
      */
@@ -317,5 +317,10 @@ public class JmxReporter implements MetricsReporter {
             throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
                                       + ".(whitelist/blacklist) is not a valid regular expression");
         }
+    }
+
+    @Override
+    public void contextChange(MetricsContext metricsContext) {
+        this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
     }
 }
