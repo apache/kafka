@@ -47,6 +47,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -136,6 +137,7 @@ public class KafkaRaftClient implements RaftClient {
                            LogContext logContext,
                            Random random) {
         this.channel = channel;
+        Objects.requireNonNull(log, "Log instance cannot be null");
         this.log = log;
         this.quorum = quorum;
         this.time = time;
@@ -385,7 +387,7 @@ public class KafkaRaftClient implements RaftClient {
         return buildBeginQuorumEpochResponse(Errors.NONE);
     }
 
-    private void handleBeginQuorumEpochResponse(int remoteNodeId, BeginQuorumEpochResponseData response) {
+    private void handleBeginQuorumEpochResponse(int remoteNodeId) {
         LeaderState state = quorum.leaderStateOrThrow();
         state.addEndorsementFrom(remoteNodeId);
     }
@@ -694,7 +696,7 @@ public class KafkaRaftClient implements RaftClient {
         } else if (responseData instanceof VoteResponseData) {
             handleVoteResponse(response.sourceId(), (VoteResponseData) responseData);
         } else if (responseData instanceof BeginQuorumEpochResponseData) {
-            handleBeginQuorumEpochResponse(response.sourceId(), (BeginQuorumEpochResponseData) responseData);
+            handleBeginQuorumEpochResponse(response.sourceId());
         } else if (responseData instanceof EndQuorumEpochResponseData) {
             // Nothing to do for now
         } else if (responseData instanceof FindQuorumResponseData) {

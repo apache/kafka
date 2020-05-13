@@ -88,5 +88,4 @@ public class MockNetworkChannel implements NetworkChannel {
         receiveQueue.clear();
         requestIdCounter.set(0);
     }
-
 }
