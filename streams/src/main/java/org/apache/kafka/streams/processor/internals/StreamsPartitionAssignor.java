@@ -761,20 +761,21 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         boolean fetchEndOffsetsSuccessful;
         Map<TaskId, Long> allTaskEndOffsetSums;
         try {
-            final Collection<TopicPartition> allExistingChangelogPartitions =
+            final Collection<TopicPartition> allChangelogPartitions =
                 changelogsByStatefulTask.values().stream()
                     .flatMap(Collection::stream)
                     .collect(Collectors.toList());
-            final Collection<TopicPartition> allNewChangelogPartitions = new ArrayList<>(allExistingChangelogPartitions);
 
-            allExistingChangelogPartitions.removeIf(partition -> newlyCreatedChangelogs.contains(partition.topic()));
-            allNewChangelogPartitions.removeAll(allExistingChangelogPartitions);
+            final Collection<TopicPartition> allPreexistingChangelogPartitions = new ArrayList<>(allChangelogPartitions);
+            allPreexistingChangelogPartitions.removeIf(partition -> newlyCreatedChangelogs.contains(partition.topic()));
 
+            final Collection<TopicPartition> allNewlyCreatedChangelogPartitions = new ArrayList<>(allChangelogPartitions);
+            allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-                fetchEndOffsets(allExistingChangelogPartitions, adminClient, Duration.ofMillis(adminClientTimeout));
+                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient, Duration.ofMillis(adminClientTimeout));
 
-            allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewChangelogPartitions);
+            allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException e) {
             allTaskEndOffsetSums = null;

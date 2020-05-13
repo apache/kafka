@@ -30,17 +30,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 public class MockInternalTopicManager extends InternalTopicManager {
 
-    final public Map<String, Integer> readyTopics = new HashMap<>();
-    final private MockConsumer<byte[], byte[]> restoreConsumer;
+    public final Map<String, Integer> readyTopics = new HashMap<>();
+    private final MockConsumer<byte[], byte[]> restoreConsumer;
+    private final boolean mockCreateInternalTopics;
 
     public MockInternalTopicManager(final StreamsConfig streamsConfig,
-                                    final MockConsumer<byte[], byte[]> restoreConsumer) {
+                                    final MockConsumer<byte[], byte[]> restoreConsumer,
+                                    final boolean mockCreateInternalTopics) {
         super(Admin.create(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
+        this.mockCreateInternalTopics = mockCreateInternalTopics;
     }
 
     @Override
@@ -57,7 +59,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
             restoreConsumer.updatePartitions(topicName, partitions);
         }
-        return Collections.emptySet();
+        return mockCreateInternalTopics ? topics.keySet() : Collections.emptySet();
     }
 
     @Override

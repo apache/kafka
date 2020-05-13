@@ -234,7 +234,11 @@ public class InternalTopicManager {
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
             final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
-            if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
+            if (!numberOfPartitions.isPresent()) {
+                log.error("Found undefined number of partitions for topic {}", topicName);
+                throw new StreamsException("Topic " + topicName + " number of partitions not defined");
+            }
+            if (existedTopicPartition.containsKey(topicName)) {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
