@@ -19,8 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -68,8 +70,20 @@ public class RaftConfig extends AbstractConfig {
                 CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
             .define(QUORUM_VOTERS_CONFIG,
                 ConfigDef.Type.LIST,
-                null,
-                new ConfigDef.NonEmptyString(),
+                ConfigDef.NO_DEFAULT_VALUE,
+                new ConfigDef.Validator() {
+                    @Override
+                    public void ensureValid(String name, Object value) {
+                        if (value == null || ((List) value).isEmpty()) {
+                            throw new ConfigException(name, value, "Empty list");
+                        }
+                    }
+
+                    @Override
+                    public String toString() {
+                        return "non-empty list";
+                    }
+                },
                 ConfigDef.Importance.HIGH,
                 QUORUM_VOTERS_DOC)
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
