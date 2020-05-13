@@ -22,14 +22,34 @@ import org.apache.kafka.common.record.Records;
 public class NoOpStateMachine implements DistributedStateMachine {
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
 
+    enum STATE {
+        INITIALIZING,
+        LEADER,
+        FOLLOWER
+    }
+
+    private STATE state = STATE.INITIALIZING;
+
+    private int epoch = -1;
+
     @Override
     public void becomeLeader(int epoch) {
-
+        this.epoch = epoch;
+        state = STATE.LEADER;
     }
 
     @Override
     public void becomeFollower(int epoch) {
+        this.epoch = epoch;
+        state = STATE.FOLLOWER;
+    }
 
+    boolean isLeader() {
+        return state == STATE.LEADER;
+    }
+
+    boolean isFollower() {
+        return state == STATE.FOLLOWER;
     }
 
     @Override
@@ -47,5 +67,14 @@ public class NoOpStateMachine implements DistributedStateMachine {
     @Override
     public synchronized boolean accept(Records records) {
         return true;
+    }
+
+    void clear() {
+        state = STATE.INITIALIZING;
+        epoch = -1;
+    }
+
+    public int epoch() {
+        return epoch;
     }
 }
