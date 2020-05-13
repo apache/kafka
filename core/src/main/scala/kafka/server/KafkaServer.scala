@@ -130,8 +130,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
-  private val KAFKA_CLUSTER_ID = "kafka.cluster.id"
-  private val KAFKA_BROKER_ID = "kafka.broker.id"
+  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
 
   private var logContext: LogContext = null
 
