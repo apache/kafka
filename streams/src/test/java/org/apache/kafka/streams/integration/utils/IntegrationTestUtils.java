@@ -1212,6 +1212,8 @@ public class IntegrationTestUtils {
 
     public static class StableAssignmentListener implements AssignmentListener {
         final AtomicInteger numStableAssignments = new AtomicInteger(0);
+        int nextExpectedNumStableAssignments;
+
         @Override
         public void onAssignmentComplete(final boolean stable) {
             if (stable) {
@@ -1224,14 +1226,23 @@ public class IntegrationTestUtils {
         }
 
         /**
-         * Waits for the number of stable assignments to reach the expected value. Typically this will be the value of
-         * {@link #numStableAssignments()} + 1 just before the rebalance triggering action is taken (eg start new client)
+         * Saves the current number of stable rebalances so that we can tell when the next stable assignment has been
+         * reached. This should be called once for every invocation of {@link #waitForNextStableAssignment(long)},
+         * before the rebalance-triggering event.
          */
-        public void waitForNextStableAssignment(final int expectedNumStableAssignments, final long maxWaitMs) throws InterruptedException {
+        public void prepareForRebalance() {
+            nextExpectedNumStableAssignments = numStableAssignments.get() + 1;
+        }
+
+        /**
+         * Waits for the assignment to stabilize after the group rebalances. You must call {@link #prepareForRebalance()}
+         * prior to the rebalance-triggering event before using this method to wait.
+         */
+        public void waitForNextStableAssignment(final long maxWaitMs) throws InterruptedException {
             waitForCondition(
-                () -> expectedNumStableAssignments == numStableAssignments(),
+                () -> nextExpectedNumStableAssignments == numStableAssignments(),
                 maxWaitMs,
-                () -> "Client did not reach " + expectedNumStableAssignments + " stable assignments on time, " +
+                () -> "Client did not reach " + nextExpectedNumStableAssignments + " stable assignments on time, " +
                     "numStableAssignments was " + numStableAssignments()
             );
         }

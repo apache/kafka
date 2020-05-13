@@ -241,10 +241,11 @@ public class EosBetaUpgradeIntegrationTest {
             streams1Alpha.setStateListener(
                 (newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState))
             );
-            int expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+
+            assignmentListener.prepareForRebalance();
             streams1Alpha.cleanUp();
             streams1Alpha.start();
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
 
             streams2Alpha = getKafkaStreams("appDir2", StreamsConfig.EXACTLY_ONCE);
@@ -252,11 +253,11 @@ public class EosBetaUpgradeIntegrationTest {
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
             stateTransitions1.clear();
-            expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
 
+            assignmentListener.prepareForRebalance();
             streams2Alpha.cleanUp();
             streams2Alpha.start();
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
@@ -345,7 +346,7 @@ public class EosBetaUpgradeIntegrationTest {
             //   p-2: 10 rec + C + 5 rec (pending)
             //   p-3: 10 rec + C + 5 rec (pending)
             stateTransitions2.clear();
-            expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+            assignmentListener.prepareForRebalance();
 
             if (!injectError) {
                 stateTransitions1.clear();
@@ -359,7 +360,7 @@ public class EosBetaUpgradeIntegrationTest {
                 uncommittedInputDataBeforeFirstUpgrade.addAll(dataPotentiallyFirstFailingKey);
                 writeInputData(dataPotentiallyFirstFailingKey);
             }
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions2);
 
             if (!injectError) {
@@ -405,11 +406,11 @@ public class EosBetaUpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
             streams1Beta = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE_BETA);
             streams1Beta.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
+            assignmentListener.prepareForRebalance();
             streams1Beta.start();
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
@@ -452,9 +453,6 @@ public class EosBetaUpgradeIntegrationTest {
                 verifyCommitted(expectedCommittedResult);
                 expectedUncommittedResult.addAll(expectedCommittedResult);
             } else {
-                waitForRunning(stateTransitions1);
-                waitForRunning(stateTransitions2);
-
                 final Set<Long> keysFirstClient = keysFromInstance(streams1Beta);
                 final Set<Long> keysSecondClient = keysFromInstance(streams2Alpha);
 
@@ -486,7 +484,8 @@ public class EosBetaUpgradeIntegrationTest {
 
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+                assignmentListener.prepareForRebalance();
+
                 commitCounterClient1.set(0);
                 commitErrorInjectedClient2.set(true);
 
@@ -499,7 +498,7 @@ public class EosBetaUpgradeIntegrationTest {
                 );
                 verifyUncommitted(expectedUncommittedResult);
 
-                assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+                assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
 
                 waitForStateTransition(stateTransitions2, CRASH);
 
@@ -539,9 +538,9 @@ public class EosBetaUpgradeIntegrationTest {
                 streams2AlphaTwo.setStateListener(
                     (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
                 );
-                expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+                assignmentListener.prepareForRebalance();
                 streams2AlphaTwo.start();
-                assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+                assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
                 waitForRunning(stateTransitions1);
                 waitForRunning(stateTransitions2);
 
@@ -577,7 +576,7 @@ public class EosBetaUpgradeIntegrationTest {
 
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+                assignmentListener.prepareForRebalance();
                 commitCounterClient2.set(0);
                 commitErrorInjectedClient1.set(true);
 
@@ -590,7 +589,7 @@ public class EosBetaUpgradeIntegrationTest {
                 );
                 verifyUncommitted(expectedUncommittedResult);
 
-                assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+                assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
                 waitForStateTransition(stateTransitions1, CRASH);
 
                 commitErrorInjectedClient1.set(false);
@@ -608,9 +607,9 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions2.clear();
                 streams1BetaTwo = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE_BETA);
                 streams1BetaTwo.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
-                expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+                assignmentListener.prepareForRebalance();
                 streams1BetaTwo.start();
-                assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+                assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
                 waitForRunning(stateTransitions1);
                 waitForRunning(stateTransitions2);
             }
@@ -675,7 +674,7 @@ public class EosBetaUpgradeIntegrationTest {
             //   p-2: 10 rec + C + 5 rec + C + 5 rec + A + 5 rec + C + 10 rec + C + 4 rec ---> A + 5 rec (pending)
             //   p-3: 10 rec + C + 5 rec + C + 5 rec + A + 5 rec + C + 10 rec + C + 5 rec ---> A + 5 rec (pending)
             stateTransitions1.clear();
-            expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+            assignmentListener.prepareForRebalance();
             if (!injectError) {
                 stateTransitions2.clear();
                 streams2AlphaTwo.close();
@@ -688,7 +687,7 @@ public class EosBetaUpgradeIntegrationTest {
                 uncommittedInputDataBeforeSecondUpgrade.addAll(dataPotentiallySecondFailingKey);
                 writeInputData(dataPotentiallySecondFailingKey);
             }
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
 
             if (!injectError) {
@@ -741,9 +740,9 @@ public class EosBetaUpgradeIntegrationTest {
             streams2Beta.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
-            expectedNumStableAssignments = assignmentListener.numStableAssignments() + 1;
+            assignmentListener.prepareForRebalance();
             streams2Beta.start();
-            assignmentListener.waitForNextStableAssignment(expectedNumStableAssignments, MAX_WAIT_TIME_MS);
+            assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
@@ -914,7 +913,7 @@ public class EosBetaUpgradeIntegrationTest {
 
     private void waitForRunning(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed) throws Exception {
         waitForCondition(
-            () -> observed.get(observed.size() - 1).equals(new KeyValue<>(State.REBALANCING, State.RUNNING)),
+            () -> !observed.isEmpty() && observed.get(observed.size() - 1).value.equals(State.RUNNING),
             MAX_WAIT_TIME_MS,
             () -> "Client did not startup on time. Observers transitions: " + observed
         );
