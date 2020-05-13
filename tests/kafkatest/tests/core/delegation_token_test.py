@@ -61,7 +61,7 @@ client.id=console-consumer
                                         client_prop_file_override=self.client_properties_content)
 
         self.kafka.security_protocol = 'SASL_PLAINTEXT'
-        self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
+        self.kafka.client_sasl_mechanism = 'SCRAM-SHA-256'
         self.kafka.interbroker_sasl_mechanism = 'GSSAPI'
 
 
@@ -78,7 +78,7 @@ client.id=console-consumer
         self.jaas_deleg_conf = self.delegation_tokens.create_jaas_conf_with_delegation_token()
 
     def expire_delegation_token(self):
-        self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
+        self.kafka.client_sasl_mechanism = 'SCRAM-SHA-256'
         token_hmac = self.delegation_tokens.token_hmac()
         self.delegation_tokens.expire_delegation_token(token_hmac)
 
@@ -110,7 +110,7 @@ client.id=console-consumer
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
     def test_delegation_token_lifecycle(self):
-        self.kafka.start(use_zk_to_create_topic=True)
+        self.kafka.start(use_zk_to_create_topic=False)
         self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)
 
         self.generate_delegation_token()
