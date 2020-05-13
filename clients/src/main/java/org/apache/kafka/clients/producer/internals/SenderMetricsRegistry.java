@@ -84,7 +84,7 @@ public class SenderMetricsRegistry {
         this.batchSizeMax = createMetricName("batch-size-max",
                 "The max number of bytes sent per partition per-request.");
         this.compressionRateAvg = createMetricName("compression-rate-avg",
-                "The average compression rate of record batches.");
+                "The average compressed-to-uncompressed size ratio of record batches.");
         this.recordQueueTimeAvg = createMetricName("record-queue-time-avg",
                 "The average time in ms record batches spent in the send buffer.");
         this.recordQueueTimeMax = createMetricName("record-queue-time-max",
@@ -139,7 +139,7 @@ public class SenderMetricsRegistry {
         this.topicByteTotal = createTopicTemplate("byte-total", 
                 "The total number of bytes sent for a topic.");
         this.topicCompressionRate = createTopicTemplate("compression-rate",
-                "The average compression rate of record batches for a topic.");
+                "The average compressed-to-uncompressed size ratio of record batches for a topic.");
         this.topicRecordRetryRate = createTopicTemplate("record-retry-rate",
                 "The average per-second number of retried record sends for a topic");
         this.topicRecordRetryTotal = createTopicTemplate("record-retry-total",
