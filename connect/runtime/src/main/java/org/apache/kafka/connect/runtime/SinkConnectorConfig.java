@@ -23,7 +23,9 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Configuration needed for all sink connectors
@@ -86,6 +88,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static void validate(Map<String, String> props) {
         final boolean hasTopicsConfig = hasTopicsConfig(props);
         final boolean hasTopicsRegexConfig = hasTopicsRegexConfig(props);
+        final boolean hasDlqTopicConfig = hasDlqTopicConfig(props);
 
         if (hasTopicsConfig && hasTopicsRegexConfig) {
             throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
@@ -95,6 +98,26 @@ public class SinkConnectorConfig extends ConnectorConfig {
         if (!hasTopicsConfig && !hasTopicsRegexConfig) {
             throw new ConfigException("Must configure one of " +
                 SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
+        }
+
+        if (hasDlqTopicConfig) {
+            String dlqTopic = props.get(DLQ_TOPIC_NAME_CONFIG).trim();
+            if (hasTopicsConfig) {
+                String[] topics = props.get(SinkTask.TOPICS_CONFIG).split(",");
+                Arrays.setAll(topics, i -> topics[i].trim());
+                if (Arrays.asList(topics).contains(dlqTopic)) {
+                    throw new ConfigException(DLQ_TOPIC_NAME_CONFIG + " has a topic name which is already in " +
+                        SinkTask.TOPICS_CONFIG);
+                }
+            }
+            if (hasTopicsRegexConfig) {
+                String topicsRegexStr = props.get(SinkTask.TOPICS_REGEX_CONFIG);
+                Pattern pattern = Pattern.compile(topicsRegexStr);
+                if (pattern.matcher(dlqTopic).matches()) {
+                    throw new ConfigException(DLQ_TOPIC_NAME_CONFIG + " has a topic name which matches in " +
+                        SinkTask.TOPICS_REGEX_CONFIG);
+                }
+            }
         }
     }
 
@@ -106,6 +129,11 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static boolean hasTopicsRegexConfig(Map<String, String> props) {
         String topicsRegexStr = props.get(TOPICS_REGEX_CONFIG);
         return topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
+    }
+
+    public static boolean hasDlqTopicConfig(Map<String, String> props) {
+        String dqlTopicStr = props.get(DLQ_TOPIC_NAME_CONFIG);
+        return dqlTopicStr != null && !dqlTopicStr.trim().isEmpty();
     }
 
     public String dlqTopicName() {
