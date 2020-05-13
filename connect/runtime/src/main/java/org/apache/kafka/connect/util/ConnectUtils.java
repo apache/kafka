@@ -16,19 +16,24 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
 
     public static Long checkAndConvertTimestamp(Long timestamp) {
         if (timestamp == null || timestamp >= 0)
@@ -64,5 +69,13 @@ public final class ConnectUtils {
             throw new ConnectException("Failed to connect to and describe Kafka cluster. "
                                        + "Check worker's broker connection and security properties.", e);
         }
+    }
+
+    public static void addMetricsContextProperties(Map<String, Object> prop, WorkerConfig config, String clusterId) {
+        //add all properties predefined with "metrics.context."
+        prop.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+        //add connect properties
+        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, config.originals().get(DistributedConfig.GROUP_ID_CONFIG));
     }
 }

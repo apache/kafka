@@ -56,6 +56,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -92,6 +93,7 @@ public class Worker {
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
+    private final String clusterId;
     private final Plugins plugins;
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
@@ -113,8 +115,9 @@ public class Worker {
         Plugins plugins,
         WorkerConfig config,
         OffsetBackingStore offsetBackingStore,
-        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
+        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+        String clusterId) {
+        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy, clusterId);
     }
 
     @SuppressWarnings("deprecation")
@@ -125,11 +128,13 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore,
             ExecutorService executorService,
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            String clusterId
     ) {
-        this.metrics = new ConnectMetrics(workerId, config, time);
+        this.metrics = new ConnectMetrics(workerId, config, time, clusterId);
         this.executor = executorService;
         this.workerId = workerId;
+        this.clusterId = clusterId;
         this.time = time;
         this.plugins = plugins;
         this.config = config;
@@ -519,7 +524,7 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
-                                                                connectorClientConfigOverridePolicy);
+                                                                connectorClientConfigOverridePolicy, clusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -532,7 +537,7 @@ public class Worker {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
 
-            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -549,7 +554,8 @@ public class Worker {
                                                WorkerConfig config,
                                                ConnectorConfig connConfig,
                                                Class<? extends Connector>  connectorClass,
-                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                               String clusterId) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -564,6 +570,8 @@ public class Worker {
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+        //add client metrics.context properties
+        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         // Connector-specified overrides
         Map<String, Object> producerOverrides =
@@ -579,7 +587,8 @@ public class Worker {
                                                WorkerConfig config,
                                                ConnectorConfig connConfig,
                                                Class<? extends Connector> connectorClass,
-                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                               String clusterId) {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
         Map<String, Object> consumerProps = new HashMap<>();
@@ -594,6 +603,8 @@ public class Worker {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
+        //add client metrics.context properties
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         // Connector-specified overrides
         Map<String, Object> consumerOverrides =
             connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
@@ -608,7 +619,8 @@ public class Worker {
                                             WorkerConfig config,
                                             ConnectorConfig connConfig,
                                             Class<? extends Connector> connectorClass,
-                                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                            String clusterId) {
         Map<String, Object> adminProps = new HashMap<>();
         // Use the top-level worker configs to retain backwards compatibility with older releases which
         // did not require a prefix for connector admin client configs in the worker configuration file
@@ -633,6 +645,9 @@ public class Worker {
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
                                            connectorClientConfigOverridePolicy);
         adminProps.putAll(adminOverrides);
+
+        //add client metrics.context properties
+        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
 
         return adminProps;
     }
@@ -676,9 +691,9 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
-                                                                connectorClientConfigOverridePolicy);
-            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id,
+                    config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
+            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }

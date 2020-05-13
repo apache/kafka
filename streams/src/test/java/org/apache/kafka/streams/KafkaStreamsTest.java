@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serdes;
@@ -172,7 +173,8 @@ public class KafkaStreamsTest {
         PowerMock.expectNew(Metrics.class,
             anyObject(MetricConfig.class),
             capture(metricsReportersCapture),
-            anyObject(Time.class)
+            anyObject(Time.class),
+            anyObject(MetricsContext.class)
         ).andAnswer(() -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());

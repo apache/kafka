@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.Table;
@@ -130,18 +131,20 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
+    private final String clusterId;
 
-    public KafkaStatusBackingStore(Time time, Converter converter) {
+    public KafkaStatusBackingStore(Time time, Converter converter, String clusterId) {
         this.time = time;
         this.converter = converter;
+        this.clusterId = clusterId;
         this.tasks = new Table<>();
         this.connectors = new HashMap<>();
         this.topics = new ConcurrentHashMap<>();
     }
 
     // visible for testing
-    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
-        this(time, converter);
+    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog, String clusterId) {
+        this(time, converter, clusterId);
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
     }
@@ -157,12 +160,15 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
+        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
+        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).

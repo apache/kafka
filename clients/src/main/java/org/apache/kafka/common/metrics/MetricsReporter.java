@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 
 /**
@@ -65,4 +66,13 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
     default void reconfigure(Map<String, ?> configs) {
     }
 
+    /**
+     * Callback method providing context metadata for the
+     * service or library exposing metrics
+     *
+     * @param metricsContext the metric context
+     */
+    @InterfaceStability.Evolving
+    default void contextChange(MetricsContext metricsContext) {
+    }
 }
