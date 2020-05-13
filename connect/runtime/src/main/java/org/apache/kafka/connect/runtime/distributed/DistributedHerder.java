@@ -1303,6 +1303,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             if (changed) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
+                // If configBackingStore task is not running on leader node,A POST request could not be send to notify
+                // the leader of the configuration update.However,dedicated mm2 cluster does not have the HTTP server
+                // turned on,so the request will fail to be sent,causing the update operation to be lost.
                 if (isLeader() || (leaderUrl() != null && leaderUrl().startsWith("NOTUSED"))) {
                     configBackingStore.putTaskConfigs(connName, rawTaskProps);
                     cb.onCompletion(null, null);
