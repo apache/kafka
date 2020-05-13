@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 
@@ -76,7 +77,8 @@ public class WorkerGroupMember {
                              WorkerRebalanceListener listener,
                              Time time,
                              String clientId,
-                             LogContext logContext) {
+                             LogContext logContext,
+                             String clusterId) {
         try {
             this.time = time;
             this.clientId = clientId;
@@ -95,6 +97,8 @@ public class WorkerGroupMember {
             reporters.add(jmxReporter);
 
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+            metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+            metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
@@ -226,5 +230,13 @@ public class WorkerGroupMember {
             throw new KafkaException("Failed to stop the Connect group member", firstException.get());
         else
             log.debug("The Connect group member has stopped.");
+    }
+
+    /**
+     * Method for unit tests
+     * @return
+     */
+    public Metrics getMetrics() {
+        return this.metrics;
     }
 }

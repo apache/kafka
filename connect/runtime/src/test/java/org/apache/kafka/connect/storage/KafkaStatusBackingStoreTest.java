@@ -63,6 +63,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     private static final String STATUS_TOPIC = "status-topic";
     private static final String WORKER_ID = "localhost:8083";
+    private static final String CLUSTER_ID = "cluster-1";
     private static final String CONNECTOR = "conn";
     private static final ConnectorTaskId TASK = new ConnectorTaskId(CONNECTOR, 0);
 
@@ -76,7 +77,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Before
     public void setup() {
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog, CLUSTER_ID);
     }
 
     @Test

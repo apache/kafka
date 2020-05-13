@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -238,11 +239,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final WorkerConfigTransformer configTransformer;
 
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
+    private final String clusterId;
+
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer, String clusterId) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
+        this.clusterId = clusterId;
 
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
         if (this.topic == null || this.topic.trim().length() == 0)
@@ -448,11 +452,15 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
+
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
+        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(1).

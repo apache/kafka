@@ -130,6 +130,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
+  private val KAFKA_CLUSTER_ID = "kafka.cluster.id"
+  private val KAFKA_BROKER_ID = "kafka.broker.id"
 
   private var logContext: LogContext = null
 
@@ -380,6 +382,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
     val metricsContext = new KafkaMetricsContext(jmxPrefix, config.originals)
+    metricsContext.metadata().put(KAFKA_CLUSTER_ID, clusterId)
+    metricsContext.metadata().put(KAFKA_BROKER_ID, config.brokerId.toString)
     metricsReporters.foreach {
       case x: MetricsReporter => x.contextChange(metricsContext)
       case _ => //do nothing

@@ -79,7 +79,7 @@ public class RetryWithToleranceOperatorTest {
 
         NOOP_OPERATOR.metrics(new ErrorHandlingMetrics(
             new ConnectorTaskId("noop-connector", -1),
-            new ConnectMetrics("noop-worker", new TestableWorkerConfig(properties), new SystemTime()))
+            new ConnectMetrics("noop-worker", new TestableWorkerConfig(properties), new SystemTime(), "test-cluster"))
         );
     }
 

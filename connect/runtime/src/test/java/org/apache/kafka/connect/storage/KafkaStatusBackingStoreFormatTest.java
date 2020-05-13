@@ -59,6 +59,7 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
     private static final String FOO_TOPIC = "foo-topic";
     private static final String FOO_CONNECTOR = "foo-source";
     private static final String BAR_TOPIC = "bar-topic";
+    private static final String CLUSTER_ID = "cluster-1";
 
     private Time time;
     private KafkaStatusBackingStore store;
@@ -71,7 +72,7 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         time = new MockTime();
         converter = new JsonConverter();
         converter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog, CLUSTER_ID);
     }
 
     @Test
