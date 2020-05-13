@@ -46,9 +46,9 @@ class ConnectionQuotasTest {
   private val knownHost = InetAddress.getByName("192.168.10.0")
   private val unknownHost = InetAddress.getByName("192.168.2.0")
 
-  case class ListenerDesc(listenerName: ListenerName, defaultClientIp: InetAddress) {
+  case class ListenerDesc(listenerName: ListenerName, defaultIp: InetAddress) {
     override def toString: String = {
-      s"(listener=${listenerName.value}, client=${defaultClientIp.getHostAddress})"
+      s"(listener=${listenerName.value}, client=${defaultIp.getHostAddress})"
     }
   }
 
@@ -86,13 +86,25 @@ class ConnectionQuotasTest {
     val executor = Executors.newSingleThreadExecutor
     try {
       // inc() on a separate thread in case it blocks
-      val externalListener = listeners("EXTERNAL")
+      val listener = listeners("EXTERNAL")
       executor.submit((() =>
-        intercept[RuntimeException](connectionQuotas.inc(externalListener.listenerName, externalListener.defaultClientIp, blockedPercentMeters("EXTERNAL")))): Runnable
+        intercept[RuntimeException](
+          connectionQuotas.inc(listener.listenerName, listener.defaultIp, blockedPercentMeters("EXTERNAL"))
+        )): Runnable
       ).get(5, TimeUnit.SECONDS)
     } finally {
       executor.shutdownNow()
     }
+  }
+
+  @Test
+  def testFailDecrementForUnknownIp(): Unit = {
+    val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
+    val connectionQuotas = new ConnectionQuotas(config, time)
+    addListenersAndVerify(config, connectionQuotas)
+
+    // calling dec() for an IP for which we didn't call inc() should throw an exception
+    intercept[IllegalArgumentException](connectionQuotas.dec(listeners("EXTERNAL").listenerName, unknownHost))
   }
 
   @Test
@@ -105,18 +117,18 @@ class ConnectionQuotasTest {
     try {
       // verify there is no limit by accepting 10000 connections as fast as possible
       val numConnections = 10000
-      val futures = listeners.values.map( listener =>
-        executor.submit((() => acceptConnections(connectionQuotas, listener, numConnections)): Runnable) )
+      val futures = listeners.values.map { listener =>
+        executor.submit((() => acceptConnections(connectionQuotas, listener, numConnections)): Runnable)
+      }
       futures.foreach(_.get(10, TimeUnit.SECONDS))
       listeners.values.foreach { listener =>
-        assertEquals(s"${listener.listenerName.value()}",numConnections, connectionQuotas.get(listener.defaultClientIp))
+        assertEquals(s"Number of connections on $listener:",
+          numConnections, connectionQuotas.get(listener.defaultIp))
 
         // verify removing one connection
-        connectionQuotas.dec(listener.listenerName, listener.defaultClientIp)
-        assertEquals(s"Number of connections on $listener:", numConnections - 1, connectionQuotas.get(listener.defaultClientIp))
-
-        // calling dec() for an IP for which we didn't call inc() should throw an exception
-        intercept[IllegalArgumentException](connectionQuotas.dec(listener.listenerName, unknownHost))
+        connectionQuotas.dec(listener.listenerName, listener.defaultIp)
+        assertEquals(s"Number of connections on $listener:",
+          numConnections - 1, connectionQuotas.get(listener.defaultIp))
       }
     } finally {
       executor.shutdownNow()
@@ -136,22 +148,34 @@ class ConnectionQuotasTest {
     val executor = Executors.newFixedThreadPool(listeners.size)
     try {
       val externalListener = listeners("EXTERNAL")
-      executor.submit((() => acceptConnections(connectionQuotas, externalListener, maxConnectionsPerIp)): Runnable).get(5, TimeUnit.SECONDS)
-      assertEquals(s"Number of connections on $externalListener:", maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultClientIp))
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, externalListener, maxConnectionsPerIp)): Runnable
+      ).get(5, TimeUnit.SECONDS)
+      assertEquals(s"Number of connections on $externalListener:",
+        maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp))
 
-      // all subsequent connections will be added to the counters, but inc() will throw TooManyConnectionsException for each of them
-      executor.submit((() => acceptConnectionsAboveIpLimit(connectionQuotas, externalListener, 2)): Runnable).get(5, TimeUnit.SECONDS)
-      assertEquals(s"Number of connections on $externalListener:", maxConnectionsPerIp + 2, connectionQuotas.get(externalListener.defaultClientIp))
+      // all subsequent connections will be added to the counters, but inc() will throw TooManyConnectionsException for each
+      executor.submit((() =>
+        acceptConnectionsAboveIpLimit(connectionQuotas, externalListener, 2)): Runnable
+      ).get(5, TimeUnit.SECONDS)
+      assertEquals(s"Number of connections on $externalListener:",
+        maxConnectionsPerIp + 2, connectionQuotas.get(externalListener.defaultIp))
 
       // connections on the same listener but from a different IP should be accepted
-      executor.submit((() => acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp, 0)): Runnable).get(5, TimeUnit.SECONDS)
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp, 0)): Runnable
+      ).get(5, TimeUnit.SECONDS)
 
       // remove two "rejected" connections and remove 2 more connections to free up the space for another 2 connections
-      for (_ <- 0 until 4) connectionQuotas.dec(externalListener.listenerName, externalListener.defaultClientIp)
-      assertEquals(s"Number of connections on $externalListener:", maxConnectionsPerIp - 2, connectionQuotas.get(externalListener.defaultClientIp))
+      for (_ <- 0 until 4) connectionQuotas.dec(externalListener.listenerName, externalListener.defaultIp)
+      assertEquals(s"Number of connections on $externalListener:",
+        maxConnectionsPerIp - 2, connectionQuotas.get(externalListener.defaultIp))
 
-      executor.submit((() => acceptConnections(connectionQuotas, externalListener, 2)): Runnable).get(5, TimeUnit.SECONDS)
-      assertEquals(s"Number of connections on $externalListener:", maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultClientIp))
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, externalListener, 2)): Runnable
+      ).get(5, TimeUnit.SECONDS)
+      assertEquals(s"Number of connections on $externalListener:",
+        maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp))
     } finally {
       executor.shutdownNow()
     }
@@ -174,43 +198,59 @@ class ConnectionQuotasTest {
 
       // verify that ConnectionQuota can give all connections to one listener
       // also add connections with a time interval between connections to make sure that time gets advanced
-      executor.submit((() => acceptConnections(connectionQuotas, listeners("EXTERNAL"), maxConnections, 1)): Runnable).get(5, TimeUnit.SECONDS)
-      assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:", maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultClientIp))
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, listeners("EXTERNAL"), maxConnections, 1)): Runnable
+      ).get(5, TimeUnit.SECONDS)
+      assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:",
+        maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp))
+
       // the blocked percent should still be 0, because there should be no wait for a connection slot
       assertEquals(0, blockedPercentMeters("EXTERNAL").count())
 
       // the number of connections should be above max for maxConnectionsExceeded to return true
-      assertFalse("Total number of connections is exactly the maximum.", connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
+      assertFalse("Total number of connections is exactly the maximum.",
+        connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
 
       // adding one more connection will block ConnectionQuota.inc()
-      val future = executor.submit((() => acceptConnections(connectionQuotas, listeners("EXTERNAL"), 1)): Runnable)
-      intercept[TimeoutException](future.get(1, TimeUnit.SECONDS))
+      val future = executor.submit((() =>
+        acceptConnections(connectionQuotas, listeners("EXTERNAL"), 1)): Runnable
+      )
+      intercept[TimeoutException](future.get(100, TimeUnit.MILLISECONDS))
       // advance time by 3ms so that when the waiting connection gets accepted, the blocked percent is non-zero
       time.sleep(3)
 
       // removing one connection should make the waiting connection to succeed
-      connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultClientIp)
+      connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
       future.get(1, TimeUnit.SECONDS)
-      assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:", maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultClientIp))
+      assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:",
+        maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp))
       // metric is recorded in nanoseconds
-      assertTrue("Expected BlockedPercentMeter metric to be recorded", blockedPercentMeters("EXTERNAL").count() > 0)
+      assertTrue("Expected BlockedPercentMeter metric to be recorded",
+        blockedPercentMeters("EXTERNAL").count() > 0)
 
       // adding inter-broker connections should succeed even when the total number of connections reached the max
-      executor.submit((() => acceptConnections(connectionQuotas, listeners("REPLICATION"), 1)): Runnable).get(5, TimeUnit.SECONDS)
-      assertTrue("Expected the number of connections to exceed the maximum.", connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, listeners("REPLICATION"), 1)): Runnable
+      ).get(5, TimeUnit.SECONDS)
+      assertTrue("Expected the number of connections to exceed the maximum.",
+        connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
 
       // adding one more connection on another non-inter-broker will block ConnectionQuota.inc()
-      val future1 = executor.submit((() => acceptConnections(connectionQuotas, listeners("ADMIN"), 1)): Runnable)
+      val future1 = executor.submit((() =>
+        acceptConnections(connectionQuotas, listeners("ADMIN"), 1)): Runnable
+      )
       intercept[TimeoutException](future1.get(1, TimeUnit.SECONDS))
 
       // adding inter-broker connection should still succeed, even though a connection from another listener is waiting
-      executor.submit((() => acceptConnections(connectionQuotas, listeners("REPLICATION"), 1)): Runnable).get(5, TimeUnit.SECONDS)
+      executor.submit((() =>
+        acceptConnections(connectionQuotas, listeners("REPLICATION"), 1)): Runnable
+      ).get(5, TimeUnit.SECONDS)
 
       // at this point, we need to remove 3 connections for the waiting connection to succeed
       // remove 2 first -- should not be enough to accept the waiting connection
-      for (_ <- 0 until 2) connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL"). defaultClientIp)
-      intercept[TimeoutException](future1.get(1, TimeUnit.SECONDS))
-      connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultClientIp)
+      for (_ <- 0 until 2) connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
+      intercept[TimeoutException](future1.get(100, TimeUnit.MILLISECONDS))
+      connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
       future1.get(1, TimeUnit.SECONDS)
     } finally {
       executor.shutdownNow()
@@ -237,27 +277,35 @@ class ConnectionQuotasTest {
     val executor = Executors.newFixedThreadPool(listeners.size)
     try {
       // verify each listener can create up to max connections configured for that listener
-      val futures = listeners.values.map( listener =>
-        executor.submit((() => acceptConnections(connectionQuotas, listener, listenerMaxConnections)): Runnable) )
+      val futures = listeners.values.map { listener =>
+        executor.submit((() => acceptConnections(connectionQuotas, listener, listenerMaxConnections)): Runnable)
+      }
       futures.foreach(_.get(5, TimeUnit.SECONDS))
       listeners.values.foreach { listener =>
-        assertEquals(s"${listener.listenerName.value()}", listenerMaxConnections, connectionQuotas.get(listener.defaultClientIp))
-        assertFalse(s"Total number of connections on $listener should be exactly the maximum.", connectionQuotas.maxConnectionsExceeded(listener.listenerName))
+        assertEquals(s"Number of connections on $listener:",
+          listenerMaxConnections, connectionQuotas.get(listener.defaultIp))
+        assertFalse(s"Total number of connections on $listener should be exactly the maximum.",
+          connectionQuotas.maxConnectionsExceeded(listener.listenerName))
       }
 
       // since every listener has exactly the max number of listener connections,
       // every listener should block on the next connection creation, even the inter-broker listener
-      val futures2 = listeners.values.map( listener =>
-        executor.submit((() => acceptConnections(connectionQuotas, listener, 1)): Runnable) )
+      val futures2 = listeners.values.map { listener =>
+        executor.submit((() => acceptConnections(connectionQuotas, listener, 1)): Runnable)
+      }
       futures2.foreach { future =>
         intercept[TimeoutException](future.get(1, TimeUnit.SECONDS))
       }
       listeners.values.foreach { listener =>
         // free up one connection slot
-        connectionQuotas.dec(listener.listenerName, listener.defaultClientIp)
+        connectionQuotas.dec(listener.listenerName, listener.defaultIp)
       }
       // all connections should get added
       futures.foreach(_.get(5, TimeUnit.SECONDS))
+      listeners.values.foreach { listener =>
+        assertEquals(s"Number of connections on $listener:",
+          listenerMaxConnections, connectionQuotas.get(listener.defaultIp))
+      }
     } finally {
       executor.shutdownNow()
     }
@@ -277,7 +325,7 @@ class ConnectionQuotasTest {
                                 listenerDesc: ListenerDesc,
                                 numConnections: Long,
                                 timeIntervalMs: Long = 0L) : Unit = {
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultClientIp, numConnections, timeIntervalMs)
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections, timeIntervalMs)
   }
 
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
@@ -297,10 +345,11 @@ class ConnectionQuotasTest {
   private def acceptConnectionsAboveIpLimit(connectionQuotas: ConnectionQuotas,
                                             listenerDesc: ListenerDesc,
                                             numConnections: Long) : Unit = {
+    val listenerName = listenerDesc.listenerName
     for (i <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit is reached
       intercept[TooManyConnectionsException](
-        connectionQuotas.inc(listenerDesc.listenerName, listenerDesc.defaultClientIp, blockedPercentMeters(listenerDesc.listenerName.value))
+        connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
       )
     }
   }
