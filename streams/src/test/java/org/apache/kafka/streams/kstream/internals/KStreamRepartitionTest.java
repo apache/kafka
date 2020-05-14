@@ -21,11 +21,16 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.test.TestRecord;
@@ -36,8 +41,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Properties;
+import java.util.TreeMap;
 
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyString;
@@ -47,7 +55,9 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class KStreamRepartitionTest {
@@ -102,6 +112,52 @@ public class KStreamRepartitionTest {
         }
 
         verify(streamPartitionerMock);
+    }
+
+    @Test
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() {
+        final String topicB = "topic-b";
+        final String outputTopic = "topic-output";
+        final String topicBRepartitionedName = "topic-b-scale-up";
+        final String inputTopicRepartitionedName = "input-topic-scale-up";
+        final int topicBNumberOfPartitions = 2;
+        final int inputTopicNumberOfPartitions = 4;
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
+                .<Integer, String>as(inputTopicRepartitionedName)
+                .withNumberOfPartitions(inputTopicNumberOfPartitions);
+
+        final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
+                .<Integer, String>as(topicBRepartitionedName)
+                .withNumberOfPartitions(topicBNumberOfPartitions);
+
+        final KStream<Integer, String> topicBStream = builder
+                .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .repartition(topicBRepartitioned);
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .repartition(inputTopicRepartitioned)
+                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+                .to(outputTopic);
+
+        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
+                Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
+                Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
+        );
+
+        final TopologyException expected = assertThrows(
+                TopologyException.class, () -> builder.build(props)
+        );
+        final String expectedErrorMessage = String.format("Following topics do not have the same " +
+                        "number of partitions: [%s]",
+                new TreeMap<>(repartitionTopicsWithNumOfPartitions));
+        assertNotNull(expected);
+        assertTrue(expected.getMessage().contains(expectedErrorMessage));
+    }
+
+    private String toRepartitionTopicName(final String input) {
+        return input + "-repartition";
     }
 
     private String repartitionOutputTopic(final Properties props, final String repartitionOperationName) {

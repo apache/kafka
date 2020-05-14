@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
@@ -398,16 +398,32 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @Test
-  def shouldAddClientConfig(): Unit = {
+  def testShouldAddClientConfig(user: Option[String], clientId: Option[String]): Unit = {
+    def toValues(entityName: Option[String], entityType: String, command: String):
+        (Array[String], Option[String], Option[ClientQuotaFilterComponent]) = {
+      entityName match {
+        case Some(null) =>
+          (Array("--entity-type", command, "--entity-default"), Some(null),
+            Some(ClientQuotaFilterComponent.ofDefaultEntity(entityType)))
+        case Some(name) =>
+          (Array("--entity-type", command, "--entity-name", name), Some(name),
+            Some(ClientQuotaFilterComponent.ofEntity(entityType, name)))
+        case None => (Array.empty, None, None)
+      }
+    }
+    val (userArgs, userEntity, userComponent) = toValues(user, ClientQuotaEntity.USER, "users")
+    val (clientIdArgs, clientIdEntity, clientIdComponent) = toValues(clientId, ClientQuotaEntity.CLIENT_ID, "clients")
+
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-name", "my-client-id",
-      "--entity-type", "clients",
       "--alter",
       "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
-      "--delete-config", "request_percentage"))
+      "--delete-config", "request_percentage") ++ userArgs ++ clientIdArgs)
 
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "my-client-id")).asJava)
+    // Explicitly populate a HashMap to ensure nulls are recorded properly.
+    val entityMap = new java.util.HashMap[String, String]
+    userEntity.foreach(u => entityMap.put(ClientQuotaEntity.USER, u))
+    clientIdEntity.foreach(c => entityMap.put(ClientQuotaEntity.CLIENT_ID, c))
+    val entity = new ClientQuotaEntity(entityMap)
 
     var describedConfigs = false
     val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
@@ -424,12 +440,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
-        assertEquals(1, filter.components.size)
         assertTrue(filter.strict)
-        val component = filter.components.asScala.head
-        assertEquals(ClientQuotaEntity.CLIENT_ID, component.entityType)
-        assertTrue(component.`match`.isPresent)
-        assertEquals("my-client-id", component.`match`.get)
+        val components = filter.components.asScala.toSeq
+        userComponent.foreach(c => assertTrue(components.contains(c)))
+        clientIdComponent.foreach(c => assertTrue(components.contains(c)))
         describedConfigs = true
         describeResult
       }
@@ -456,6 +470,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertTrue(describedConfigs)
     assertTrue(alteredConfigs)
     EasyMock.reset(alterResult, describeResult)
+  }
+
+  @Test
+  def shouldAddClientConfig(): Unit = {
+    testShouldAddClientConfig(Some("test-user-1"), Some("test-client-1"))
+    testShouldAddClientConfig(Some("test-user-2"), Some(null))
+    testShouldAddClientConfig(Some("test-user-3"), None)
+    testShouldAddClientConfig(Some(null), Some("test-client-2"))
+    testShouldAddClientConfig(Some(null), Some(null))
+    testShouldAddClientConfig(Some(null), None)
+    testShouldAddClientConfig(None, Some("test-client-3"))
+    testShouldAddClientConfig(None, Some(null))
   }
 
   @Test
@@ -746,7 +772,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val resource = entry.getKey
         val config = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        config.entries.forEach { e => brokerConfigs.put(e.name, e.value) }
         alterResult
       }
     }

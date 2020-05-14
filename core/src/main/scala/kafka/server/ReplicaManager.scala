@@ -1340,7 +1340,7 @@ class ReplicaManager(val config: KafkaConfig,
         // remove metrics for brokers which are not followers of a topic
         leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
 
-        leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
+        leaderAndIsrRequest.partitionStates.forEach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
           /*
            * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()

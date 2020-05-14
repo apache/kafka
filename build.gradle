@@ -501,6 +501,10 @@ subprojects {
       ]
     }
 
+    // Scalac's `-release` requires Java 9 or higher
+    if (JavaVersion.current().isJava9Compatible())
+      scalaCompileOptions.additionalParameters += ["-release", minJavaVersion]
+
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
       jvmArgs = ['-Xss4m']

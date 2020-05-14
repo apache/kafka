@@ -366,16 +366,6 @@ private[log] object LogValidator extends Logging {
       else None
     }
 
-    def validateOffset(batchIndex: Int, record: Record, expectedOffset: Long): Option[ApiRecordError] = {
-      // inner records offset should always be continuous
-      if (record.offset != expectedOffset) {
-        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-        Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
-          s"Inner record $record inside the compressed record batch does not have " +
-            s"incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition.")))
-      } else None
-    }
-
     // No in place assignment situation 1
     var inPlaceAssignment = sourceCodec == targetCodec
 
@@ -423,8 +413,15 @@ private[log] object LogValidator extends Logging {
               if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
                 if (record.timestamp > maxTimestamp)
                   maxTimestamp = record.timestamp
-                validateOffset(batchIndex, record, expectedOffset)
-              } else None
+
+                // Some older clients do not implement the V1 internal offsets correctly.
+                // Historically the broker handled this by rewriting the batches rather
+                // than rejecting the request. We must continue this handling here to avoid
+                // breaking these clients.
+                if (record.offset != expectedOffset)
+                  inPlaceAssignment = false
+              }
+              None
             }
           }
 
