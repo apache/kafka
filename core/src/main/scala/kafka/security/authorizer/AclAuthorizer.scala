@@ -350,17 +350,9 @@ class AclAuthorizer extends Authorizer with Logging {
     // Evaluate if operation is allowed
     val authorized = isSuperUser(principal) || aclsAllowAccess
 
-    // Record authorization requests
-    authorizerMetrics.recordAuthorizationRequest()
-
     logAuditMessage(requestContext, action, authorized)
-    if (authorized) {
-      authorizerMetrics.recordAuthorizationAllowed()
-      AuthorizationResult.ALLOWED
-    } else {
-      authorizerMetrics.recordAuthorizationDenied()
-      AuthorizationResult.DENIED
-    }
+    authorizerMetrics.recordAuthorizerMetrics(authorized)
+    if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
   }
 
   def isSuperUser(principal: KafkaPrincipal): Boolean = {
@@ -594,15 +586,12 @@ class AclAuthorizer extends Authorizer with Logging {
     metrics.addMetric(metrics.metricName("acls-total-count", GROUP_NAME, "The number of acls defined"),
       (config, now) => aclCache.size)
 
-    def recordAuthorizationAllowed(): Unit = {
-      authorizationAllowedSensor.record()
-    }
-
-    def recordAuthorizationDenied(): Unit = {
-      authorizationDeniedSensor.record()
-    }
-
-    def recordAuthorizationRequest(): Unit = {
+    def recordAuthorizerMetrics(authorized: Boolean): Unit = {
+      if (authorized) {
+        authorizationAllowedSensor.record()
+      } else {
+        authorizationDeniedSensor.record()
+      }
       authorizationRequestSensor.record()
     }
   }
