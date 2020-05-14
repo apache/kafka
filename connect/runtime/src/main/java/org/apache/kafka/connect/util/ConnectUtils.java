@@ -79,10 +79,6 @@ public final class ConnectUtils {
             }
         }
         prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
-        if (prop.containsKey(CommonClientConfigs.GROUP_ID_CONFIG)) {
-            prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, prop.get(CommonClientConfigs.GROUP_ID_CONFIG));
-        } else {
-            prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG));
-        }
+        prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG));
     }
 }

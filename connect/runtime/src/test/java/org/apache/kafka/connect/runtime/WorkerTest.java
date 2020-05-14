@@ -1136,7 +1136,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("group.id", "connect-test");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
@@ -1158,7 +1158,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("max.poll.records", "1000");
         expectedConfigs.put("client.id", "consumer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
@@ -1181,7 +1181,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("max.poll.interval.ms", "1000");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         Map<String, Object> connConfig = new HashMap<String, Object>();
         connConfig.put("max.poll.records", "5000");
