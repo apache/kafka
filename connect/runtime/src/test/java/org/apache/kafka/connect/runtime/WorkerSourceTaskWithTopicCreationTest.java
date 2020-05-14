@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
@@ -101,7 +102,7 @@ import static org.junit.Assert.assertTrue;
 @PowerMockIgnore({"javax.management.*",
                   "org.apache.log4j.*"})
 @RunWith(PowerMockRunner.class)
-public class WorkerSourceTaskTest extends ThreadedTest {
+public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     private static final String TOPIC = "topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
@@ -151,7 +152,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     );
 
     // when this test becomes parameterized, this variable will be a test parameter
-    public boolean enableTopicCreation = false;
+    public boolean enableTopicCreation = true;
 
     @Override
     public void setup() {
@@ -858,6 +859,22 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test(expected = ConnectException.class)
+    public void testSendRecordsAdminCallbackFail() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectTopicCreation(TOPIC, false, false, false);
+        expectSendRecordProducerCallbackFail();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
+
     private CountDownLatch expectEmptyPolls(int minimum, final AtomicInteger count) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(minimum);
         // Note that we stub these to allow any number of calls because the thread will continue to
@@ -1159,11 +1176,23 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void expectTopicCreation(String topic) {
+        expectTopicCreation(topic, false, true, true);
+    }
+    private void expectTopicCreation(String topic, boolean anyTimes, boolean describeSuccess,
+                                     boolean createSuccess) {
         if (config.topicCreationEnable()) {
-            EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
+            if (describeSuccess) {
+                EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
+            } else {
+                EasyMock.expect(admin.describeTopics(topic)).andThrow(new RetriableException("timeout"));
+            }
 
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+            if (createSuccess) {
+                EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+            } else {
+                EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andThrow(new RetriableException("timeout"));
+            }
         }
     }
 }
