@@ -36,8 +36,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -105,6 +109,7 @@ public class ClientUtils {
                 endOffsets = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             }
         } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
+            LOG.warn("listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
         return endOffsets;
