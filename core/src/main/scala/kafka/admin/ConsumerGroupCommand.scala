@@ -291,14 +291,21 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def printStates(states: Map[String, GroupState]): Unit = {
-      for ((groupId, state) <- states) {
-        if (shouldPrintMemberState(groupId, Some(state.state), Some(1))) {
+      val stateProps =  states.filter{case(groupId,state)=>shouldPrintMemberState(groupId, Some(state.state), Some(1))}
+        .map{case (_,state)=>
           val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
-          val coordinatorColLen = Math.max(25, coordinator.length)
-          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format(state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers))
-          println()
+          (state.group,coordinator,state.assignmentStrategy,state.state,state.numMembers)
         }
+      val hasAllGroups = opts.options.has(opts.allGroupsOpt)
+      if(stateProps.nonEmpty && hasAllGroups){
+        val headerLengthOffset = Math.max(25,stateProps.maxBy{_._2.length}._2.length)
+        print(s"\n%${-headerLengthOffset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+      }
+      stateProps.foreach{ case(group,coordinator,assignmentStrategy,state,numMembers)=>
+        val offset = -Math.max(25,coordinator.length)
+        if(!hasAllGroups) print(s"\n%${offset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print(s"\n%${offset}s %-25s %-20s %-15s %s".format(group, coordinator, assignmentStrategy, state, numMembers))
+        println()
       }
     }
 
