@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -23,23 +25,12 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KeyValueStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.SessionStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.TimestampedKeyValueStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.TimestampedWindowStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.WindowStoreReadWriteDecorator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
-
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final StateManager stateMgr,
@@ -51,20 +42,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @Override
     public StateStore getStateStore(final String name) {
         final StateStore store = stateManager.getGlobalStore(name);
-
-        if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
-        } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
-        } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
-        } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
-        } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
-        }
-
-        return store;
+        return getReadWriteStore(store);
     }
 
     @SuppressWarnings("unchecked")

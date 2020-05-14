@@ -78,7 +78,7 @@ public class ProcessorNode<K, V> {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    public ProcessorNode getChild(final String childName) {
         return childByName.get(childName);
     }
 

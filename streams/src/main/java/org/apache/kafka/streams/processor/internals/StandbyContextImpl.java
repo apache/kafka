@@ -24,17 +24,18 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 
-class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext implements Supplier {
 
-    StandbyContextImpl(final TaskId id,
-                       final StreamsConfig config,
-                       final ProcessorStateManager stateMgr,
-                       final StreamsMetricsImpl metrics) {
+    public StandbyContextImpl(final TaskId id,
+                              final StreamsConfig config,
+                              final ProcessorStateManager stateMgr,
+                              final StreamsMetricsImpl metrics) {
         super(
             id,
             config,
@@ -48,8 +49,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         );
     }
 
-
-    StateManager getStateMgr() {
+    StateManager stateMgr() {
         return stateManager;
     }
 

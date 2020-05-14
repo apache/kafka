@@ -902,7 +902,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     /**
      * Request committing the current task's state
      */
-    void requestCommit() {
+    public void requestCommit() {
         commitRequested = true;
     }
 

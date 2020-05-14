@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -217,5 +218,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void uninitialize() {
         initialized = false;
+    }
+
+    @Override
+    public TaskType taskType() {
+        return stateManager.taskType();
     }
 }
