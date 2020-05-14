@@ -1118,7 +1118,7 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION, null));
 
-        prepareInitPidResponse(Errors.NOT_COORDINATOR, false, producerId, epoch);
+        prepareInitPidResponse(Errors.NOT_COORDINATOR, false, pid, epoch);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
         assertFalse(initPidResult.isCompleted());
@@ -1897,7 +1897,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasInFlightRequest);
 
         transactionManager.transitionToAbortableError(new KafkaException());
-        sendAddPartitionsToTxnResponse(Errors.NOT_COORDINATOR, tp0, epoch, producerId);
+        sendAddPartitionsToTxnResponse(Errors.NOT_COORDINATOR, tp0, epoch, pid);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION, null) == null);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
