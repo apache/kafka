@@ -83,7 +83,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public ProcessorStateManager stateManager() {
         return (ProcessorStateManager) stateManager;
     }
-    
+
     @Override
     public RecordCollector recordCollector() {
         return collector;
