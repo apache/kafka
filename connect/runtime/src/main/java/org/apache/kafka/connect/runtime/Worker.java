@@ -525,8 +525,6 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy, clusterId);
-            //add client metrics.context properties
-            ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -540,7 +538,6 @@ public class Worker {
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
 
             Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
-            ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -573,6 +570,7 @@ public class Worker {
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+        //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         // Connector-specified overrides
@@ -605,6 +603,7 @@ public class Worker {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
+        //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         // Connector-specified overrides
         Map<String, Object> consumerOverrides =
@@ -646,6 +645,8 @@ public class Worker {
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
                                            connectorClientConfigOverridePolicy);
         adminProps.putAll(adminOverrides);
+
+        //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
 
         return adminProps;
