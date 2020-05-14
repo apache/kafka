@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -40,7 +39,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
-public class ProcessorContextImpl extends AbstractProcessorContext implements Supplier {
+public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     // The below are both null for standby tasks
     private final Task task;
@@ -49,35 +48,35 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    public ProcessorContextImpl(final TaskId id,
-                                final StreamTask task,
-                                final StreamsConfig config,
-                                final RecordCollector collector,
-                                final ProcessorStateManager stateMgr,
-                                final StreamsMetricsImpl metrics,
-                                final ThreadCache cache) {
+    ProcessorContextImpl(final TaskId id,
+                         final StreamTask task,
+                         final StreamsConfig config,
+                         final RecordCollector collector,
+                         final ProcessorStateManager stateMgr,
+                         final StreamsMetricsImpl metrics,
+                         final ThreadCache cache) {
         super(id, config, metrics, stateMgr, cache);
         this.task = task;
         this.collector = collector;
     }
 
-    public ProcessorContextImpl(final TaskId id,
-                                final StreamsConfig config,
-                                final ProcessorStateManager stateMgr,
-                                final StreamsMetricsImpl metrics) {
-        super(
+    ProcessorContextImpl(final TaskId id,
+                         final StreamsConfig config,
+                         final ProcessorStateManager stateMgr,
+                         final StreamsMetricsImpl metrics) {
+        this(
             id,
+            null,
             config,
-            metrics,
+            null,
             stateMgr,
+            metrics,
             new ThreadCache(
                 new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
                 0,
                 metrics
             )
         );
-        collector = null;
-        task = null;
     }
 
     public ProcessorStateManager stateManager() {
