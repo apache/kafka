@@ -73,7 +73,7 @@ final class TaskMovement {
         final BiFunction<UUID, TaskId, Boolean> caughtUpPredicate =
             (client, task) -> taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients);
 
-        final ConstrainedPrioritySet clientsByTaskLoad = new ConstrainedPrioritySet(
+        final ConstrainedPrioritySet caughtUpClientsByTaskLoad = new ConstrainedPrioritySet(
             caughtUpPredicate,
             client -> clientStates.get(client).assignedTaskLoad()
         );
@@ -93,21 +93,21 @@ final class TaskMovement {
                     taskMovements.add(new TaskMovement(task, client, tasksToCaughtUpClients.get(task)));
                 }
             }
-            clientsByTaskLoad.offer(client);
+            caughtUpClientsByTaskLoad.offer(client);
         }
 
         final boolean movementsNeeded = !taskMovements.isEmpty();
 
         final AtomicInteger remainingWarmupReplicas = new AtomicInteger(maxWarmupReplicas);
         for (final TaskMovement movement : taskMovements) {
-            final UUID standbySourceClient = clientsByTaskLoad.poll(
+            final UUID standbySourceClient = caughtUpClientsByTaskLoad.poll(
                 movement.task,
                 c -> clientStates.get(c).hasStandbyTask(movement.task)
             );
             if (standbySourceClient == null) {
                 // there's not a caught-up standby available to take over the task, so we'll schedule a warmup instead
                 final UUID sourceClient = requireNonNull(
-                    clientsByTaskLoad.poll(movement.task),
+                    caughtUpClientsByTaskLoad.poll(movement.task),
                     "Tried to move task to caught-up client but none exist"
                 );
 
@@ -117,7 +117,7 @@ final class TaskMovement {
                     clientStates.get(sourceClient),
                     clientStates.get(movement.destination)
                 );
-                clientsByTaskLoad.offerAll(asList(sourceClient, movement.destination));
+                caughtUpClientsByTaskLoad.offerAll(asList(sourceClient, movement.destination));
             } else {
                 // we found a candidate to trade standby/active state with our destination, so we don't need a warmup
                 swapStandbyAndActive(
@@ -125,7 +125,7 @@ final class TaskMovement {
                     clientStates.get(standbySourceClient),
                     clientStates.get(movement.destination)
                 );
-                clientsByTaskLoad.offerAll(asList(standbySourceClient, movement.destination));
+                caughtUpClientsByTaskLoad.offerAll(asList(standbySourceClient, movement.destination));
             }
         }
 
