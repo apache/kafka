@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -38,6 +39,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
     private long currentSystemTimeMs;
+    private TaskType taskType = TaskType.ACTIVE;
 
     public MockInternalProcessorContext() {
     }
@@ -115,5 +117,14 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     public StateRestoreCallback stateRestoreCallback(final String storeName) {
         return restoreCallbacks.get(storeName);
+    }
+
+    @Override
+    public TaskType taskType() {
+        return taskType;
+    }
+
+    public void setTaskType(final TaskType newType) {
+        taskType = newType;
     }
 }
