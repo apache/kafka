@@ -232,7 +232,6 @@ public class TaskAssignorConvergenceTest {
     @Test
     public void staticAssignmentShouldConvergeWithTheFirstAssignment() {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 2,
                                                                 0,
                                                                 1000L);
@@ -251,7 +250,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -273,7 +271,6 @@ public class TaskAssignorConvergenceTest {
         final int numStandbyReplicas = 0;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                1,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
                                                                 1000L);
@@ -314,7 +311,6 @@ public class TaskAssignorConvergenceTest {
             final int numberOfEvents = prng.nextInt(10) + 1;
 
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                    1,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
                                                                     1000L);
@@ -416,11 +412,12 @@ public class TaskAssignorConvergenceTest {
             iteration++;
             harness.prepareForNextRebalance();
             harness.recordBefore(iteration);
-            rebalancePending = new HighAvailabilityTaskAssignor(
-                harness.clientStates, allTasks,
+            rebalancePending = new HighAvailabilityTaskAssignor().assign(
+                harness.clientStates,
+                allTasks,
                 harness.statefulTaskEndOffsetSums.keySet(),
                 configs
-            ).assign();
+            );
             harness.recordAfter(iteration, rebalancePending);
         }
 

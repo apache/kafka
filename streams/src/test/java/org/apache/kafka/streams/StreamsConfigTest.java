@@ -399,9 +399,11 @@ public class StreamsConfigTest {
     @Test
     public void shouldOverrideStreamsDefaultProducerConfigs() {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), "30000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
+        assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
 
     @Test
@@ -935,18 +937,6 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds() {
         props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, -1L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-    }
-
-    @Test
-    public void shouldSetDefaultBalanceFactor() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG), is(1));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionIfBalanceFactorIsOutsideBounds() {
-        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 0);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

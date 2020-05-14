@@ -408,12 +408,10 @@ public class BufferPoolTest {
         BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
-        CountDownLatch completed = new CountDownLatch(numWorkers);
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
         Callable<Void> work = new Callable<Void>() {
                 public Void call() throws Exception {
                     assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
-                    completed.countDown();
                     return null;
                 }
             };
@@ -421,12 +419,12 @@ public class BufferPoolTest {
             executor.submit(work);
         }
 
-        assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
+        TestUtils.waitForCondition(() -> pool.queued() == numWorkers, "Awaiting " + numWorkers + " workers to be blocked on allocation");
 
         // Close the buffer pool. This should notify all waiters.
         pool.close();
 
-        completed.await(15, TimeUnit.SECONDS);
+        TestUtils.waitForCondition(() -> pool.queued() == 0, "Awaiting " + numWorkers + " workers to be interrupted from allocation");
 
         pool.deallocate(buffer);
     }

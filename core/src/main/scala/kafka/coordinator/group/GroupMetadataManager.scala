@@ -611,7 +611,7 @@ class GroupMetadataManager(brokerId: Int,
               MemoryRecords.readableRecords(buffer)
           }
 
-          memRecords.batches.asScala.foreach { batch =>
+          memRecords.batches.forEach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
               val recordIterator = batch.iterator

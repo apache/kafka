@@ -331,7 +331,7 @@ class TransactionStateManager(brokerId: Int,
                 MemoryRecords.readableRecords(buffer)
             }
 
-            memRecords.batches.asScala.foreach { batch =>
+            memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
                 val txnKey = TransactionLog.readTxnRecordKey(record.key)

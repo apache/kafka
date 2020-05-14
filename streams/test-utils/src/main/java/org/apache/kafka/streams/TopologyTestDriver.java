@@ -102,6 +102,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -145,6 +146,12 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
  * Topology topology = ...
  * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
  * }</pre>
+ *
+ * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
+ * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
+ * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
+ * after each input record.
  *
  * <h2>Processing messages</h2>
  * <p>
@@ -376,7 +383,7 @@ public class TopologyTestDriver implements Closeable {
             "test-client",
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
         );
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(mockWallClockTime));
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
 
         return streamsMetrics;
@@ -425,8 +432,8 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig
             );
 
-            final GlobalProcessorContextImpl<Object, Object> globalProcessorContext =
-                new GlobalProcessorContextImpl<>(streamsConfig, globalStateManager, streamsMetrics, cache);
+            final GlobalProcessorContextImpl globalProcessorContext =
+                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -853,6 +860,21 @@ public class TopologyTestDriver implements Closeable {
                                                                 final Deserializer<K> keyDeserializer,
                                                                 final Deserializer<V> valueDeserializer) {
         return new TestOutputTopic<>(this, topicName, keyDeserializer, valueDeserializer);
+    }
+
+    /**
+     * Get all the names of all the topics to which records have been produced during the test run.
+     * <p>
+     * Call this method after piping the input into the test driver to retrieve the full set of topic names the topology
+     * produced records to.
+     * <p>
+     * The returned set of topic names may include user (e.g., output) and internal (e.g., changelog, repartition) topic
+     * names.
+     *
+     * @return the set of topic names the topology has produced to
+     */
+    public final Set<String> producedTopicNames() {
+        return Collections.unmodifiableSet(outputRecordsByTopic.keySet());
     }
 
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {

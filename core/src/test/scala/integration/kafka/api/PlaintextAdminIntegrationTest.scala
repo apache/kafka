@@ -187,7 +187,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }.filter { case (k, _) => k.topic == topic }
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
-      logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>
+      logDirInfos.forEach { (logDir, logDirInfo) =>
         logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
           assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)
         )
@@ -205,7 +205,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }.toSeq
 
     val replicaDirInfos = client.describeReplicaLogDirs(replicas.asJavaCollection).all.get
-    replicaDirInfos.asScala.foreach { case (topicPartitionReplica, replicaDirInfo) =>
+    replicaDirInfos.forEach { (topicPartitionReplica, replicaDirInfo) =>
       val server = servers.find(_.config.brokerId == topicPartitionReplica.brokerId()).get
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
       assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)

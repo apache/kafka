@@ -184,7 +184,7 @@ public class AbstractProcessorContextTest {
     }
 
 
-    private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
+    private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;
         static {
             config = getStreamsConfig();

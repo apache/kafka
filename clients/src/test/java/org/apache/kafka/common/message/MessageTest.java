@@ -61,6 +61,7 @@ import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -620,12 +621,27 @@ public final class MessageTest {
         message.setMyNullableString("notNull");
         message.setMyInt16((short) 3);
         message.setMyString("test string");
+        SimpleExampleMessageData duplicate = message.duplicate();
+        assertEquals(duplicate, message);
+        assertEquals(message, duplicate);
+        duplicate.setMyTaggedIntArray(Collections.singletonList(123));
+        assertFalse(duplicate.equals(message));
+        assertFalse(message.equals(duplicate));
 
         testAllMessageRoundTripsFromVersion((short) 2, message);
     }
 
     private void testAllMessageRoundTrips(Message message) throws Exception {
+        testDuplication(message);
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
+    }
+
+    private void testDuplication(Message message) {
+        Message duplicate = message.duplicate();
+        assertEquals(duplicate, message);
+        assertEquals(message, duplicate);
+        assertEquals(duplicate.hashCode(), message.hashCode());
+        assertEquals(message.hashCode(), duplicate.hashCode());
     }
 
     private void testAllMessageRoundTripsBeforeVersion(short beforeVersion, Message message, Message expected) throws Exception {

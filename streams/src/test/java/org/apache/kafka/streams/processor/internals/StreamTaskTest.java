@@ -386,12 +386,12 @@ public class StreamTaskTest {
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20)
         ));
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(2.0d));
 
         task.process(0L);
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(1.0d));
     }
@@ -406,7 +406,7 @@ public class StreamTaskTest {
 
         task.recordProcessBatchTime(10L);
         task.recordProcessBatchTime(15L);
-        task.recordProcessTimeRatioAndBufferSize(100L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(0.25d));
 
@@ -415,7 +415,7 @@ public class StreamTaskTest {
         assertThat(metric.metricValue(), equalTo(0.25d));
 
         task.recordProcessBatchTime(10L);
-        task.recordProcessTimeRatioAndBufferSize(20L);
+        task.recordProcessTimeRatioAndBufferSize(20L, time.milliseconds());
 
         assertThat(metric.metricValue(), equalTo(1.0d));
     }
@@ -784,12 +784,18 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, Arrays.asList(getConsumerRecord(partition1, 0L), getConsumerRecord(partition1, 5L)));
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 0L),
+            getConsumerRecord(partition1, 3L),
+            getConsumerRecord(partition1, 5L)));
+
         task.process(0L);
+        task.process(0L);
+
         task.prepareCommit();
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(5L))))));
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(3L))))));
     }
 
     @Test

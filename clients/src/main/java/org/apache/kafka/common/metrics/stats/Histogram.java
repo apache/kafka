@@ -156,10 +156,7 @@ public class Histogram {
             if (binNumber < MIN_BIN_NUMBER) {
                 return MIN_BIN_NUMBER;
             }
-            if (binNumber > maxBinNumber) {
-                return maxBinNumber;
-            }
-            return binNumber;
+            return Math.min(binNumber, maxBinNumber);
         }
     }
 

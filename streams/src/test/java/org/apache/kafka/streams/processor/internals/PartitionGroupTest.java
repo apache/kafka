@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -39,6 +41,7 @@ import java.util.List;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -47,6 +50,7 @@ import static org.junit.Assert.assertThrows;
 
 public class PartitionGroupTest {
     private final LogContext logContext = new LogContext();
+    private final Time time = new MockTime();
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
@@ -98,8 +102,8 @@ public class PartitionGroupTest {
     private void testFirstBatch() {
         StampedRecord record;
         final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        assertThat(group.numBuffered(), is(0));
 
-        assertEquals(0, group.numBuffered());
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
@@ -120,39 +124,36 @@ public class PartitionGroupTest {
         // st: -1 since no records was being processed yet
 
         verifyBuffered(6, 3, 3);
-        assertEquals(1L, group.partitionTimestamp(partition1));
-        assertEquals(2L, group.partitionTimestamp(partition2));
-        assertEquals(1L, group.headRecordOffset(partition1).longValue());
-        assertEquals(2L, group.headRecordOffset(partition2).longValue());
-        assertEquals(-1L, group.streamTime());
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(group.partitionTimestamp(partition1), is(RecordQueue.UNKNOWN));
+        assertThat(group.partitionTimestamp(partition2), is(RecordQueue.UNKNOWN));
+        assertThat(group.headRecordOffset(partition1), is(1L));
+        assertThat(group.headRecordOffset(partition2), is(2L));
+        assertThat(group.streamTime(), is(RecordQueue.UNKNOWN));
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one record, now the time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[3, 5]
         // 2:[2, 4, 6]
         // st: 1
-        assertEquals(partition1, info.partition());
-        assertEquals(3L, group.partitionTimestamp(partition1));
-        assertEquals(2L, group.partitionTimestamp(partition2));
-        assertEquals(3L, group.headRecordOffset(partition1).longValue());
-        assertEquals(2L, group.headRecordOffset(partition2).longValue());
-        assertEquals(1L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition1));
+        assertThat(group.partitionTimestamp(partition1), is(1L));
+        assertThat(group.partitionTimestamp(partition2), is(RecordQueue.UNKNOWN));
+        assertThat(group.headRecordOffset(partition1), is(3L));
+        assertThat(group.headRecordOffset(partition2), is(2L));
         verifyTimes(record, 1L, 1L);
-        verifyBuffered(5, 2, 3);
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one record, now the time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[3, 5]
         // 2:[4, 6]
         // st: 2
-        assertEquals(partition2, info.partition());
-        assertEquals(3L, group.partitionTimestamp(partition1));
-        assertEquals(4L, group.partitionTimestamp(partition2));
-        assertEquals(3L, group.headRecordOffset(partition1).longValue());
-        assertEquals(4L, group.headRecordOffset(partition2).longValue());
-        assertEquals(2L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition2));
+        assertThat(group.partitionTimestamp(partition1), is(1L));
+        assertThat(group.partitionTimestamp(partition2), is(2L));
+        assertThat(group.headRecordOffset(partition1), is(3L));
+        assertThat(group.headRecordOffset(partition2), is(4L));
         verifyTimes(record, 2L, 2L);
         verifyBuffered(4, 2, 2);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -172,102 +173,96 @@ public class PartitionGroupTest {
         // 2:[4, 6]
         // st: 2 (just adding records shouldn't change it)
         verifyBuffered(6, 4, 2);
-        assertEquals(3L, group.partitionTimestamp(partition1));
-        assertEquals(4L, group.partitionTimestamp(partition2));
-        assertEquals(3L, group.headRecordOffset(partition1).longValue());
-        assertEquals(4L, group.headRecordOffset(partition2).longValue());
-        assertEquals(2L, group.streamTime());
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(group.partitionTimestamp(partition1), is(1L));
+        assertThat(group.partitionTimestamp(partition2), is(2L));
+        assertThat(group.headRecordOffset(partition1), is(3L));
+        assertThat(group.headRecordOffset(partition2), is(4L));
+        assertThat(group.streamTime(), is(2L));
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one record, time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[5, 2, 4]
         // 2:[4, 6]
         // st: 3
-        assertEquals(partition1, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(4L, group.partitionTimestamp(partition2));
-        assertEquals(5L, group.headRecordOffset(partition1).longValue());
-        assertEquals(4L, group.headRecordOffset(partition2).longValue());
-        assertEquals(3L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition1));
+        assertThat(group.partitionTimestamp(partition1), is(3L));
+        assertThat(group.partitionTimestamp(partition2), is(2L));
+        assertThat(group.headRecordOffset(partition1), is(5L));
+        assertThat(group.headRecordOffset(partition2), is(4L));
         verifyTimes(record, 3L, 3L);
         verifyBuffered(5, 3, 2);
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one record, time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[5, 2, 4]
         // 2:[6]
         // st: 4
-        assertEquals(partition2, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(6L, group.partitionTimestamp(partition2));
-        assertEquals(5L, group.headRecordOffset(partition1).longValue());
-        assertEquals(6L, group.headRecordOffset(partition2).longValue());
-        assertEquals(4L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition2));
+        assertThat(group.partitionTimestamp(partition1), is(3L));
+        assertThat(group.partitionTimestamp(partition2), is(4L));
+        assertThat(group.headRecordOffset(partition1), is(5L));
+        assertThat(group.headRecordOffset(partition2), is(6L));
         verifyTimes(record, 4L, 4L);
         verifyBuffered(4, 3, 1);
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one more record, time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[2, 4]
         // 2:[6]
         // st: 5
-        assertEquals(partition1, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(6L, group.partitionTimestamp(partition2));
-        assertEquals(2L, group.headRecordOffset(partition1).longValue());
-        assertEquals(6L, group.headRecordOffset(partition2).longValue());
-        assertEquals(5L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition1));
+        assertThat(group.partitionTimestamp(partition1), is(5L));
+        assertThat(group.partitionTimestamp(partition2), is(4L));
+        assertThat(group.headRecordOffset(partition1), is(2L));
+        assertThat(group.headRecordOffset(partition2), is(6L));
         verifyTimes(record, 5L, 5L);
         verifyBuffered(3, 2, 1);
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
         // get one more record, time should not be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[4]
         // 2:[6]
         // st: 5
-        assertEquals(partition1, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(6L, group.partitionTimestamp(partition2));
-        assertEquals(4L, group.headRecordOffset(partition1).longValue());
-        assertEquals(6L, group.headRecordOffset(partition2).longValue());
-        assertEquals(5L, group.streamTime());
+        assertThat(info.partition(), equalTo(partition1));
+        assertThat(group.partitionTimestamp(partition1), is(5L));
+        assertThat(group.partitionTimestamp(partition2), is(4L));
+        assertThat(group.headRecordOffset(partition1), is(4L));
+        assertThat(group.headRecordOffset(partition2), is(6L));
         verifyTimes(record, 2L, 5L);
         verifyBuffered(2, 1, 1);
-        assertEquals(3.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(3.0));
 
         // get one more record, time should not be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[6]
         // st: 5
-        assertEquals(partition1, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(6L, group.partitionTimestamp(partition2));
+        assertThat(info.partition(), equalTo(partition1));
+        assertThat(group.partitionTimestamp(partition1), is(5L));
+        assertThat(group.partitionTimestamp(partition2), is(4L));
         assertNull(group.headRecordOffset(partition1));
-        assertEquals(6L, group.headRecordOffset(partition2).longValue());
-        assertEquals(5L, group.streamTime());
+        assertThat(group.headRecordOffset(partition2), is(6L));
         verifyTimes(record, 4L, 5L);
         verifyBuffered(1, 0, 1);
-        assertEquals(1.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(1.0));
 
         // get one more record, time should be advanced
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[]
         // st: 6
-        assertEquals(partition2, info.partition());
-        assertEquals(5L, group.partitionTimestamp(partition1));
-        assertEquals(6L, group.partitionTimestamp(partition2));
+        assertThat(info.partition(), equalTo(partition2));
+        assertThat(group.partitionTimestamp(partition1), is(5L));
+        assertThat(group.partitionTimestamp(partition2), is(6L));
         assertNull(group.headRecordOffset(partition1));
         assertNull(group.headRecordOffset(partition2));
-        assertEquals(6L, group.streamTime());
         verifyTimes(record, 6L, 6L);
         verifyBuffered(0, 0, 0);
-        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
     }
 
     @Test
@@ -290,9 +285,9 @@ public class PartitionGroupTest {
         final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
 
         // get first two records from partition 1
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         assertEquals(record.timestamp, 1L);
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         assertEquals(record.timestamp, 5L);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
@@ -306,21 +301,21 @@ public class PartitionGroupTest {
         // 2:[2, 4, 6]
 
         // get one record, next record should be ts=2 from partition 2
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[3]
         // 2:[4, 6]
         assertEquals(record.timestamp, 2L);
 
         // get one record, next up should have ts=3 from partition 1 (even though it has seen a larger max timestamp =5)
-        record = group.nextRecord(info);
+        record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[4, 6]
         assertEquals(record.timestamp, 3L);
     }
 
     private void verifyTimes(final StampedRecord record, final long recordTime, final long streamTime) {
-        assertEquals(recordTime, record.timestamp);
-        assertEquals(streamTime, group.streamTime());
+        assertThat(record.timestamp, is(recordTime));
+        assertThat(group.streamTime(), is(streamTime));
     }
 
     private void verifyBuffered(final int totalBuffered, final int partitionOneBuffered, final int partitionTwoBuffered) {
@@ -386,14 +381,14 @@ public class PartitionGroupTest {
             new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo());
-        group.nextRecord(new PartitionGroup.RecordInfo());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
 
         group.clear();
 
         assertThat(group.numBuffered(), equalTo(0));
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo()), equalTo(null));
+        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
         group.addRawRecords(partition1, list);
@@ -406,13 +401,13 @@ public class PartitionGroupTest {
             new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
 
         group.close();
 
         assertThat(group.numBuffered(), equalTo(0));
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo()), equalTo(null));
+        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
         // The partition1 should still be able to find.

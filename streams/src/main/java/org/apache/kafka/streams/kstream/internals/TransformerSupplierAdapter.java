@@ -38,7 +38,7 @@ public class TransformerSupplierAdapter<KIn, VIn, KOut, VOut> implements Transfo
             private Transformer<KIn, VIn, KeyValue<KOut, VOut>> transformer = transformerSupplier.get();
 
             @Override
-            public void init(final ProcessorContext<Object, Object> context) {
+            public void init(final ProcessorContext context) {
                 transformer.init(context);
             }
 
