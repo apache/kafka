@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -299,6 +300,10 @@ public class TopicAdmin implements AutoCloseable {
                                     " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();
+                }
+                if (cause instanceof InvalidConfigurationException) {
+                    throw new ConnectException("Unable to create topic(s) '" + topicNameList + "': " + cause.getMessage(),
+                            cause);
                 }
                 if (cause instanceof TimeoutException) {
                     // Timed out waiting for the operation to complete
