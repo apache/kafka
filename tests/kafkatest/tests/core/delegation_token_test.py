@@ -35,7 +35,6 @@ class DelegationTokenTest(Test):
         self.topic = "topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
-                                  topics={self.topic: {"partitions": 1, "replication-factor": 1}},
                                   server_prop_overides=[
                                       [config_property.DELEGATION_TOKEN_MAX_LIFETIME_MS, "604800000"],
                                       [config_property.DELEGATION_TOKEN_EXPIRY_TIME_MS, "86400000"],
@@ -61,7 +60,7 @@ client.id=console-consumer
                                         client_prop_file_override=self.client_properties_content)
 
         self.kafka.security_protocol = 'SASL_PLAINTEXT'
-        self.kafka.client_sasl_mechanism = 'SCRAM-SHA-256'
+        self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
         self.kafka.interbroker_sasl_mechanism = 'GSSAPI'
 
 
@@ -82,6 +81,17 @@ client.id=console-consumer
         token_hmac = self.delegation_tokens.token_hmac()
         self.delegation_tokens.expire_delegation_token(token_hmac)
 
+    def create_topic(self):
+        self.logger.info(self.jaas_deleg_conf)
+        kafka_opts = "KAFKA_OPTS='-Djava.security.auth.login.config=/mnt/kafka/jaas_deleg.conf " \
+                     "-Djava.security.krb5.conf=/mnt/security/krb5.conf'"
+        topics_cmd_config= """
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=SCRAM-SHA-256
+"""
+        self.kafka.create_topic({"topic": self.topic, "partitions": 1, "replication-factor": 1},
+                                kafka_opts=kafka_opts,
+                                topics_cmd_config=topics_cmd_config)
 
     def produce_with_delegation_token(self):
         self.producer.acked_values = []
@@ -110,11 +120,12 @@ client.id=console-consumer
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
     def test_delegation_token_lifecycle(self):
-        self.kafka.start(use_zk_to_create_topic=False)
+        self.kafka.start()
         self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)
 
         self.generate_delegation_token()
         self.renew_delegation_token()
+        self.create_topic()
         self.produce_with_delegation_token()
         wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30,
                    err_msg="Expected producer to still be producing.")

@@ -238,7 +238,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
-    def start(self, add_principals="", use_zk_to_create_topic=False):
+    def start(self, add_principals=""):
         if self.zk_client_secure and not self.zk.zk_client_secure_port:
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         self.open_port(self.security_protocol)
@@ -265,7 +265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     topic_cfg = {}
 
                 topic_cfg["topic"] = topic
-                self.create_topic(topic_cfg, use_zk_to_create_topic=use_zk_to_create_topic)
+                self.create_topic(topic_cfg)
 
     def _ensure_zk_chroot(self):
         self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
@@ -426,7 +426,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
-    def _kafka_topics_cmd(self, node, use_zk_connection=True):
+    def _kafka_topics_cmd(self, node, kafka_opts=None, use_zk_connection=True):
         """
         Returns kafka-topics.sh command path with jaas configuration and krb5 environment variable
         set. If Admin client is not going to be used, don't set the environment variable.
@@ -434,17 +434,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
         skip_security_settings = use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
         return kafka_topic_script if skip_security_settings else \
+            "%s %s" % (kafka_opts, kafka_topic_script) or \
             "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
 
-    def _kafka_topics_cmd_config(self, node, use_zk_connection=True):
+    def _kafka_topics_cmd_config(self, node, topic_cmd_config=None, use_zk_connection=True):
         """
         Return --command-config parameter to the kafka-topics.sh command. The config parameter specifies
         the security settings that AdminClient uses to connect to a secure kafka server.
         """
         skip_command_config = use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
-        return "" if skip_command_config else " --command-config <(echo '%s')" % (self.security_config.client_config())
+        return "" if skip_command_config else " --command-config <(echo '%s')" % (topic_cmd_config or self.security_config.client_config())
 
-    def create_topic(self, topic_cfg, node=None, use_zk_to_create_topic=False):
+    def create_topic(self, topic_cfg, node=None, kafka_opts=None, topics_cmd_config=None):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
         and we care where command gets run.
@@ -456,11 +457,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Creating topic %s with settings %s",
                          topic_cfg["topic"], topic_cfg)
 
-        use_zk_connection = use_zk_to_create_topic or not node.version.topic_command_supports_bootstrap_server
+        use_zk_connection = not node.version.topic_command_supports_bootstrap_server
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
-            'kafka_topics_cmd': self._kafka_topics_cmd(node, use_zk_connection),
+            'kafka_topics_cmd': self._kafka_topics_cmd(node, kafka_opts, use_zk_connection),
             'connection_string': self._connect_setting(node, use_zk_connection),
             'topic': topic_cfg.get("topic"),
         }
@@ -481,7 +482,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             for config_name, config_value in topic_cfg["configs"].items():
                 cmd += " --config %s=%s" % (config_name, str(config_value))
 
-        cmd += self._kafka_topics_cmd_config(node, use_zk_connection)
+        cmd += self._kafka_topics_cmd_config(node, topics_cmd_config, use_zk_connection)
 
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
