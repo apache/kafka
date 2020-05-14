@@ -433,9 +433,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
         skip_security_settings = use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
-        return kafka_topic_script if skip_security_settings else \
-            "%s %s" % (kafka_opts, kafka_topic_script) or \
-            "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
+        if skip_security_settings:
+            return kafka_topic_script
+        if kafka_opts:
+            return "%s %s" % (kafka_opts, kafka_topic_script)
+        return "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
 
     def _kafka_topics_cmd_config(self, node, topic_cmd_config=None, use_zk_connection=True):
         """
