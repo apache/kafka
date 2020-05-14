@@ -1073,7 +1073,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // until it has been revoked and can safely be reassigned according to the COOPERATIVE protocol
                 if (newPartitionForConsumer && allOwnedPartitions.contains(partition)) {
                     log.info("Removing task {} from assignment until it is safely revoked in followup rebalance", taskId);
-                    clientState.removeFromAssignment(taskId);
+                    clientState.unassignActive(taskId);
                     // Clear the assigned partitions list for this task if any partition can not safely be assigned,
                     // so as not to encode a partial task
                     assignedPartitionsForTask.clear();

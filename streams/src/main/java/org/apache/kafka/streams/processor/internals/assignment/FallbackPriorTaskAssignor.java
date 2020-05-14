@@ -41,9 +41,9 @@ public class FallbackPriorTaskAssignor implements TaskAssignor {
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
-                          final Set<TaskId> standbyTaskIds,
+                          final Set<TaskId> statefulTaskIds,
                           final AssignmentConfigs configs) {
-        delegate.assign(clients, allTaskIds, standbyTaskIds, configs);
+        delegate.assign(clients, allTaskIds, statefulTaskIds, configs);
         return true;
     }
 }

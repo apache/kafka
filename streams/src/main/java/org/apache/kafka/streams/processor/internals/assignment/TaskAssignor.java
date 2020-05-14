@@ -28,6 +28,6 @@ public interface TaskAssignor {
      */
     boolean assign(Map<UUID, ClientState> clients,
                    Set<TaskId> allTaskIds,
-                   Set<TaskId> standbyTaskIds,
+                   Set<TaskId> statefulTaskIds,
                    AssignorConfiguration.AssignmentConfigs configs);
 }

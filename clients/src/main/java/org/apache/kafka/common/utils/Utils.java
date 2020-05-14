@@ -1155,4 +1155,21 @@ public final class Utils {
         }
         return result;
     }
+
+    @SafeVarargs
+    public static <E> Set<E> intersection(final Supplier<Set<E>> constructor, final Set<E> first, final Set<E>... set) {
+        final Set<E> result = constructor.get();
+        result.addAll(first);
+        for (final Set<E> s : set) {
+            result.retainAll(s);
+        }
+        return result;
+    }
+
+    public static <E> Set<E> diff(final Supplier<Set<E>> constructor, final Set<E> left, final Set<E> right) {
+        final Set<E> result = constructor.get();
+        result.addAll(left);
+        result.removeAll(right);
+        return result;
+    }
 }

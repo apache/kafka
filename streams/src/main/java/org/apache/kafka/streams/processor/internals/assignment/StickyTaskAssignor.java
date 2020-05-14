@@ -56,11 +56,11 @@ public class StickyTaskAssignor implements TaskAssignor {
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
-                          final Set<TaskId> standbyTaskIds,
+                          final Set<TaskId> statefulTaskIds,
                           final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
-        this.standbyTaskIds = standbyTaskIds;
+        this.standbyTaskIds = statefulTaskIds;
 
         final int maxPairs = allTaskIds.size() * (allTaskIds.size() - 1) / 2;
         taskPairs = new TaskPairs(maxPairs);
