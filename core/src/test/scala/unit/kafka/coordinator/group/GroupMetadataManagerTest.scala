@@ -1399,7 +1399,7 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
-    recordsCapture.getValue.batches.asScala.foreach { batch =>
+    recordsCapture.getValue.batches.forEach { batch =>
       assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, batch.magic)
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
     }
@@ -1447,7 +1447,7 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
-    recordsCapture.getValue.batches.asScala.foreach { batch =>
+    recordsCapture.getValue.batches.forEach { batch =>
       assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, batch.magic)
       // Use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)

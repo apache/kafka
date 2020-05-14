@@ -53,6 +53,20 @@
     </ul>
 
     <p>
+        Starting in Kafka Streams 2.6.x, a new processing mode <code>"exactly_once_beta"</code> (configurable via parameter
+        <code>processing.guarantee</code>) is available.
+        To use this new feature, your brokers must be on version 2.5.x or newer.
+        A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
+        only possible if the application is on version 2.6.x.
+        If you want to upgrade your application from an older version and enable this feature,
+        you first need to upgrade your application to version 2.6.x, staying on <code>"exactly_once"</code>,
+        and then do second round of rolling bounces to switch to <code>"exactly_once_beta"</code>.
+        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_beta"</code> to
+        <code>"exactly_once"</code> to disable the feature in your 2.6.x application.
+        Afterward, you can downgrade your application to a pre-2.6.x version.
+    </p>
+
+    <p>
         To run a Kafka Streams application version 2.2.1, 2.3.0, or higher a broker version 0.11.0 or higher is required
         and the on-disk message format must be 0.11 or higher.
         Brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 to 2.2.0.
@@ -70,6 +84,15 @@
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
+    <p>
+        We added a new processing mode that improves application scalability using exactly-once guarantees
+        (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>).
+        You can enable this new feature by setting the configuration parameter <code>processing.guarantee</code> to the
+        new value <code>"exactly_once_beta"</code>.
+        Note that you need brokers with version 2.5 or newer to use this feature.
     </p>
 
     <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
@@ -761,16 +784,19 @@
 
     <p> Metrics using exactly-once semantics: </p>
     <p>
-        If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
+        If <code>"exactly_once"</code> processing is enabled via the <code>processing.guarantee</code> parameter,
+        internally Streams switches from a producer-per-thread to a producer-per-task runtime model.
+        Using <code>"exactly_once_beta"</code> does use a producer-per-thread, so <code>client.id</code> doesn't change,
+        compared with <code>"at_least_once"</code> for this case).
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
-
     </p>
 
     <p> Producer's <code>client.id</code> naming schema: </p>
     <ul>
         <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
         <li> exactly-once: <code>[client.Id]-StreamThread-[sequence-number]-[taskId]</code> </li>
+        <li> exactly-once-beta: <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
     </ul>
     <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id</code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
 

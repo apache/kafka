@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.easymock.EasyMockRule;
 import org.easymock.Mock;
@@ -65,6 +66,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -178,6 +180,52 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final KafkaMetric metric = metric("put-rate");
         assertTrue((Double) metric.metricValue() > 0);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldGetWithBinary() {
+        expect(inner.get(keyBytes)).andReturn(valueAndTimestampBytes);
+
+        inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
+        expectLastCall();
+        init();
+
+        final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(key);
+        assertEquals(valueWithBinary.value, valueAndTimestamp);
+        assertEquals(valueWithBinary.serializedValue, valueAndTimestampBytes);
+    }
+
+    @SuppressWarnings("resource")
+    @Test
+    public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
+        init();
+
+        metered.put(key, valueAndTimestamp);
+        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
+        final byte[] encodedOldValue = stringSerde.serializer().serialize("TOPIC", valueAndTimestamp);
+
+        final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make("value", 98L);
+        assertFalse(metered.putIfDifferentValues(key,
+                                                 newValueAndTimestamp,
+                                                 encodedOldValue));
+        verify(inner);
+    }
+
+    @SuppressWarnings("resource")
+    @Test
+    public void shouldPutIfOutOfOrder() {
+        inner.put(eq(keyBytes), aryEq(valueAndTimestampBytes));
+        expectLastCall();
+        init();
+
+        metered.put(key, valueAndTimestamp);
+
+        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
+        final byte[] encodedOldValue = stringSerde.serializer().serialize("TOPIC", valueAndTimestamp);
+
+        final ValueAndTimestamp<String> outOfOrderValueAndTimestamp = ValueAndTimestamp.make("value", 95L);
+        assertTrue(metered.putIfDifferentValues(key, outOfOrderValueAndTimestamp, encodedOldValue));
         verify(inner);
     }
 

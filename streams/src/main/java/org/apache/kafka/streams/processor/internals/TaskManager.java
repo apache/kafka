@@ -732,15 +732,16 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
+    // For testing only.
+    int commitAll() {
+        return commit(tasks.values());
+    }
+
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commitAll() {
-        return commit(tasks.values());
-    }
-
     int commit(final Collection<Task> tasks) {
         if (rebalanceInProgress) {
             return -1;

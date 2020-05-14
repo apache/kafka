@@ -103,6 +103,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.easymock.EasyMock.expect;
@@ -540,7 +541,7 @@ public class StreamThreadTest {
         }
 
         AtomicLong nextRebalanceMs() {
-            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS);
+            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
         }
     }
 
@@ -1964,6 +1965,60 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotCommitNonRunningNonRestoringTasks() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final Task task3 = mock(Task.class);
+
+        final TaskId taskId1 = new TaskId(0, 1);
+        final TaskId taskId2 = new TaskId(0, 2);
+        final TaskId taskId3 = new TaskId(0, 3);
+
+        expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task2.state()).andReturn(Task.State.RESTORING).anyTimes();
+        expect(task2.id()).andReturn(taskId2).anyTimes();
+        expect(task3.state()).andReturn(Task.State.CREATED).anyTimes();
+        expect(task3.id()).andReturn(taskId3).anyTimes();
+
+        expect(taskManager.tasks()).andReturn(mkMap(
+            mkEntry(taskId1, task1),
+            mkEntry(taskId2, task2),
+            mkEntry(taskId3, task3)
+        )).anyTimes();
+
+        // expect not to try and commit task3, because it's not running.
+        expect(taskManager.commit(mkSet(task1, task2))).andReturn(2).times(1);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE)
+        );
+
+        EasyMock.replay(task1, task2, task3, taskManager);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager);
+    }
+
+    @Test
     public void shouldNotCommitNonRunningNonCorruptedTasksOnTaskCorruptedException() {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
@@ -2229,8 +2284,15 @@ public class StreamThreadTest {
                                               final int numberOfCommits,
                                               final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
-        EasyMock.replay(taskManager, consumer);
+        final Task runningTask = mock(Task.class);
+        final TaskId taskId = new TaskId(0, 0);
+
+        expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(runningTask.id()).andReturn(taskId).anyTimes();
+        expect(taskManager.tasks())
+            .andReturn(Collections.singletonMap(taskId, runningTask)).times(numberOfCommits);
+        expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(commits).times(numberOfCommits);
+        EasyMock.replay(taskManager, consumer, runningTask);
         return taskManager;
     }
 

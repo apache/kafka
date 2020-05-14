@@ -40,7 +40,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -242,11 +241,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    int getAssignmentErrorCode() {
-        return assignmentErrorCode.get();
-    }
-
-
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -256,7 +250,6 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
-    private final AtomicInteger assignmentErrorCode;
     private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
@@ -366,8 +359,8 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
-        final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_PROBING_REBALANCE_MS, nextProbingRebalanceMs);
+        final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -392,7 +385,7 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             assignmentErrorCode,
-            nextProbingRebalanceMs
+            nextScheduledRebalanceMs
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -475,13 +468,12 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
-        this.assignmentErrorCode = assignmentErrorCode;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -556,14 +548,8 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 runOnce();
-                if (assignmentErrorCode.get() == AssignorError.REBALANCE_NEEDED.code()) {
-                    log.info("Detected that the assignor requested a rebalance. Rejoining the consumer group to " +
-                                 "trigger a new rebalance.");
-                    assignmentErrorCode.set(AssignorError.NONE.code());
-                    mainConsumer.enforceRebalance();
-                } else if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("The probing rebalance interval has elapsed since the last rebalance, triggering a " +
-                                "rebalance to probe for newly caught-up clients");
+                if (nextProbingRebalanceMs.get() < time.milliseconds()) {
+                    log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
                     mainConsumer.enforceRebalance();
                 }
             } catch (final TaskCorruptedException e) {
@@ -860,7 +846,14 @@ public class StreamThread extends Thread {
                           taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            committed = taskManager.commitAll();
+            committed = taskManager.commit(
+                taskManager.tasks()
+                    .values()
+                    .stream()
+                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                    .collect(Collectors.toSet())
+            );
+
             if (committed > 0) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
