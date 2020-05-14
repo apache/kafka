@@ -109,7 +109,7 @@ public class ClientUtils {
                 endOffsets = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             }
         } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
-            LOG.warn("listOffsets request failed due to ", e);
+            LOG.warn("listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
         return endOffsets;
