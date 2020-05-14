@@ -24,13 +24,17 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +69,168 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
+        Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
+        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions)) {
+            log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
+                          + "optimized assignment algorithm");
+            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
+        } else {
+            log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
+                          + "general case assignment algorithm");
+            return generalAssign(partitionsPerTopic, subscriptions);
+        }
+    }
+
+    private boolean allSubscriptionsEqual(Map<String, Subscription> subscriptions,
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        Set<String> membersWithOldGeneration = new HashSet<>();
+        Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
+        int maxGeneration = 0;
+
+        final Set<String> subscriptionSet = new HashSet<>();
+
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
+            String consumer = subscriptionEntry.getKey();
+            Subscription subscription = subscriptionEntry.getValue();
+
+            if (subscriptionSet.isEmpty()) {
+                subscriptionSet.addAll(subscription.topics());
+            } else if (!(subscription.topics().size() == subscriptionSet.size()
+                && subscriptionSet.containsAll(subscription.topics()))) {
+                return false;
+            }
+
+            MemberData memberData = memberData(subscription);
+            if (!memberData.generation.isPresent() || memberData.generation.get() < maxGeneration) {
+                consumerToOwnedPartitions.put(consumer, new ArrayList<>());
+            } else {
+                // If the current member's generation is higher, all the previous owned partitions are invalid
+                if (memberData.generation.get() > maxGeneration) {
+                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
+                    membersOfCurrentHighestGeneration.clear();
+                    maxGeneration = memberData.generation.get();
+                }
+                membersOfCurrentHighestGeneration.add(consumer);
+                List<TopicPartition> ownedPartitions = memberData.partitions.stream()
+                    .filter(tp -> subscriptionSet.contains(tp.topic()))
+                    .collect(Collectors.toList());
+                consumerToOwnedPartitions.put(consumer, ownedPartitions);
+            }
+        }
+
+        for (String consumer : membersWithOldGeneration) {
+            consumerToOwnedPartitions.get(consumer).clear();
+        }
+        return true;
+    }
+
+    private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
+                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        SortedSet<TopicPartition> unassignedPartitions = processTopicPartitions(partitionsPerTopic);
+
+        // Each consumer should end up in exactly one of the below
+        List<String> unfilledMembers = new LinkedList<>();
+        Queue<String> maxCapacityMembers = new LinkedList<>();
+        Queue<String> minCapacityMembers = new LinkedList<>();
+
+        int minQuota = (int) Math.floor(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
+        int maxQuota = (int) Math.ceil(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
+
+        Map<String, List<TopicPartition>> assignment = new HashMap<>(
+            consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
+
+        for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
+            String consumer = consumerEntry.getKey();
+            List<TopicPartition> ownedPartitions = consumerEntry.getValue();
+
+            if (ownedPartitions.size() < minQuota) {
+                assignment.get(consumer).addAll(ownedPartitions);
+                unassignedPartitions.removeAll(ownedPartitions);
+                unfilledMembers.add(consumer);
+            } else if (ownedPartitions.size() == minQuota) {
+                assignment.get(consumer).addAll(ownedPartitions);
+                unassignedPartitions.removeAll(ownedPartitions);
+                minCapacityMembers.add(consumer);
+            } else {
+                List<TopicPartition> assignmentPartitions = assignment.get(consumer);
+                Iterator<TopicPartition> ownedPartitionsIter = ownedPartitions.iterator();
+                for (int i = 0; i < maxQuota; ++i) {
+                    assignmentPartitions.add(ownedPartitionsIter.next());
+                }
+                maxCapacityMembers.add(consumer);
+            }
+        }
+
+        Collections.sort(unfilledMembers);
+
+        Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
+        Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
+        while (unfilledConsumerIter.hasNext()) {
+            String consumer = unfilledConsumerIter.next();
+            List<TopicPartition> consumerAssignment = assignment.get(consumer);
+            int remainingCapacity = minQuota - consumerAssignment.size();
+            while (remainingCapacity > 0) {
+                if (unassignedPartitionsIter.hasNext()) {
+                    consumerAssignment.add(unassignedPartitionsIter.next());
+                    --remainingCapacity;
+                    unassignedPartitionsIter.remove();
+                } else {
+                    break;
+                }
+            }
+            if (remainingCapacity == 0) {
+                minCapacityMembers.add(consumer);
+                unfilledConsumerIter.remove();
+            }
+            if (unassignedPartitions.isEmpty()) {
+                break;
+            }
+        }
+
+        // If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+        // from the over-full consumers at max capacity
+        for (String consumer : unfilledMembers) {
+            List<TopicPartition> consumerAssignment = assignment.get(consumer);
+            int remainingCapacity = minQuota - consumerAssignment.size();
+            while (remainingCapacity > 0) {
+                String overloadedConsumer = maxCapacityMembers.poll();
+                if (overloadedConsumer == null) {
+                    throw new IllegalStateException("Some consumers are under capacity but all partitions have been assigned");
+                }
+                TopicPartition swappedPartition = assignment.get(overloadedConsumer).remove(0);
+                consumerAssignment.add(swappedPartition);
+                --remainingCapacity;
+            }
+            minCapacityMembers.add(consumer);
+        }
+
+        // Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+        // should just distribute one partition each to all consumers at min capacity
+        for (TopicPartition unassignedPartition : unassignedPartitions) {
+            String underCapacityConsumer = minCapacityMembers.poll();
+            if (underCapacityConsumer == null) {
+                throw new IllegalStateException("Some partitions are unassigned but all consumers are at maximum capacity");
+            }
+            // We can skip the bookkeeping of unassignedPartitions and maxCapacityMembers here since we are at the end
+            assignment.get(underCapacityConsumer).add(unassignedPartition);
+        }
+
+        return assignment;
+    }
+
+    private SortedSet<TopicPartition> processTopicPartitions(Map<String, Integer> partitionsPerTopic) {
+        SortedSet<TopicPartition> allPartitions =
+            new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+        for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
+            for (int i = 0; i < entry.getValue(); ++i) {
+                allPartitions.add(new TopicPartition(entry.getKey(), i));
+            }
+        }
+        return allPartitions;
+    }
+
+    private Map<String, List<TopicPartition>> generalAssign(Map<String, Integer> partitionsPerTopic,
+                                                            Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
@@ -148,7 +314,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.addAll(currentAssignment.keySet());
 
         balance(currentAssignment, prevAssignment, sortedPartitions, unassignedPartitions, sortedCurrentSubscriptions,
-            consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer, revocationRequired);
+                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer, revocationRequired);
         return currentAssignment;
     }
 

@@ -56,13 +56,12 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
-        return new MemberData(subscription.ownedPartitions(), Optional.empty());
+        return new MemberData(subscription.ownedPartitions(), Optional.of(1));
     }
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
-
         final Map<String, List<TopicPartition>> assignments = super.assign(partitionsPerTopic, subscriptions);
         adjustAssignment(subscriptions, assignments);
         return assignments;
@@ -71,7 +70,7 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     // Following the cooperative rebalancing protocol requires removing partitions that must first be revoked from the assignment
     private void adjustAssignment(final Map<String, Subscription> subscriptions,
                                   final Map<String, List<TopicPartition>> assignments) {
-
+        // TODO-soph initialize these sets during assignment?
         Map<TopicPartition, String> allAddedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
