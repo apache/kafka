@@ -162,8 +162,8 @@ public class Metrics implements Closeable {
         this.reporters = Objects.requireNonNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters) {
-            reporter.init(new ArrayList<>());
             reporter.contextChange(metricsContext);
+            reporter.init(new ArrayList<>());
         }
 
         // Create the ThreadPoolExecutor only if expiration of Sensors is enabled.

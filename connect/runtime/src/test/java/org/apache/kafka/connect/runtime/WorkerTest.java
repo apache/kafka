@@ -110,6 +110,7 @@ public class WorkerTest extends ThreadedTest {
     private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
     private static final String WORKER_ID = "localhost:8083";
     private static final String CLUSTER_ID = "test-cluster";
+    private static final String GROUP_ID = "group-1";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
     private final ConnectorClientConfigOverridePolicy allConnectorClientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
 
@@ -163,7 +164,7 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("config.providers.file.class", MockFileConfigProvider.class.getName());
         mockFileProviderTestId = UUID.randomUUID().toString();
         workerProps.put("config.providers.file.param.testId", mockFileProviderTestId);
-        workerProps.put("group.id", "group-1");
+        workerProps.put("group.id", GROUP_ID);
         config = new StandaloneConfig(workerProps);
 
         defaultProducerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -1076,7 +1077,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
         assertEquals(expectedConfigs,
                      Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
@@ -1094,7 +1095,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("linger.ms", "1000");
         expectedConfigs.put("client.id", "producer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
             new HashMap<String, Object>());
@@ -1117,7 +1118,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("batch.size", "1000");
         expectedConfigs.put("client.id", "producer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         Map<String, Object> connConfig = new HashMap<String, Object>();
         connConfig.put("linger.ms", "5000");
@@ -1135,7 +1136,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("group.id", "connect-test");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
@@ -1157,7 +1158,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("max.poll.records", "1000");
         expectedConfigs.put("client.id", "consumer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
@@ -1180,7 +1181,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("max.poll.interval.ms", "1000");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", "connect-test");
 
         Map<String, Object> connConfig = new HashMap<String, Object>();
         connConfig.put("max.poll.records", "5000");
@@ -1228,7 +1229,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metadata.max.age.ms", "10000");
         //we added a config on the fly
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
-        expectedConfigs.put("metrics.context.connect.group.id", "group-1");
+        expectedConfigs.put("metrics.context.connect.group.id", GROUP_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
             .andReturn(connConfig);
@@ -1317,8 +1318,8 @@ public class WorkerTest extends ThreadedTest {
             if (reporter instanceof MockMetricsReporter) {
                 MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) reporter;
                 //verify connect cluster is set in MetricsContext
-                assertEquals("test-cluster", mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID));
-                assertEquals("group-1", mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_GROUP_ID));
+                assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID));
+                assertEquals(GROUP_ID, mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_GROUP_ID));
             }
         }
         //verify metric is created with correct jmx prefix
