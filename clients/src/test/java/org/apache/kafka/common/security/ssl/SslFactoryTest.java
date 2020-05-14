@@ -385,6 +385,22 @@ public class SslFactoryTest {
                 sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory);
     }
 
+    @Test
+    public void testEngineFactoryClosed() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+                .createNewTrustStore(trustStoreFile)
+                .useClientCert(false)
+                .build();
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        sslFactory.configure(clientSslConfig);
+        TestSslUtils.TestSslEngineFactory engine = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
+        assertFalse(engine.closed);
+        sslFactory.close();
+        assertTrue(engine.closed);
+    }
+
     /**
      * Tests server side ssl.engine.factory configuration is used when specified
      */

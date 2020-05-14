@@ -55,7 +55,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ProcessorContextImplTest {
-    private ProcessorContextImpl<Object, Object> context;
+    private ProcessorContextImpl context;
 
     private static final String KEY = "key";
     private static final long VALUE = 42L;
@@ -121,7 +121,7 @@ public class ProcessorContextImplTest {
 
         replay(stateManager);
 
-        context = new ProcessorContextImpl<>(
+        context = new ProcessorContextImpl(
             mock(TaskId.class),
             mock(StreamTask.class),
             streamsConfig,
@@ -524,10 +524,10 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        final Processor processor = new Processor<String, Long>() {
             @Override
             @SuppressWarnings("unchecked")
-            public void init(final ProcessorContext<Object, Object> context) {
+            public void init(final ProcessorContext context) {
                 final T store = (T) context.getStateStore(name);
                 checker.accept(store);
             }

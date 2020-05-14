@@ -51,8 +51,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
@@ -66,8 +64,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            threeClientsToNumberOfStreamThreads(1, 1, 1),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(1, 1, 1)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_1_0, TASK_2_0);
@@ -81,8 +78,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsWhereNumberOfClientsNotIntegralDivisorOfNumberOfTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             TWO_CLIENTS,
             mkSortedSet(
@@ -96,8 +91,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            twoClientsToNumberOfStreamThreads(1, 1),
-            balanceFactor
+            twoClientsToNumberOfStreamThreads(1, 1)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_0_2, TASK_1_1, TASK_2_0, TASK_2_2);
@@ -110,8 +104,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsWhereNumberOfStreamThreadsIntegralDivisorOfNumberOfTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
@@ -125,8 +117,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            threeClientsToNumberOfStreamThreads(3, 3, 3),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(3, 3, 3)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_1_0, TASK_2_0);
@@ -140,8 +131,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsWhereNumberOfStreamThreadsNotIntegralDivisorOfNumberOfTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
@@ -155,8 +144,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            threeClientsToNumberOfStreamThreads(2, 2, 2),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(2, 2, 2)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_1_0, TASK_2_0);
@@ -170,8 +158,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverUnevenlyDistributedStreamThreads() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
@@ -185,8 +171,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            threeClientsToNumberOfStreamThreads(1, 2, 3),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(1, 2, 3)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_1_0, TASK_2_0);
@@ -200,16 +185,13 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsWithLessClientsThanTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
                 TASK_0_0,
                 TASK_0_1
             ),
-            threeClientsToNumberOfStreamThreads(1, 1, 1),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(1, 1, 1)
         );
 
         final List<TaskId> assignedTasksForClient1 = Collections.singletonList(TASK_0_0);
@@ -223,8 +205,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverClientsAndStreamThreadsWithMoreStreamThreadsThanTasks() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             THREE_CLIENTS,
             mkSortedSet(
@@ -238,8 +218,7 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            threeClientsToNumberOfStreamThreads(6, 6, 6),
-            balanceFactor
+            threeClientsToNumberOfStreamThreads(6, 6, 6)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_1_0, TASK_2_0);
@@ -253,8 +232,6 @@ public class DefaultBalancedAssignorTest {
 
     @Test
     public void shouldAssignTasksEvenlyOverStreamThreadsButBestEffortOverClients() {
-        final int balanceFactor = 1;
-
         final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
             TWO_CLIENTS,
             mkSortedSet(
@@ -268,42 +245,12 @@ public class DefaultBalancedAssignorTest {
                 TASK_2_1,
                 TASK_2_2
             ),
-            twoClientsToNumberOfStreamThreads(6, 2),
-            balanceFactor
+            twoClientsToNumberOfStreamThreads(6, 2)
         );
 
         final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_0_2, TASK_1_1, TASK_2_0, TASK_2_2,
             TASK_0_1);
         final List<TaskId> assignedTasksForClient2 = Arrays.asList(TASK_1_0, TASK_1_2, TASK_2_1);
-        assertThat(
-            assignment,
-            is(expectedAssignmentForTwoClients(assignedTasksForClient1, assignedTasksForClient2))
-        );
-    }
-
-    @Test
-    public void shouldAssignTasksEvenlyOverClientsButNotOverStreamThreadsBecauseBalanceFactorSatisfied() {
-        final int balanceFactor = 2;
-
-        final Map<UUID, List<TaskId>> assignment = new DefaultBalancedAssignor().assign(
-            TWO_CLIENTS,
-            mkSortedSet(
-                TASK_0_0,
-                TASK_0_1,
-                TASK_0_2,
-                TASK_1_0,
-                TASK_1_1,
-                TASK_1_2,
-                TASK_2_0,
-                TASK_2_1,
-                TASK_2_2
-            ),
-            twoClientsToNumberOfStreamThreads(6, 2),
-            balanceFactor
-        );
-
-        final List<TaskId> assignedTasksForClient1 = Arrays.asList(TASK_0_0, TASK_0_2, TASK_1_1, TASK_2_0, TASK_2_2);
-        final List<TaskId> assignedTasksForClient2 = Arrays.asList(TASK_0_1, TASK_1_0, TASK_1_2, TASK_2_1);
         assertThat(
             assignment,
             is(expectedAssignmentForTwoClients(assignedTasksForClient1, assignedTasksForClient2))

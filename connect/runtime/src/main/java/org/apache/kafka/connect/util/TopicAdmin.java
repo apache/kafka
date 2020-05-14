@@ -236,19 +236,19 @@ public class TopicAdmin implements AutoCloseable {
                     continue;
                 }
                 if (cause instanceof UnsupportedVersionException) {
-                    log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API.",
+                    log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API." +
                             " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();
                 }
                 if (cause instanceof ClusterAuthorizationException) {
-                    log.debug("Not authorized to create topic(s) '{}'." +
+                    log.debug("Not authorized to create topic(s) '{}' upon the brokers {}." +
                             " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();
                 }
                 if (cause instanceof TopicAuthorizationException) {
-                    log.debug("Not authorized to create topic(s) '{}'." +
+                    log.debug("Not authorized to create topic(s) '{}' upon the brokers {}." +
                                     " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();

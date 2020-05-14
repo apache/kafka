@@ -187,7 +187,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
       TestUtils.bootstrapServers(servers, new ListenerName("BROKER")))
-    clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].asScala.foreach { case (key, value) =>
+    clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].forEach { (key, value) =>
       config.put(key.toString, value)
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
@@ -264,11 +264,16 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     def produceConsume(expectProduceThrottle: Boolean, expectConsumeThrottle: Boolean): Unit = {
       val numRecords = 1000
       val produced = produceUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false)
+      // don't verify request channel metrics as it's difficult to write non flaky assertions
+      // given the specifics of this test (throttle metric removal followed by produce/consume
+      // until throttled)
+      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
       // make sure there are enough records on the topic to test consumer throttling
       produceWithoutThrottle(topic, numRecords - produced)
       consumeUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false)
+      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
     }
 
     def removeThrottleMetrics(): Unit = {
@@ -361,7 +366,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    reconfigurableConfigs.asScala.foreach(configValue(configs, _))
+    reconfigurableConfigs.forEach(configValue(configs, _))
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {

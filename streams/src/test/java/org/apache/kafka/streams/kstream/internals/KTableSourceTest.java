@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -30,10 +32,12 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.streams.TestOutputTopic;
+
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -85,6 +89,44 @@ public class KTableSourceTest {
                 new KeyValueTimestamp<>("A", null, 14L),
                 new KeyValueTimestamp<>("B", null, 15L)),
             supplier.theCapturedProcessor().processed);
+    }
+
+    @Test
+    public void testKTableSourceEmitOnChange() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"))
+               .toStream()
+               .to("output");
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, Integer> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic("output", new StringDeserializer(), new IntegerDeserializer());
+
+            inputTopic.pipeInput("A", 1, 10L);
+            inputTopic.pipeInput("B", 2, 11L);
+            inputTopic.pipeInput("A", 1, 12L);
+            inputTopic.pipeInput("B", 3, 13L);
+            // this record should be kept since this is out of order, so the timestamp
+            // should be updated in this scenario
+            inputTopic.pipeInput("A", 1, 9L);
+
+            assertEquals(
+                1.0,
+                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue()
+            );
+
+            assertEquals(
+                asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
+                           new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
+                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)),
+                           new TestRecord<>("A", 1, Instant.ofEpochMilli(9L))),
+                outputTopic.readRecordsToList()
+            );
+        }
     }
 
     @Test
@@ -189,7 +231,7 @@ public class KTableSourceTest {
                     Duration.ZERO
                 );
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table1.name)));
+            getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);

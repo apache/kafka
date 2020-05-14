@@ -26,6 +26,5 @@ public interface BalancedAssignor {
 
     Map<UUID, List<TaskId>> assign(final SortedSet<UUID> clients,
                                    final SortedSet<TaskId> tasks,
-                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads,
-                                   final int balanceFactor);
+                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads);
 }

@@ -77,7 +77,6 @@ public class SslTransportLayerTest {
     private final String tlsProtocol;
     private NioEchoServer server;
     private Selector selector;
-    private ChannelBuilder channelBuilder;
     private CertStores serverCertStores;
     private CertStores clientCertStores;
     private Map<String, Object> sslClientConfigs;
@@ -96,7 +95,6 @@ public class SslTransportLayerTest {
 
     public SslTransportLayerTest(String tlsProtocol) {
         this.tlsProtocol = tlsProtocol;
-
         sslConfigOverrides = new HashMap<>();
         sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
         sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
@@ -112,8 +110,8 @@ public class SslTransportLayerTest {
         sslServerConfigs.putAll(sslConfigOverrides);
         sslClientConfigs.putAll(sslConfigOverrides);
         LogContext logContext = new LogContext();
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
-        this.channelBuilder.configure(sslClientConfigs);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
     }
 
@@ -759,48 +757,51 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testNetworkThreadTimeRecorded() throws Exception {
-        selector.close();
-        this.selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext());
+        LogContext logContext = new LogContext();
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        channelBuilder.configure(sslClientConfigs);
+        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
 
-        String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+            String node = "0";
+            server = createEchoServer(SecurityProtocol.SSL);
+            InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        String message = TestUtils.randomString(1024 * 1024);
-        NetworkTestUtils.waitForChannelReady(selector, node);
-        final KafkaChannel channel = selector.channel(node);
-        assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
-        assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+            String message = TestUtils.randomString(1024 * 1024);
+            NetworkTestUtils.waitForChannelReady(selector, node);
+            final KafkaChannel channel = selector.channel(node);
+            assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
+            assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
 
-        selector.mute(node);
-        selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
-        while (selector.completedSends().isEmpty()) {
-            selector.poll(100L);
-        }
-        long sendTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
-        assertTrue("Send time not recorded: " + sendTimeNanos, sendTimeNanos > 0);
-        assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
-        assertFalse("Unexpected bytes buffered", channel.hasBytesBuffered());
-        assertEquals(0, selector.completedReceives().size());
-
-        selector.unmute(node);
-        // Wait for echo server to send the message back
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(100L);
-                } catch (IOException e) {
-                    return false;
-                }
-                return !selector.completedReceives().isEmpty();
+            selector.mute(node);
+            selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+            while (selector.completedSends().isEmpty()) {
+                selector.poll(100L);
             }
-        }, "Timed out waiting for a message to receive from echo server");
+            long sendTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
+            assertTrue("Send time not recorded: " + sendTimeNanos, sendTimeNanos > 0);
+            assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+            assertFalse("Unexpected bytes buffered", channel.hasBytesBuffered());
+            assertEquals(0, selector.completedReceives().size());
 
-        long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
-        assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
+            selector.unmute(node);
+            // Wait for echo server to send the message back
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    try {
+                        selector.poll(100L);
+                    } catch (IOException e) {
+                        return false;
+                    }
+                    return !selector.completedReceives().isEmpty();
+                }
+            }, "Timed out waiting for a message to receive from echo server");
+
+            long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
+            assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
+        }
     }
 
     /**
@@ -1221,8 +1222,7 @@ public class SslTransportLayerTest {
                                 final Integer netWriteBufSize, final Integer appBufSize) {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
-        this.channelBuilder = channelBuilder;
-        this.channelBuilder.configure(sslClientConfigs);
+        channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
