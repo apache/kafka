@@ -18,12 +18,13 @@
  */
 
 def config = jobConfig {
-    cron = '@midnight'
+    cron = '@weekly'
     nodeLabel = 'docker-oraclejdk8'
     testResultSpecs = ['junit': '**/build/test-results/**/TEST-*.xml']
     slackChannel = '#kafka-warn'
     timeoutHours = 4
     runMergeCheck = false
+    downStreamValidate = true
 }
 
 def retryFlagsString(jobConfig) {
@@ -54,7 +55,7 @@ def job = {
 
 
     stage("Compile and validate") {
-        sh "./gradlew clean assemble spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
+        sh "./gradlew clean assemble install spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                 "--no-daemon --stacktrace -PxmlSpotBugsReport=true"
     }
 
@@ -68,69 +69,46 @@ def job = {
       }
     }
 
-    stage("Run Tests and build cp-downstream-builds") {
-    	def runTestsStepName = "Step run-tests"
-    	def downstreamBuildsStepName = "Step cp-downstream-builds"
-        def testTargets = [
-           runTestsStepName: {
-               stage('Run tests') {
-                   echo "Running unit and integration tests"
-                   sh "./gradlew unitTest integrationTest " +
-                           "--no-daemon --stacktrace --continue -PtestLoggingEvents=started,passed,skipped,failed -PmaxParallelForks=4 -PignoreFailures=true" +
-                           retryFlagsString(config)
-               }
-               stage('Upload results') {
-                   // Kafka failed test stdout files
-                   archiveArtifacts artifacts: '**/testOutput/*.stdout', allowEmptyArchive: true
+    def runTestsStepName = "Step run-tests"
+    def downstreamBuildsStepName = "Step cp-downstream-builds"
+    def testTargets = [
+        runTestsStepName: {
+            stage('Run tests') {
+                echo "Running unit and integration tests"
+                sh "./gradlew unitTest integrationTest " +
+                        "--no-daemon --stacktrace --continue -PtestLoggingEvents=started,passed,skipped,failed -PmaxParallelForks=4 -PignoreFailures=true" +
+                        retryFlagsString(config)
+            }
+            stage('Upload results') {
+                // Kafka failed test stdout files
+                archiveArtifacts artifacts: '**/testOutput/*.stdout', allowEmptyArchive: true
 
-                   def summary = junit '**/build/test-results/**/TEST-*.xml'
-                   def total = summary.getTotalCount()
-                   def failed = summary.getFailCount()
-                   def skipped = summary.getSkipCount()
-                   summary = "Test results:\n\t"
-                   summary = summary + ("Passed: " + (total - failed - skipped))
-                   summary = summary + (", Failed: " + failed)
-                   summary = summary + (", Skipped: " + skipped)
-                   return summary;
-               }
+                def summary = junit '**/build/test-results/**/TEST-*.xml'
+                def total = summary.getTotalCount()
+                def failed = summary.getFailCount()
+                def skipped = summary.getSkipCount()
+                summary = "Test results:\n\t"
+                summary = summary + ("Passed: " + (total - failed - skipped))
+                summary = summary + (", Failed: " + failed)
+                summary = summary + (", Skipped: " + skipped)
+                return summary;
+            }
         },
         downstreamBuildsStepName: {
             echo "Building cp-downstream-builds"
-            if (config.isPrJob) {
-                try {
-                    def muckrakeBranch = kafkaMuckrakeVersionMap[env.CHANGE_TARGET]
-                    def forkRepo = "${env.CHANGE_FORK ?: "confluentinc"}/kafka.git"
-                    def forkBranch = env.CHANGE_BRANCH
-                    echo "Schedule test-cp-downstream-builds with :"
-                    echo "Muckrake branch : ${muckrakeBranch}"
-                    echo "PR fork repo : ${forkRepo}"
-                    echo "PR fork branch : ${forkBranch}"
-                    buildResult = build job: 'test-cp-downstream-builds', parameters: [
-                            [$class: 'StringParameterValue', name: 'BRANCH', value: muckrakeBranch],
-                            [$class: 'StringParameterValue', name: 'TEST_PATH', value: "muckrake/tests/dummy_test.py"],
-                            [$class: 'StringParameterValue', name: 'KAFKA_REPO', value: forkRepo],
-                            [$class: 'StringParameterValue', name: 'KAFKA_BRANCH', value: forkBranch]],
-                            propagate: true, wait: true
-                    downstreamBuildFailureOutput = "cp-downstream-builds result: " + buildResult.getResult();
-                    return downstreamBuildFailureOutput
-                } catch (Exception e) {
-                    currentBuild.result = 'UNSTABLE'
-                    downstreamBuildFailureOutput = "cp-downstream-builds result: " + e.getMessage()
-                    writeFile file: "downstream/cp-downstream-build-failure.txt", text: downstreamBuildFailureOutput
-                    archiveArtifacts artifacts: 'downstream/*.txt'
-
-                    return downstreamBuildFailureOutput
+            stage('Downstream validation') {
+                if (config.isPrJob && config.downStreamValidate) {
+                    downStreamValidation(true, true)
+                } else {
+                    return "skip downStreamValidation"
                 }
-            } else {
-                return ""
             }
-         }
-        ]
+        }
+    ]
 
-        result = parallel testTargets
-        // combine results of the two targets into one result string
-        return result.runTestsStepName + "\n" + result.downstreamBuildsStepName
-    }
+    result = parallel testTargets
+    // combine results of the two targets into one result string
+    return result.runTestsStepName + "\n" + result.downstreamBuildsStepName
 }
 
 runJob config, job
