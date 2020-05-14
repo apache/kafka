@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.function.Consumer;
+import java.util.function.Function;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -39,8 +42,10 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDeco
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements Supplier {
 
-    private final StreamTask task;
+    // The below are both null for standby tasks
+    private final Task task;
     private final RecordCollector collector;
+
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -56,10 +61,29 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
         this.collector = collector;
     }
 
-    public ProcessorStateManager getStateMgr() {
-        return (ProcessorStateManager) stateManager;
+    public ProcessorContextImpl(final TaskId id,
+                                final StreamsConfig config,
+                                final ProcessorStateManager stateMgr,
+                                final StreamsMetricsImpl metrics) {
+        super(
+            id,
+            config,
+            metrics,
+            stateMgr,
+            new ThreadCache(
+                new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+                0,
+                metrics
+            )
+        );
+        collector = null;
+        task = null;
     }
 
+    public ProcessorStateManager stateManager() {
+        return (ProcessorStateManager) stateManager;
+    }
+    
     @Override
     public RecordCollector recordCollector() {
         return collector;
@@ -67,9 +91,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
 
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
+     * @throws UnsupportedOperationException if the current task type is standby
      */
     @Override
     public StateStore getStateStore(final String name) {
+        throwUnsupportedOperationExceptionIfStandby("getStateStore");
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
         }
@@ -96,6 +122,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     @Override
     public <K, V> void forward(final K key,
                                final V value) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(key, value, SEND_TO_ALL);
     }
 
@@ -104,6 +131,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public <K, V> void forward(final K key,
                                final V value,
                                final int childIndex) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(
             key,
             value,
@@ -115,6 +143,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public <K, V> void forward(final K key,
                                final V value,
                                final String childName) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(key, value, To.child(childName));
     }
 
@@ -123,6 +152,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public <K, V> void forward(final K key,
                                final V value,
                                final To to) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         final ProcessorNode<?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
@@ -166,7 +196,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
 
     @Override
     public void commit() {
-        task.requestCommit();
+        throwUnsupportedOperationExceptionIfStandby("commit");
+        applyStreamTaskOperation(StreamTask::requestCommit);
     }
 
     @Override
@@ -174,10 +205,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
+        throwUnsupportedOperationExceptionIfStandby("schedule");
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return task.schedule(intervalMs, type, callback);
+        return returnStreamTaskOperation(t -> t.schedule(intervalMs, type, callback));
     }
 
     @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
@@ -185,6 +217,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
+        throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }
@@ -192,6 +225,22 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Su
     @Override
     public TaskType taskType() {
         return stateManager.taskType();
+    }
+
+    private <T> T returnStreamTaskOperation(final Function<StreamTask, T> operation) {
+        if (task instanceof StreamTask) {
+            return operation.apply((StreamTask) task);
+        } else {
+            throw new IllegalStateException("Tried to cast task to StreamTask but it was " + taskType());
+        }
+    }
+
+    private void applyStreamTaskOperation(final Consumer<StreamTask> operation) {
+        if (task instanceof StreamTask) {
+            operation.accept((StreamTask) task);
+        } else {
+            throw new IllegalStateException("Tried to cast task to StreamTask but it was " + taskType());
+        }
     }
 
 }

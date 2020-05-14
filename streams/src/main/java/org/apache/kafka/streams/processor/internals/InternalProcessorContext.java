@@ -70,7 +70,7 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * Get the thread-global cache
      */
-    ThreadCache getCache();
+    ThreadCache cache();
 
     /**
      * Mark this context as being initialized

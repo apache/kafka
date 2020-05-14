@@ -88,7 +88,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public ThreadCache getCache() {
+    public ThreadCache cache() {
         return null;
     }
 
