@@ -31,9 +31,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static java.time.Instant.ofEpochMilli;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingTimestampedWindowBytesStoreTest {
