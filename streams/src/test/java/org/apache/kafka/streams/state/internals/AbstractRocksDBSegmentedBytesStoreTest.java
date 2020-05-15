@@ -383,28 +383,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldRespectBulkLoadOptionsDuringInit() {
-        bytesStore.init(context, bytesStore);
-        final String key = "a";
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(2, bytesStore.getSegments().size());
-
-        final StateRestoreListener restoreListener = context.getRestoreListener(bytesStore.name());
-
-        restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
-
-        for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(1 << 30));
-        }
-
-        restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
-        for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(4));
-        }
-    }
-
-    @Test
     public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
         shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
     }

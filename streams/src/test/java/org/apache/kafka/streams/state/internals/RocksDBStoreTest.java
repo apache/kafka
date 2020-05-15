@@ -238,25 +238,6 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldRespectBulkloadOptionsDuringInit() {
-        rocksDBStore.init(context, rocksDBStore);
-
-        final StateRestoreListener restoreListener = context.getRestoreListener(rocksDBStore.name());
-
-        restoreListener.onRestoreStart(null, rocksDBStore.name(), 0L, 0L);
-
-        assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
-        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(1 << 30));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(1 << 30));
-
-        restoreListener.onRestoreEnd(null, rocksDBStore.name(), 0L);
-
-        assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(10));
-        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(20));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));
-    }
-
-    @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
@@ -328,36 +309,6 @@ public class RocksDBStoreTest {
             stringDeserializer.deserialize(
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
-    }
-
-    @Test
-    public void shouldTogglePrepareForBulkloadSetting() {
-        rocksDBStore.init(context, rocksDBStore);
-        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
-
-        restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have set bulk loading to true", rocksDBStore.isPrepareForBulkload());
-
-        restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
-    }
-
-    @Test
-    public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() {
-        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-
-        rocksDBStore.init(context, rocksDBStore);
-        context.restore(rocksDBStore.name(), entries);
-
-        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
-
-        restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have not set bulk loading to true", rocksDBStore.isPrepareForBulkload());
-
-        restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
     }
 
     @Test

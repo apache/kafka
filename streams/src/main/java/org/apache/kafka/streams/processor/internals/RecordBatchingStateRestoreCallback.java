@@ -20,18 +20,15 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
 
     @Override
     default void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    default void restore(final byte[] key, final byte[] value) {
         throw new UnsupportedOperationException();
     }
 }
