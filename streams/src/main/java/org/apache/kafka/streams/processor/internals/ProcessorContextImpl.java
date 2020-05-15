@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.function.Consumer;
-import java.util.function.Function;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -42,21 +40,21 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDeco
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     // The below are both null for standby tasks
-    private final Task task;
+    private final StreamTask streamTask;
     private final RecordCollector collector;
 
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
     ProcessorContextImpl(final TaskId id,
-                         final StreamTask task,
+                         final StreamTask streamTask,
                          final StreamsConfig config,
                          final RecordCollector collector,
                          final ProcessorStateManager stateMgr,
                          final StreamsMetricsImpl metrics,
                          final ThreadCache cache) {
         super(id, config, metrics, stateMgr, cache);
-        this.task = task;
+        this.streamTask = streamTask;
         this.collector = collector;
     }
 
@@ -90,7 +88,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
-     * @throws UnsupportedOperationException if the current task type is standby
+     * @throws UnsupportedOperationException if the current streamTask type is standby
      */
     @Override
     public StateStore getStateStore(final String name) {
@@ -196,7 +194,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public void commit() {
         throwUnsupportedOperationExceptionIfStandby("commit");
-        applyStreamTaskOperation(StreamTask::requestCommit);
+        streamTask.requestCommit();
     }
 
     @Override
@@ -208,7 +206,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return returnStreamTaskOperation(t -> t.schedule(intervalMs, type, callback));
+        return streamTask.schedule(intervalMs, type, callback);
     }
 
     @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
@@ -224,22 +222,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public TaskType taskType() {
         return stateManager.taskType();
-    }
-
-    private <T> T returnStreamTaskOperation(final Function<StreamTask, T> operation) {
-        if (task instanceof StreamTask) {
-            return operation.apply((StreamTask) task);
-        } else {
-            throw new IllegalStateException("Tried to cast task to StreamTask but it was " + taskType());
-        }
-    }
-
-    private void applyStreamTaskOperation(final Consumer<StreamTask> operation) {
-        if (task instanceof StreamTask) {
-            operation.accept((StreamTask) task);
-        } else {
-            throw new IllegalStateException("Tried to cast task to StreamTask but it was " + taskType());
-        }
     }
 
 }
