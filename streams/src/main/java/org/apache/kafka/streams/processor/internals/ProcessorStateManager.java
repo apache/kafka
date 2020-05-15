@@ -130,6 +130,10 @@ public class ProcessorStateManager implements StateManager {
             return this.stateStore;
         }
 
+        StateRestoreCallback restoreCallback() {
+            return this.restoreCallback;
+        }
+
         @Override
         public String toString() {
             return "StateStoreMetadata (" + stateStore.name() + " : " + changelogPartition + " @ " + offset;
