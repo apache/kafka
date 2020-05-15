@@ -45,8 +45,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KEY_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.VALUE_SERIALIZER;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
@@ -360,7 +360,7 @@ public class ProcessorContextImplTest {
         final Bytes key = Bytes.wrap("key".getBytes());
         final byte[] value = "zero".getBytes();
 
-        recordCollector.send(null, key, value, null, 0, 42L, BYTES_KEY_SERIALIZER, BYTE_ARRAY_VALUE_SERIALIZER);
+        recordCollector.send(null, key, value, null, 0, 42L, KEY_SERIALIZER, VALUE_SERIALIZER);
 
         replay(recordCollector);
         context.logChange("Store", key, value, 42L);

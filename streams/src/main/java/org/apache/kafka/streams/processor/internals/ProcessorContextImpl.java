@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -40,10 +42,10 @@ import java.util.List;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+    public static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
+    public static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
 
     // The below are both null for standby tasks
     private final StreamTask streamTask;
@@ -115,8 +117,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             null,
             taskId().partition,
             timestamp,
-            BYTES_KEY_SERIALIZER,
-            BYTE_ARRAY_VALUE_SERIALIZER);
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER);
     }
 
     /**
@@ -253,8 +255,51 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public TaskType taskType() {
-        return stateManager.taskType();
+    public String topic() {
+        throwUnsupportedOperationExceptionIfStandby("topic");
+        return super.topic();
     }
 
+    @Override
+    public int partition() {
+        throwUnsupportedOperationExceptionIfStandby("partition");
+        return super.partition();
+    }
+
+    @Override
+    public long offset() {
+        throwUnsupportedOperationExceptionIfStandby("offset");
+        return super.offset();
+    }
+
+    @Override
+    public long timestamp() {
+        throwUnsupportedOperationExceptionIfStandby("timestamp");
+        return super.timestamp();
+    }
+
+    @Override
+    public ProcessorNode<?, ?> currentNode() {
+        throwUnsupportedOperationExceptionIfStandby("currentNode");
+        return super.currentNode();
+    }
+
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        throwUnsupportedOperationExceptionIfStandby("setRecordContext");
+        super.setRecordContext(recordContext);
+    }
+
+    @Override
+    public ProcessorRecordContext recordContext() {
+        throwUnsupportedOperationExceptionIfStandby("recordContext");
+        return super.recordContext();
+    }
+
+    private void throwUnsupportedOperationExceptionIfStandby(final String operationName) {
+        if (taskType() == TaskType.STANDBY) {
+            throw new UnsupportedOperationException(
+                "this should not happen: " + operationName + "() is not supported in standby tasks.");
+        }
+    }
 }

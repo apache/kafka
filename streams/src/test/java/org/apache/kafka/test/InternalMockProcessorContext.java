@@ -54,8 +54,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
-import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KEY_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext
@@ -370,8 +370,8 @@ public class InternalMockProcessorContext
             null,
             taskId().partition,
             timestamp,
-            BYTES_KEY_SERIALIZER,
-            BYTE_ARRAY_VALUE_SERIALIZER);
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {

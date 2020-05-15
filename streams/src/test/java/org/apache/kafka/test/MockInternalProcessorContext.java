@@ -125,10 +125,6 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         return taskType;
     }
 
-    public void setTaskType(final TaskType newType) {
-        taskType = newType;
-    }
-
     @Override
     public void logChange(final String storeName,
                           final Bytes key,

@@ -21,6 +21,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -54,6 +56,8 @@ import java.util.function.Supplier;
 import static java.util.Objects.requireNonNull;
 
 public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
+    private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
+    private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
@@ -266,8 +270,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             V_2_CHANGELOG_HEADERS,
             partition,
             null,
-            RecordCollector.BYTES_KEY_SERIALIZER,
-            RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER
         );
     }
 
@@ -278,8 +282,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                        null,
                        partition,
                        null,
-                       RecordCollector.BYTES_KEY_SERIALIZER,
-                       RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER
+                       KEY_SERIALIZER,
+                       VALUE_SERIALIZER
         );
     }
 

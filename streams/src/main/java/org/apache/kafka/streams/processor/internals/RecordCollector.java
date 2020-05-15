@@ -19,17 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Map;
 
 public interface RecordCollector {
-
-    BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
-    ByteArraySerializer BYTE_ARRAY_VALUE_SERIALIZER = new ByteArraySerializer();
 
     <K, V> void send(final String topic,
                      final K key,

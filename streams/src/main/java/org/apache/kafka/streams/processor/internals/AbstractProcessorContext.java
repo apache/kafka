@@ -113,12 +113,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     /**
-     * @throws UnsupportedOperationException if the current task type is standby
      * @throws IllegalStateException if the task's record is null
      */
     @Override
     public String topic() {
-        throwUnsupportedOperationExceptionIfStandby("topic");
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
         }
@@ -133,12 +131,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     /**
-     * @throws UnsupportedOperationException if the current task type is standby
      * @throws IllegalStateException if partition is null
      */
     @Override
     public int partition() {
-        throwUnsupportedOperationExceptionIfStandby("partition");
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
         }
@@ -147,12 +143,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     /**
-     * @throws UnsupportedOperationException if the current task type is standby
      * @throws IllegalStateException if offset is null
      */
     @Override
     public long offset() {
-        throwUnsupportedOperationExceptionIfStandby("offset");
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
         }
@@ -172,7 +166,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
      */
     @Override
     public long timestamp() {
-        throwUnsupportedOperationExceptionIfStandby("timestamp");
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
         }
@@ -194,25 +187,21 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public void setRecordContext(final ProcessorRecordContext recordContext) {
-        throwUnsupportedOperationExceptionIfStandby("setRecordContext");
         this.recordContext = recordContext;
     }
 
     @Override
     public ProcessorRecordContext recordContext() {
-        throwUnsupportedOperationExceptionIfStandby("recordContext");
         return recordContext;
     }
 
     @Override
     public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
-        // can't throw if standby as this is called on commit when the StateStores get flushed.
         this.currentNode = currentNode;
     }
 
     @Override
     public ProcessorNode<?, ?> currentNode() {
-        throwUnsupportedOperationExceptionIfStandby("currentNode");
         return currentNode;
     }
 
@@ -234,12 +223,5 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public TaskType taskType() {
         return stateManager.taskType();
-    }
-
-    void throwUnsupportedOperationExceptionIfStandby(final String operationName) {
-        if (taskType() == TaskType.STANDBY) {
-            throw new UnsupportedOperationException(
-                "this should not happen: " + operationName + "() is not supported in standby tasks.");
-        }
     }
 }
