@@ -80,6 +80,12 @@ public class FollowerState implements EpochState {
         return leaderIdOpt.isPresent();
     }
 
+    public boolean hasLeader(int replicaId) {
+        if (replicaId < 0)
+            throw new IllegalArgumentException("Illegal negative replicaId " + replicaId);
+        return leaderIdOpt.orElse(-1) == replicaId;
+    }
+
     public boolean acknowledgeLeader(int leaderId) {
         if (leaderId < 0) {
             throw new IllegalArgumentException("Invalid negative leaderId: " + leaderId);
@@ -108,7 +114,7 @@ public class FollowerState implements EpochState {
         return votedIdOpt.isPresent();
     }
 
-    public boolean isVotedCandidate(int candidateId) {
+    public boolean hasVotedFor(int candidateId) {
         if (candidateId < 0)
             throw new IllegalArgumentException("Illegal negative candidateId " + candidateId);
         return votedIdOpt.orElse(-1) == candidateId;
@@ -147,4 +153,7 @@ public class FollowerState implements EpochState {
         return true;
     }
 
+    public boolean isUnattached() {
+        return !hasVoted() && !hasLeader();
+    }
 }
