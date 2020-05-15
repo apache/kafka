@@ -20,9 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
