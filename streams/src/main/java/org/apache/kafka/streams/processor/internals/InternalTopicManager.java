@@ -24,12 +24,14 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -93,6 +95,8 @@ public class InternalTopicManager {
      * If a topic does not exist creates a new topic.
      * If a topic with the correct number of partitions exists ignores it.
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
+     *
+     * @param topics the set of given internal topics.
      * @return the set of topics which had to be newly created
      */
     public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
@@ -156,13 +160,11 @@ public class InternalTopicManager {
                 }
             }
 
-
             if (!topicsNotReady.isEmpty()) {
-                log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
-
                 Utils.sleep(retryBackOffMs);
 
                 remainingRetries--;
+                log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
             }
         }
 
@@ -171,7 +173,7 @@ public class InternalTopicManager {
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
             log.error(timeoutAndRetryError);
-            throw new StreamsException(timeoutAndRetryError);
+            throw new TaskMigratedException("Time out for creating internal topics", new TimeoutException(timeoutAndRetryError));
         }
         log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
 
