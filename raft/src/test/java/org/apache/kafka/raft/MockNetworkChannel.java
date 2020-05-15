@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -73,6 +74,19 @@ public class MockNetworkChannel implements NetworkChannel {
         List<RaftMessage> messages = sendQueue;
         sendQueue = new ArrayList<>();
         return messages;
+    }
+
+    public List<RaftResponse.Outbound> drainSentResponses() {
+        List<RaftResponse.Outbound> responses = new ArrayList<>();
+        Iterator<RaftMessage> iterator = sendQueue.iterator();
+        while (iterator.hasNext()) {
+            RaftMessage message = iterator.next();
+            if (message instanceof RaftResponse.Outbound) {
+                responses.add((RaftResponse.Outbound) message);
+                iterator.remove();
+            }
+        }
+        return responses;
     }
 
     public boolean hasSentMessages() {

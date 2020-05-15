@@ -51,7 +51,7 @@ public abstract class RaftResponse implements RaftMessage {
 
         @Override
         public String toString() {
-            return "Inbound(" +
+            return "InboundResponse(" +
                     "correlationId=" + correlationId +
                     ", data=" + data +
                     ", sourceId=" + sourceId +

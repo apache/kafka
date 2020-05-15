@@ -111,6 +111,10 @@ public class QuorumState {
             return OptionalInt.empty();
     }
 
+    public boolean hasLeader() {
+        return leaderId().isPresent();
+    }
+
     public boolean isLeader() {
         return state instanceof LeaderState;
     }
@@ -152,6 +156,9 @@ public class QuorumState {
      * is invoked.
      */
     public boolean becomeVotedFollower(int epoch, int candidateId) throws IOException {
+        if (candidateId == localId)
+            throw new IllegalArgumentException("Cannot become a follower of " + candidateId +
+                " since that matches the local `broker.id`");
         if (!isVoter(candidateId))
             throw new IllegalArgumentException("Cannot become follower of non-voter " + candidateId);
 
@@ -165,6 +172,9 @@ public class QuorumState {
      * Become a follower of an elected leader so that we can begin fetching.
      */
     public boolean becomeFetchingFollower(int epoch, int leaderId) throws IOException {
+        if (leaderId == localId)
+            throw new IllegalArgumentException("Cannot become a follower of " + leaderId +
+                " since that matches the local `broker.id`");
         if (!isVoter(leaderId))
             throw new IllegalArgumentException("Cannot become follower of non-voter " + leaderId);
         boolean transitioned = becomeFollower(epoch, state -> state.acknowledgeLeader(leaderId));
