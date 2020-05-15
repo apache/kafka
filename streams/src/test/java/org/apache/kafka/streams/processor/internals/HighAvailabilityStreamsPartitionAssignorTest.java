@@ -179,7 +179,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     }
 
     private void overwriteInternalTopicManagerWithMock() {
-        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
+        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+            streamsConfig,
+            mockClientSupplier.restoreConsumer,
+            false);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
     }
 
