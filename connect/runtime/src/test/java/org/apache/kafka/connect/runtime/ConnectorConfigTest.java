@@ -177,4 +177,77 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);
     }
 
+    @Test
+    public void abstractTransform() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", AbstractTransformation.class.getName());
+        try {
+            new ConnectorConfig(MOCK_PLUGINS, props);
+        } catch (ConfigException ex) {
+            assertTrue(
+                ex.getMessage().contains("Transformation is abstract and cannot be created.")
+            );
+        }
+    }
+    @Test
+    public void abstractKeyValueTransform() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("transforms", "a");
+        props.put("transforms.a.type", AbstractKeyValueTransformation.class.getName());
+        try {
+            new ConnectorConfig(MOCK_PLUGINS, props);
+        } catch (ConfigException ex) {
+            assertTrue(
+                ex.getMessage().contains("Transformation is abstract and cannot be created.")
+            );
+            assertTrue(
+                ex.getMessage().contains(AbstractKeyValueTransformation.Key.class.getName())
+            );
+            assertTrue(
+                ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
+            );
+        }
+    }
+
+    public static abstract class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+
+    }
+
+    public static abstract class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+        @Override
+        public R apply(R record) {
+            return null;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+
+        }
+
+
+        public static class Key extends AbstractKeyValueTransformation {
+
+
+        }
+        public static class Value extends AbstractKeyValueTransformation {
+
+        }
+    }
+
+
 }
