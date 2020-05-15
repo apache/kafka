@@ -334,8 +334,17 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.removeMetrics(topic)
   }
 
-  def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean): Unit  = {
+  def stopReplica(topicPartition: TopicPartition,
+                  deletePartition: Boolean,
+                  logDirs: mutable.Set[File]): Unit  = {
     if (deletePartition) {
+      val log = logManager.getLog(topicPartition)
+      val futureLog = logManager.getLog(topicPartition, isFuture = true)
+
+      // Collect log dirs of the partition for future checkpointing
+      log.foreach(log => logDirs += log.parentDirFile)
+      futureLog.foreach(log => logDirs += log.parentDirFile)
+
       getPartition(topicPartition) match {
         case hostedPartition @ HostedPartition.Online(removedPartition) =>
           if (allPartitions.remove(topicPartition, hostedPartition)) {
@@ -345,14 +354,13 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
         case _ =>
+          // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
+          // This could happen when topic is being deleted while broker is down and recovers.
+          if (log.isDefined)
+            logManager.asyncDelete(topicPartition)
+          if (futureLog.isDefined)
+            logManager.asyncDelete(topicPartition, isFuture = true)
       }
-
-      // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
-      // This could happen when topic is being deleted while broker is down and recovers.
-      if (logManager.getLog(topicPartition).isDefined)
-        logManager.asyncDelete(topicPartition)
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
-        logManager.asyncDelete(topicPartition, isFuture = true)
     }
 
     // If we were the leader, we may have some operations still waiting for completion.
@@ -442,10 +450,11 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
 
+        val logDirs = mutable.Set.empty[File]
         stoppedPartitions.foreach { case (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition
           try {
-            stopReplica(topicPartition, deletePartition)
+            stopReplica(topicPartition, deletePartition, logDirs)
             responseMap.put(topicPartition, Errors.NONE)
           } catch {
             case e: KafkaStorageException =>
@@ -456,6 +465,8 @@ class ReplicaManager(val config: KafkaConfig,
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
           }
         }
+
+        logManager.checkpoint(logDirs)
 
         (responseMap, Errors.NONE)
       }

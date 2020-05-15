@@ -393,7 +393,7 @@ class LogCleanerManagerTest extends Logging {
     // log cleanup starts
     val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
     // Broker processes StopReplicaRequest with delete=true
-    cleanerManager.abortCleaning(log.topicPartition)
+    cleanerManager.abortCleaning(log.topicPartition, true)
     // log cleanup finishes and pausedPartitions are resumed
     cleanerManager.resumeCleaning(pausedPartitions.map(_._1))
 

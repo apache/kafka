@@ -29,6 +29,7 @@ import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager
 import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
@@ -54,6 +55,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.Mockito
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 
@@ -1302,7 +1304,7 @@ class ReplicaManagerTest {
     // We have a fetch in purgatory, now receive a stop replica request and
     // assert that the fetch returns with a NOT_LEADER error
 
-    replicaManager.stopReplica(tp0, deletePartition = true)
+    replicaManager.stopReplica(tp0, deletePartition = true, mutable.Set.empty[File])
     assertNotNull(fetchResult.get)
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, fetchResult.get.error)
   }
@@ -1336,7 +1338,7 @@ class ReplicaManagerTest {
 
     Mockito.when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
 
-    replicaManager.stopReplica(tp0, deletePartition = true)
+    replicaManager.stopReplica(tp0, deletePartition = true, mutable.Set.empty[File])
     assertNotNull(produceResult.get)
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, produceResult.get.error)
   }
@@ -2058,12 +2060,36 @@ class ReplicaManagerTest {
     val partition = replicaManager.createPartition(tp0)
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
+    val logDirFailureChannel = new LogDirFailureChannel(replicaManager.config.logDirs.size)
+    val logDir = partition.log.get.parentDirFile
+
+    def readRecoveryPointCheckpoint(): Map[TopicPartition, Long] = {
+      new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile),
+        logDirFailureChannel).read()
+    }
+
+    def readLogStartOffsetCheckpoint(): Map[TopicPartition, Long] = {
+      new OffsetCheckpointFile(new File(logDir, LogManager.LogStartOffsetCheckpointFile),
+        logDirFailureChannel).read()
+    }
+
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
     ).build()
 
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+
+    val batch = TestUtils.records(records = List(
+      new SimpleRecord(10, "k1".getBytes, "v1".getBytes),
+      new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
+    partition.appendRecordsToLeader(batch, AppendOrigin.Client, requiredAcks = 0)
+    partition.log.get.updateHighWatermark(2L)
+    partition.log.get.maybeIncrementLogStartOffset(1L)
+    replicaManager.logManager.checkpointLogRecoveryOffsets()
+    replicaManager.logManager.checkpointLogStartOffsets()
+    assertTrue(readRecoveryPointCheckpoint().contains(tp0))
+    assertTrue(readLogStartOffsetCheckpoint().contains(tp0))
 
     if (throwIOException) {
       // Delete the underlying directory to trigger an KafkaStorageException
@@ -2084,6 +2110,8 @@ class ReplicaManagerTest {
 
     if (expectedOutput == Errors.NONE && deletePartition) {
       assertEquals(HostedPartition.None, replicaManager.getPartition(tp0))
+      assertFalse(readRecoveryPointCheckpoint().contains(tp0))
+      assertFalse(readLogStartOffsetCheckpoint().contains(tp0))
     }
   }
 }

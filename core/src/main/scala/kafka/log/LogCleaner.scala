@@ -198,8 +198,8 @@ class LogCleaner(initialConfig: CleanerConfig,
    *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
    *  the partition is aborted.
    */
-  def abortCleaning(topicPartition: TopicPartition): Unit = {
-    cleanerManager.abortCleaning(topicPartition)
+  def abortCleaning(topicPartition: TopicPartition, partitionDeleted: Boolean): Unit = {
+    cleanerManager.abortCleaning(topicPartition, partitionDeleted)
   }
 
   /**

@@ -253,12 +253,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  the partition is aborted.
    *  This is implemented by first abortAndPausing and then resuming the cleaning of the partition.
    */
-  def abortCleaning(topicPartition: TopicPartition): Unit = {
+  def abortCleaning(topicPartition: TopicPartition, partitionDeleted: Boolean): Unit = {
     inLock(lock) {
-      abortAndPauseCleaning(topicPartition)
+      abortAndPauseCleaning(topicPartition, partitionDeleted)
       resumeCleaning(Seq(topicPartition))
     }
-    info(s"The cleaning for partition $topicPartition is aborted")
   }
 
   /**
@@ -273,7 +272,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  6. If the partition is already paused, a new call to this function
    *     will increase the paused count by one.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition, partitionDeleted: Boolean = false): Unit = {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
@@ -285,11 +284,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(s) =>
           throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
       }
-
       while(!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
-    info(s"The cleaning for partition $topicPartition is aborted and paused")
+    if (!partitionDeleted)
+      info(s"The cleaning for partition $topicPartition is aborted and paused")
   }
 
   /**
