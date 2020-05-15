@@ -17,9 +17,12 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 import javax.ws.rs.HttpMethod;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +100,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
             String method = credentials.substring(0, space);
             if (!BASIC.equalsIgnoreCase(method)) {
-                log.trace("Request credentials used {} authentication, but only {} supported; ignoring", BASIC, method);
+                log.trace("Request credentials used {} authentication, but only {} supported; ignoring", method, BASIC);
                 return;
             }
 
@@ -116,29 +119,28 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
         @Override
         public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
-            Callback unsupportedCallback = null;
+            List<Callback> unsupportedCallbacks = new ArrayList<>();
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback) {
                     ((NameCallback) callback).setName(username);
                 } else if (callback instanceof PasswordCallback) {
-                    ((PasswordCallback) callback).setPassword(password.toCharArray());
-                } else {
-                    // Log at WARN level here as this indicates incompatibility between the Connect basic auth
-                    // extension and the JAAS login module that the user has configured and it is likely that the
-                    // worker will need to be reconfigured and restarted
-                    log.warn(
-                        "Asked to handle unsupported callback '{}' of type {}; request authentication will fail",
-                        callback,
-                        callback.getClass()
+                    ((PasswordCallback) callback).setPassword(password != null
+                        ? password.toCharArray()
+                        : null
                     );
-                    if (unsupportedCallback == null)
-                        unsupportedCallback = callback;
+                } else {
+                    unsupportedCallbacks.add(callback);
                 }
             }
-            if (unsupportedCallback != null)
-                throw new UnsupportedCallbackException(
-                    unsupportedCallback,
-                    "Supports only NameCallback and PasswordCallback");
+            if (!unsupportedCallbacks.isEmpty())
+                throw new ConnectException(String.format(
+                    "Unsupported callbacks %s; request authentication will fail. "
+                        + "This indicates the Connect worker was configured with a JAAS "
+                        + "LoginModule that is incompatible with the %s, and will need to be "
+                        + "corrected and restarted.",
+                    unsupportedCallbacks,
+                    BasicAuthSecurityRestExtension.class.getSimpleName()
+                ));
         }
     }
 }
