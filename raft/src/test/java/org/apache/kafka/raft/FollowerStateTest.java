@@ -37,7 +37,7 @@ public class FollowerStateTest {
         int votedId = 1;
         assertTrue(state.grantVoteTo(votedId));
         assertTrue(state.hasVoted());
-        assertTrue(state.isVotedCandidate(votedId));
+        assertTrue(state.hasVotedFor(votedId));
     }
 
     @Test
@@ -56,7 +56,7 @@ public class FollowerStateTest {
         assertTrue(state.grantVoteTo(votedId));
         assertFalse(state.grantVoteTo(votedId));
         assertTrue(state.hasVoted());
-        assertTrue(state.isVotedCandidate(votedId));
+        assertTrue(state.hasVotedFor(votedId));
     }
 
     @Test
@@ -87,7 +87,7 @@ public class FollowerStateTest {
         int leaderId = 2;
         assertTrue(state.grantVoteTo(candidateId));
         assertTrue(state.acknowledgeLeader(leaderId));
-        assertFalse(state.isVotedCandidate(candidateId));
+        assertFalse(state.hasVotedFor(candidateId));
         assertFalse(state.hasVoted());
         assertTrue(state.hasLeader());
         assertEquals(leaderId, state.leaderId());
