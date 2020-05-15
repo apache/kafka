@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -32,7 +31,6 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -200,30 +198,6 @@ public class ProcessorStateManagerTest {
             IllegalStateException.class,
             () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L))
         );
-    }
-
-    @Test
-    public void shouldRestoreStoreWithRestoreCallback() {
-        final MockBatchingStateRestoreListener batchingRestoreCallback = new MockBatchingStateRestoreListener();
-
-        final KeyValue<byte[], byte[]> expectedKeyValue = KeyValue.pair(keyBytes, valueBytes);
-
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-
-        try {
-            stateMgr.registerStore(persistentStore, batchingRestoreCallback);
-            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
-            assertThat(storeMetadata, notNullValue());
-
-            stateMgr.restore(storeMetadata, singletonList(consumerRecord));
-
-            assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
-            assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
-
-            assertEquals(Collections.singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
-        } finally {
-            stateMgr.close();
-        }
     }
 
     @Test
@@ -642,11 +616,8 @@ public class ProcessorStateManagerTest {
     public void shouldThrowIfRestoreCallbackThrows() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
-        stateMgr.registerStore(persistentStore, new MockBatchingStateRestoreListener() {
-            @Override
-            public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-                throw new RuntimeException("KABOOM!");
-            }
+        stateMgr.registerStore(persistentStore, (key, value) -> {
+            throw new RuntimeException("KABOOM!");
         });
 
         final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
