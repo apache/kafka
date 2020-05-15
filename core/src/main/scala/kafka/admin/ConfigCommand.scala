@@ -61,6 +61,7 @@ import scala.collection._
  */
 object ConfigCommand extends Config {
 
+  val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
   val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType
   val ZkSupportedConfigTypes = ConfigType.all
@@ -424,7 +425,7 @@ object ConfigCommand extends Config {
         case ConfigType.Topic =>
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
-          adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ ConfigEntityName.Default
+          adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
       })
 
     entities.foreach { entity =>
