@@ -24,8 +24,6 @@ import java.util.stream.Collectors;
  * A implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
  */
 public class KafkaMetricsContext implements MetricsContext {
-    public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
-
     /**
      * Client or Service's metadata map.
      */
