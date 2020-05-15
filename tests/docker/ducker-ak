@@ -44,10 +44,10 @@ default_num_nodes=14
 # The default OpenJDK base image.
 case "$(uname -m)" in
   aarch64)
-    default_jdk="arm64v8/openjdk:8"
+    default_jdk="arm64v8/openjdk:11"
     ;;
   *)
-    default_jdk="openjdk:8"
+    default_jdk="openjdk:11"
     ;;
 esac
 
