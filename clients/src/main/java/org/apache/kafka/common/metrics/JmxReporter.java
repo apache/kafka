@@ -38,6 +38,7 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -61,11 +62,12 @@ public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
-    private String prefix = "";
+    private String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<>();
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
+        this("");
     }
 
     /**
@@ -73,6 +75,7 @@ public class JmxReporter implements MetricsReporter {
      */
     @Deprecated
     public JmxReporter(String prefix) {
+        Objects.requireNonNull(prefix);
         this.prefix = prefix;
     }
 
@@ -320,9 +323,14 @@ public class JmxReporter implements MetricsReporter {
     }
 
     @Override
-    public synchronized void contextChange(MetricsContext metricsContext) {
-        if (this.prefix == null || this.prefix.isEmpty()) {
-            this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+    public void contextChange(MetricsContext metricsContext) {
+        if (!this.mbeans.isEmpty()) {
+            throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
+        }
+        synchronized (LOCK) {
+            if (this.prefix.isEmpty()) {
+                this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+            }
         }
     }
 }

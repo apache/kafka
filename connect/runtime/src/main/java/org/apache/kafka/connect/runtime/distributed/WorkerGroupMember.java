@@ -96,7 +96,8 @@ public class WorkerGroupMember {
             jmxReporter.configure(config.originals());
             reporters.add(jmxReporter);
 
-            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
             metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
             metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);

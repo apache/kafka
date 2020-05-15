@@ -18,6 +18,8 @@ package org.apache.kafka.streams;
 
 import java.util.LinkedList;
 import java.util.TreeMap;
+
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -684,7 +686,8 @@ public class KafkaStreams implements AutoCloseable {
         final JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
-        final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+        final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
         metrics = new Metrics(metricConfig, reporters, time, metricsContext);
         streamsMetrics =
             new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));

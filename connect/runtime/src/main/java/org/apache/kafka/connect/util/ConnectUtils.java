@@ -20,10 +20,10 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,12 +73,9 @@ public final class ConnectUtils {
 
     public static void addMetricsContextProperties(Map<String, Object> prop, WorkerConfig config, String clusterId) {
         //add all properties start with "metrics.context"
-        for (String key : config.originals().keySet()) {
-            if (key.startsWith(KafkaMetricsContext.METRICS_CONTEXT_PREFIX)) {
-                prop.put(key, config.originals().get(key));
-            }
-        }
-        prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
-        prop.put(KafkaMetricsContext.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG));
+        prop.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+        //add connect properties
+        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_GROUP_ID, config.originals().get(DistributedConfig.GROUP_ID_CONFIG));
     }
 }

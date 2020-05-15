@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,11 +82,12 @@ public class ConnectMetrics {
         JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
-        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
         metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
-        if (config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG) != null) {
-            metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID,
-                    config.originals().get(CommonClientConfigs.GROUP_ID_CONFIG).toString());
+        Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
+        if (groupId != null) {
+            metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID, groupId.toString());
         }
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 

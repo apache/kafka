@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * A implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
@@ -46,11 +47,10 @@ public class KafkaMetricsContext implements MetricsContext {
     public KafkaMetricsContext(String namespace, Map<String, Object> properties) {
         metadata.put(MetricsContext.NAMESPACE, namespace);
         //add properties start with metrics.context from properties file
-        for (String key : properties.keySet()) {
-            if (key.startsWith(METRICS_CONTEXT_PREFIX)) {
-                metadata.put(key.substring(METRICS_CONTEXT_PREFIX.length()), properties.get(key).toString());
-            }
-        }
+        metadata.putAll(properties.entrySet().stream().collect(Collectors.toMap(
+            entry -> entry.getKey(),
+            entry -> entry.getValue().toString()))
+        );
     }
 
     /**

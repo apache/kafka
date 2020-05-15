@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -356,7 +357,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             JmxReporter jmxReporter = new JmxReporter();
             jmxReporter.configure(userProvidedConfigs);
             reporters.add(jmxReporter);
-            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);

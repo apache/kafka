@@ -22,6 +22,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
@@ -467,7 +468,8 @@ public class KafkaAdminClient extends AdminClient {
             JmxReporter jmxReporter = new JmxReporter();
             jmxReporter.configure(config.originals());
             reporters.add(jmxReporter);
-            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
