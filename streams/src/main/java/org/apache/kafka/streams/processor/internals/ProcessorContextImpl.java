@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -23,6 +26,7 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
@@ -36,6 +40,8 @@ import java.util.List;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
@@ -45,6 +51,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
+
+    final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     ProcessorContextImpl(final TaskId id,
                          final StreamTask streamTask,
@@ -82,8 +90,33 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
+        storeToChangelogTopic.put(store.name(), ProcessorStateManager.storeChangelogTopic(applicationId(), store.name()));
+        super.register(store, stateRestoreCallback);
+    }
+
+    @Override
     public RecordCollector recordCollector() {
         return collector;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        throwUnsupportedOperationExceptionIfStandby("logChange");
+        // Sending null headers to changelog topics (KIP-244)
+        collector.send(
+            storeToChangelogTopic.get(storeName),
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTE_ARRAY_VALUE_SERIALIZER);
     }
 
     /**

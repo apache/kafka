@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -53,6 +54,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext
@@ -353,6 +356,22 @@ public class InternalMockProcessorContext
     @Override
     public TaskType taskType() {
         return TaskType.ACTIVE;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        recordCollector().send(
+            storeName + "-changelog",
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTE_ARRAY_VALUE_SERIALIZER);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {

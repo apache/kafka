@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
@@ -44,6 +45,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTES_KEY_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.RecordCollector.BYTE_ARRAY_VALUE_SERIALIZER;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
@@ -51,12 +54,15 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
+
+    private RecordCollector recordCollector = mock(RecordCollector.class);
 
     private static final String KEY = "key";
     private static final long VALUE = 42L;
@@ -127,7 +133,7 @@ public class ProcessorContextImplTest {
             mock(TaskId.class),
             mock(StreamTask.class),
             streamsConfig,
-            mock(RecordCollector.class),
+            recordCollector,
             stateManager,
             mock(StreamsMetricsImpl.class),
             mock(ThreadCache.class)
@@ -347,6 +353,19 @@ public class ProcessorContextImplTest {
             assertEquals(iters.get(5), store.fetch(KEY));
             assertEquals(iters.get(6), store.fetch(KEY, KEY));
         });
+    }
+
+    @Test
+    public void shouldNotSendRecordHeadersToChangelogTopic() {
+        final Bytes key = Bytes.wrap("key".getBytes());
+        final byte[] value = "zero".getBytes();
+
+        recordCollector.send(null, key, value, null, 0, 42L, BYTES_KEY_SERIALIZER, BYTE_ARRAY_VALUE_SERIALIZER);
+
+        replay(recordCollector);
+        context.logChange("Store", key, value, 42L);
+
+        verify(recordCollector);
     }
 
     @SuppressWarnings("unchecked")

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -107,5 +108,13 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @Override
     public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }
 }

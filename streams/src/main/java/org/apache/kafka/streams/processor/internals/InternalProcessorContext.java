@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -92,4 +93,10 @@ public interface InternalProcessorContext extends ProcessorContext {
     default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
         return (T) getStateStore(builder.name());
     }
+
+    void logChange(final String storeName,
+                   final Bytes key,
+                   final byte[] value,
+                   final long timestamp);
+
 }
