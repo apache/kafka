@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
@@ -101,5 +102,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
+                         final StateRestoreCallback stateRestoreCallback) {
+    }
+
+    @Override
+    public TaskType taskType() {
+        return TaskType.ACTIVE;
+    }
 }

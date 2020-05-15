@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -347,6 +348,11 @@ public class InternalMockProcessorContext
             return new RecordHeaders();
         }
         return recordContext.headers();
+    }
+
+    @Override
+    public TaskType taskType() {
+        return TaskType.ACTIVE;
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {
