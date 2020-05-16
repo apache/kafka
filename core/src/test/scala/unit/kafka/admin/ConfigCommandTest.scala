@@ -789,11 +789,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--describe"))
 
-    val resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
-    val resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val BrokerDefaultEntityName = ""
+    val resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, BrokerDefaultEntityName)
     val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
     val emptyConfig = new Config(util.Collections.emptyList[ConfigEntry])
-    val resultMap = Map(resource -> emptyConfig, resourceDefault -> emptyConfig).asJava
+    val resultMap = Map(resourceCustom -> emptyConfig, resourceDefault -> emptyConfig).asJava
     future.complete(resultMap)
     val describeResult: DescribeConfigsResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
     // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
@@ -805,7 +806,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         assertTrue("Synonyms not requested", options.includeSynonyms())
         val resource = resources.iterator.next
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        assertTrue("1" == resource.name || "" == resource.name)
+        assertTrue(resourceCustom.name == resource.name || resourceDefault.name == resource.name)
         assertEquals(1, resources.size)
         describeResult
       }
