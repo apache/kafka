@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * A serializable type
+ * 一个序列化类型
  */
 public abstract class Type {
 

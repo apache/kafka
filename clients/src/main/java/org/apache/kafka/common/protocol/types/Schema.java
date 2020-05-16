@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -17,25 +17,31 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * 对于复合记录定义架构
  * The schema for a compound record definition
  */
 public class Schema extends Type {
 
+    //字段属性集合
     private final Field[] fields;
+    //字段名称和字段映射
     private final Map<String, Field> fieldsByName;
 
     /**
      * Construct the schema with a given list of its field values
+     * 根据给定的filed集合构建Schema
      *
-     * @throws SchemaException If the given list have duplicate fields
+     * @throws SchemaException If the given list have duplicate fields 如果有重复的fileds就抛出此异常
      */
     public Schema(Field... fs) {
         this.fields = new Field[fs.length];
         this.fieldsByName = new HashMap<String, Field>();
         for (int i = 0; i < this.fields.length; i++) {
             Field field = fs[i];
+            //如果filedname重复已经存在就抛出异常
             if (fieldsByName.containsKey(field.name))
                 throw new SchemaException("Schema contains a duplicate field: " + field.name);
+            //fileds数组赋值
             this.fields[i] = new Field(i, field.name, field.type, field.doc, field.defaultValue, this);
             this.fieldsByName.put(fs[i].name, this.fields[i]);
         }
@@ -43,6 +49,7 @@ public class Schema extends Type {
 
     /**
      * Write a struct to the buffer
+     * 写一个结构到buffer中
      */
     @Override
     public void write(ByteBuffer buffer, Object o) {
@@ -54,8 +61,8 @@ public class Schema extends Type {
                 f.type.write(buffer, value);
             } catch (Exception e) {
                 throw new SchemaException("Error writing field '" + f.name +
-                                          "': " +
-                                          (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                        "': " +
+                        (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
     }
@@ -71,8 +78,8 @@ public class Schema extends Type {
                 objects[i] = fields[i].type.read(buffer);
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].name +
-                                          "': " +
-                                          (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                        "': " +
+                        (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
         return new Struct(this, objects);
@@ -99,7 +106,7 @@ public class Schema extends Type {
 
     /**
      * Get a field by its slot in the record array
-     * 
+     *
      * @param slot The slot at which this field sits
      * @return The field
      */
@@ -109,7 +116,7 @@ public class Schema extends Type {
 
     /**
      * Get a field by its name
-     * 
+     *
      * @param name The name of the field
      * @return The field
      */

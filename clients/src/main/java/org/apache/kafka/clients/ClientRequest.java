@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -16,14 +16,20 @@ import org.apache.kafka.common.requests.RequestSend;
 
 /**
  * A request being sent to the server. This holds both the network send as well as the client-level metadata.
+ * 一个将被发往服务器的请求 这里封装了更容易网络发送的客户端级别的元数据
  */
 public final class ClientRequest {
-
+    //创建时间
     private final long createdTimeMs;
+    //是否需要响应
     private final boolean expectResponse;
+    //send请求包含RequestHeader和RequestBody
     private final RequestSend request;
+    //请求完成处理器
     private final RequestCompletionHandler callback;
+    //是否通过NetworkClinet初始化
     private final boolean isInitiatedByNetworkClient;
+    //发送时间
     private long sendTimeMs;
 
     /**
@@ -57,12 +63,12 @@ public final class ClientRequest {
     @Override
     public String toString() {
         return "ClientRequest(expectResponse=" + expectResponse +
-            ", callback=" + callback +
-            ", request=" + request +
-            (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
-            ", createdTimeMs=" + createdTimeMs +
-            ", sendTimeMs=" + sendTimeMs +
-            ")";
+                ", callback=" + callback +
+                ", request=" + request +
+                (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
+                ", createdTimeMs=" + createdTimeMs +
+                ", sendTimeMs=" + sendTimeMs +
+                ")";
     }
 
     public boolean expectResponse() {

@@ -19,6 +19,7 @@ import org.apache.kafka.common.KafkaException;
 
 /**
  * A ChannelBuilder interface to build Channel based on configs
+ * //一个构建channel的通道
  */
 public interface ChannelBuilder {
 
@@ -30,6 +31,7 @@ public interface ChannelBuilder {
 
     /**
      * returns a Channel with TransportLayer and Authenticator configured.
+     * 返回配置了TransportLayer和Authenticator的Channel。
      * @param  id  channel id
      * @param  key SelectionKey
      * @param  maxReceiveSize

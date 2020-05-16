@@ -3,39 +3,19 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.network;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.UnresolvedAddressException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -46,12 +26,26 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+import java.nio.channels.UnresolvedAddressException;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+
 /**
+ * 一个nioSelector接口做非阻塞多连接的网络IO
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
  * <p>
+ *     这个类工作在NetworkSend和NetworkReceive发送大小分隔网络请求和响应
  * This class works with {@link NetworkSend} and {@link NetworkReceive} to transmit size-delimited network requests and
  * responses.
  * <p>
+ *     一个连接能够添加到nioSelector关联的一个证书id
  * A connection can be added to the nioSelector associated with an integer id by doing
  *
  * <pre>
@@ -79,25 +73,39 @@ public class Selector implements Selectable {
 
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
+    //java.nio.channels.Selector类型，用来监听网络IO事件
     private final java.nio.channels.Selector nioSelector;
+    //HashMap＜String, KafkaChannel＞类型，维护了NodeId与KafkaChannel之间的映射关系，
+    // 表示生产者客户端与各个Node之间的网络连接。KafkaChannel是在SocketChannel上的又
+    // 一层封装
     private final Map<String, KafkaChannel> channels;
+    //记录已经完全发送出去的请求
     private final List<Send> completedSends;
+    //记录已经完全接收到的请求
     private final List<NetworkReceive> completedReceives;
+    //暂存一次OP_READ事件处理过程中读取到的全部请求。当一次OP_READ事件处理完成之后，会将stagedReceives集合中的
+    //请求保存到completedReceives中
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+    //
     private final Set<SelectionKey> immediatelyConnectedKeys;
+    //记录poll过程断开的连接和新建立的连接
     private final List<String> disconnected;
     private final List<String> connected;
+    //记录向那些NODE发送的请求失败了
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
     private final String metricGrpPrefix;
     private final Map<String, String> metricTags;
     private final ChannelBuilder channelBuilder;
+    //“LinkedHashMap类型，用来记录各个连接的使用情况，并据此关闭空闲时间超过connectionsMaxIdleNanos的连接。”
     private final Map<String, Long> lruConnections;
     private final long connectionsMaxIdleNanos;
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
+    //当前时间
     private long currentTimeNanos;
+    //下次空闲关闭校验时间
     private long nextIdleCloseCheckTime;
 
 
@@ -106,6 +114,7 @@ public class Selector implements Selectable {
      */
     public Selector(int maxReceiveSize, long connectionMaxIdleMs, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection, ChannelBuilder channelBuilder) {
         try {
+            //得到nio的选择器
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -132,11 +141,20 @@ public class Selector implements Selectable {
         this.metricsPerConnection = metricsPerConnection;
     }
 
+    /**
+     * 创建Selector
+     * @param connectionMaxIdleMS
+     * @param metrics
+     * @param time
+     * @param metricGrpPrefix
+     * @param channelBuilder
+     */
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
     }
 
     /**
+     * 开始连接到给定的地址，并将连接添加到与给定的id号关联的nioSelector。
      * Begin connecting to the given address and add the connection to this nioSelector associated with the given id
      * number.
      * <p>
@@ -151,13 +169,19 @@ public class Selector implements Selectable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        //查询nodeId是否已经连接
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
 
+        //拿到nio sc
         SocketChannel socketChannel = SocketChannel.open();
+        //设置为非阻塞模式
         socketChannel.configureBlocking(false);
+        //拿到Socket
         Socket socket = socketChannel.socket();
+        //设置为长连接
         socket.setKeepAlive(true);
+        //设置SO_SNDBUF大小、SO_RCVBUF大小
         if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setSendBufferSize(sendBufferSize);
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
@@ -165,6 +189,7 @@ public class Selector implements Selectable {
         socket.setTcpNoDelay(true);
         boolean connected;
         try {
+            //建立socket连接
             connected = socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
             socketChannel.close();
@@ -173,15 +198,22 @@ public class Selector implements Selectable {
             socketChannel.close();
             throw e;
         }
+        //注册连接事件和选择器
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
+        //构建Kafkachannel，配置连TransportLayer和Authenticator
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        //将key附加给kafkachannel
         key.attach(channel);
+        //放入内存中
         this.channels.put(id, channel);
 
+        //如果连接成
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
             log.debug("Immediately connected to node {}", channel.id());
+            //将key存入
             immediatelyConnectedKeys.add(key);
+            //并且向key插入数据
             key.interestOps(0);
         }
     }
@@ -224,14 +256,18 @@ public class Selector implements Selectable {
     }
 
     /**
+     * 将创建的RequestSend对象缓存到KafkaChannel的send字段中
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
     public void send(Send send) {
+        //根据node id得到KafkaChannel
         KafkaChannel channel = channelOrFail(send.destination());
         try {
+            //将RequestSend设置到KafkaChannel，并且将此链接改为OP_WRITE事件
             channel.setSend(send);
         } catch (CancelledKeyException e) {
+            //发送失败将nodeid记录
             this.failedSends.add(send.destination());
             close(channel);
         }
@@ -266,7 +302,7 @@ public class Selector implements Selectable {
     public void poll(long timeout) throws IOException {
         if (timeout < 0)
             throw new IllegalArgumentException("timeout should be >= 0");
-
+        //清空修改内存存储的完成接受和完成发送的请求，以及上传断开连接的节点。清空上一次拉取的数据
         clear();
 
         if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty())
@@ -274,38 +310,53 @@ public class Selector implements Selectable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
+        //根据超时时间选择可读的数量
         int readyKeys = select(timeout);
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
+            //处理IO事件
             pollSelectionKeys(this.nioSelector.selectedKeys(), false);
             pollSelectionKeys(immediatelyConnectedKeys, true);
         }
-
+        //stagedReceives辅助到completedReceives
         addToCompletedReceives();
 
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+        //关闭长期空闲连接
         maybeCloseOldestConnection();
     }
 
+    /**
+     * 处理io请求，“其中会分别处理OP_ CONNECT、OP_ READ、OP_WRITE事件，并且会检测连接状态。”
+     *
+     * @param selectionKeys
+     * @param isImmediatelyConnected 是否的立即连接
+     */
     private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys, boolean isImmediatelyConnected) {
         Iterator<SelectionKey> iterator = selectionKeys.iterator();
+        //遍历SelectionKey
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
+            //在比迭代器中移除
             iterator.remove();
+            //根据key拿到KafkaChannel
             KafkaChannel channel = channel(key);
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
+            //加入lru连接
             lruConnections.put(channel.id(), currentTimeNanos);
 
             try {
 
+                //如果立即连接或者可以连接
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
+                    //如果以及完成连接，
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
@@ -315,6 +366,7 @@ public class Selector implements Selectable {
 
                 /* if channel is not ready finish prepare */
                 if (channel.isConnected() && !channel.ready())
+                    //完成就绪
                     channel.prepare();
 
                 /* if channel is ready read from any connections that have readable data */
@@ -404,10 +456,13 @@ public class Selector implements Selectable {
     }
 
     private void maybeCloseOldestConnection() {
+        //如果当前时间大于连就季铵盐
         if (currentTimeNanos > nextIdleCloseCheckTime) {
             if (lruConnections.isEmpty()) {
+                //得到下一次校验时间
                 nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
             } else {
+                //拿到最少使用的连接
                 Map.Entry<String, Long> oldestConnectionEntry = lruConnections.entrySet().iterator().next();
                 Long connectionLastActiveTime = oldestConnectionEntry.getValue();
                 nextIdleCloseCheckTime = connectionLastActiveTime + connectionsMaxIdleNanos;
@@ -418,6 +473,7 @@ public class Selector implements Selectable {
                                 + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
 
                     disconnected.add(connectionId);
+                    //关闭连接
                     close(connectionId);
                 }
             }
@@ -488,6 +544,11 @@ public class Selector implements Selectable {
         return channel != null && channel.ready();
     }
 
+    /**
+     * 根据node id得到KafkaChannel
+     * @param id
+     * @return
+     */
     private KafkaChannel channelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)
@@ -528,7 +589,9 @@ public class Selector implements Selectable {
      * check if stagedReceives have unmuted channel
      */
     private boolean hasStagedReceives() {
+        //暂存一次OP_READ事件处理过程中读取到的全部请求的channel是否
         for (KafkaChannel channel : this.stagedReceives.keySet()) {
+            //不是mute的
             if (!channel.isMute())
                 return true;
         }
@@ -588,7 +651,7 @@ public class Selector implements Selectable {
             String metricGrpName = metricGrpPrefix + "-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
-            for (Map.Entry<String, String> tag: metricTags.entrySet()) {
+            for (Map.Entry<String, String> tag : metricTags.entrySet()) {
                 tagsSuffix.append(tag.getKey());
                 tagsSuffix.append("-");
                 tagsSuffix.append(tag.getValue());

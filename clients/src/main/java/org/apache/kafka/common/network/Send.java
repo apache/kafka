@@ -16,21 +16,25 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
+ *
  * This interface models the in-progress sending of data to a destination identified by an integer id.
  */
 public interface Send {
 
     /**
      * The numeric id for the destination of this send
+     * 数字ID为这个发送的目的地
      */
     public String destination();
 
     /**
+     * 是否发送完成
      * Is this send complete?
      */
     public boolean completed();
 
     /**
+     * 写入一些至今没写入的字节根据提供的通道 发送可能需要多次调用才能完全写入
      * Write some as-yet unwritten bytes from this send to the provided channel. It may take multiple calls for the send
      * to be completely written
      * @param channel The Channel to write to

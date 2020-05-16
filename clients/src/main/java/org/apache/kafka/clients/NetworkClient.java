@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Random;
 
 /**
+ * 一个网络客户端为了异步去请求/响应网络IO
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
  * user-facing producer and consumer clients.
  * <p>
@@ -50,22 +51,37 @@ public class NetworkClient implements KafkaClient {
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
 
     /* the selector used to perform network i/o */
+    /**
+     * 用于执行网络i/o的选择器
+     */
     private final Selectable selector;
 
+    /**
+     * 元数据更新器
+     */
     private final MetadataUpdater metadataUpdater;
 
+    /**
+     * 随机offset
+     */
     private final Random randOffset;
 
     /* the state of each node's connection */
+    /**
+     * 每个节点的连接状态
+     */
     private final ClusterConnectionStates connectionStates;
 
     /* the set of requests currently being sent or awaiting a response */
+    //当前正在发送或等待响应的一组请求
     private final InFlightRequests inFlightRequests;
 
     /* the socket send buffer size in bytes */
+    //socket的SEND_BUF大小
     private final int socketSendBuffer;
 
     /* the socket receive size buffer in bytes */
+    //SOCKET的REV_BUF大小
     private final int socketReceiveBuffer;
 
     /* the client id used to identify this client in requests to the server */
@@ -74,6 +90,7 @@ public class NetworkClient implements KafkaClient {
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
+    //生产者等待ack的最大超时时间
     /* max time in ms for the producer to wait for acknowledgement from server*/
     private final int requestTimeoutMs;
 
@@ -120,19 +137,24 @@ public class NetworkClient implements KafkaClient {
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
          */
+        //如果metadataUpdater为null
         if (metadataUpdater == null) {
             if (metadata == null)
                 throw new IllegalArgumentException("`metadata` must not be null");
+            //创建默认的metadataUpdater
             this.metadataUpdater = new DefaultMetadataUpdater(metadata);
         } else {
             this.metadataUpdater = metadataUpdater;
         }
         this.selector = selector;
         this.clientId = clientId;
+        //最大的正在发送或等待响应的请求连接数
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
+        //每个节点重连接的间隔
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
+        //默认correlation为0
         this.correlation = 0;
         this.randOffset = new Random();
         this.requestTimeoutMs = requestTimeoutMs;
@@ -150,10 +172,10 @@ public class NetworkClient implements KafkaClient {
     public boolean ready(Node node, long now) {
         if (node.isEmpty())
             throw new IllegalArgumentException("Cannot connect to empty node " + node);
-
+        //是否就绪
         if (isReady(node, now))
             return true;
-
+        //该节点是否能够连接，那么就初始化连接
         if (connectionStates.canConnect(node.idString(), now))
             // if we are interested in sending to a node and we don't have a connection to it, initiate one
             initiateConnect(node, now);
@@ -212,6 +234,7 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         // if we need to update our metadata now declare all requests unready to make metadata requests first
         // priority
+        //如果修改不是过期的并且能够发送请求该节点
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
     }
 
@@ -309,6 +332,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public RequestHeader nextRequestHeader(ApiKeys key) {
+        //api_key_id、clientid、correlation_id
         return new RequestHeader(key.id, clientId, correlation++);
     }
 
@@ -341,6 +365,9 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     *
+     * 选择与至少符合连接最少未完成请求的节点。 这种方法会选择一个节点与现有连接，但将有可能选择，
+     * 我们还没有一个连接，如果所有现有的连接都在使用的一个节点。 此方法不会选择这没有现成的连接，从我们已重新连接退避时间内断开连接的节点
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no
@@ -488,21 +515,27 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 初始化给定节点连接
      * Initiate a connection to the given node
      */
     private void initiateConnect(Node node, long now) {
+        //得到连接节点id
         String nodeConnectionId = node.idString();
         try {
             log.debug("Initiating connection to node {} at {}:{}.", node.id(), node.host(), node.port());
+            //将该节点的信息添加到连接状态里
             this.connectionStates.connecting(nodeConnectionId, now);
+            //真正的连接逻辑
             selector.connect(nodeConnectionId,
                              new InetSocketAddress(node.host(), node.port()),
                              this.socketSendBuffer,
                              this.socketReceiveBuffer);
         } catch (IOException e) {
+            //移除节点数据
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
+            //可能问题在元数据所以更新连接
             metadataUpdater.requestUpdate();
             log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
         }
@@ -514,9 +547,11 @@ public class NetworkClient implements KafkaClient {
         private final Metadata metadata;
 
         /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
+        //true代表，元数据请求以及发送但是还没有到响应
         private boolean metadataFetchInProgress;
 
         /* the last timestamp when no broker node is available to connect */
+        //“当检测到没有可用节点时，会用此字段记录时间戳。”
         private long lastNoNodeAvailableMs;
 
         DefaultMetadataUpdater(Metadata metadata) {
@@ -532,34 +567,41 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean isUpdateDue(long now) {
+            //如果元数据请求收到了收到响应了，下一次更新的信息为
             return !this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0;
         }
 
         @Override
         public long maybeUpdate(long now) {
-            // should we update our metadata?
+            // should we update our metadata? 得到下次更新元数据的时间
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
+            //得到下次重连的时间
             long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
+            //等待元数据请求发送完毕
             long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
             // if there is no node available to connect, back off refreshing metadata
+            //得到超时时间
             long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
                     waitForMetadataFetch);
 
             if (metadataTimeout == 0) {
                 // Beware that the behavior of this method and the computation of timeouts for poll() are
                 // highly dependent on the behavior of leastLoadedNode.
+                //得到最佳加载的Node
                 Node node = leastLoadedNode(now);
+                //尝试修改元数据
                 maybeUpdate(now, node);
             }
-
+            //返回元数据修改请求超时时间
             return metadataTimeout;
         }
 
         @Override
         public boolean maybeHandleDisconnection(ClientRequest request) {
             ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
-
+            //如果该请求为metadata相关
             if (requestKey == ApiKeys.METADATA) {
+                //拉去集群信息
                 Cluster cluster = metadata.fetch();
                 if (cluster.isBootstrapConfigured()) {
                     int nodeId = Integer.parseInt(request.request().destination());
@@ -567,7 +609,7 @@ public class NetworkClient implements KafkaClient {
                     if (node != null)
                         log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
                 }
-
+                //设置为元数据请求已经收到响应
                 metadataFetchInProgress = false;
                 return true;
             }

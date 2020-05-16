@@ -28,12 +28,21 @@ import java.security.Principal;
 
 import org.apache.kafka.common.utils.Utils;
 
+/**
+ * Kafka通道
+ */
 public class KafkaChannel {
+    //id
     private final String id;
+    //传输层
     private final TransportLayer transportLayer;
+    //权限器
     private final Authenticator authenticator;
+    //最大接受数量
     private final int maxReceiveSize;
+    //RCV_BUFFER
     private NetworkReceive receive;
+    //SEND请求
     private Send send;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
@@ -44,6 +53,7 @@ public class KafkaChannel {
     }
 
     public void close() throws IOException {
+        //传输层和权限器
         Utils.closeAll(transportLayer, authenticator);
     }
 
@@ -51,15 +61,22 @@ public class KafkaChannel {
      * Returns the principal returned by `authenticator.principal()`.
      */
     public Principal principal() throws IOException {
+        //得到一个权限信息
         return authenticator.principal();
     }
 
     /**
+     *
+     * 准备阶段
+     * 使用配置认证传送层的不握手和认证
      * Does handshake of transportLayer and authentication using configured authenticator
      */
     public void prepare() throws IOException {
+        //如果传输层为权限认证和我是
         if (!transportLayer.ready())
+
             transportLayer.handshake();
+        //如果就绪连但是权限为完成认证，则认证
         if (transportLayer.ready() && !authenticator.complete())
             authenticator.authenticate();
     }
@@ -125,40 +142,67 @@ public class KafkaChannel {
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
+    /**
+     * 读取数据防止RVC_BUF中
+     * @return
+     * @throws IOException
+     */
     public NetworkReceive read() throws IOException {
         NetworkReceive result = null;
 
+        //如果revice为空，则生成，传入最大接受大小和通道id
         if (receive == null) {
             receive = new NetworkReceive(maxReceiveSize, id);
         }
-
+        //接受RVC_BUF
         receive(receive);
+        //如果接受完成，就将buffer倒置
         if (receive.complete()) {
             receive.payload().rewind();
             result = receive;
             receive = null;
         }
+        //返回
         return result;
     }
 
+    /**
+     * 写入数据
+     * @return
+     * @throws IOException
+     */
     public Send write() throws IOException {
         Send result = null;
+        //如果发送完毕
         if (send != null && send(send)) {
             result = send;
+            //help gc
             send = null;
         }
+        //返回send结果
         return result;
     }
 
     private long receive(NetworkReceive receive) throws IOException {
+        //读取数据
         return receive.readFrom(transportLayer);
     }
 
+    /**
+     * 是否可以发送
+     * @param send
+     * @return
+     * @throws IOException
+     */
     private boolean send(Send send) throws IOException {
+        //send数据写入传输层
         send.writeTo(transportLayer);
+        //如果发送完毕
         if (send.completed())
+            //移除OP_WRITE操作
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
 
+        //返回是否发送完毕
         return send.completed();
     }
 

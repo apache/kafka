@@ -27,10 +27,11 @@ import java.util.Map;
 
 /**
  * This wrapper supports both v0 and v1 of ProduceResponse.
+ * 生产者响应的V0和V1版本支持的包装类
  */
 public class ProduceResponse extends AbstractRequestResponse {
-    
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
+    //responses集合
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
@@ -58,17 +59,20 @@ public class ProduceResponse extends AbstractRequestResponse {
     private final int throttleTime;
 
     /**
-     * Constructor for Version 0
+     * Constructor for Version 0 构造V0版本的生产者响应
      * @param responses Produced data grouped by topic-partition
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0)));
+        //初始化通用字段属性
         initCommonFields(responses);
         this.responses = responses;
+        //默认的时间
         this.throttleTime = DEFAULT_THROTTLE_TIME;
     }
 
     /**
+     * 构造最新版本的生产者响应
      * Constructor for the latest version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
@@ -78,6 +82,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     /**
+     * 构造指定版本的生产者响应
      * Constructor for a specific version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
@@ -93,6 +98,7 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     /**
+     * 将Struct反解析成HashMap<TopicPartition, PartitionResponse>()
      * Constructor from a {@link Struct}. It is the caller's responsibility to pass in a struct with the latest schema.
      * @param struct
      */
@@ -116,25 +122,36 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     private void initCommonFields(Map<TopicPartition, PartitionResponse> responses) {
+        //将topic PartitionResponse转换为topic:[partition:PartitionResponse]形式
         Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
+            //实例化responses集合结构
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            //设置TOPIC_KEY_NAME
             topicData.set(TOPIC_KEY_NAME, entry.getKey());
+            //创建partition_responses集合
             List<Struct> partitionArray = new ArrayList<Struct>();
             for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
+                //得到分区响应
                 PartitionResponse part = partitionEntry.getValue();
+                //实例化partition_responses结构
                 Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
+                        //设置分区、errorcode、baseOffset，如果有timestamp字段就设置
                         .set(PARTITION_KEY_NAME, partitionEntry.getKey())
                         .set(ERROR_CODE_KEY_NAME, part.errorCode)
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
                 if (partStruct.hasField(TIMESTAMP_KEY_NAME))
                         partStruct.set(TIMESTAMP_KEY_NAME, part.timestamp);
+                //添加进partition_responses集合
                 partitionArray.add(partStruct);
             }
+            //设置partition_responses字段
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
+            //添加到topicdate中
             topicDatas.add(topicData);
         }
+        //添加到reponses集合中
         struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
     }
 

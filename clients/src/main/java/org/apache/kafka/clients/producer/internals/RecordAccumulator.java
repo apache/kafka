@@ -319,12 +319,16 @@ public final class RecordAccumulator {
      * Re-enqueue the given record batch in the accumulator to retry
      */
     public void reenqueue(RecordBatch batch, long now) {
+        //更新重试次数，最后重试时间，已经最后累加时间
         batch.attempts++;
         batch.lastAttemptMs = now;
         batch.lastAppendTime = now;
+        //设置为正在重试
         batch.setRetry();
+        //拿到当前topicPartition的RecordBatch队列
         Deque<RecordBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
+            //将重试记录放在队列头部
             deque.addFirst(batch);
         }
     }
@@ -552,6 +556,7 @@ public final class RecordAccumulator {
      * Are there any threads currently appending messages?
      */
     private boolean appendsInProgress() {
+        //如果正在累加的数据还存在
         return appendsInProgress.get() > 0;
     }
 
@@ -568,6 +573,7 @@ public final class RecordAccumulator {
     }
 
     /**
+     * 当发送者被强制关闭该功能仅调用。 它会失败的所有不完整的批次和回报
      * This function is only called when sender is closed forcefully. It will fail all the
      * incomplete batches and return.
      */
@@ -577,6 +583,7 @@ public final class RecordAccumulator {
         // 2. Free up memory in case appending threads are blocked on buffer full.
         // This is a tight loop but should be able to get through very quickly.
         do {
+            //那么就中断batchesRecords数据，从batches移除，释放主线程阻塞，释放BufferPool
             abortBatches();
         } while (appendsInProgress());
         // After this point, no thread will append any messages because they will see the close
@@ -590,14 +597,20 @@ public final class RecordAccumulator {
      * Go through incomplete batches and abort them.
      */
     private void abortBatches() {
+        //遍历未发送完成的数据列表
         for (RecordBatch batch : incomplete.all()) {
+            //根据topic拿到对应的队列
             Deque<RecordBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
+                //关闭记录
                 batch.records.close();
+                //并且在队列中移除
                 dq.remove(batch);
             }
+            //释放sender线程锁
             batch.done(-1L, Record.NO_TIMESTAMP, new IllegalStateException("Producer is closed forcefully."));
+            //释放资源
             deallocate(batch);
         }
     }

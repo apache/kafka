@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,6 +21,9 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+/**
+ * 生产者请求基类
+ */
 public abstract class AbstractRequest extends AbstractRequestResponse {
 
     public AbstractRequest(Struct struct) {
@@ -28,14 +31,17 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     /**
+     * 根据api版本得到这个请求的错误响应
      * Get an error response for a request for a given api version
      */
     public abstract AbstractRequestResponse getErrorResponse(int versionId, Throwable e);
 
     /**
+     * 工厂方法为了得到一个请求对象基于ApiKey ID和这个bytebuffer
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
     public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
+        //根据请求id拿到APIKEYs
         ApiKeys apiKey = ApiKeys.forId(requestId);
         switch (apiKey) {
             case PRODUCE:

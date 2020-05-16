@@ -22,10 +22,14 @@ import java.util.Map;
 
 /**
  * The set of requests which have been sent or are being sent but haven't yet received a response
+ * 缓存已发完成发送但是未收到响应的ClientRequest
  */
 final class InFlightRequests {
 
+    //最大InFlightRequests连接数量
     private final int maxInFlightRequestsPerConnection;
+
+    //缓存完成发送的ClientRequest  NodeId:Deque<ClientRequest>
     private final Map<String, Deque<ClientRequest>> requests = new HashMap<String, Deque<ClientRequest>>();
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
@@ -33,6 +37,7 @@ final class InFlightRequests {
     }
 
     /**
+     * 添加至requests中
      * Add the given request to the queue for the connection it was directed to
      */
     public void add(ClientRequest request) {
@@ -41,11 +46,13 @@ final class InFlightRequests {
             reqs = new ArrayDeque<>();
             this.requests.put(request.request().destination(), reqs);
         }
+        //在头部加入
         reqs.addFirst(request);
     }
 
     /**
      * Get the request queue for the given node
+     * 根据给定的node得到请求队列
      */
     private Deque<ClientRequest> requestQueue(String node) {
         Deque<ClientRequest> reqs = requests.get(node);
@@ -55,6 +62,7 @@ final class InFlightRequests {
     }
 
     /**
+     * 得到最后的请求
      * Get the oldest request (the one that that will be completed next) for the given node
      */
     public ClientRequest completeNext(String node) {
@@ -62,6 +70,7 @@ final class InFlightRequests {
     }
 
     /**
+     * 得到给定节点的最后ClientRequest，不移除
      * Get the last request we sent to the given node (but don't remove it from the queue)
      * @param node The node id
      */
@@ -80,7 +89,7 @@ final class InFlightRequests {
 
     /**
      * Can we send more requests to this node?
-     * 
+     * 这个节点是否还能发送
      * @param node Node in question
      * @return true iff we have no requests still being sent to the given node
      */
@@ -127,7 +136,7 @@ final class InFlightRequests {
 
     /**
      * Returns a list of nodes with pending inflight request, that need to be timed out
-     *
+     * 返回鸡诶单的集合等待的inflight request,
      * @param now current time in milliseconds
      * @param requestTimeout max time to wait for the request to be completed
      * @return list of nodes
@@ -135,9 +144,11 @@ final class InFlightRequests {
     public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
         List<String> nodeIds = new LinkedList<String>();
         for (String nodeId : requests.keySet()) {
+            //如果该队列还有request
             if (inFlightRequestCount(nodeId) > 0) {
                 ClientRequest request = requests.get(nodeId).peekLast();
                 long timeSinceSend = now - request.sendTimeMs();
+                //得到超时请求的节点
                 if (timeSinceSend > requestTimeout) {
                     nodeIds.add(nodeId);
                 }

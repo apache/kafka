@@ -23,6 +23,8 @@ package org.apache.kafka.common.network;
  * and other network Channel implementations.
  * As NetworkClient replaces BlockingChannel and other implementations we will be using KafkaChannel as
  * a network I/O channel.
+ * 用于基础通信的传输层。在最基本的层次上，它是SocketChannel的包装，并且可以替代SocketChannel和其他网络Channel的实现。
+ * 随着NetworkClient替换BlockingChannel和其他实现，我们将使用KafkaChannel作为网络I / O通道。
  */
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -36,11 +38,13 @@ import java.security.Principal;
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
     /**
+     * 如果通道已完成握手和身份验证，则返回true。
      * Returns true if the channel has handshake and authentication done.
      */
     boolean ready();
 
     /**
+     * 连接一个socket通道完成处理
      * Finishes the process of connecting a socket channel.
      */
     boolean finishConnect() throws IOException;

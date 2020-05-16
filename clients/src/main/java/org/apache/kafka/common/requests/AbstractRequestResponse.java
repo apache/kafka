@@ -16,7 +16,12 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+
+/**
+ * Kafka Request、Response基类
+ */
 public abstract class AbstractRequestResponse {
+    //
     protected final Struct struct;
 
 
@@ -24,6 +29,10 @@ public abstract class AbstractRequestResponse {
         this.struct = struct;
     }
 
+    /**
+     * 请求体结构
+     * @return
+     */
     public Struct toStruct() {
         return struct;
     }

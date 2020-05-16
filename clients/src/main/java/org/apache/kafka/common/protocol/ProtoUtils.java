@@ -34,9 +34,16 @@ public class ProtoUtils {
         return versions[version];
     }
 
+    /**
+     * 根据apikey拿到最新的版本号
+     * @param apiKey
+     * @return
+     */
     public static short latestVersion(int apiKey) {
+        //apikey不合法
         if (apiKey < 0 || apiKey >= Protocol.CURR_VERSION.length)
             throw new IllegalArgumentException("Invalid api key: " + apiKey);
+        //拿到最新的版本
         return Protocol.CURR_VERSION[apiKey];
     }
 

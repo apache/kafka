@@ -20,15 +20,22 @@ import java.nio.channels.ScatteringByteChannel;
 
 /**
  * A size delimited Receive that consists of a 4 byte network-ordered size N followed by N bytes of content
+ * 大小分隔的接收，包括一个4字节的网络排序大小N，后跟N字节的内容
  */
 public class NetworkReceive implements Receive {
 
+    //未知源
     public final static String UNKNOWN_SOURCE = "";
+    //不限制
     public final static int UNLIMITED = -1;
 
+    //接收源
     private final String source;
+    //大小 4个字节
     private final ByteBuffer size;
+    //最大大小
     private final int maxSize;
+    //缓存
     private ByteBuffer buffer;
 
 
@@ -62,11 +69,17 @@ public class NetworkReceive implements Receive {
         return source;
     }
 
+    /**
+     * 是否完成
+     * @return
+     */
     @Override
     public boolean complete() {
+        //如果size和buffer没有空闲位置
         return !size.hasRemaining() && !buffer.hasRemaining();
     }
 
+    //读取数据
     public long readFrom(ScatteringByteChannel channel) throws IOException {
         return readFromReadableChannel(channel);
     }
@@ -76,20 +89,24 @@ public class NetworkReceive implements Receive {
     // This can go away after we get rid of BlockingChannel
     @Deprecated
     public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
+        //读取的字节位置
         int read = 0;
+        //如果还有剩余数据没读
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
             if (!size.hasRemaining()) {
+                //倒带
                 size.rewind();
+                //接受的大小，4个字节大小的N
                 int receiveSize = size.getInt();
                 if (receiveSize < 0)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");
                 if (maxSize != UNLIMITED && receiveSize > maxSize)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
-
+                //存入receiveBuffer
                 this.buffer = ByteBuffer.allocate(receiveSize);
             }
         }

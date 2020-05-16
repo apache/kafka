@@ -18,9 +18,11 @@ package org.apache.kafka.common.protocol.types;
 
 /**
  * A field in a schema
+ * 在一个schema的熟悉
  */
 public class Field {
 
+    //不是默认
     public static final Object NO_DEFAULT = new Object();
 
     final int index;
@@ -28,6 +30,7 @@ public class Field {
     public final Type type;
     public final Object defaultValue;
     public final String doc;
+    //嵌套字段
     final Schema schema;
 
     /**

@@ -105,6 +105,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           /* If request doesn't have a default error response, we just close the connection.
              For example, when produce request has acks set to 0 */
+          //如果acks=0不需要返回任何响应和同步副本确认
           if (response == null)
             requestChannel.closeConnection(request.processor, request)
           else

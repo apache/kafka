@@ -21,13 +21,15 @@ import org.apache.kafka.common.requests.RequestHeader;
 
 /**
  * The interface for {@link NetworkClient}
+ * NetworkClient接口
  */
 public interface KafkaClient extends Closeable {
 
     /**
      * Check if we are currently ready to send another request to the given node but don't attempt to connect if we
      * aren't.
-     * 
+     *  检查我们目前准备发送另一个请求给定的节点，但不尝试，如果我们不进行连接
+     *  检测该Node节点是否准备就绪
      * @param node The node to check
      * @param now The current timestamp
      */
@@ -36,7 +38,7 @@ public interface KafkaClient extends Closeable {
     /**
      * Initiate a connection to the given node (if necessary), and return true if already connected. The readiness of a
      * node will change only when poll is invoked.
-     * 
+     *  初始化一个连接到给定节点，如果已经连接返回true。只有在调用轮询时，节点的就绪状态才会更改。
      * @param node The node to connect to.
      * @param now The current time
      * @return true iff we are ready to immediately initiate the sending of another request to the given node.
@@ -101,6 +103,7 @@ public interface KafkaClient extends Closeable {
     public Node leastLoadedNode(long now);
 
     /**
+     * 我们尚未返回响应的当前进行中的请求数
      * The number of currently in-flight requests for which we have not yet returned a response
      */
     public int inFlightRequestCount();

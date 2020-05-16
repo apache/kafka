@@ -16,6 +16,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
+ * 可以根据预先定义的模式进行序列化和反序列化A记录
+ * 请求的结构体
  * A record that can be serialized and deserialized according to a pre-defined schema
  */
 public class Struct {
