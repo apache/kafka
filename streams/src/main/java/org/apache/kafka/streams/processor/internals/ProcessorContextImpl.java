@@ -66,6 +66,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         super(id, config, metrics, stateMgr, cache);
         this.streamTask = streamTask;
         this.collector = collector;
+
+        if (streamTask == null && taskType() == TaskType.ACTIVE) {
+            throw new IllegalStateException("Tried to create context for active task but the streamtask was null");
+        }
     }
 
     ProcessorContextImpl(final TaskId id,
