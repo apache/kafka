@@ -43,5 +43,5 @@ public interface MetricsContext {
     /**
      * Returns metadata fields
      */
-    public Map<String, String> metadata();
+    Map<String, String> metadata();
 }

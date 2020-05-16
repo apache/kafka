@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,13 +83,15 @@ public class ConnectMetrics {
         JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
-        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
-        metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+        metadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
-            metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID, groupId.toString());
+            metadata.put(ConnectUtils.CONNECT_GROUP_ID, groupId);
         }
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, metadata);
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);

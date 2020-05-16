@@ -324,13 +324,12 @@ public class JmxReporter implements MetricsReporter {
 
     @Override
     public void contextChange(MetricsContext metricsContext) {
-        if (!this.mbeans.isEmpty()) {
-            throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
-        }
+        Objects.requireNonNull(metricsContext.metadata().get(MetricsContext.NAMESPACE));
         synchronized (LOCK) {
-            if (this.prefix.isEmpty()) {
-                this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+            if (!this.mbeans.isEmpty()) {
+                throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
             }
+            this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
         }
     }
 }

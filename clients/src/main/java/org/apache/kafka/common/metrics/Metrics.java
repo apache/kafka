@@ -127,7 +127,7 @@ public class Metrics implements Closeable {
      * @param defaultConfig The default config
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
-     * @param metricsContext The metricsContext that saves kafka or client metadata
+     * @param metricsContext The metricsContext to initialize metrics reporter with
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, MetricsContext metricsContext) {
         this(defaultConfig, reporters, time, false, metricsContext);
@@ -151,7 +151,7 @@ public class Metrics implements Closeable {
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
-     * @param metricsContext The metricsContext that saves kafka or client metadata
+     * @param metricsContext The metricsContext to initialize metrics reporter with
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {

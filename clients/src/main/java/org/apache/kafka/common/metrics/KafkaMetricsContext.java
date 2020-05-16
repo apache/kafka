@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -40,24 +42,19 @@ public class KafkaMetricsContext implements MetricsContext {
     /**
      * Create a MetricsContext with namespace, service or client properties
      * @param namespace value for _namespace key
-     * @param properties key/value pairs of service or client properties
+     * @param metadata  metadata additional entries to add to the context
+     *                  values will be converted to string using Object.toString()
      */
-    public KafkaMetricsContext(String namespace, Map<String, Object> properties) {
-        metadata.put(MetricsContext.NAMESPACE, namespace);
-        //add properties start with metrics.context from properties file
-        metadata.putAll(properties.entrySet().stream().collect(Collectors.toMap(
+    public KafkaMetricsContext(String namespace, Map<String, ?> metadata) {
+        this.metadata.put(MetricsContext.NAMESPACE, namespace);
+        this.metadata.putAll(metadata.entrySet().stream().collect(Collectors.toMap(
             entry -> entry.getKey(),
             entry -> entry.getValue().toString()))
         );
     }
 
-    /**
-     * Returns client's metadata map.
-     *
-     * @return metadata fields
-     */
     public Map<String, String> metadata() {
-        return metadata;
+        return Collections.unmodifiableMap(metadata);
     }
 
 }

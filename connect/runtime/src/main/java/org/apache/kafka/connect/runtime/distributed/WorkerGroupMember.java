@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,10 +97,12 @@ public class WorkerGroupMember {
             jmxReporter.configure(config.originals());
             reporters.add(jmxReporter);
 
-            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
-            metricsContext.metadata().put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
-            metricsContext.metadata().put(ConnectUtils.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
+            Map<String, Object> connectMetadata = new HashMap<>();
+            connectMetadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+            connectMetadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+            connectMetadata.put(ConnectUtils.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, connectMetadata);
+
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),

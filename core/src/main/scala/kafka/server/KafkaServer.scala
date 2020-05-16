@@ -391,10 +391,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   private[server] def createKafkaMetricsContext() : KafkaMetricsContext = {
-    val metricsContext = new KafkaMetricsContext(jmxPrefix,
-      config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false))
-    metricsContext.metadata().put(KAFKA_CLUSTER_ID, clusterId)
-    metricsContext.metadata().put(KAFKA_BROKER_ID, config.brokerId.toString)
+    val metadata = new util.HashMap[String, Object]
+    metadata.put(KAFKA_CLUSTER_ID, clusterId)
+    metadata.put(KAFKA_BROKER_ID, config.brokerId.toString)
+    metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false))
+    val metricsContext = new KafkaMetricsContext(jmxPrefix, metadata)
     metricsContext
   }
 
