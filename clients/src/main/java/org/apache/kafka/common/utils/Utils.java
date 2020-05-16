@@ -846,6 +846,18 @@ public final class Utils {
     }
 
     /**
+     * An {@link AutoCloseable} interface without a throws clause in the signature
+     *
+     * This is used with lambda expressions in try-with-resources clauses
+     * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
+     */
+    @FunctionalInterface
+    public interface UncheckedCloseable extends AutoCloseable {
+        @Override
+        void close();
+    }
+
+    /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
