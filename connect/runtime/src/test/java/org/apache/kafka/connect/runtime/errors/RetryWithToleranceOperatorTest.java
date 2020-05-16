@@ -16,12 +16,20 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
+import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.Test;
@@ -33,6 +41,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -59,7 +68,19 @@ public class RetryWithToleranceOperatorTest {
     public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
             ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
     static {
-        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
+        Map<String, String> properties = new HashMap<>();
+        properties.put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
+        properties.put(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG, Objects.toString(3000));
+        properties.put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+
+        // define required properties
+        properties.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+        properties.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+
+        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics(
+            new ConnectorTaskId("noop-connector", -1),
+            new ConnectMetrics("noop-worker", new TestableWorkerConfig(properties), new SystemTime()))
+        );
     }
 
     @SuppressWarnings("unused")

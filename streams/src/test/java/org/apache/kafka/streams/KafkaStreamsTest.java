@@ -17,9 +17,14 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -28,6 +33,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -76,13 +82,17 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -104,7 +114,7 @@ public class KafkaStreamsTest {
     private MockTime time;
 
     private Properties props;
-
+    
     @Mock
     private StateDirectory stateDirectory;
     @Mock
@@ -141,7 +151,7 @@ public class KafkaStreamsTest {
     public void before() throws Exception {
         time = new MockTime();
         supplier = new MockClientSupplier();
-        supplier.setClusterForAdminClient(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
         streamsStateListener = new StateListenerStub();
         threadStatelistenerCapture = EasyMock.newCapture();
         metricsReportersCapture = EasyMock.newCapture();
@@ -161,8 +171,8 @@ public class KafkaStreamsTest {
         // setup metrics
         PowerMock.expectNew(Metrics.class,
             anyObject(MetricConfig.class),
-            EasyMock.capture(metricsReportersCapture),
-            EasyMock.anyObject(Time.class)
+            capture(metricsReportersCapture),
+            anyObject(Time.class)
         ).andAnswer(() -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());
@@ -185,6 +195,7 @@ public class KafkaStreamsTest {
         ClientMetrics.addApplicationIdMetric(anyObject(StreamsMetricsImpl.class), EasyMock.eq(APPLICATION_ID));
         ClientMetrics.addTopologyDescriptionMetric(anyObject(StreamsMetricsImpl.class), anyString());
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
+        ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);
@@ -203,10 +214,9 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class),
             anyInt()
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
-        EasyMock.expect(StreamThread.getSharedAdminClientId(
-            anyString()
-        )).andReturn("admin").anyTimes();
 
+        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
+        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(0L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(1L).anyTimes();
         prepareStreamThread(streamThreadOne, true);
@@ -226,7 +236,7 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class)
         ).andReturn(globalStreamThread).anyTimes();
         EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
-        globalStreamThread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        globalStreamThread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         globalStreamThread.start();
@@ -240,7 +250,8 @@ public class KafkaStreamsTest {
         globalStreamThread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             globalThreadState.set(GlobalStreamThread.State.DEAD);
@@ -272,7 +283,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
-        thread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        thread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
         thread.start();
@@ -296,7 +307,7 @@ public class KafkaStreamsTest {
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
             supplier.restoreConsumer.close();
-            for (final MockProducer producer : supplier.producers) {
+            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
             state.set(StreamThread.State.DEAD);
@@ -313,11 +324,14 @@ public class KafkaStreamsTest {
                 Thread.sleep(50L);
                 return null;
             }).anyTimes();
+
+        EasyMock.expect(thread.activeTasks()).andStubReturn(emptyList());
+        EasyMock.expect(thread.allTasks()).andStubReturn(Collections.emptyMap());
     }
 
     @Test
     public void testShouldTransitToNotRunningIfCloseRightAfterCreated() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.close();
 
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
@@ -325,7 +339,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.setStateListener(streamsStateListener);
 
         Assert.assertEquals(0, streamsStateListener.numChanges);
@@ -393,7 +407,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void stateShouldTransitToErrorIfAllThreadsDead() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.setStateListener(streamsStateListener);
 
         Assert.assertEquals(0, streamsStateListener.numChanges);
@@ -457,7 +471,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
@@ -469,7 +483,7 @@ public class KafkaStreamsTest {
 
         assertTrue(supplier.consumer.closed());
         assertTrue(supplier.restoreConsumer.closed());
-        for (final MockProducer p : supplier.producers) {
+        for (final MockProducer<byte[], byte[]> p : supplier.producers) {
             assertTrue(p.closed());
         }
     }
@@ -477,7 +491,7 @@ public class KafkaStreamsTest {
     @Test
     public void testStateThreadClose() throws Exception {
         // make sure we have the global state thread running too
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
@@ -514,7 +528,7 @@ public class KafkaStreamsTest {
     @Test
     public void testStateGlobalThreadClose() throws Exception {
         // make sure we have the global state thread running too
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
@@ -542,7 +556,7 @@ public class KafkaStreamsTest {
     public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
 
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
             assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
@@ -556,7 +570,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCloseIsIdempotent() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -567,7 +581,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCannotStartOnceClosed() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         streams.close();
         try {
@@ -582,7 +596,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldNotSetGlobalRestoreListenerAfterStarting() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setGlobalStateRestoreListener(null);
@@ -596,7 +610,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setUncaughtExceptionHandler(null);
@@ -608,7 +622,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
             streams.setStateListener(null);
@@ -620,7 +634,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldAllowCleanupBeforeStartAndAfterClose() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         try {
             streams.cleanUp();
             streams.start();
@@ -632,7 +646,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldThrowOnCleanupWhileRunning() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -648,46 +662,74 @@ public class KafkaStreamsTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", Serdes.String().serializer());
+    public void shouldNotGetQueryMetadataWithSerializerWhenNotRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.queryMetadataForKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test
+    public void shouldGetQueryMetadataWithSerializerWhenRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
-        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        streams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+    public void shouldNotGetQueryMetadataWithPartitionerWhenNotRunningOrRebalancing() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+    }
+
+    @Test
+    public void shouldReturnEmptyLocalStorePartitionLags() {
+        // Mock all calls made to compute the offset lags,
+        final ListOffsetsResult result = EasyMock.mock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(Collections.emptyMap());
+
+        EasyMock.expect(result.all()).andReturn(allFuture);
+        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
+            .addMockedMethod("listOffsets", Map.class).createMock();
+        EasyMock.expect(mockAdminClient.listOffsets(anyObject())).andStubReturn(result);
+        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
+            .addMockedMethod("getAdmin").createMock();
+        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
+        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time);
+        streams.start();
+        assertEquals(0, streams.allLocalStorePartitionLags().size());
     }
 
     @Test
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() {
         // do not use mock time so that it can really elapse
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(Duration.ofMillis(10L)));
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnNegativeTimeoutForClose() {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.close(Duration.ofMillis(-1L));
         }
     }
 
     @Test
     public void shouldNotBlockInCloseForZeroDuration() {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             // with mock time that does not elapse, close would not return if it ever waits on the state transition
             assertFalse(streams.close(Duration.ZERO));
         }
@@ -720,7 +762,7 @@ public class KafkaStreamsTest {
         builder.table("topic", Materialized.as("store"));
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.DEBUG.name());
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -743,7 +785,7 @@ public class KafkaStreamsTest {
         builder.table("topic", Materialized.as("store"));
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.INFO.name());
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -762,15 +804,15 @@ public class KafkaStreamsTest {
     public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
         props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
 
-        assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-            + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
+                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
+        }
     }
 
     @Test
@@ -807,8 +849,9 @@ public class KafkaStreamsTest {
 
     @Test
     public void statelessTopologyShouldNotCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
@@ -825,24 +868,69 @@ public class KafkaStreamsTest {
 
     @Test
     public void inMemoryStatefulTopologyShouldNotCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = testName.getMethodName() + "-counts";
-        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
+        final String globalTopicName = safeTestName + "-global";
+        final String storeName = safeTestName + "-counts";
+        final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
         startStreamsAndCheckDirExists(topology, false);
     }
 
     @Test
     public void statefulTopologyShouldCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = testName.getMethodName() + "-counts";
-        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String inputTopic = safeTestName + "-input";
+        final String outputTopic = safeTestName + "-output";
+        final String globalTopicName = safeTestName + "-global";
+        final String storeName = safeTestName + "-counts";
+        final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
         startStreamsAndCheckDirExists(topology, true);
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionOnEmptyTopology() {
+        try {
+            new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException e) {
+            assertThat(
+                e.getMessage(),
+                equalTo("Invalid topology: Topology has no stream threads and no global threads, " +
+                            "must subscribe to at least one source topic or global table."));
+        }
+    }
+
+    @Test
+    public void shouldNotCreateStreamThreadsForGlobalOnlyTopology() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
+
+        assertThat(streams.threads.length, equalTo(0));
+    }
+
+    @Test
+    public void shouldTransitToRunningWithGlobalOnlyTopology() throws InterruptedException {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
+
+        assertThat(streams.threads.length, equalTo(0));
+        assertEquals(streams.state(), KafkaStreams.State.CREATED);
+
+        streams.start();
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.RUNNING,
+            "Streams never started, state is " + streams.state());
+
+        streams.close();
+
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
+            "Streams never stopped.");
     }
 
     @SuppressWarnings("unchecked")
@@ -877,14 +965,21 @@ public class KafkaStreamsTest {
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
             isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
             Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(globalStoreBuilder,
+        topology.addGlobalStore(
+            globalStoreBuilder,
             "global",
             Serdes.String().deserializer(),
             Serdes.String().deserializer(),
             globalTopicName,
             globalTopicName + "-processor",
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<>());
         return topology;
+    }
+    
+    private StreamsBuilder getBuilderWithSource() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic");
+        return builder;
     }
 
     private void startStreamsAndCheckDirExists(final Topology topology,

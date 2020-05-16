@@ -104,8 +104,8 @@ public class Worker {
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
-    private WorkerConfigTransformer workerConfigTransformer;
-    private ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    private final WorkerConfigTransformer workerConfigTransformer;
+    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
 
     public Worker(
         String workerId,
@@ -220,6 +220,8 @@ public class Worker {
 
         workerMetricsGroup.close();
         connectorStatusMetricsGroup.close();
+
+        workerConfigTransformer.close();
     }
 
     /**
@@ -523,7 +525,7 @@ public class Worker {
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator);
+                    time, retryWithToleranceOperator, herder.statusBackingStore());
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -535,9 +537,9 @@ public class Worker {
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
-                                      retryWithToleranceOperator);
+                                      retryWithToleranceOperator, herder.statusBackingStore());
         } else {
-            log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
+            log.error("Tasks must be a subclass of either SourceTask or SinkTask and current is {}", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
     }
@@ -726,12 +728,12 @@ public class Worker {
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.remove(taskId);
-            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
                 return;
             }
 
+            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (!task.awaitStop(timeout)) {
                 log.error("Graceful stop of task {} failed.", task.id());
                 task.cancel();
@@ -854,11 +856,11 @@ public class Worker {
     }
 
     static class ConnectorStatusMetricsGroup {
-        private ConnectMetrics connectMetrics;
-        private ConnectMetricsRegistry registry;
-        private ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
-        private Herder herder;
-        private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
+        private final ConnectMetrics connectMetrics;
+        private final ConnectMetricsRegistry registry;
+        private final ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
+        private final Herder herder;
+        private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
 
 
         protected ConnectorStatusMetricsGroup(

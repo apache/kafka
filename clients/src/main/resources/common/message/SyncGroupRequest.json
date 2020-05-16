@@ -22,7 +22,11 @@
   // Starting from version 3, we add a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Starting from version 5, the client sends the Protocol Type and the Protocol Name
+  // to the broker (KIP-559). The broker will reject the request if they are inconsistent
+  // with the Type and Name known by the broker.
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
@@ -34,6 +38,12 @@
     { "name": "GroupInstanceId", "type": "string", "versions": "3+", 
       "nullableVersions": "3+", "default": "null",
       "about": "The unique identifier of the consumer instance provided by end user." },
+    { "name": "ProtocolType", "type": "string", "versions": "5+",
+      "nullableVersions": "5+", "default": "null", "ignorable": true,
+      "about": "The group protocol type." },
+    { "name": "ProtocolName", "type": "string", "versions": "5+",
+      "nullableVersions": "5+", "default": "null", "ignorable": true,
+      "about": "The group protocol name." },
     { "name": "Assignments", "type": "[]SyncGroupRequestAssignment", "versions": "0+",
       "about": "Each assignment.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "0+",

@@ -24,8 +24,8 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.Serdes
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class ConsumedTest extends FlatSpec with Matchers {

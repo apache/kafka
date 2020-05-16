@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -46,7 +47,6 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,7 +54,9 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class InternalMockProcessorContext
+    extends AbstractProcessorContext
+    implements RecordCollector.Supplier {
 
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
@@ -177,12 +179,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
-        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
+        super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
-        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
 
     @Override
@@ -253,40 +255,38 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void commit() {}
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public void forward(final Object key, final Object value) {
         forward(key, value, To.all());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+    public void forward(final Object key, final Object value, final int childIndex) {
+        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public void forward(final Object key, final Object value, final String childName) {
         forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public void forward(final Object key, final Object value, final To to) {
         toInternal.update(to);
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode thisNode = currentNode;
+        final ProcessorNode<?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    childNode.process(key, value);
-                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
+                    ((ProcessorNode<Object, Object>) childNode).process(key, value);
+                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
+                                           // Processors and toInternal might have been modified
                 }
             }
         } finally {
@@ -298,7 +298,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // and also not throwing exceptions if record context is not available.
     public void setTime(final long timestamp) {
         if (recordContext != null) {
-            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic(), recordContext.headers());
+            recordContext = new ProcessorRecordContext(
+                timestamp,
+                recordContext.offset(),
+                recordContext.partition(),
+                recordContext.topic(),
+                recordContext.headers()
+            );
         }
         this.timestamp = timestamp;
     }
@@ -341,10 +347,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             return new RecordHeaders();
         }
         return recordContext.headers();
-    }
-
-    Map<String, StateStore> allStateStores() {
-        return Collections.unmodifiableMap(storeMap);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {

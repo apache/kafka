@@ -73,7 +73,7 @@ test
 Run the producer and then type a few messages into the console to send to the server.</p>
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic test
 This is a message
 This is another message
 </pre>
@@ -162,7 +162,7 @@ Topic:test	PartitionCount:1	ReplicationFactor:1	Configs:
 Let's publish a few messages to our new topic:
 </p>
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic my-replicated-topic
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic my-replicated-topic
 ...
 my test message 1
 my test message 2
@@ -211,7 +211,7 @@ my test message 2
 
 <h4><a id="quickstart_kafkaconnect" href="#quickstart_kafkaconnect">Step 7: Use Kafka Connect to import/export data</a></h4>
 
-<p>Writing data from the console and writing it back to the console is a convenient place to start, but you'll probably want
+<p>Reading data from the console and writing it back to the console is a convenient place to start, but you'll probably want
 to use data from other sources or export data from Kafka to other systems. For many systems, instead of writing custom
 integration code you can use Kafka Connect to import or export data.</p>
 

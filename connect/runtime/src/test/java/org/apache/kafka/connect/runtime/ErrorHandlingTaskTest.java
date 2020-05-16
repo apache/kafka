@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -33,6 +34,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
@@ -48,11 +50,13 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -135,6 +139,7 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock
     private TaskStatus.Listener statusListener;
+    @Mock private StatusBackingStore statusBackingStore;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
 
@@ -163,6 +168,93 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
+    public void testSinkTasksCloseErrorReporters() throws Exception {
+        ErrorReporter reporter = EasyMock.mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
+
+        createSinkTask(initialState, retryWithToleranceOperator);
+
+        expectInitializeTask();
+        reporter.close();
+        EasyMock.expectLastCall();
+        sinkTask.stop();
+        EasyMock.expectLastCall();
+
+        consumer.close();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerSinkTask.initialize(TASK_CONFIG);
+        workerSinkTask.initializeAndStart();
+        workerSinkTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSourceTasksCloseErrorReporters() {
+        ErrorReporter reporter = EasyMock.mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
+
+        createSourceTask(initialState, retryWithToleranceOperator);
+
+        sourceTask.stop();
+        PowerMock.expectLastCall();
+
+        producer.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        reporter.close();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCloseErrorReportersExceptionPropagation() {
+        ErrorReporter reporterA = EasyMock.mock(ErrorReporter.class);
+        ErrorReporter reporterB = EasyMock.mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        createSourceTask(initialState, retryWithToleranceOperator);
+
+        sourceTask.stop();
+        PowerMock.expectLastCall();
+
+        producer.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+        reporterA.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException());
+
+        reporterB.close();
+        EasyMock.expectLastCall().andThrow(new RuntimeException());
+
+        PowerMock.replayAll();
+
+        workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testErrorHandlingInSinkTasks() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
@@ -175,6 +267,7 @@ public class ErrorHandlingTaskTest {
         createSinkTask(initialState, retryWithToleranceOperator);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // valid json
         ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(TOPIC, PARTITION1, FIRST_OFFSET, null, "{\"a\": 10}".getBytes());
@@ -361,6 +454,29 @@ public class ErrorHandlingTaskTest {
         PowerMock.expectLastCall();
     }
 
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
+        }
+    }
+
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
@@ -373,7 +489,8 @@ public class ErrorHandlingTaskTest {
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter,
-            headerConverter, sinkTransforms, consumer, pluginLoader, time, retryWithToleranceOperator);
+            headerConverter, sinkTransforms, consumer, pluginLoader, time,
+                retryWithToleranceOperator, statusBackingStore);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -402,7 +519,8 @@ public class ErrorHandlingTaskTest {
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
                 producer, offsetReader, offsetWriter, workerConfig,
-                ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator);
+                ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
+                statusBackingStore);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

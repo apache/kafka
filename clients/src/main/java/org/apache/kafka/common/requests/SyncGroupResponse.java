@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class SyncGroupResponse extends AbstractResponse {
@@ -53,7 +52,7 @@ public class SyncGroupResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override
@@ -61,8 +60,13 @@ public class SyncGroupResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
+    @Override
+    public String toString() {
+        return data.toString();
+    }
+
     public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
-        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
+        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer), version);
     }
 
     @Override

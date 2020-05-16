@@ -76,6 +76,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
+    private InternalProcessorContext context;
     private RecordCollector collector;
     private String changelogTopic;
     private Sensor bufferSizeSensor;
@@ -94,6 +95,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         private final Serde<K> keySerde;
         private final Serde<V> valSerde;
         private boolean loggingEnabled = true;
+        private Map<String, String> logConfig = new HashMap<>();
 
         public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valSerde) {
             this.storeName = storeName;
@@ -127,7 +129,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withLoggingEnabled(final Map<String, String> config) {
-            throw new UnsupportedOperationException();
+            logConfig = config;
+            return this;
         }
 
         @Override
@@ -143,7 +146,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public Map<String, String> logConfig() {
-            return Collections.emptyMap();
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
         }
 
         @Override
@@ -187,8 +190,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         taskId = context.taskId().toString();
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-        streamsMetrics = internalProcessorContext.metrics();
+        this.context = (InternalProcessorContext) context;
+        streamsMetrics = this.context.metrics();
 
         threadId = Thread.currentThread().getName();
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
@@ -548,8 +551,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private void updateBufferMetrics() {
-        bufferSizeSensor.record(memBufferSize);
-        bufferCountSensor.record(index.size());
+        bufferSizeSensor.record(memBufferSize, context.currentSystemTimeMs());
+        bufferCountSensor.record(index.size(), context.currentSystemTimeMs());
     }
 
     @Override

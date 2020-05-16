@@ -98,6 +98,28 @@ public class ProcessorNodeMetricsTest {
     }
 
     @Test
+    public void shouldGetIdempotentUpdateSkipSensor() {
+        final String metricNamePrefix = "idempotent-update-skip";
+        final String descriptionOfCount = "The total number of skipped idempotent updates";
+        final String descriptionOfRate = "The average number of skipped idempotent updates per second";
+        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            metricNamePrefix,
+            descriptionOfRate,
+            descriptionOfCount
+        );
+
+        verifySensor(
+            () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
+        );
+    }
+
+    @Test
     public void shouldGetProcessSensor() {
         final String metricNamePrefix = "process";
         final String descriptionOfCount = "The total number of calls to process";
@@ -121,7 +143,7 @@ public class ProcessorNodeMetricsTest {
         final String descriptionOfRate = "The average number of calls to process per second";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
             .andReturn(expectedParentSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID))
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,

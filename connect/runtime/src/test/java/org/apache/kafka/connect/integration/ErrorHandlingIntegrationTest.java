@@ -34,7 +34,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +68,7 @@ public class ErrorHandlingIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
 
+    private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";
@@ -83,12 +83,14 @@ public class ErrorHandlingIntegrationTest {
     private ConnectorHandle connectorHandle;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws InterruptedException {
         // setup Connect cluster with defaults
         connect = new EmbeddedConnectCluster.Builder().build();
 
         // start Connect cluster
         connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
@@ -134,6 +136,8 @@ public class ErrorHandlingIntegrationTest {
         connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
 
         connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         waitForCondition(this::checkForPartitionAssignment,
                 CONNECTOR_SETUP_DURATION_MS,
@@ -172,6 +176,9 @@ public class ErrorHandlingIntegrationTest {
         }
 
         connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
+                "Connector tasks did not stop in time.");
+
     }
 
     /**

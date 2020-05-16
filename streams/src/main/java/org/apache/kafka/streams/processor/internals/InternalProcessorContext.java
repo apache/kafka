@@ -34,6 +34,16 @@ public interface InternalProcessorContext extends ProcessorContext {
     StreamsMetricsImpl metrics();
 
     /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
+
+    /**
+     * @retun the current wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
+
+    /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */
@@ -47,12 +57,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode currentNode);
+    void setCurrentNode(ProcessorNode<?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode currentNode();
+    ProcessorNode<?, ?> currentNode();
 
     /**
      * Get the thread-global cache
@@ -71,9 +81,6 @@ public interface InternalProcessorContext extends ProcessorContext {
 
     /**
      * Get a correctly typed state store, given a handle on the original builder.
-     * @param builder
-     * @param <T>
-     * @return
      */
     @SuppressWarnings("unchecked")
     default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {

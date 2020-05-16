@@ -22,16 +22,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class JoinGroupResponse extends AbstractResponse {
 
     private final JoinGroupResponseData data;
-
-    public static final String UNKNOWN_PROTOCOL = "";
-    public static final int UNKNOWN_GENERATION_ID = -1;
-    public static final String UNKNOWN_MEMBER_ID = "";
 
     public JoinGroupResponse(JoinGroupResponseData data) {
         this.data = data;
@@ -65,7 +60,7 @@ public class JoinGroupResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     public static JoinGroupResponse parse(ByteBuffer buffer, short versionId) {
