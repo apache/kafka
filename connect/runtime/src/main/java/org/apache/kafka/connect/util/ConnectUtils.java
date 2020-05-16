@@ -72,7 +72,7 @@ public final class ConnectUtils {
     }
 
     public static void addMetricsContextProperties(Map<String, Object> prop, WorkerConfig config, String clusterId) {
-        //add all properties predefined with "metrics.context"
+        //add all properties predefined with "metrics.context."
         prop.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
         //add connect properties
         prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
