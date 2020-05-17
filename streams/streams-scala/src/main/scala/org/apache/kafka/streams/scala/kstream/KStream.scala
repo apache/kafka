@@ -260,7 +260,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * import Serdes._
    *
    * //..
-   * val clicksPerRegion: KStram[String, Long] = //..
+   * val clicksPerRegion: KStream[String, Long] = //..
    *
    * // Implicit serdes in scope will generate an implicit Produced instance, which
    * // will be passed automatically to the call of through below

@@ -21,7 +21,17 @@ package org.apache.kafka.streams.scala
 
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{Repartitioned, CogroupedKStream => CogroupedKStreamJ, KGroupedStream => KGroupedStreamJ, KGroupedTable => KGroupedTableJ, KStream => KStreamJ, KTable => KTableJ, SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ, SessionWindowedKStream => SessionWindowedKStreamJ, TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ, TimeWindowedKStream => TimeWindowedKStreamJ}
+import org.apache.kafka.streams.kstream.{
+  CogroupedKStream => CogroupedKStreamJ,
+  KGroupedStream => KGroupedStreamJ,
+  KGroupedTable => KGroupedTableJ,
+  KStream => KStreamJ,
+  KTable => KTableJ,
+  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  SessionWindowedKStream => SessionWindowedKStreamJ,
+  TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ,
+  TimeWindowedKStream => TimeWindowedKStreamJ
+}
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
 
