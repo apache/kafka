@@ -81,13 +81,14 @@ public class KStreamTransformIntegrationTest {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic(topic, new IntegerSerializer(), new IntegerSerializer());
-            inputTopic.pipeKeyValueList(Arrays.asList(new KeyValue<>(1, 1),
-                                                                       new KeyValue<>(2, 2),
-                                                                       new KeyValue<>(3, 3),
-                                                                       new KeyValue<>(2, 1),
-                                                                       new KeyValue<>(2, 3),
-                                                                       new KeyValue<>(1, 3)));
+                driver.createInputTopic(topic, new IntegerSerializer(), new IntegerSerializer());
+            inputTopic.pipeKeyValueList(Arrays.asList(
+                new KeyValue<>(1, 1),
+                new KeyValue<>(2, 2),
+                new KeyValue<>(3, 3),
+                new KeyValue<>(2, 1),
+                new KeyValue<>(2, 3),
+                new KeyValue<>(1, 3)));
         }
         assertThat(results, equalTo(expected));
     }
