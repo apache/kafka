@@ -110,7 +110,7 @@ public class StreamsResetter {
     private static String usage = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
-            + "intermediate topics (topics used in the through() method).\n"
+            + "intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "You do not need to specify internal topics because the tool finds them automatically.\n"
@@ -209,7 +209,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics used in the through() method). For these topics, the tool will skip to the end.")
+        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
