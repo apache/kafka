@@ -863,6 +863,25 @@
                             </div>
                         </td>
                     </tr>
+                    <tr class="row-even">
+                        <td><p class="first"><strong>Repartition</strong></p>
+                            <ul class="last simple">
+                                <li>KStream &rarr; KStream</li>
+                            </ul>
+                        </td>
+                        <td>
+                            <p class="first">Manually trigger repartitioning of the stream with desired number of partitions. (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--">details</a>)</p>
+
+                            <code><span class="pre">repartition()</span></code> is similar to <code><span class="pre">through()</span></code> however Kafka Streams will manage the topic for you.
+                            Generated topic is treated as internal topic, as a result data will be purged automatically as any other internal repartition topic.
+                            In addition, you can specify the desired number of partitions, which allows to easily scale in/out downstream sub-topologies.
+                            <code><span class="pre">repartition()</span></code> operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like <code><span class="pre">transform()</span></code> et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand.
+
+                            <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">... ;</span>
+<span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">repartitionedStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">repartition</span><span class="o">(</span><span class="n">Repartitioned</span><span class="o">.</span><span class="na">numberOfPartitions</span><span class="o">(</span><span class="s">10</span>)<span class="o">);</span></pre></div>
+                            </div>
+                        </td>
+                    </tr>
                     </tbody>
                 </table>
             </div>

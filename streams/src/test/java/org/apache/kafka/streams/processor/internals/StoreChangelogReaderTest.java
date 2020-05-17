@@ -31,6 +31,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -874,6 +875,79 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertTrue(changelogReader.isEmpty());
         assertNull(changelogReader.changelogMetadata(tp1));
         assertNull(changelogReader.changelogMetadata(tp2));
+    }
+
+    @Test
+    public void shouldTriggerRestoreCallbackAsListener() {
+        // do not need this test for standby task
+        if (type == STANDBY)
+            return;
+
+        final MockBatchingStateRestoreListener restoreListener = new MockBatchingStateRestoreListener();
+        EasyMock.expect(storeMetadata.restoreCallback()).andReturn(restoreListener).anyTimes();
+        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
+        EasyMock.replay(stateManager, storeMetadata, store);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 11L));
+            }
+        };
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
+
+        final StoreChangelogReader changelogReader =
+                new StoreChangelogReader(time, config, logContext, consumer, callback);
+
+        changelogReader.register(tp, stateManager);
+
+        changelogReader.restore();
+
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(5L, consumer.position(tp));
+        assertEquals(Collections.emptySet(), consumer.paused());
+
+        assertEquals(11L, (long) changelogReader.changelogMetadata(tp).endOffset());
+
+        assertEquals(tp, callback.restoreTopicPartition);
+        assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
+        assertNull(callback.storeNameCalledStates.get(RESTORE_END));
+        assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        assertEquals(5L, restoreListener.restoreStartOffset);
+        assertEquals(11L, restoreListener.restoreEndOffset);
+        assertEquals(storeName, restoreListener.storeNameCalledStates.get(RESTORE_START));
+
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
+        // null key should be ignored
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, null, "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
+
+        changelogReader.restore();
+
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
+        assertEquals(storeName, restoreListener.storeNameCalledStates.get(RESTORE_BATCH));
+
+        // consumer position bypassing the gap in the next poll
+        consumer.seek(tp, 11L);
+
+        changelogReader.restore();
+
+        assertEquals(11L, consumer.position(tp));
+        assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+
+        assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
+        assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
+        assertEquals(Collections.singleton(tp), consumer.paused());
+
+        assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_BATCH));
+        assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
+        assertEquals(storeName, restoreListener.storeNameCalledStates.get(RESTORE_END));
     }
 
     @Test

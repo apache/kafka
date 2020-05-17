@@ -130,6 +130,10 @@ public class ProcessorStateManager implements StateManager {
             return this.stateStore;
         }
 
+        StateRestoreCallback restoreCallback() {
+            return this.restoreCallback;
+        }
+
         @Override
         public String toString() {
             return "StateStoreMetadata (" + stateStore.name() + " : " + changelogPartition + " @ " + offset;
@@ -358,7 +362,7 @@ public class ProcessorStateManager implements StateManager {
 
     // used by the changelog reader only
     void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
-        if (!stores.values().contains(storeMetadata)) {
+        if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
         }
