@@ -23,6 +23,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -92,6 +93,6 @@ public class ConfigTest {
 
     public static ConfigEntry newConfigEntry(String name, String value, ConfigEntry.ConfigSource source, boolean isSensitive,
                                              boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
-        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms);
+        return new ConfigEntry(name, Optional.ofNullable(value), source, isSensitive, isReadOnly, synonyms);
     }
 }

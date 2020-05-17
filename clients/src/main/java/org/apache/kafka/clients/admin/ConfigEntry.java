@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
@@ -32,7 +33,7 @@ import java.util.Objects;
 public class ConfigEntry {
 
     private final String name;
-    private final String value;
+    private final Optional<String> value;
     private final ConfigSource source;
     private final boolean isSensitive;
     private final boolean isReadOnly;
@@ -61,7 +62,7 @@ public class ConfigEntry {
     @Deprecated
     public ConfigEntry(String name, String value, boolean isDefault, boolean isSensitive, boolean isReadOnly) {
         this(name,
-             value,
+             Optional.ofNullable(value),
              isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
              isSensitive,
              isReadOnly,
@@ -78,7 +79,7 @@ public class ConfigEntry {
      * @param isReadOnly whether the config is read-only and cannot be updated
      * @param synonyms Synonym configs in order of precedence
      */
-    ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
+    ConfigEntry(String name, Optional<String> value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
                 List<ConfigSynonym> synonyms) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
@@ -99,7 +100,7 @@ public class ConfigEntry {
     /**
      * Return the value or null. Null is returned if the config is unset or if isSensitive is true.
      */
-    public String value() {
+    public Optional<String> value() {
         return value;
     }
 
@@ -163,7 +164,7 @@ public class ConfigEntry {
         final int prime = 31;
         int result = 1;
         result = prime * result + name.hashCode();
-        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        result = prime * result + value.hashCode();
         result = prime * result + (isSensitive ? 1 : 0);
         result = prime * result + (isReadOnly ? 1 : 0);
         result = prime * result + source.hashCode();

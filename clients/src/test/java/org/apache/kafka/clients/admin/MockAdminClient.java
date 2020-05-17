@@ -547,7 +547,7 @@ public class MockAdminClient extends AdminClient {
                 for (AlterConfigOp op : ops) {
                     switch (op.opType()) {
                         case SET:
-                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            newMap.put(op.configEntry().name(), op.configEntry().value().orElse("null"));
                             break;
                         case DELETE:
                             newMap.remove(op.configEntry().name());
@@ -570,7 +570,7 @@ public class MockAdminClient extends AdminClient {
                 for (AlterConfigOp op : ops) {
                     switch (op.opType()) {
                         case SET:
-                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            newMap.put(op.configEntry().name(), op.configEntry().value().orElse("null"));
                             break;
                         case DELETE:
                             newMap.remove(op.configEntry().name());
