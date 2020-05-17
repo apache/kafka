@@ -22,15 +22,15 @@ package org.apache.kafka.streams.scala
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
-  CogroupedKStream => CogroupedKStreamJ,
-  KGroupedStream => KGroupedStreamJ,
-  KGroupedTable => KGroupedTableJ,
   KStream => KStreamJ,
-  KTable => KTableJ,
-  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  KGroupedStream => KGroupedStreamJ,
+  TimeWindowedKStream => TimeWindowedKStreamJ,
   SessionWindowedKStream => SessionWindowedKStreamJ,
+  CogroupedKStream => CogroupedKStreamJ,
   TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ,
-  TimeWindowedKStream => TimeWindowedKStreamJ
+  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  KTable => KTableJ,
+  KGroupedTable => KGroupedTableJ
 }
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
