@@ -464,6 +464,8 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
+                lockedTaskDirectories.remove(task.id());
+
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                 } catch (final RuntimeException e) {
