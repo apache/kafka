@@ -472,6 +472,44 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
+    void testReprocessingFromScratchAfterResetAllExternalTopics() throws Exception {
+        appID = testId + "from-reset-all-topics";
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+
+        // RUN
+        streams = new KafkaStreams(setupTopologyWithKTableStoreUserTopic(), streamsConfig);
+        streams.start();
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close();
+        TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
+            "Streams Application consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
+
+        mockTime.sleep(1);
+
+        resetAllExternalTopics(appID);
+
+        // RE-RUN
+        streams = new KafkaStreams(setupTopologyWithKTableStoreUserTopic(), streamsConfig);
+        streams.cleanUp();
+
+        TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
+            "Reset Tool consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+
+
+        streams.start();
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+        streams.close();
+
+        assertThat(resultRerun, equalTo(result));
+
+        TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
+                "Reset Tool consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+        resetAllExternalTopics(appID);
+
+        cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
+    }
+
     private Topology setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -502,6 +540,21 @@ public abstract class AbstractResetIntegrationTest {
 
         // use map to trigger internal re-partitioning before groupByKey
         input.map((key, value) -> new KeyValue<>(key, key))
+                .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
+
+        return builder.build();
+    }
+
+    private Topology setupTopologyWithKTableStoreUserTopic() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
+
+        input.groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
+            .count()
+            .toStream()
+            .map((key, value) -> new KeyValue<>(key.window().start() + key.window().end(), value))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
 
         return builder.build();
@@ -539,6 +592,23 @@ public abstract class AbstractResetIntegrationTest {
         if (resetScenarioArg != null) {
             parameterList.add(resetScenarioArg);
         }
+
+        final String[] parameters = parameterList.toArray(new String[0]);
+
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+
+        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        Assert.assertEquals(0, exitCode);
+    }
+
+    private void resetAllExternalTopics(final String appID) {
+        final List<String> parameterList = new ArrayList<>(
+                Arrays.asList("--application-id", appID,
+                    "--bootstrap-servers", cluster.bootstrapServers(),
+                    "--reset-all-external-topics",
+                    "--execute"));
 
         final String[] parameters = parameterList.toArray(new String[0]);
 

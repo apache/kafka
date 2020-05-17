@@ -93,7 +93,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhileStreamsRunning() throws Exception {
+    public void testReprocessingFromScratchAfterResetAllExternalTopics() throws Exception {
+        super.testReprocessingFromScratchAfterResetAllExternalTopics();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhileStreamsRunning() {
         super.shouldNotAllowToResetWhileStreamsIsRunning();
     }
 
