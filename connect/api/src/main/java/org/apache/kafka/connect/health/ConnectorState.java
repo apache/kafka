@@ -32,4 +32,13 @@ public class ConnectorState extends AbstractState {
     public ConnectorState(String state, String workerId, String traceMessage) {
         super(state, workerId, traceMessage);
     }
+
+    @Override
+    public String toString() {
+        return "ConnectorState{"
+            + "state='" + state() + '\''
+            + ", traceMessage='" + traceMessage() + '\''
+            + ", workerId='" + workerId() + '\''
+            + '}';
+    }
 }

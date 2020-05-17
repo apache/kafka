@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.KeyValue;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -66,26 +66,28 @@ public class KStreamTransformIntegrationTest {
     @Before
     public void before() {
         builder = new StreamsBuilder();
+        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder = storeBuilder();
+        builder.addStateStore(keyValueStoreBuilder);
         stream = builder.stream(topic, Consumed.with(Serdes.Integer(), Serdes.Integer()));
     }
 
     private StoreBuilder<KeyValueStore<Integer, Integer>> storeBuilder() {
         return Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
-            Serdes.Integer(),
-            Serdes.Integer());
+                                    Serdes.Integer(),
+                                    Serdes.Integer());
     }
 
     private void verifyResult(final List<KeyValue<Integer, Integer>> expected) {
-        final ConsumerRecordFactory<Integer, Integer> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, Arrays.asList(new KeyValue<>(1, 1),
-                new KeyValue<>(2, 2),
-                new KeyValue<>(3, 3),
-                new KeyValue<>(2, 1),
-                new KeyValue<>(2, 3),
-                new KeyValue<>(1, 3))));
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(topic, new IntegerSerializer(), new IntegerSerializer());
+            inputTopic.pipeKeyValueList(Arrays.asList(new KeyValue<>(1, 1),
+                                                                       new KeyValue<>(2, 2),
+                                                                       new KeyValue<>(3, 3),
+                                                                       new KeyValue<>(2, 1),
+                                                                       new KeyValue<>(2, 3),
+                                                                       new KeyValue<>(1, 3)));
         }
         assertThat(results, equalTo(expected));
     }
@@ -141,7 +143,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })
@@ -223,7 +225,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })
@@ -301,7 +303,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })
@@ -357,7 +359,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })
@@ -438,7 +440,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })
@@ -531,7 +533,7 @@ public class KStreamTransformIntegrationTest {
                 }
 
                 @Override
-                public Set<StoreBuilder> stores() {
+                public Set<StoreBuilder<?>> stores() {
                     return Collections.singleton(storeBuilder());
                 }
             })

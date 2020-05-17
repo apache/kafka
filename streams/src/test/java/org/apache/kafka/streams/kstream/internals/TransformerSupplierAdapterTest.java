@@ -40,7 +40,7 @@ public class TransformerSupplierAdapterTest extends EasyMockSupport {
     private ProcessorContext context;
     private Transformer<String, String, KeyValue<Integer, Integer>> transformer;
     private TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier;
-    private Set<StoreBuilder> stores;
+    private Set<StoreBuilder<?>> stores;
 
     final String key = "Hello";
     final String value = "World";

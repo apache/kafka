@@ -19,6 +19,10 @@ package org.apache.kafka.connect.runtime.distributed;
 import java.util.Arrays;
 import java.util.Locale;
 
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
+
 /**
  * An enumeration of the modes available to the worker to signal which Connect protocols are
  * enabled at any time.
@@ -28,13 +32,22 @@ import java.util.Locale;
  *
  * {@code COMPATIBLE} signifies that this worker supports both eager and incremental cooperative
  * Connect protocols and will use the version that is elected by the Kafka broker coordinator
- * during rebalancing.
+ * during rebalance.
+ *
+ * {@code SESSIONED} signifies that this worker supports all of the above protocols in addition to
+ * a protocol that uses incremental cooperative rebalancing for worker assignment and uses session
+ * keys distributed via the config topic to verify internal REST requests
  */
 public enum ConnectProtocolCompatibility {
     EAGER {
         @Override
         public String protocol() {
             return "default";
+        }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V0;
         }
     },
 
@@ -43,11 +56,28 @@ public enum ConnectProtocolCompatibility {
         public String protocol() {
             return "compatible";
         }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V1;
+        }
+    },
+
+    SESSIONED {
+        @Override
+        public String protocol() {
+            return "sessioned";
+        }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V2;
+        }
     };
 
     /**
      * Return the enum that corresponds to the name that is given as an argument;
-     * if the no mapping is found {@code IllegalArgumentException} is thrown.
+     * if no mapping is found {@code IllegalArgumentException} is thrown.
      *
      * @param name the name of the protocol compatibility mode
      * @return the enum that corresponds to the protocol compatibility mode
@@ -60,10 +90,38 @@ public enum ConnectProtocolCompatibility {
                         "Unknown Connect protocol compatibility mode: " + name));
     }
 
+    /**
+     * Return the enum that corresponds to the Connect protocol version that is given as an argument;
+     * if no mapping is found {@code IllegalArgumentException} is thrown.
+     *
+     * @param protocolVersion the version of the protocol; for example,
+     * {@link ConnectProtocol#CONNECT_PROTOCOL_V0 CONNECT_PROTOCOL_V0}. May not be null
+     * @return the enum that corresponds to the protocol compatibility mode
+     */
+    public static ConnectProtocolCompatibility fromProtocolVersion(short protocolVersion) {
+        switch (protocolVersion) {
+            case CONNECT_PROTOCOL_V0:
+                return EAGER;
+            case CONNECT_PROTOCOL_V1:
+                return COMPATIBLE;
+            case CONNECT_PROTOCOL_V2:
+                return SESSIONED;
+            default:
+                throw new IllegalArgumentException("Unknown Connect protocol version: " + protocolVersion);
+        }
+    }
+
     @Override
     public String toString() {
         return name().toLowerCase(Locale.ROOT);
     }
+
+    /**
+     * Return the version of the protocol for this mode.
+     *
+     * @return the protocol version
+     */
+    public abstract short protocolVersion();
 
     /**
      * Return the name of the protocol that this mode will use in {@code ProtocolMetadata}.
@@ -74,7 +132,7 @@ public enum ConnectProtocolCompatibility {
 
     /**
      * Return the enum that corresponds to the protocol name that is given as an argument;
-     * if the no mapping is found {@code IllegalArgumentException} is thrown.
+     * if no mapping is found {@code IllegalArgumentException} is thrown.
      *
      * @param protocolName the name of the connect protocol
      * @return the enum that corresponds to the protocol compatibility mode that supports the

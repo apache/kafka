@@ -19,27 +19,32 @@ package kafka.log
 
 import java.io.PrintWriter
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.core.{Gauge, MetricName}
+import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 
-import scala.collection.{Iterable, JavaConverters, Seq}
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.{Iterable, Seq}
+import scala.jdk.CollectionConverters._
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
+class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
 
   val codec: CompressionType = CompressionType.LZ4
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
+
+  @After
+  def cleanup(): Unit = {
+    TestUtils.clearYammerMetrics()
+  }
 
   @Test(timeout = DEFAULT_MAX_WAIT_MS)
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
@@ -60,18 +65,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
       writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
     }
 
-    def getGauge[T](metricName: String, metricScope: String): Gauge[T] = {
-      Metrics.defaultRegistry.allMetrics.asScala
-        .filterKeys(k => {
-          k.getName.endsWith(metricName) && k.getScope.endsWith(metricScope)
-        })
-        .headOption
-        .getOrElse { fail(s"Unable to find metric $metricName") }
-        .asInstanceOf[(Any, Gauge[Any])]
-        ._2
-        .asInstanceOf[Gauge[T]]
-    }
-
     breakPartitionLog(topicPartitions(0))
     breakPartitionLog(topicPartitions(1))
 
@@ -84,8 +77,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
 
     TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 2000L)
-    val expectedTotalUncleanableBytes = LogCleaner.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
-      LogCleaner.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
+    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
+      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
@@ -93,6 +86,24 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     assertTrue(uncleanablePartitions.contains(topicPartitions(0)))
     assertTrue(uncleanablePartitions.contains(topicPartitions(1)))
     assertFalse(uncleanablePartitions.contains(topicPartitions(2)))
+  }
+
+  private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => filter(k) }
+      .headOption
+      .getOrElse { fail(s"Unable to find metric") }
+      .asInstanceOf[(Any, Gauge[Any])]
+      ._2
+      .asInstanceOf[Gauge[T]]
+  }
+
+  private def getGauge[T](metricName: String): Gauge[T] = {
+    getGauge(mName => mName.getName.endsWith(metricName) && mName.getScope == null)
+  }
+
+  private def getGauge[T](metricName: String, metricScope: String): Gauge[T] = {
+    getGauge(k => k.getName.endsWith(metricName) && k.getScope.endsWith(metricScope))
   }
 
   @Test
@@ -167,7 +178,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    import JavaConverters._
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
@@ -184,5 +194,23 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
       valCounter += step
       (key, curValue)
     }
+  }
+
+  @Test
+  def testIsThreadFailed(): Unit = {
+    val metricName = "DeadThreadCount"
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner.startup()
+    assertEquals(0, cleaner.deadThreadCount)
+    // we simulate the unexpected error with an interrupt
+    cleaner.cleaners.foreach(_.interrupt())
+    // wait until interruption is propagated to all the threads
+    TestUtils.waitUntilTrue(
+      () => cleaner.cleaners.foldLeft(true)((result, thread) => {
+        thread.isThreadFailed && result
+      }), "Threads didn't terminate unexpectedly"
+    )
+    assertEquals(cleaner.cleaners.size, getGauge[Int](metricName).value())
+    assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
   }
 }

@@ -115,11 +115,19 @@ class LogConfigTest {
     assertFalse(isValid("100:0,10 :   "))
   }
 
+  /* Sanity check that toHtmlTable produces one of the expected configs */
+  @Test
+  def testToHtmlTable(): Unit = {
+    val html = LogConfig.configDefCopy.toHtmlTable
+    val expectedConfig = "<td>file.delete.delay.ms</td>"
+    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+  }
+
   /* Sanity check that toHtml produces one of the expected configs */
   @Test
   def testToHtml(): Unit = {
-    val html = LogConfig.configDefCopy.toHtmlTable
-    val expectedConfig = "<td>file.delete.delay.ms</td>"
+    val html = LogConfig.configDefCopy.toHtml
+    val expectedConfig = "<h4><a id=\"file.delete.delay.ms\" href=\"#file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
   }
 

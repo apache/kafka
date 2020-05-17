@@ -361,6 +361,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
@@ -395,6 +396,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
@@ -570,7 +572,8 @@ public class StandaloneHerderTest {
 
         herder.putTaskConfigs(CONNECTOR_NAME,
                 Arrays.asList(singletonMap("config", "value")),
-                cb);
+                cb,
+                null);
 
         PowerMock.verifyAll();
     }
@@ -614,7 +617,7 @@ public class StandaloneHerderTest {
             capture.getValue().getMessage(),
             "Connector configuration is invalid and contains the following 1 error(s):\n" +
                 error + "\n" +
-                "You can also find the above list of errors at the endpoint `/{connectorType}/config/validate`"
+                "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
         );
 
         PowerMock.verifyAll();
@@ -645,6 +648,7 @@ public class StandaloneHerderTest {
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
+                null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),

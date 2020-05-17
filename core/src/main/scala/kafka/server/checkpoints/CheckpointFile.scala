@@ -33,6 +33,48 @@ trait CheckpointFileFormatter[T]{
   def fromLine(line: String): Option[T]
 }
 
+class CheckpointReadBuffer[T](location: String,
+                              reader: BufferedReader,
+                              version: Int,
+                              formatter: CheckpointFileFormatter[T]) extends Logging {
+  def read(): Seq[T] = {
+    def malformedLineException(line: String) =
+      new IOException(s"Malformed line in checkpoint file ($location): '$line'")
+
+    var line: String = null
+    try {
+      line = reader.readLine()
+      if (line == null)
+        return Seq.empty
+      line.toInt match {
+        case fileVersion if fileVersion == version =>
+          line = reader.readLine()
+          if (line == null)
+            return Seq.empty
+          val expectedSize = line.toInt
+          val entries = mutable.Buffer[T]()
+          line = reader.readLine()
+          while (line != null) {
+            val entry = formatter.fromLine(line)
+            entry match {
+              case Some(e) =>
+                entries += e
+                line = reader.readLine()
+              case _ => throw malformedLineException(line)
+            }
+          }
+          if (entries.size != expectedSize)
+            throw new IOException(s"Expected $expectedSize entries in checkpoint file ($location), but found only ${entries.size}")
+          entries
+        case _ =>
+          throw new IOException(s"Unrecognized version of the checkpoint file ($location): " + version)
+      }
+    } catch {
+      case _: NumberFormatException => throw malformedLineException(line)
+    }
+  }
+}
+
 class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],
@@ -80,41 +122,12 @@ class CheckpointFile[T](val file: File,
   }
 
   def read(): Seq[T] = {
-    def malformedLineException(line: String) =
-      new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
     lock synchronized {
       try {
         val reader = Files.newBufferedReader(path)
-        var line: String = null
         try {
-          line = reader.readLine()
-          if (line == null)
-            return Seq.empty
-          line.toInt match {
-            case fileVersion if fileVersion == version =>
-              line = reader.readLine()
-              if (line == null)
-                return Seq.empty
-              val expectedSize = line.toInt
-              val entries = mutable.Buffer[T]()
-              line = reader.readLine()
-              while (line != null) {
-                val entry = formatter.fromLine(line)
-                entry match {
-                  case Some(e) =>
-                    entries += e
-                    line = reader.readLine()
-                  case _ => throw malformedLineException(line)
-                }
-              }
-              if (entries.size != expectedSize)
-                throw new IOException(s"Expected $expectedSize entries in checkpoint file (${file.getAbsolutePath}), but found only ${entries.size}")
-              entries
-            case _ =>
-              throw new IOException(s"Unrecognized version of the checkpoint file (${file.getAbsolutePath}): " + version)
-          }
-        } catch {
-          case _: NumberFormatException => throw malformedLineException(line)
+          val checkpointBuffer = new CheckpointReadBuffer[T](file.getAbsolutePath, reader, version, formatter)
+          checkpointBuffer.read()
         } finally {
           reader.close()
         }

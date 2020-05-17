@@ -31,7 +31,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
                         final long retentionPeriod,
                         final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
     }
 
     @Override
@@ -53,8 +53,8 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     }
 
     @Override
-    public void close() {
-        metricsRecorder.close();
-        super.close();
+    public void openExisting(final InternalProcessorContext context, final long streamTime) {
+        metricsRecorder.init(context.metrics(), context.taskId());
+        super.openExisting(context, streamTime);
     }
 }

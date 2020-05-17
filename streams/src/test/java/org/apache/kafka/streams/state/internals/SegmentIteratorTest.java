@@ -24,7 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -41,10 +41,12 @@ import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
 
+    private final RocksDBMetricsRecorder rocksDBMetricsRecorder =
+        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
     private final KeyValueSegment segmentOne =
-        new KeyValueSegment("one", "one", 0, new RocksDBMetricsRecorder("metrics-scope", "store-name"));
+        new KeyValueSegment("one", "one", 0, rocksDBMetricsRecorder);
     private final KeyValueSegment segmentTwo =
-        new KeyValueSegment("two", "window", 1, new RocksDBMetricsRecorder("metrics-scope", "store-name"));
+        new KeyValueSegment("two", "window", 1, rocksDBMetricsRecorder);
     private final HasNextCondition hasNextCondition = Iterator::hasNext;
 
     private SegmentIterator<KeyValueSegment> iterator = null;
@@ -55,13 +57,13 @@ public class SegmentIteratorTest {
                 TestUtils.tempDirectory(),
                 Serdes.String(),
                 Serdes.String(),
-                new NoOpRecordCollector(),
+                new MockRecordCollector(),
                 new ThreadCache(
                     new LogContext("testCache "),
                     0,
                     new MockStreamsMetrics(new Metrics())));
-        segmentOne.openDB(context);
-        segmentTwo.openDB(context);
+        segmentOne.init(context, segmentOne);
+        segmentTwo.init(context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
         segmentOne.put(Bytes.wrap("b".getBytes()), "2".getBytes());
         segmentTwo.put(Bytes.wrap("c".getBytes()), "3".getBytes());

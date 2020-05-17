@@ -61,7 +61,7 @@ public class TransformerSupplierAdapter<KIn, VIn, KOut, VOut> implements Transfo
     }
 
     @Override
-    public Set<StoreBuilder> stores() {
+    public Set<StoreBuilder<?>> stores() {
         return transformerSupplier.stores();
     }
 }

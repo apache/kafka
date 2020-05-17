@@ -121,6 +121,6 @@ public class SinkConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtmlTable());
+        System.out.println(config.toHtml());
     }
 }

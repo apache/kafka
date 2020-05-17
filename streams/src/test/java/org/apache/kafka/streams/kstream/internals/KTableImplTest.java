@@ -42,7 +42,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -70,8 +70,6 @@ public class KTableImplTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
@@ -93,7 +91,7 @@ public class KTableImplTest {
         final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        final KTable<String, Integer> table2 = table1.mapValues(Integer::new);
+        final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
         table2.toStream().process(supplier);
 
         final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);
@@ -104,12 +102,14 @@ public class KTableImplTest {
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02", 100L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "03", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "04", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "05", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "06", 8L));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("A", "01", 5L);
+            inputTopic.pipeInput("B", "02", 100L);
+            inputTopic.pipeInput("C", "03", 0L);
+            inputTopic.pipeInput("D", "04", 0L);
+            inputTopic.pipeInput("A", "05", 10L);
+            inputTopic.pipeInput("A", "06", 8L);
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
@@ -274,7 +274,7 @@ public class KTableImplTest {
         builder.table(topic2, consumed);
 
         final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -294,7 +294,7 @@ public class KTableImplTest {
             (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
         final KTableImpl<String, Integer, Integer> table1MappedFiltered =
             (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);

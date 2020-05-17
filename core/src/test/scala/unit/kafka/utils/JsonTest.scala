@@ -27,7 +27,7 @@ import kafka.utils.json.JsonValue
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 object JsonTest {
@@ -59,10 +59,6 @@ class JsonTest {
     val encoded = Json.legacyEncodeAsString(map)
     val decoded = Json.parseFull(encoded)
     assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
-
-    // Test strings with non-escaped backslash and quotes. This is to verify that ACLs
-    // containing non-escaped chars persisted using 1.0 can be parsed.
-    assertEquals(decoded, Json.parseFull("""{"foo1":"bar1\,bar2", "foo2":"\bar"}"""))
   }
 
   @Test
@@ -140,15 +136,12 @@ class JsonTest {
 
     val result = Json.parseStringAs[TestObject](s"""{"foo": "$foo", "bar": $bar}""")
 
-    assertTrue(result.isRight)
-    assertEquals(TestObject(foo, bar), result.right.get)
+    assertEquals(Right(TestObject(foo, bar)), result)
   }
 
   @Test
   def testParseToWithInvalidJson() = {
     val result = Json.parseStringAs[TestObject]("{invalid json}")
-
-    assertTrue(result.isLeft)
-    assertEquals(classOf[JsonParseException], result.left.get.getClass)
+    assertEquals(Left(classOf[JsonParseException]), result.left.map(_.getClass))
   }
 }

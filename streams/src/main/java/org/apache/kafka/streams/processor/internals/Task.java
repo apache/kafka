@@ -16,60 +16,208 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public interface Task {
-    /**
-     * Initialize the task and return {@code true} if the task is ready to run, i.e, it has not state stores
-     * @return true if this task has no state stores that may need restoring.
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
+
+    // this must be negative to distinguish a running active task from other kinds of tasks
+    // which may be caught up to the same offsets
+    long LATEST_OFFSET = -2L;
+
+    /*
+     *
+     * <pre>
+     *                 +-------------+
+     *          +<---- | Created (0) | <----------------------+
+     *          |      +-----+-------+                        |
+     *          |            |                                |
+     *          |            v                                |
+     *          |      +-----+-------+                        |
+     *          +<---- | Restoring(1)|<---------------+       |
+     *          |      +-----+-------+                |       |
+     *          |            |                        |       |
+     *          |            +--------------------+   |       |
+     *          |            |                    |   |       |
+     *          |            v                    v   |       |
+     *          |      +-----+-------+       +----+---+----+  |
+     *          |      | Running (2) | ----> | Suspended(3)|  |    //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |      +-----+-------+       +------+------+  |
+     *          |            |                      |         |
+     *          |            |                      |         |
+     *          |            v                      |         |
+     *          |      +-----+-------+              |         |
+     *          +----> | Closing (4) | <------------+         |
+     *                 +-----+-------+                        |
+     *                       |                                |
+     *                       v                                |
+     *                 +-----+-------+                        |
+     *                 | Closed (5)  | -----------------------+
+     *                 +-------------+
+     * </pre>
      */
-    boolean initializeStateStores();
+    enum State {
+        CREATED(1, 4),         // 0
+        RESTORING(2, 3, 4),    // 1
+        RUNNING(3, 4),         // 2
+        SUSPENDED(1, 4),       // 3
+        CLOSED(0);             // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
-    boolean commitNeeded();
+        private final Set<Integer> validTransitions = new HashSet<>();
 
-    void initializeTopology();
+        State(final Integer... validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
 
-    void commit();
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
+        }
+    }
 
-    void suspend();
+    enum TaskType {
+        ACTIVE("ACTIVE"),
 
-    void resume();
+        STANDBY("STANDBY"),
 
-    void closeSuspended(final boolean clean,
-                        final boolean isZombie,
-                        final RuntimeException e);
+        GLOBAL("GLOBAL");
 
-    void close(final boolean clean,
-               final boolean isZombie);
+        public final String name;
 
-    StateStore getStore(final String name);
-
-    String applicationId();
-
-    ProcessorTopology topology();
-
-    ProcessorContext context();
+        TaskType(final String name) {
+            this.name = name;
+        }
+    }
 
     TaskId id();
 
-    Set<TopicPartition> partitions();
+    State state();
+
+    boolean isActive();
+
+    boolean isClosed();
+
+    /**
+     * @throws LockException could happen when multi-threads within the single instance, could retry
+     * @throws StreamsException fatal error, should close the thread
+     */
+    void initializeIfNeeded();
+
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
+    void completeRestoration();
+
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
+
+    boolean commitNeeded();
+
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
+    void prepareCommit();
+
+    void postCommit();
+
+    /**
+     * @throws TaskMigratedException all the task has been migrated
+     * @throws StreamsException fatal error, should close the thread
+     */
+    void prepareSuspend();
+
+    void suspend();
+    /**
+     *
+     * @throws StreamsException fatal error, should close the thread
+     */
+    void resume();
+
+    /**
+     * Prepare to close a task that we still own and prepare it for committing
+     * Throws an exception if this couldn't be done.
+     * Must be idempotent.
+     *
+     * @throws StreamsException fatal error, should close the thread
+     */
+    Map<TopicPartition, Long> prepareCloseClean();
+
+    /**
+     * Must be idempotent.
+     */
+    void closeClean(final Map<TopicPartition, Long> checkpoint);
+
+    /**
+     * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.
+     * Never throws an exception, but just makes all attempts to release resources while closing.
+     * Must be idempotent.
+     */
+    void prepareCloseDirty();
+
+    /**
+     * Must be idempotent.
+     */
+    void closeDirty();
+
+    /**
+     * Revive a closed task to a created one; should never throw an exception
+     */
+    void revive();
+
+    StateStore getStore(final String name);
+
+    Set<TopicPartition> inputPartitions();
 
     /**
      * @return any changelog partitions associated with this task
      */
     Collection<TopicPartition> changelogPartitions();
 
-    boolean hasStateStores();
+    /**
+     * @return the offsets of all the changelog partitions associated with this task,
+     *         indicating the current positions of the logged state stores of the task.
+     */
+    Map<TopicPartition, Long> changelogOffsets();
 
-    String toString(final String indent);
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
+
+    default Map<TopicPartition, Long> purgeableOffsets() {
+        return Collections.emptyMap();
+    }
+
+    default Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+        return Collections.emptyMap();
+    }
+
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
+
+    default boolean process(final long wallClockTime) {
+        return false;
+    }
+
+    default boolean commitRequested() {
+        return false;
+    }
+
+    default boolean maybePunctuateStreamTime() {
+        return false;
+    }
+
+    default boolean maybePunctuateSystemTime() {
+        return false;
+    }
 
 }

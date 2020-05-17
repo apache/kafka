@@ -40,7 +40,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
     }
 
     @Override
-    public Set<StoreBuilder> stores() {
+    public Set<StoreBuilder<?>> stores() {
         return valueTransformerSupplier.stores();
     }
 

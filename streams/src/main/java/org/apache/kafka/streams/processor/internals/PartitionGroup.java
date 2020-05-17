@@ -59,14 +59,14 @@ public class PartitionGroup {
     private boolean allBuffered;
 
 
-    public static class RecordInfo {
+    static class RecordInfo {
         RecordQueue queue;
 
-        public ProcessorNode node() {
+        ProcessorNode<?, ?> node() {
             return queue.source();
         }
 
-        public TopicPartition partition() {
+        TopicPartition partition() {
             return queue.partition();
         }
 
@@ -84,12 +84,32 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
+    // visible for testing
+    long partitionTimestamp(final TopicPartition partition) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+        return queue.partitionTime();
+    }
+
+    void setPartitionTime(final TopicPartition partition, final long partitionTime) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+        if (streamTime < partitionTime) {
+            streamTime = partitionTime;
+        }
+        queue.setPartitionTime(partitionTime);
+    }
+
     /**
      * Get the next record and queue
      *
      * @return StampedRecord
      */
-    StampedRecord nextRecord(final RecordInfo info) {
+    StampedRecord nextRecord(final RecordInfo info, final long wallClockTime) {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
@@ -112,9 +132,9 @@ public class PartitionGroup {
                 // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
                     streamTime = record.timestamp;
-                    recordLatenessSensor.record(0);
+                    recordLatenessSensor.record(0, wallClockTime);
                 } else {
-                    recordLatenessSensor.record(streamTime - record.timestamp);
+                    recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }
             }
         }
@@ -131,6 +151,10 @@ public class PartitionGroup {
      */
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
 
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
@@ -152,15 +176,25 @@ public class PartitionGroup {
         return newSize;
     }
 
-    public Set<TopicPartition> partitions() {
+    Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
     /**
      * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
      */
-    public long streamTime() {
+    long streamTime() {
         return streamTime;
+    }
+
+    Long headRecordOffset(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordOffset();
     }
 
     /**
@@ -170,7 +204,7 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null) {
-            throw new IllegalStateException(String.format("Record's partition %s does not belong to this partition-group.", partition));
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
 
         return recordQueue.size();
@@ -184,16 +218,16 @@ public class PartitionGroup {
         return allBuffered;
     }
 
-    public void close() {
+    void close() {
         clear();
-        partitionQueues.clear();
     }
 
-    public void clear() {
-        nonEmptyQueuesByTime.clear();
-        streamTime = RecordQueue.UNKNOWN;
+    void clear() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
+        nonEmptyQueuesByTime.clear();
+        totalBuffered = 0;
+        streamTime = RecordQueue.UNKNOWN;
     }
 }

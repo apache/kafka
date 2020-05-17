@@ -304,6 +304,27 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Poll for network IO in best-effort only trying to transmit the ready-to-send request
+     * Do not check any pending requests or metadata errors so that no exception should ever
+     * be thrown, also no wakeups be triggered and no interrupted exception either.
+     */
+    public void transmitSends() {
+        Timer timer = time.timer(0);
+
+        // do not try to handle any disconnects, prev request failures, metadata exception etc;
+        // just try once and return immediately
+        lock.lock();
+        try {
+            // send all the requests we can send now
+            trySend(timer.currentTimeMs());
+
+            client.poll(0, timer.currentTimeMs());
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
      * @param timer Timer bounding how long this method can block

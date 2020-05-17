@@ -40,7 +40,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
     }
 
     @Override
-    public Set<StoreBuilder> stores() {
+    public Set<StoreBuilder<?>> stores() {
         return valueTransformerSupplier.stores();
     }
 

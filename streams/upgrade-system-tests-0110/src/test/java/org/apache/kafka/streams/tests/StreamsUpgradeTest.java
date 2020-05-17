@@ -32,17 +32,14 @@ public class StreamsUpgradeTest {
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("StreamsUpgradeTest requires two argument (kafka-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] : ""));
+        if (args.length < 1) {
+            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but provided none");
         }
-        final String kafka = args[0];
-        final String propFileName = args.length > 1 ? args[1] : null;
+        final String propFileName = args[0];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started (StreamsUpgradeTest v0.11.0)");
-        System.out.println("kafka=" + kafka);
         System.out.println("props=" + streamsProperties);
 
         final KStreamBuilder builder = new KStreamBuilder();
@@ -52,7 +49,6 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
 

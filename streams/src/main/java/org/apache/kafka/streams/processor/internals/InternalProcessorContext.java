@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -30,6 +32,16 @@ public interface InternalProcessorContext extends ProcessorContext {
 
     @Override
     StreamsMetricsImpl metrics();
+
+    /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
+
+    /**
+     * @retun the current wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
 
     /**
      * Returns the current {@link RecordContext}
@@ -45,12 +57,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode currentNode);
+    void setCurrentNode(ProcessorNode<?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode currentNode();
+    ProcessorNode<?, ?> currentNode();
 
     /**
      * Get the thread-global cache
@@ -66,4 +78,12 @@ public interface InternalProcessorContext extends ProcessorContext {
      * Mark this context as being uninitialized
      */
     void uninitialize();
+
+    /**
+     * Get a correctly typed state store, given a handle on the original builder.
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return (T) getStateStore(builder.name());
+    }
 }

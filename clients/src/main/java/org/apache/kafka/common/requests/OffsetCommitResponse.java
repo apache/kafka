@@ -94,14 +94,9 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<TopicPartition, Errors> errorMap = new HashMap<>();
-        for (OffsetCommitResponseTopic topic : data.topics()) {
-            for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                        Errors.forCode(partition.errorCode()));
-            }
-        }
-        return errorCounts(errorMap);
+        return errorCounts(data.topics().stream().flatMap(topicResult ->
+                topicResult.partitions().stream().map(partitionResult ->
+                        Errors.forCode(partitionResult.errorCode()))));
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {

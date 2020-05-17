@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -947,6 +948,33 @@ public class ConfigDef {
         }
     }
 
+    public static class CaseInsensitiveValidString implements Validator {
+
+        final Set<String> validStrings;
+
+        private CaseInsensitiveValidString(List<String> validStrings) {
+            this.validStrings = validStrings.stream()
+                .map(s -> s.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        }
+
+        public static CaseInsensitiveValidString in(String... validStrings) {
+            return new CaseInsensitiveValidString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+            }
+        }
+
+        public String toString() {
+            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
     public static class NonNullValidator implements Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -1407,6 +1435,60 @@ public class ConfigDef {
                 return base.visible(unprefixed(name), unprefixed(parsedConfig));
             }
         };
+    }
+
+    public String toHtml() {
+        return toHtml(Collections.<String, String>emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     */
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
+        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        b.append("<ul class=\"config-list\">\n");
+        for (ConfigKey key : configs) {
+            if (key.internalConfig) {
+                continue;
+            }
+            b.append("<li>\n");
+            b.append(String.format("<h4>" +
+                    "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
+                    "</h4>%n", key.name));
+            b.append("<p>");
+            b.append(key.documentation.replaceAll("\n", "<br>"));
+            b.append("</p>\n");
+
+            b.append("<table>" +
+                    "<tbody>\n");
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                addConfigDetail(b, detail, getConfigValue(key, detail));
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addConfigDetail(b, "Update Mode", updateMode);
+            }
+            b.append("</tbody></table>\n");
+            b.append("</li>\n");
+        }
+        b.append("</ul>\n");
+        return b.toString();
+    }
+
+    private static void addConfigDetail(StringBuilder builder, String name, String value) {
+        builder.append("<tr>" +
+                "<th>" + name + ":</th>" +
+                "<td>" + value + "</td>" +
+                "</tr>\n");
     }
 
 }

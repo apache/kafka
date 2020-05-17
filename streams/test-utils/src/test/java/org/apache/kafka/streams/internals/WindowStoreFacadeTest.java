@@ -60,6 +60,7 @@ public class WindowStoreFacadeTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPutWithUnknownTimestamp() {
         mockedWindowTimestampStore.put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP));
         expectLastCall();

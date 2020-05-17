@@ -75,6 +75,15 @@ public class WorkerHandle {
         return worker.restUrl();
     }
 
+    /**
+     * Get the workers's url that accepts requests to its Admin REST endpoint.
+     *
+     * @return the worker's admin url
+     */
+    public URI adminUrl() {
+        return worker.adminUrl();
+    }
+
     @Override
     public String toString() {
         return "WorkerHandle{" +

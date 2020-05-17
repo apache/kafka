@@ -90,7 +90,7 @@ public class ConsumerProtocol {
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final short CONSUMER_PROTOCOL_V1 = 1;
 
-    public static final short CONSUMER_PROTOCL_LATEST_VERSION = CONSUMER_PROTOCOL_V1;
+    public static final short CONSUMER_PROTOCOL_LATEST_VERSION = CONSUMER_PROTOCOL_V1;
 
     public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY_NAME, Type.INT16));
@@ -119,6 +119,11 @@ public class ConsumerProtocol {
     public static final Schema ASSIGNMENT_V1 = new Schema(
         new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
+
+    public static Short deserializeVersion(ByteBuffer buffer) {
+        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        return header.getShort(VERSION_KEY_NAME);
+    }
 
     public static ByteBuffer serializeSubscriptionV0(Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V0);
@@ -154,7 +159,7 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeSubscription(Subscription subscription) {
-        return serializeSubscription(subscription, CONSUMER_PROTOCL_LATEST_VERSION);
+        return serializeSubscription(subscription, CONSUMER_PROTOCOL_LATEST_VERSION);
     }
 
     public static ByteBuffer serializeSubscription(Subscription subscription, short version) {
@@ -201,8 +206,7 @@ public class ConsumerProtocol {
     }
 
     public static Subscription deserializeSubscription(ByteBuffer buffer) {
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        Short version = header.getShort(VERSION_KEY_NAME);
+        Short version = deserializeVersion(buffer);
 
         if (version < CONSUMER_PROTOCOL_V0)
             throw new SchemaException("Unsupported subscription version: " + version);
@@ -261,7 +265,7 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeAssignment(Assignment assignment) {
-        return serializeAssignment(assignment, CONSUMER_PROTOCL_LATEST_VERSION);
+        return serializeAssignment(assignment, CONSUMER_PROTOCOL_LATEST_VERSION);
     }
 
     public static ByteBuffer serializeAssignment(Assignment assignment, short version) {
@@ -297,8 +301,7 @@ public class ConsumerProtocol {
     }
 
     public static Assignment deserializeAssignment(ByteBuffer buffer) {
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        Short version = header.getShort(VERSION_KEY_NAME);
+        Short version = deserializeVersion(buffer);
 
         if (version < CONSUMER_PROTOCOL_V0)
             throw new SchemaException("Unsupported assignment version: " + version);

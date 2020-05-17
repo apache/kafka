@@ -32,6 +32,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class DefaultPartitionGrouperTest {
 
     private final List<PartitionInfo> infos = Arrays.asList(

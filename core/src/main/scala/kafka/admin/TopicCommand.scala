@@ -28,19 +28,20 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.io.StdIn
 
 object TopicCommand extends Logging {
@@ -112,21 +113,22 @@ object TopicCommand extends Logging {
   case class PartitionDescription(topic: String,
                                   info: TopicPartitionInfo,
                                   config: Option[JConfig],
-                                  markedForDeletion: Boolean) {
+                                  markedForDeletion: Boolean,
+                                  reassignment: Option[PartitionReassignment]) {
 
     private def minIsrCount: Option[Int] = {
       config.map(_.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value.toInt)
     }
 
-    def hasUnderReplicatedPartitions: Boolean = {
-      info.isr.size < info.replicas.size
+    def isUnderReplicated: Boolean = {
+      getReplicationFactor(info, reassignment) - info.isr.size > 0
     }
 
     private def hasLeader: Boolean = {
       info.leader != null
     }
 
-    def hasUnderMinIsrPartitions: Boolean = {
+    def isUnderMinIsr: Boolean = {
       !hasLeader || minIsrCount.exists(info.isr.size < _)
     }
 
@@ -144,6 +146,10 @@ object TopicCommand extends Logging {
       print("\tLeader: " + (if (hasLeader) info.leader.id else "none"))
       print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
       print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
+      if (reassignment.nonEmpty) {
+        print("\tAdding Replicas: " + reassignment.get.addingReplicas().asScala.mkString(","))
+        print("\tRemoving Replicas: " + reassignment.get.removingReplicas().asScala.mkString(","))
+      }
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
     }
@@ -159,13 +165,13 @@ object TopicCommand extends Logging {
     val describePartitions: Boolean = !opts.reportOverriddenConfigs
 
     private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription): Boolean = {
-      opts.reportUnderReplicatedPartitions && partitionDescription.hasUnderReplicatedPartitions
+      opts.reportUnderReplicatedPartitions && partitionDescription.isUnderReplicated
     }
     private def shouldPrintUnavailablePartitions(partitionDescription: PartitionDescription): Boolean = {
       opts.reportUnavailablePartitions && partitionDescription.hasUnavailablePartitions(liveBrokers)
     }
     private def shouldPrintUnderMinIsrPartitions(partitionDescription: PartitionDescription): Boolean = {
-      opts.reportUnderMinIsrPartitions && partitionDescription.hasUnderMinIsrPartitions
+      opts.reportUnderMinIsrPartitions && partitionDescription.isUnderMinIsr
     }
     private def shouldPrintAtMinIsrPartitions(partitionDescription: PartitionDescription): Boolean = {
       opts.reportAtMinIsrPartitions && partitionDescription.isAtMinIsrPartitions
@@ -207,7 +213,7 @@ object TopicCommand extends Logging {
         case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
         case None =>
       }
-      JAdminClient.create(commandConfig)
+      Admin.create(commandConfig)
     }
 
     def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =
@@ -240,6 +246,7 @@ object TopicCommand extends Logging {
         newTopic.configs(configsMap)
         val createResult = adminClient.createTopics(Collections.singleton(newTopic))
         createResult.all().get()
+        println(s"Created topic ${topic.name}.")
       } else {
         throw new IllegalArgumentException(s"Topic ${topic.name} already exists")
       }
@@ -267,10 +274,25 @@ object TopicCommand extends Logging {
         }}.toMap.asJava).all().get()
     }
 
+    private def listAllReassignments(): Map[TopicPartition, PartitionReassignment] = {
+      try {
+        adminClient.listPartitionReassignments(new ListPartitionReassignmentsOptions).reassignments().get().asScala
+      } catch {
+        case e: ExecutionException =>
+          e.getCause match {
+            case ex: UnsupportedVersionException =>
+              logger.debug("Couldn't query reassignments through the AdminClient API", ex)
+              Map()
+            case t => throw t
+          }
+      }
+    }
+
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
       val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
+      val reassignments = listAllReassignments()
       val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
@@ -283,15 +305,17 @@ object TopicCommand extends Logging {
           val hasNonDefault = config.entries().asScala.exists(!_.isDefault)
           if (!opts.reportOverriddenConfigs || hasNonDefault) {
             val numPartitions = td.partitions().size
-            val replicationFactor = td.partitions.iterator.next().replicas.size
-            val topicDesc = TopicDescription(topicName, numPartitions, replicationFactor, config, markedForDeletion = false)
+            val firstPartition = td.partitions.iterator.next()
+            val reassignment = reassignments.get(new TopicPartition(td.name, firstPartition.partition))
+            val topicDesc = TopicDescription(topicName, numPartitions, getReplicationFactor(firstPartition, reassignment), config, markedForDeletion = false)
             topicDesc.printDescription()
           }
         }
 
         if (describeOptions.describePartitions) {
           for (partition <- sortedPartitions) {
-            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false)
+            val reassignment = reassignments.get(new TopicPartition(td.name, partition.partition))
+            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false, reassignment)
             describeOptions.maybePrintPartitionDescription(partitionDesc)
           }
         }
@@ -318,7 +342,7 @@ object TopicCommand extends Logging {
 
   object ZookeeperTopicService {
     def apply(zkConnect: Option[String]): ZookeeperTopicService =
-      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSaslEnabled, 30000, 30000,
         Int.MaxValue, Time.SYSTEM))
   }
 
@@ -371,8 +395,8 @@ object TopicCommand extends Logging {
           }
           println("WARNING: If partitions are increased for a topic that has a key, the partition " +
             "logic or ordering of the messages will be affected")
-          val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
-            case (topicPartition, replicas) => topicPartition.partition -> replicas
+          val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
+            case (topicPartition, assignment) => topicPartition.partition -> assignment
           }
           if (existingAssignment.isEmpty)
             throw new InvalidTopicException(s"The topic $topic does not exist")
@@ -401,14 +425,15 @@ object TopicCommand extends Logging {
               val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
               if (!opts.reportOverriddenConfigs || configs.nonEmpty) {
                 val numPartitions = topicPartitionAssignment.size
-                val replicationFactor = topicPartitionAssignment.head._2.size
+                val replicationFactor = topicPartitionAssignment.head._2.replicas.size
                 val config = new JConfig(configs.map{ case (k, v) => new ConfigEntry(k, v) }.asJavaCollection)
                 val topicDesc = TopicDescription(topic, numPartitions, replicationFactor, config, markedForDeletion)
                 topicDesc.printDescription()
               }
             }
             if (describeOptions.describePartitions) {
-              for ((partitionId, assignedReplicas) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
+              for ((partitionId, replicaAssignment) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
+                val assignedReplicas = replicaAssignment.replicas
                 val tp = new TopicPartition(topic, partitionId)
                 val (leaderOpt, isr) =  zkClient.getTopicPartitionState(tp).map(_.leaderAndIsr) match {
                   case Some(leaderAndIsr) => (leaderAndIsr.leaderOpt, leaderAndIsr.isr)
@@ -426,7 +451,7 @@ object TopicCommand extends Logging {
                   assignedReplicas.map(asNode).toList.asJava,
                   isr.map(asNode).toList.asJava)
 
-                val partitionDesc = PartitionDescription(topic, info, config = None, markedForDeletion)
+                val partitionDesc = PartitionDescription(topic, info, config = None, markedForDeletion, reassignment = None)
                 describeOptions.maybePrintPartitionDescription(partitionDesc)
               }
             }
@@ -460,7 +485,7 @@ object TopicCommand extends Logging {
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
-      val allTopics = zkClient.getAllTopicsInCluster.toSeq.sorted
+      val allTopics = zkClient.getAllTopicsInCluster().toSeq.sorted
       doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
     }
 
@@ -476,7 +501,7 @@ object TopicCommand extends Logging {
     *                           If set to true, the command will throw an exception if the topic with the
     *                           requested name does not exist.
     */
-  private def ensureTopicExists(foundTopics: Seq[String], requestedTopic: Option[String], requireTopicExists: Boolean = true) = {
+  private def ensureTopicExists(foundTopics: Seq[String], requestedTopic: Option[String], requireTopicExists: Boolean = true): Unit = {
     // If no topic name was mentioned, do not need to throw exception.
     if (requestedTopic.isDefined && requireTopicExists && foundTopics.isEmpty) {
       // If given topic doesn't exist then throw exception
@@ -532,6 +557,22 @@ object TopicCommand extends Logging {
 
   def asJavaReplicaReassignment(original: Map[Int, List[Int]]): util.Map[Integer, util.List[Integer]] = {
     original.map(f => Integer.valueOf(f._1) -> f._2.map(e => Integer.valueOf(e)).asJava).asJava
+  }
+
+  private def getReplicationFactor(tpi: TopicPartitionInfo, reassignment: Option[PartitionReassignment]): Int = {
+    // It is possible for a reassignment to complete between the time we have fetched its state and the time
+    // we fetch partition metadata. In ths case, we ignore the reassignment when determining replication factor.
+    def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
+      // Reassignment is still in progress as long as the removing and adding replicas are still present
+      val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet
+      val changingReplicaIds = ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
+      allReplicaIds.exists(changingReplicaIds.contains)
+    }
+
+    reassignment match {
+      case Some(ra) if isReassignmentInProgress(ra) => ra.replicas.asScala.diff(ra.addingReplicas.asScala).size
+      case _=> tpi.replicas.size
+    }
   }
 
   class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
@@ -612,7 +653,7 @@ object TopicCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    private val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
+    private val allTopicLevelOpts = immutable.Set[OptionSpec[_]](alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
     private val allReplicationReportOpts: Set[OptionSpec[_]] = Set(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt)
 

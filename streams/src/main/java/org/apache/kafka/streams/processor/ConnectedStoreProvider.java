@@ -58,7 +58,7 @@ import java.util.Set;
  *             }
  *         }
  *
- *         Set<StoreBuilder> stores() {
+ *         Set<StoreBuilder<?>> stores() {
  *             return Collections.singleton(storeBuilder);
  *         }
  *     }
@@ -82,7 +82,7 @@ import java.util.Set;
  *             }
  *         }
  *
- *         Set<StoreBuilder> stores() {
+ *         Set<StoreBuilder<?>> stores() {
  *             return Collections.singleton(storeBuilder);
  *         }
  *     }
@@ -103,7 +103,7 @@ public interface ConnectedStoreProvider {
     /**
      * @return the state stores to be connected and added, or null if no stores should be automatically connected and added.
      */
-    default Set<StoreBuilder> stores() {
+    default Set<StoreBuilder<?>> stores() {
         return null;
     }
 }
