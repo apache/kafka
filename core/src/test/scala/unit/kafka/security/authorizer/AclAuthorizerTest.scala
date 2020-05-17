@@ -956,8 +956,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     for (i <- 1 to count) {
       authorize(aclAuthorizer, requestContext, READ, resource1)
     }
-    TimeUnit.SECONDS.sleep(30)
-    assertTrue(getAclAuthorizerMetric("authorization-denied-rate-per-minute") > 5)
+    TimeUnit.SECONDS.sleep(10)
+    assertTrue(getAclAuthorizerMetric("authorization-denied-rate-per-minute") >= 10)
 
     addAcls(aclAuthorizer, Set(allowReadAcl), resource)
     for (i <- 1 to count) {
@@ -967,8 +967,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       authorize(aclAuthorizer, requestContext, READ, resource1)
     }
     TimeUnit.SECONDS.sleep(30)
-    assertTrue(getAclAuthorizerMetric("authorization-allowed-rate-per-minute") > 5)
-    assertTrue(getAclAuthorizerMetric("authorization-request-rate-per-minute") > 10)
+    assertTrue(getAclAuthorizerMetric("authorization-allowed-rate-per-minute") >= 10)
+    assertTrue(getAclAuthorizerMetric("authorization-request-rate-per-minute") >= 20)
   }
 
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
