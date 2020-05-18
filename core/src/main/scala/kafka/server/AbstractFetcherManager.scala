@@ -67,6 +67,23 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   Map("clientId" -> clientId)
   )
 
+  newGauge(
+    "FetchFailureRate", {
+      new Gauge[Double] {
+        // fetch failure rate sum across all fetchers/topics/partitions
+        def value: Double = {
+          val headRate: Double =
+            fetcherThreadMap.headOption.map(_._2.fetcherStats.requestFailureRate.oneMinuteRate).getOrElse(0)
+
+          fetcherThreadMap.foldLeft(headRate)((curSum, fetcherThreadMapEntry) => {
+            fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate + curSum
+          })
+        }
+      }
+    },
+    Map("clientId" -> clientId)
+  )
+
   val failedPartitionsCount = newGauge(
     "FailedPartitionsCount", {
       new Gauge[Int] {

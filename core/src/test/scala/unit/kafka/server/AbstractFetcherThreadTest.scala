@@ -80,7 +80,8 @@ class AbstractFetcherThreadTest {
 
     // wait until all fetcher metrics are present
     TestUtils.waitUntilTrue(() =>
-      allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
+      allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestFailuresPerSec, FetcherMetrics.RequestsPerSec,
+                             FetcherMetrics.ConsumerLag),
       "Failed waiting for all fetcher metrics to be registered")
 
     fetcher.shutdown()
