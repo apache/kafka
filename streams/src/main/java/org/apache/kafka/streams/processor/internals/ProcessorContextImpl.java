@@ -18,8 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,9 +42,6 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecor
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
-    public static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
-    public static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
-
     // The below are both null for standby tasks
     private final StreamTask streamTask;
     private final RecordCollector collector;
@@ -121,8 +116,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             null,
             taskId().partition,
             timestamp,
-            KEY_SERIALIZER,
-            VALUE_SERIALIZER);
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER);
     }
 
     /**
