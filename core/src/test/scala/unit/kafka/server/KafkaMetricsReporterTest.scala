@@ -46,7 +46,6 @@ object KafkaMetricsReporterTest {
       MockMetricsReporter.JMXPREFIX.set(metricsContext.metadata().get("_namespace").toString)
       MockMetricsReporter.CLUSTERID.set(metricsContext.metadata().get("kafka.cluster.id").toString)
       MockMetricsReporter.BROKERID.set(metricsContext.metadata().get("kafka.broker.id").toString)
-      MockMetricsReporter.testProp.set(metricsContext.metadata().get("foo.bar"))
     }
 
     override def configure(configs: util.Map[String, _]): Unit = {}
@@ -57,7 +56,6 @@ object KafkaMetricsReporterTest {
     val JMXPREFIX: AtomicReference[String] = new AtomicReference[String]
     val BROKERID : AtomicReference[String] = new AtomicReference[String]
     val CLUSTERID : AtomicReference[String] = new AtomicReference[String]
-    val testProp :  AtomicReference[String] = new AtomicReference[String]
   }
 }
 
@@ -70,7 +68,6 @@ class KafkaMetricsReporterTest extends ZooKeeperTestHarness {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
-    props.setProperty("metrics.context.foo.bar", "test")
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
@@ -84,7 +81,6 @@ class KafkaMetricsReporterTest extends ZooKeeperTestHarness {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID)
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX)
     assertEquals("kafka.server", KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())
-    assertEquals("test", KafkaMetricsReporterTest.MockMetricsReporter.testProp.get())
 
     server.shutdown()
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
