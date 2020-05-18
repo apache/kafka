@@ -325,6 +325,7 @@ abstract class AbstractFetcherThread(name: String,
       case t: Throwable =>
         if (isRunning) {
           warn(s"Error in response for fetch request $fetchRequest", t)
+          fetcherStats.requestFailureRate.mark()
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
             // there is an error occurred while fetching partitions, sleep a while
@@ -770,6 +771,7 @@ object AbstractFetcherThread {
 object FetcherMetrics {
   val ConsumerLag = "ConsumerLag"
   val RequestsPerSec = "RequestsPerSec"
+  val RequestFailuresPerSec = "RequestFailuresPerSec"
   val BytesPerSec = "BytesPerSec"
 }
 
@@ -821,10 +823,13 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 
   val requestRate = newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
 
+  val requestFailureRate = newMeter(FetcherMetrics.RequestFailuresPerSec, "requestFailures", TimeUnit.SECONDS, tags)
+
   val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
   def unregister(): Unit = {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)
+    removeMetric(FetcherMetrics.RequestFailuresPerSec, tags)
     removeMetric(FetcherMetrics.BytesPerSec, tags)
   }
 

@@ -47,6 +47,14 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }, tags)
 
+  newGauge("FetchFailureRate", () => {
+    // fetch failure rate sum across all fetchers/topics/partitions
+    val headRate = fetcherThreadMap.headOption.map(_._2.fetcherStats.requestFailureRate.oneMinuteRate).getOrElse(0.0)
+    fetcherThreadMap.foldLeft(headRate)((curSum, fetcherThreadMapEntry) => {
+      fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate + curSum
+    })
+  }, tags)
+
   newGauge("MinFetchRate", () => {
     // current min fetch rate across all fetchers/topics/partitions
     val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
