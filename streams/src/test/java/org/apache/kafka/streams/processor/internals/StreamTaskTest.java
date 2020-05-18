@@ -1171,7 +1171,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotReInitializeTopologyWhenResuming() throws IOException {
+    public void shouldReInitializeTopologyWhenResuming() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
         EasyMock.expect(recordCollector.offsets()).andThrow(new AssertionError("Should not try to read offsets")).anyTimes();

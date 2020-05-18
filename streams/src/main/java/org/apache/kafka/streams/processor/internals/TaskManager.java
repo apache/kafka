@@ -185,7 +185,10 @@ public class TaskManager {
 
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
-
+        builder.addSubscribedTopicsFromAssignment(
+                activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+                logPrefix
+        );
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
@@ -196,13 +199,13 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
                 if (task.commitNeeded()) {
                     additionalTasksForCommitting.add(task);
                 }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
             } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
                 try {
@@ -311,10 +314,6 @@ public class TaskManager {
             }
         }
 
-        builder.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
-            logPrefix
-        );
     }
 
     private void cleanUpTaskProducer(final Task task,
@@ -328,6 +327,21 @@ public class TaskManager {
                 taskCloseExceptions.putIfAbsent(task.id(), e);
             }
         }
+    }
+
+    private void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
+        final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
+        if (requiresUpdate) {
+            log.trace("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
+            for (final TopicPartition inputPartition : task.inputPartitions()) {
+                partitionToTask.remove(inputPartition);
+            }
+            for (final TopicPartition topicPartition : topicPartitions) {
+                partitionToTask.put(topicPartition, task);
+            }
+            task.update(topicPartitions, builder.buildSubtopology(task.id().topicGroupId));
+        }
+        task.resume();
     }
 
     private void addNewTask(final Task task) {
