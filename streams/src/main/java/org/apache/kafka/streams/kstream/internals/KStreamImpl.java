@@ -1435,8 +1435,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
      * 2) {@link StoreBuilder}s are provided by the Processor/TransformerSupplier itself, by returning a set from
      * {@link ConnectedStoreProvider#stores()}.  The {@link StoreBuilder}s will also be added to the topology.
      */
-    private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String[] varargsStoreNames) {
-        final List<String> allStoreNames = new ArrayList<>(Arrays.asList(varargsStoreNames == null ? new String[]{} : varargsStoreNames));
+    private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String... varargsStoreNames) {
+        final List<String> allStoreNames = new ArrayList<>(Arrays.asList(varargsStoreNames));
         final Set<StoreBuilder<?>> stores = storeProvider.stores();
         if (stores != null) {
             stores.forEach(builder::addStateStore);
