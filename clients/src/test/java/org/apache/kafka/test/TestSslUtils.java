@@ -367,6 +367,8 @@ public class TestSslUtils {
 
     public static final class TestSslEngineFactory implements SslEngineFactory {
 
+        public boolean closed = false;
+
         DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
 
         @Override
@@ -402,6 +404,7 @@ public class TestSslUtils {
         @Override
         public void close() throws IOException {
             defaultSslEngineFactory.close();
+            closed = true;
         }
 
         @Override

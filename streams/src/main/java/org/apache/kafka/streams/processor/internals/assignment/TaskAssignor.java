@@ -16,9 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
 public interface TaskAssignor {
     /**
-     * @return whether the generated assignment requires a followup rebalance to satisfy all conditions
+     * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
-    boolean assign();
+    boolean assign(Map<UUID, ClientState> clients,
+                   Set<TaskId> allTaskIds,
+                   Set<TaskId> statefulTaskIds,
+                   AssignorConfiguration.AssignmentConfigs configs);
 }

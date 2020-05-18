@@ -56,7 +56,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     }
 
     @Override
-    public void init(final ProcessorContext<Object, Object> context) {
+    public void init(final ProcessorContext context) {
         super.init(context);
         if (scheduleInterval > 0L) {
             scheduleCancellable = context.schedule(
@@ -93,7 +93,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         }
     }
 
-    public void checkAndClearProcessResult(final KeyValueTimestamp... expected) {
+    public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
         assertEquals("the number of outputs:" + processed, expected.length, processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals("output[" + i + "]:", expected[i], processed.get(i));

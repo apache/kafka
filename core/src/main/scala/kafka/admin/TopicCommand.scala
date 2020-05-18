@@ -563,10 +563,10 @@ object TopicCommand extends Logging {
     // It is possible for a reassignment to complete between the time we have fetched its state and the time
     // we fetch partition metadata. In ths case, we ignore the reassignment when determining replication factor.
     def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
-      // Reassignment is still in progress as long as the removing replicas are still present
+      // Reassignment is still in progress as long as the removing and adding replicas are still present
       val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet
-      val removingReplicaIds = ra.removingReplicas.asScala.map(Int.unbox).toSet
-      allReplicaIds.exists(removingReplicaIds.contains)
+      val changingReplicaIds = ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
+      allReplicaIds.exists(changingReplicaIds.contains)
     }
 
     reassignment match {

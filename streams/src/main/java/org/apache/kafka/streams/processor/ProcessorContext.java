@@ -27,35 +27,32 @@ import java.util.Map;
 
 /**
  * Processor context interface.
- *
- * @param <K> the type of input keys that can be forwarded
- * @param <V> the type of input values that can be forwarded
  */
-public interface ProcessorContext<K, V> {
+public interface ProcessorContext {
 
     /**
-     * Returns the application id
+     * Returns the application id.
      *
      * @return the application id
      */
     String applicationId();
 
     /**
-     * Returns the task id
+     * Returns the task id.
      *
      * @return the task id
      */
     TaskId taskId();
 
     /**
-     * Returns the default key serde
+     * Returns the default key serde.
      *
      * @return the key serializer
      */
     Serde<?> keySerde();
 
     /**
-     * Returns the default value serde
+     * Returns the default value serde.
      *
      * @return the value serializer
      */
@@ -69,7 +66,7 @@ public interface ProcessorContext<K, V> {
     File stateDir();
 
     /**
-     * Returns Metrics instance
+     * Returns Metrics instance.
      *
      * @return StreamsMetrics
      */
@@ -161,12 +158,11 @@ public interface ProcessorContext<K, V> {
      * @param interval the time interval between punctuations (supported minimum is 1 millisecond)
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
-     * @throws IllegalArgumentException if the interval is under 1 millisecond
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      */
     Cancellable schedule(final Duration interval,
                          final PunctuationType type,
-                         final Punctuator callback);
+                         final Punctuator callback) throws IllegalArgumentException;
 
     /**
      * Forwards a key/value pair to all downstream processors.
@@ -175,7 +171,7 @@ public interface ProcessorContext<K, V> {
      * @param key key
      * @param value value
      */
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value);
+    <K, V> void forward(final K key, final V value);
 
     /**
      * Forwards a key/value pair to the specified downstream processors.
@@ -185,10 +181,11 @@ public interface ProcessorContext<K, V> {
      * @param value value
      * @param to the options to use when forwarding
      */
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to);
+    <K, V> void forward(final K key, final V value, final To to);
 
     /**
-     * Forwards a key/value pair to one of the downstream processors designated by childIndex
+     * Forwards a key/value pair to one of the downstream processors designated by childIndex.
+     *
      * @param key key
      * @param value value
      * @param childIndex index in list of children of this node
@@ -196,26 +193,27 @@ public interface ProcessorContext<K, V> {
      */
     // TODO when we remove this method, we can also remove `ProcessorNode#children`
     @Deprecated
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex);
+    <K, V> void forward(final K key, final V value, final int childIndex);
 
     /**
-     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
+     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name.
+     *
      * @param key key
      * @param value value
      * @param childName name of downstream processor
      * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
     @Deprecated
-    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName);
+    <K, V> void forward(final K key, final V value, final String childName);
 
     /**
-     * Requests a commit
+     * Requests a commit.
      */
     void commit();
 
     /**
      * Returns the topic name of the current input record; could be null if it is not
-     * available (for example, if this method is invoked from the punctuate call)
+     * available (for example, if this method is invoked from the punctuate call).
      *
      * @return the topic name
      */
@@ -223,7 +221,7 @@ public interface ProcessorContext<K, V> {
 
     /**
      * Returns the partition id of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call)
+     * available (for example, if this method is invoked from the punctuate call).
      *
      * @return the partition id
      */
@@ -231,14 +229,16 @@ public interface ProcessorContext<K, V> {
 
     /**
      * Returns the offset of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call)
+     * available (for example, if this method is invoked from the punctuate call).
      *
      * @return the offset
      */
     long offset();
 
     /**
-     * Returns the headers of the current input record; could be null if it is not available
+     * Returns the headers of the current input record; could be null if it is not
+     * available (for example, if this method is invoked from the punctuate call).
+     *
      * @return the headers
      */
     Headers headers();
@@ -246,12 +246,13 @@ public interface ProcessorContext<K, V> {
     /**
      * Returns the current timestamp.
      *
-     * If it is triggered while processing a record streamed from the source processor, timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
+     * <p> If it is triggered while processing a record streamed from the source processor,
+     * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
      *
-     * If it is triggered while processing a record generated not from the source processor (for example,
+     * <p> If it is triggered while processing a record generated not from the source processor (for example,
      * if this method is invoked from the punctuate call), timestamp is defined as the current
-     * task's stream time, which is defined as the smallest among all its input stream partition timestamps.
+     * task's stream time, which is defined as the largest timestamp of any record processed by the task.
      *
      * @return the timestamp
      */
@@ -260,10 +261,10 @@ public interface ProcessorContext<K, V> {
     /**
      * Returns all the application config properties as key/value pairs.
      *
-     * The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
+     * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
      * object and associated to the ProcessorContext.
-     * <p>
-     * The type of the values is dependent on the {@link org.apache.kafka.common.config.ConfigDef.Type type} of the property
+     *
+     * <p> The type of the values is dependent on the {@link org.apache.kafka.common.config.ConfigDef.Type type} of the property
      * (e.g. the value of {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG DEFAULT_KEY_SERDE_CLASS_CONFIG}
      * will be of type {@link Class}, even if it was specified as a String to
      * {@link org.apache.kafka.streams.StreamsConfig#StreamsConfig(Map) StreamsConfig(Map)}).
@@ -276,12 +277,11 @@ public interface ProcessorContext<K, V> {
      * Returns all the application config properties with the given key prefix, as key/value pairs
      * stripping the prefix.
      *
-     * The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
+     * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
      * object and associated to the ProcessorContext.
      *
      * @param prefix the properties prefix
      * @return the key/values matching the given prefix from the StreamsConfig properties.
-     *
      */
     Map<String, Object> appConfigsWithPrefix(final String prefix);
 

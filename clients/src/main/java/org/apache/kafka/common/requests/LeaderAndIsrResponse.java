@@ -26,7 +26,6 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class LeaderAndIsrResponse extends AbstractResponse {
 
@@ -60,7 +59,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         if (error != Errors.NONE)
             // Minor optimization since the top-level error applies to all partitions
             return Collections.singletonMap(error, data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())).collect(Collectors.toList()));
+        return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {

@@ -33,6 +33,9 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
@@ -119,6 +122,8 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
@@ -268,13 +273,15 @@ public class RequestResponseTest {
         checkErrorResponse(createProduceRequest(3), new UnknownServerException(), true);
         checkResponse(createProduceResponse(), 2, true);
         checkResponse(createProduceResponseWithErrorMessage(), 8, true);
-        checkRequest(createStopReplicaRequest(0, true), true);
-        checkRequest(createStopReplicaRequest(0, false), true);
-        checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException(), true);
-        checkRequest(createStopReplicaRequest(1, true), true);
-        checkRequest(createStopReplicaRequest(1, false), true);
-        checkErrorResponse(createStopReplicaRequest(1, true), new UnknownServerException(), true);
-        checkResponse(createStopReplicaResponse(), 0, true);
+
+        for (int v = ApiKeys.STOP_REPLICA.oldestVersion(); v <= ApiKeys.STOP_REPLICA.latestVersion(); v++) {
+            checkRequest(createStopReplicaRequest(v, true), true);
+            checkRequest(createStopReplicaRequest(v, false), true);
+            checkErrorResponse(createStopReplicaRequest(v, true), new UnknownServerException(), true);
+            checkErrorResponse(createStopReplicaRequest(v, false), new UnknownServerException(), true);
+            checkResponse(createStopReplicaResponse(), v, true);
+        }
+
         checkRequest(createLeaderAndIsrRequest(0), true);
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
@@ -1283,8 +1290,24 @@ public class RequestResponseTest {
     }
 
     private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
-        Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
-        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
+        List<StopReplicaTopicState> topicStates = new ArrayList<>();
+        StopReplicaTopicState topic1 = new StopReplicaTopicState()
+            .setTopicName("topic1")
+            .setPartitionStates(Collections.singletonList(new StopReplicaPartitionState()
+                .setPartitionIndex(0)
+                .setLeaderEpoch(1)
+                .setDeletePartition(deletePartitions)));
+        topicStates.add(topic1);
+        StopReplicaTopicState topic2 = new StopReplicaTopicState()
+            .setTopicName("topic2")
+            .setPartitionStates(Collections.singletonList(new StopReplicaPartitionState()
+                .setPartitionIndex(1)
+                .setLeaderEpoch(2)
+                .setDeletePartition(deletePartitions)));
+        topicStates.add(topic2);
+
+        return new StopReplicaRequest.Builder((short) version, 0, 1, 0,
+            deletePartitions, topicStates).build((short) version);
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
@@ -1631,11 +1654,19 @@ public class RequestResponseTest {
     }
 
     private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
-        return new AddOffsetsToTxnRequest.Builder("tid", 21L, (short) 42, "gid").build();
+        return new AddOffsetsToTxnRequest.Builder(
+            new AddOffsetsToTxnRequestData()
+                .setTransactionalId("tid")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setGroupId("gid")
+        ).build();
     }
 
     private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
-        return new AddOffsetsToTxnResponse(0, Errors.NONE);
+        return new AddOffsetsToTxnResponse(new AddOffsetsToTxnResponseData()
+                                               .setErrorCode(Errors.NONE.code())
+                                               .setThrottleTimeMs(0));
     }
 
     private EndTxnRequest createEndTxnRequest() {
@@ -1853,14 +1884,23 @@ public class RequestResponseTest {
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
                 new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
-        return new AlterConfigsRequest((short) 0, configs, false);
+        return new AlterConfigsRequest.Builder(configs, false).build((short) 0);
     }
 
     private AlterConfigsResponse createAlterConfigsResponse() {
-        Map<ConfigResource, ApiError> errors = new HashMap<>();
-        errors.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), ApiError.NONE);
-        errors.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
-        return new AlterConfigsResponse(20, errors);
+        AlterConfigsResponseData data = new AlterConfigsResponseData()
+                .setThrottleTimeMs(20);
+        data.responses().add(new AlterConfigsResponseData.AlterConfigsResourceResponse()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+                .setResourceName("0")
+                .setResourceType(ConfigResource.Type.BROKER.id()));
+        data.responses().add(new AlterConfigsResponseData.AlterConfigsResourceResponse()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("This request is invalid")
+                .setResourceName("topic")
+                .setResourceType(ConfigResource.Type.TOPIC.id()));
+        return new AlterConfigsResponse(data);
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest() {

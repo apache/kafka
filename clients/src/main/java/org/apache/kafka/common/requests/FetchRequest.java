@@ -266,10 +266,10 @@ public class FetchRequest extends AbstractRequest {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             PartitionData that = (PartitionData) o;
-            return Objects.equals(fetchOffset, that.fetchOffset) &&
-                Objects.equals(logStartOffset, that.logStartOffset) &&
-                Objects.equals(maxBytes, that.maxBytes) &&
-                Objects.equals(currentLeaderEpoch, that.currentLeaderEpoch);
+            return fetchOffset == that.fetchOffset &&
+                    logStartOffset == that.logStartOffset &&
+                    maxBytes == that.maxBytes &&
+                    currentLeaderEpoch.equals(that.currentLeaderEpoch);
         }
     }
 

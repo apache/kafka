@@ -21,7 +21,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
@@ -50,11 +49,11 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     }
 
     @Override
-    public void init(final ProcessorContext<Object, Object> context) {
+    public void init(final ProcessorContext context) {
         super.init(context);
         metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
-        valueGetter.init(new ForwardingDisabledProcessorContext(context));
+        valueGetter.init(context);
     }
 
     @Override

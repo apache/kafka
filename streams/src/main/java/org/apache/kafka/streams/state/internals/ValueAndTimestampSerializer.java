@@ -34,6 +34,51 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
         timestampSerializer = new LongSerializer();
     }
 
+    private static boolean skipTimestampAndCompareValues(final byte[] left, final byte[] right) {
+        for (int i = Long.BYTES; i < left.length; i++) {
+            if (left[i] != right[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static long extractTimestamp(final byte[] bytes) {
+        final byte[] timestampBytes = new byte[Long.BYTES];
+        for (int i = 0; i < Long.BYTES; i++) {
+            timestampBytes[i] = bytes[i];
+        }
+        return ByteBuffer.wrap(timestampBytes).getLong();
+    }
+
+    /**
+     * @param left  the serialized byte array of the old record in state store
+     * @param right the serialized byte array of the new record being processed
+     * @return true if the two serialized values are the same (excluding timestamp) or 
+     *              if the timestamp of right is less than left (indicating out of order record)
+     *         false otherwise
+     */
+    public static boolean compareValuesAndCheckForIncreasingTimestamp(final byte[] left, final byte[] right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+
+        final int length = left.length;
+        if (right.length != length) {
+            return false;
+        }
+
+        final long leftTimestamp = extractTimestamp(left);
+        final long rightTimestamp = extractTimestamp(right);
+        if (rightTimestamp < leftTimestamp) {
+            return false;
+        }
+        return skipTimestampAndCompareValues(left, right);
+    }
+
     @Override
     public void configure(final Map<String, ?> configs,
                           final boolean isKey) {

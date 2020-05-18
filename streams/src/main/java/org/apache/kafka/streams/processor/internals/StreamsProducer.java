@@ -113,7 +113,9 @@ public class StreamsProducer {
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(
                     ProducerConfig.TRANSACTIONAL_ID_CONFIG,
-                    applicationId + "-" + Objects.requireNonNull(processId, "processId cannot be null for exactly-once beta"));
+                    applicationId + "-" +
+                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once beta") +
+                        "-" + threadId.split("-StreamThread-")[1]);
 
                 eosBetaProducerConfigs = producerConfigs;
 

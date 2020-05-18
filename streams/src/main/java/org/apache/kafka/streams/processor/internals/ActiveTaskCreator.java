@@ -62,7 +62,6 @@ class ActiveTaskCreator {
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
-    private final String transactionalId;
 
     ActiveTaskCreator(final InternalTopologyBuilder builder,
                       final StreamsConfig config,
@@ -87,8 +86,6 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        transactionalId = applicationId + "-" + processId + "-StreamThread-" + threadId.split("-StreamThread-")[1];
         processingMode = StreamThread.processingMode(config);
 
         if (processingMode == EXACTLY_ONCE_ALPHA) {

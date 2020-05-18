@@ -237,8 +237,9 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
 
-    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(2L, filthiestLog.firstDirtyOffset)
+    // The active segment is uncleanable and hence not filthy from the POV of the CleanerManager.
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals(None, filthiestLog)
   }
 
   @Test
@@ -262,8 +263,9 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 3L)
 
-    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(3L, filthiestLog.firstDirtyOffset)
+    // These segments are uncleanable and hence not filthy
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals(None, filthiestLog)
   }
 
   /**

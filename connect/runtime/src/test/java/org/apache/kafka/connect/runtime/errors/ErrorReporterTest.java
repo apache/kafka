@@ -147,6 +147,20 @@ public class ErrorReporterTest {
     }
 
     @Test
+    public void testCloseDLQ() {
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
+            producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+
+        producer.close();
+        EasyMock.expectLastCall();
+        replay(producer);
+
+        deadLetterQueueReporter.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testLogOnDisabledLogReporter() {
         LogReporter logReporter = new LogReporter(TASK_ID, config(emptyMap()), errorHandlingMetrics);
 

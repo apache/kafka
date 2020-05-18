@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -959,7 +960,9 @@ public class KafkaProducerTest {
     }
 
     private AddOffsetsToTxnResponse addOffsetsToTxnResponse(Errors error) {
-        return new AddOffsetsToTxnResponse(10, error);
+        return new AddOffsetsToTxnResponse(new AddOffsetsToTxnResponseData()
+                                               .setErrorCode(error.code())
+                                               .setThrottleTimeMs(10));
     }
 
     private TxnOffsetCommitResponse txnOffsetsCommitResponse(Map<TopicPartition, Errors> errorMap) {

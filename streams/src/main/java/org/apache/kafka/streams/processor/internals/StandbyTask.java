@@ -72,7 +72,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
-        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        eosEnabled = StreamThread.eosEnabled(config);
     }
 
     @Override
@@ -209,15 +209,12 @@ public class StandbyTask extends AbstractTask implements Task {
                 stateMgr.checkpoint(Collections.emptyMap());
                 offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
             }
-            final boolean wipeStateStore = !clean && eosEnabled;
-            log.info("standby task clean {}, eos enabled {}", clean, eosEnabled);
-
             executeAndMaybeSwallow(clean, () ->
                 StateManagerUtil.closeStateManager(
                     log,
                     logPrefix,
                     clean,
-                    wipeStateStore,
+                    eosEnabled,
                     stateMgr,
                     stateDirectory,
                     TaskType.STANDBY),

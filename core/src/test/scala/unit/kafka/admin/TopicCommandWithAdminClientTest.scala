@@ -294,13 +294,6 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateWithUnspecifiedReplicationFactorAndPartitionsWithZkClient(): Unit = {
-    assertExitCode(1, () =>
-      new TopicCommandOptions(Array("--create", "--zookeeper", "zk", "--topic", testTopicName)).checkArgs()
-    )
-  }
-
-  @Test
   def testInvalidTopicLevelConfig(): Unit = {
     val createOpts = new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
@@ -665,7 +658,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
 
     adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
-      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
+      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica))))).all().get()
 
     // let's wait until the LAIR is propagated
     TestUtils.waitUntilTrue(() => {
@@ -682,7 +675,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
-    assertEquals("--under-replicated-partitions shouldn't return anything", "", underReplicatedOutput)
+    assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
 
     TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp))
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
