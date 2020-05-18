@@ -308,6 +308,30 @@ public class TopologyTest {
     }
 
     @Test
+    public void shouldAllowToShareStoreUsingSameStoreBuilder() {
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
+
+        topology.addSource("source", "topic-1");
+
+        topology.addProcessor("processor-1", new MockProcessorSupplierProvidingStore<>(storeBuilder), "source");
+        topology.addProcessor("processor-2", new MockProcessorSupplierProvidingStore<>(storeBuilder), "source");
+    }
+
+    private static class MockProcessorSupplierProvidingStore<K, V> extends MockProcessorSupplier<K, V> {
+        private final StoreBuilder<MockKeyValueStore> storeBuilder;
+
+        public MockProcessorSupplierProvidingStore(final StoreBuilder<MockKeyValueStore> storeBuilder) {
+            this.storeBuilder = storeBuilder;
+        }
+
+        @Override
+        public Set<StoreBuilder<?>> stores() {
+            return Collections.singleton(storeBuilder);
+        }
+    }
+
+    @Test
     public void shouldThrowOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
