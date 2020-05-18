@@ -71,9 +71,9 @@ public class AdminClientConfig extends AbstractConfig {
                 "retry a failed request. This avoids repeatedly sending requests in a tight loop under " +
                 "some failure scenarios.";
 
-    /** <code>connections.setup.timeout.ms</code> */
-    public static final String CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG;
-    private static final String CONNECTIONS_SETUP_TIMEOUT_MS_DOC = CommonClientConfigs.CONNECTIONS_SETUP_TIMEOUT_MS_DOC;
+    /** <code>socket.connections.setup.timeout.ms</code> */
+    public static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG;
+    private static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC;
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -153,11 +153,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
-                                .define(CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
+                                .define(SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         10 * 1000,
                                         Importance.MEDIUM,
-                                        CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
+                                        SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,
                                         5 * 60 * 1000,

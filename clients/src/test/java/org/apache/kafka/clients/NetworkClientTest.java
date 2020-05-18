@@ -74,17 +74,17 @@ public class NetworkClientTest {
     protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
-
+    protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
-    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
-    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
+    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest, connectionSetupTimeoutMsTest);
+    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest, connectionSetupTimeoutMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
-    private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
+    private NetworkClient createNetworkClient(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest) {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, 10 * 1000, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
@@ -455,6 +455,25 @@ public class NetworkClientTest {
         ClientResponse clientResponse = responses.get(0);
         assertEquals(node.idString(), clientResponse.destination());
         assertTrue("Expected response to fail due to disconnection", clientResponse.wasDisconnected());
+    }
+
+    @Test
+    public void testConnectionTimeout() {
+        client.ready(node, time.milliseconds());
+        selector.serverConnectionBlocked(node.idString());
+
+        client.poll(0, time.milliseconds());
+        assertFalse(
+                "The connection should not fail before the socket connection setup timeout elapsed",
+                client.connectionFailed(node)
+        );
+
+        time.sleep(connectionSetupTimeoutMsTest + 1);
+        client.poll(0, time.milliseconds());
+        assertTrue(
+                "Expected the connection to fail due to the socket connection setup timeout",
+                client.connectionFailed(node)
+        );
     }
 
     @Test

@@ -218,8 +218,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
     public static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>org.apache.kafka.common.serialization.Serializer</code> interface.";
 
-    /** <code>connections.setup.timeout.ms</code> */
-    public static final String CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG;
+    /** <code>socket.connections.setup.timeout.ms</code> */
+    public static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG;
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -364,11 +364,11 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         VALUE_SERIALIZER_CLASS_DOC)
-                                .define(CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
+                                .define(SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         10 * 1000,
                                         Importance.MEDIUM,
-                                        CommonClientConfigs.CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG)
+                                        CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,

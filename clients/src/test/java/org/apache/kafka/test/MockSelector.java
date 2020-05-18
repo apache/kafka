@@ -79,6 +79,10 @@ public class MockSelector implements Selectable {
         }
     }
 
+    public void serverConnectionBlocked(String id) {
+        this.connected.remove(id);
+    }
+
     /**
      * Simulate a server disconnect. This id will be present in {@link #disconnected()} on
      * the next {@link #poll(long)}.
