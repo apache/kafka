@@ -65,10 +65,18 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> {
-            return new AtomicInteger(0);
-        });
+        AtomicInteger counter = topicCounterMap.
+            computeIfAbsent(topic, k -> new AtomicInteger(0));
         return counter.getAndIncrement();
+    }
+
+    @Override
+    public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
+        // After onNewBatch is called, we will call partition() again.
+        // So 'rewind' the counter for this topic.
+        AtomicInteger counter = topicCounterMap.
+            computeIfAbsent(topic, k -> new AtomicInteger(0));
+        counter.getAndDecrement();
     }
 
     public void close() {}
