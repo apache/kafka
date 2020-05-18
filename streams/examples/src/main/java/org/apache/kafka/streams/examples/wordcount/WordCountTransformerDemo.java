@@ -103,7 +103,6 @@ public final class WordCountTransformerDemo {
                         }
                     }
 
-                    context.commit();
                     return null;
                 }
 
