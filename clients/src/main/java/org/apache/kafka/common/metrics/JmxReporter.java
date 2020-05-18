@@ -72,6 +72,9 @@ public class JmxReporter implements MetricsReporter {
 
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
+     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
+     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
+     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
      */
     @Deprecated
     public JmxReporter(String prefix) {
@@ -326,10 +329,10 @@ public class JmxReporter implements MetricsReporter {
     public void contextChange(MetricsContext metricsContext) {
         Objects.requireNonNull(metricsContext.metadata().get(MetricsContext.NAMESPACE));
         synchronized (LOCK) {
-            if (!this.mbeans.isEmpty()) {
+            if (!mbeans.isEmpty()) {
                 throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
             }
-            this.prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+            prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
         }
     }
 }
