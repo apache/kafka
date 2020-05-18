@@ -344,8 +344,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public Set<String> getAllTopicsInCluster() {
-        scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
-        Set<String> topics = new HashSet<>();
+        final scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
+        final Set<String> topics = new HashSet<>();
         while (topicsIterator.hasNext()) {
             topics.add(topicsIterator.next());
         }
