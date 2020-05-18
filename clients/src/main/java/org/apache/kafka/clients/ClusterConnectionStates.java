@@ -165,6 +165,7 @@ final class ClusterConnectionStates {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
+        nodeState.failedAttempts++;
         updateReconnectBackoff(nodeState);
         connectingNodes.remove(id);
     }
@@ -243,6 +244,7 @@ final class ClusterConnectionStates {
         nodeState.authenticationException = exception;
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
         nodeState.lastConnectAttemptMs = now;
+        nodeState.failedAttempts++;
         updateReconnectBackoff(nodeState);
     }
 
@@ -322,7 +324,6 @@ final class ClusterConnectionStates {
      */
     private void updateReconnectBackoff(NodeConnectionState nodeState) {
         if (this.reconnectBackoffMaxMs > this.reconnectBackoffInitMs) {
-            nodeState.failedAttempts += 1;
             double backoffExp = Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
             double backoffFactor = Math.pow(RECONNECT_BACKOFF_EXP_BASE, backoffExp);
             long reconnectBackoffMs = (long) (this.reconnectBackoffInitMs * backoffFactor);
@@ -370,12 +371,14 @@ final class ClusterConnectionStates {
 
     // TODO: Javadoc
     public long lastConnectAttemptMs(String id) {
-        return this.nodeState.get(id).lastConnectAttemptMs;
+        NodeConnectionState nodeState = this.nodeState.get(id);
+        return nodeState == null ? 0 : nodeState.lastConnectAttemptMs;
     }
 
     // TODO: Javadoc
     public long failedAttempts(String id) {
-        return this.nodeState.get(id).failedAttempts;
+        NodeConnectionState nodeState = this.nodeState.get(id);
+        return nodeState == null ? 0 : nodeState.failedAttempts;
     }
 
     /**

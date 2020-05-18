@@ -52,6 +52,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -82,6 +83,14 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest) {
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createNetworkClientWithMultipleNodes(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest, int nodeNumber) {
+        List<Node> nodes = TestUtils.clusterWith(nodeNumber).nodes();
+        TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(nodes);
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
@@ -458,7 +467,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testConnectionTimeout() {
+    public void testConnectionSetupTimeout() {
         client.ready(node, time.milliseconds());
         selector.serverConnectionBlocked(node.idString());
 
@@ -623,6 +632,29 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
+    public void testLeastLoadedNodeProvideDisconnectedNodesPrioritizedByFailedAttempts() {
+        int nodeNumber = 3;
+        NetworkClient client = createNetworkClientWithMultipleNodes(0, connectionSetupTimeoutMsTest, nodeNumber);
+
+        Set<Node> providedNodeIds = new HashSet<>();
+        for (int i = 0; i < nodeNumber * 10; i++) {
+            Node node = client.leastLoadedNode(time.milliseconds());
+            assertNotNull("Should provide a node", node);
+            providedNodeIds.add(node);
+            client.ready(node, time.milliseconds());
+            client.disconnect(node.idString());
+            time.sleep(connectionSetupTimeoutMsTest + 1);
+            client.poll(0, time.milliseconds());
+            // Define a round as nodeNumber of nodes have been provided
+            // In each round every node should be provided exactly once
+            if ((i + 1) % nodeNumber == 0) {
+                assertEquals("All the nodes should be provided", nodeNumber, providedNodeIds.size());
+                providedNodeIds.clear();
+            }
+        }
     }
 
     @Test
