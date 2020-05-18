@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -180,7 +181,7 @@ public class AbstractProcessorContextTest {
     public void appConfigsShouldReturnUnrecognizedValues() {
         assertThat(
             context.appConfigs().get("user.supplied.config"),
-            equalTo("user-suppplied-value"));
+            equalTo("user-supplied-value"));
     }
 
 
@@ -190,7 +191,7 @@ public class AbstractProcessorContextTest {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
-            config.put("user.supplied.config", "user-suppplied-value");
+            config.put("user.supplied.config", "user-supplied-value");
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
@@ -233,5 +234,12 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void commit() {}
+
+        @Override
+        public void logChange(final String storeName,
+                              final Bytes key,
+                              final byte[] value,
+                              final long timestamp) {
+        }
     }
 }

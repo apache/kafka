@@ -345,8 +345,8 @@ public class ProcessorStateManager implements StateManager {
         return sourcePartitions.contains(partition);
     }
 
-    // used by the changelog reader only
-    TaskType taskType() {
+    @Override
+    public TaskType taskType() {
         return taskType;
     }
 
