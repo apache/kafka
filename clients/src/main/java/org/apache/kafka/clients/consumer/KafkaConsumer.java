@@ -874,7 +874,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
     }
 

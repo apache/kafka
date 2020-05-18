@@ -19,7 +19,6 @@ package org.apache.kafka.common.metrics;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**

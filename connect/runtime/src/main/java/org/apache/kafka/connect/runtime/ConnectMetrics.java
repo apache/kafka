@@ -85,7 +85,7 @@ public class ConnectMetrics {
         reporters.add(jmxReporter);
 
         Map<String, Object> metadata = new HashMap<>();
-        metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+        metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         metadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {

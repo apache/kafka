@@ -469,7 +469,7 @@ public class KafkaAdminClient extends AdminClient {
             jmxReporter.configure(config.originals());
             reporters.add(jmxReporter);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
+                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
