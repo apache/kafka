@@ -129,7 +129,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
-        case ApiKeys.FETCH => handleFetchRequest(request)
+        case ApiKeys.FETCH =>
+          // Use separate methods for consumer and follower to make it easier to distinguish the cost
+          // when profiling
+          if (request.body[FetchRequest].isFromFollower)
+            handleFollowerFetchRequest(request)
+          else
+            handleConsumerFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
@@ -607,6 +613,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
       produceRequest.clearPartitionRecords()
     }
+  }
+
+  private def handleFollowerFetchRequest(request: RequestChannel.Request): Unit = {
+    handleFetchRequest(request)
+  }
+
+  private def handleConsumerFetchRequest(request: RequestChannel.Request): Unit = {
+    handleFetchRequest(request)
   }
 
   /**
