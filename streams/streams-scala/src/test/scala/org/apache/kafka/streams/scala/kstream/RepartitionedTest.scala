@@ -18,11 +18,10 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.streams.kstream.Repartitioned
-import org.apache.kafka.streams.kstream.internals.{ProducedInternal, RepartitionedInternal}
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal
 import org.apache.kafka.streams.processor.StreamPartitioner
-import org.apache.kafka.streams.scala.Serdes
 import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.Serdes
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
@@ -38,20 +37,53 @@ class RepartitionedTest extends FlatSpec with Matchers {
     internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 
+  "Create a Repartitioned with numPartitions" should "create a Repartitioned with Serdes and numPartitions" in {
+    val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](5)
+
+    val internalRepartitioned = new RepartitionedInternal(repartitioned)
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.numberOfPartitions shouldBe 5
+
+  }
+
+  "Create a Repartitioned with topicName" should "create a Repartitioned with Serdes and topicName" in {
+    val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long]("repartitionTopic")
+
+    val internalRepartitioned = new RepartitionedInternal(repartitioned)
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.name shouldBe "repartitionTopic"
+  }
+
+  "Create a Repartitioned with streamPartitioner" should "create a Repartitioned with Serdes, numPartitions, topicName and streamPartitioner" in {
+    val partitioner = new StreamPartitioner[String, Long] {
+      override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
+    }
+    val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](partitioner)
+
+    val internalRepartitioned = new RepartitionedInternal(repartitioned)
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.streamPartitioner shouldBe partitioner
+  }
+
   "Create a Repartitioned with numPartitions, topicName, and streamPartitioner" should "create a Repartitioned with Serdes, numPartitions, topicName and streamPartitioner" in {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
     }
     val repartitioned: Repartitioned[String, Long] =
-      Repartitioned.`numberOfPartitions`(5)
-                   .withName("repartitionTopic")
-                   .withStreamPartitioner(partitioner)
+      Repartitioned
+        .`with`[String, Long](5)
+        .withName("repartitionTopic")
+        .withStreamPartitioner(partitioner)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
     internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
     internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
-    internalRepartitioned.numberOfPartitions shouldBe partitioner
+    internalRepartitioned.numberOfPartitions shouldBe 5
     internalRepartitioned.name shouldBe "repartitionTopic"
     internalRepartitioned.streamPartitioner shouldBe partitioner
   }
+
 }

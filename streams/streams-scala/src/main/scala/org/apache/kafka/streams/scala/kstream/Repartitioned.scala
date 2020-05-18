@@ -80,8 +80,7 @@ object Repartitioned {
    * @return A new [[Repartitioned]] instance configured with keySerde, valueSerde, and number of partitions
    * @see KStream#repartition(Repartitioned)
    */
-  def `with`[K, V](numberOfPartitions: Int)(implicit keySerde: Serde[K],
-                                            valueSerde: Serde[V]): RepartitionedJ[K, V] =
+  def `with`[K, V](numberOfPartitions: Int)(implicit keySerde: Serde[K], valueSerde: Serde[V]): RepartitionedJ[K, V] =
     RepartitionedJ.`numberOfPartitions`(numberOfPartitions).withKeySerde(keySerde).withValueSerde(valueSerde)
 
 }
