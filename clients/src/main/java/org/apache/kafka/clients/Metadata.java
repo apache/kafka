@@ -155,8 +155,9 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called the client
-     * handles a response from the broker besides UpdateMetadata that includes leader epochs (e.g., ListOffsets)
+     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
+     * any time it handles a response from the broker that includes leader epoch, except for UpdateMetadata which
+     * follows a different code path ({@link #update}).
      *
      * @param topicPartition
      * @param leaderEpoch
