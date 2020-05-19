@@ -459,6 +459,10 @@ public class TaskManagerTest {
 
         makeTaskFolders(taskId00.toString(), taskId01.toString());
         expectLockObtainedFor(taskId00, taskId01);
+
+        // The second attempt will return empty tasks.
+        makeTaskFolders();
+        expectLockObtainedFor();
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(emptySet());
@@ -481,7 +485,12 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), is(singletonMap(taskId01, task01)));
 
-        assertThat(taskManager.lockedTaskDirectories(), is(singleton(taskId01)));
+        // The locked task map will not be cleared.
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+
+        taskManager.handleRebalanceStart(emptySet());
+
+        assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
     }
 
     @Test
