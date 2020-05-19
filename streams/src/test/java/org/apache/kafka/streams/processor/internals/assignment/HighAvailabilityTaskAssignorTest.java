@@ -263,7 +263,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
         assertThat(unstable, is(false));
-        assertValidAssignment(0, allTaskIds.size() / 3 + 1, allTaskIds, emptySet(), clientStates, new StringBuilder());
+        assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
         assertBalancedTasks(clientStates);
