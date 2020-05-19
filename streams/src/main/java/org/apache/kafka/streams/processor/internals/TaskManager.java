@@ -567,11 +567,6 @@ public class TaskManager {
         if (fatalException != null) {
             throw fatalException;
         }
-
-        if (!lockedTaskDirectories.isEmpty()) {
-            log.info("The following tasks {} are no longer owned by the thread while trying to release their directory " +
-                    "locks. They are closed likely due to errors during the rebalance.", lockedTaskDirectories);
-        }
     }
 
     private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
