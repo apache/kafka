@@ -570,7 +570,7 @@ public class TaskManager {
 
         if (!lockedTaskDirectories.isEmpty()) {
             log.warn("The following tasks {} are no longer owned by the thread while trying to release their directory " +
-                    "tasks. It could potentially because those tasks are closed due to errors during the rebalance.", lockedTaskDirectories);
+                    "locks. It could potentially because those tasks are closed due to errors during the rebalance.", lockedTaskDirectories);
         }
     }
 
