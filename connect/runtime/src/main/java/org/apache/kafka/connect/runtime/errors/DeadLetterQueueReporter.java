@@ -74,23 +74,14 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                                                          ConnectorTaskId id,
                                                          SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
                                                          ErrorHandlingMetrics errorHandlingMetrics) {
-        String topic = sinkConfig.dlqTopicName();
 
-        try (Admin admin = Admin.create(adminProps)) {
-            if (!admin.listTopics().names().get().contains(topic)) {
-                log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
-                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
-                admin.createTopics(singleton(schemaTopicRequest)).all().get();
-            }
-        } catch (InterruptedException e) {
-            throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
-        } catch (ExecutionException e) {
-            if (!(e.getCause() instanceof TopicExistsException)) {
-                throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
-            }
-        }
 
-        KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
+        KafkaProducer<byte[], byte[]> dlqProducer = setUpTopicAndProducer(
+            adminProps,
+            producerProps,
+            sinkConfig,
+            DLQ_NUM_DESIRED_PARTITIONS
+        );
         return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
     }
 
@@ -174,6 +165,43 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                 headers.add(ERROR_HEADER_EXCEPTION_STACK_TRACE, trace);
             }
         }
+    }
+
+    public static KafkaProducer<byte[], byte[]> setUpTopicAndProducer(
+        Map<String, Object> adminProps,
+        Map<String, Object> producerProps,
+        SinkConnectorConfig sinkConnectorConfig,
+        int dlqTopicNumPartitions
+    ) {
+        String dlqTopic = sinkConnectorConfig.dlqTopicName();
+
+        if (dlqTopic != null && !dlqTopic.isEmpty()) {
+            try (Admin admin = Admin.create(adminProps)) {
+                if (!admin.listTopics().names().get().contains(dlqTopic)) {
+                    log.error("Topic {} doesn't exist. Will attempt to create topic.", dlqTopic);
+                    NewTopic schemaTopicRequest = new NewTopic(
+                        dlqTopic,
+                        dlqTopicNumPartitions,
+                        sinkConnectorConfig.dlqTopicReplicationFactor()
+                    );
+                    admin.createTopics(singleton(schemaTopicRequest)).all().get();
+                }
+            } catch (InterruptedException e) {
+                throw new ConnectException(
+                    "Could not initialize errant record reporter with topic = " + dlqTopic,
+                    e
+                );
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof TopicExistsException)) {
+                    throw new ConnectException(
+                        "Could not initialize errant record reporter with topic = " + dlqTopic,
+                        e
+                    );
+                }
+            }
+            return new KafkaProducer<>(producerProps);
+        }
+        return null;
     }
 
     private byte[] stacktrace(Throwable error) {

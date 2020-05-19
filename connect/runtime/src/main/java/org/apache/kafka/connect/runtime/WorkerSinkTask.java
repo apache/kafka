@@ -94,6 +94,7 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
+    private WorkerErrantRecordReporter workerErrantRecordReporter;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -110,6 +111,7 @@ class WorkerSinkTask extends WorkerTask {
                           ClassLoader loader,
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
+                          WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore) {
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -136,6 +138,7 @@ class WorkerSinkTask extends WorkerTask {
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
         this.consumer = consumer;
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.workerErrantRecordReporter = workerErrantRecordReporter;
     }
 
     @Override
@@ -360,6 +363,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void commitOffsets(long now, boolean closing) {
+        if (workerErrantRecordReporter != null) {
+            workerErrantRecordReporter.waitForAllFutures();
+        }
+
         if (currentOffsets.isEmpty())
             return;
 
@@ -516,6 +523,10 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         return result;
+    }
+
+    WorkerErrantRecordReporter workerErrantRecordReporter() {
+        return workerErrantRecordReporter;
     }
 
     private void resumeAll() {

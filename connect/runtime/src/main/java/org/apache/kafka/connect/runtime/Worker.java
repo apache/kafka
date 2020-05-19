@@ -553,13 +553,22 @@ public class Worker {
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
+            WorkerErrantRecordReporter workerErrantRecordReporter =
+                createWorkerErrantRecordReporter(
+                    id,
+                    sinkConfig,
+                    connectorClass,
+                    keyConverter,
+                    valueConverter,
+                    headerConverter
+                );
 
             Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
-                                      retryWithToleranceOperator, herder.statusBackingStore());
+                                      retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore());
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask and current is {}", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
@@ -704,6 +713,7 @@ public class Worker {
                                                                 connectorClientConfigOverridePolicy);
             Map<String, Object> adminProps = adminConfigs(id, "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
+
             reporters.add(reporter);
         }
 
@@ -717,6 +727,32 @@ public class Worker {
         reporters.add(logReporter);
 
         return reporters;
+    }
+
+    private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
+        ConnectorTaskId id,
+        SinkConnectorConfig connConfig,
+        Class<? extends Connector> connectorClass,
+        Converter keyConverter,
+        Converter valueConverter,
+        HeaderConverter headerConverter
+    ) {
+        // check if errant record reporter topic is configured
+        String topic = connConfig.dlqTopicName();
+        if ((topic != null && !topic.isEmpty()) || connConfig.enableErrorLog()) {
+            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
+                connectorClientConfigOverridePolicy);
+            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            return WorkerErrantRecordReporter.createAndSetup(
+                adminProps,
+                producerProps,
+                connConfig,
+                keyConverter,
+                valueConverter,
+                headerConverter
+            );
+        }
+        return null;
     }
 
     private void stopTask(ConnectorTaskId taskId) {
