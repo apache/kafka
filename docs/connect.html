@@ -129,7 +129,7 @@
     <p>The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:</p>
     <ul>
         <li><b>HoistField</b> to place the input line inside a Map</li>
-        <li><b>InsertField</b> to add the static field. In this example we'll indicate that the record came from a file connector.</li>
+        <li><b>InsertField</b> to add the static field. In this example we'll indicate that the record came from a file connector</li>
     </ul>
 
     <p>After adding the transformations, <code>connect-file-source.properties</code> file looks as following:</p>
