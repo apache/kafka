@@ -276,7 +276,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains the exact same repartitioned records as this [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#repartition`
    */
-  def repartition()(implicit repartitioned: Repartitioned[K, V]): KStream[K, V] =
+  def repartition(implicit repartitioned: Repartitioned[K, V]): KStream[K, V] =
     new KStream(inner.repartition(repartitioned))
 
   /**
