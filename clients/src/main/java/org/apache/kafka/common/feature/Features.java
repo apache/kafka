@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.feature;
 
 import java.util.HashMap;
@@ -15,8 +31,10 @@ import static java.util.stream.Collectors.joining;
  * Features.supportedFeatures(...) and Features.finalizedFeatures(...).
  *
  * @param <VersionRangeType> is the type of version range.
+ * @see SupportedVersionRange
+ * @see FinalizedVersionRange
  */
-public class Features<VersionRangeType extends VersionRange> {
+public class Features<VersionRangeType extends BaseVersionRange> {
     private final Map<String, VersionRangeType> features;
 
     /**
@@ -35,29 +53,29 @@ public class Features<VersionRangeType extends VersionRange> {
      *                   for the Features object.
      * @return           Returns a new Features object representing "supported" features.
      */
-    public static Features<VersionRange> supportedFeatures(Map<String, VersionRange> features) {
-        return new Features<VersionRange>(features);
+    public static Features<SupportedVersionRange> supportedFeatures(Map<String, SupportedVersionRange> features) {
+        return new Features<>(features);
     }
 
     /**
-     * @param features   Map of feature name to VersionLevelRange, as the backing data structure
+     * @param features   Map of feature name to FinalizedVersionRange, as the backing data structure
      *                   for the Features object.
      * @return           Returns a new Features object representing "finalized" features.
      */
-    public static Features<VersionLevelRange> finalizedFeatures(Map<String, VersionLevelRange> features) {
-        return new Features<VersionLevelRange>(features);
+    public static Features<FinalizedVersionRange> finalizedFeatures(Map<String, FinalizedVersionRange> features) {
+        return new Features<>(features);
     }
 
-    public static Features<VersionLevelRange> emptyFinalizedFeatures() {
+    // Visible for testing.
+    public static Features<FinalizedVersionRange> emptyFinalizedFeatures() {
         return new Features<>(new HashMap<>());
     }
 
-    public static Features<VersionRange> emptySupportedFeatures() {
+    public static Features<SupportedVersionRange> emptySupportedFeatures() {
         return new Features<>(new HashMap<>());
     }
 
-
-    public Map<String, VersionRangeType> all() {
+    public Map<String, VersionRangeType> features() {
         return features;
     }
 
@@ -65,8 +83,13 @@ public class Features<VersionRangeType extends VersionRange> {
         return features.isEmpty();
     }
 
+    /**
+     * @param  feature   name of the feature
+     *
+     * @return           the VersionRangeType corresponding to the feature name, or null if absent
+     */
     public VersionRangeType get(String feature) {
-        return all().get(feature);
+        return features.get(feature);
     }
 
     public String toString() {
@@ -81,8 +104,8 @@ public class Features<VersionRangeType extends VersionRange> {
     }
 
     /**
-     * @return   Serializes the underlying features to a map, and returns the same.
-     *           The returned value can be deserialized using one of the deserialize* APIs.
+     * @return   A map with underlying features serialized. The returned value can be deserialized
+     *           using one of the deserialize* APIs.
      */
     public Map<String, Map<String, Long>> serialize() {
         return features.entrySet().stream().collect(
@@ -92,35 +115,35 @@ public class Features<VersionRangeType extends VersionRange> {
     }
 
     /**
-     * Deserializes a map to Features<VersionLevelRange>.
+     * Deserialize a map to Features<FinalizedVersionRange>.
      *
-     * @param serialized   the serialized representation of a Features<VersionLevelRange> object,
+     * @param serialized   the serialized representation of a Features<FinalizedVersionRange> object,
      *                     generated using the serialize() API.
      *
-     * @return             the deserialized Features<VersionLevelRange> object
+     * @return             the deserialized Features<FinalizedVersionRange> object
      */
-    public static Features<VersionLevelRange> deserializeFinalizedFeatures(
+    public static Features<FinalizedVersionRange> deserializeFinalizedFeatures(
         Map<String, Map<String, Long>> serialized) {
         return finalizedFeatures(serialized.entrySet().stream().collect(
             Collectors.toMap(
                 Map.Entry::getKey,
-                entry -> VersionLevelRange.deserialize(entry.getValue()))));
+                entry -> FinalizedVersionRange.deserialize(entry.getValue()))));
     }
 
     /**
-     * Deserializes a map to Features<VersionRange>.
+     * Deserializes a map to Features<SupportedVersionRange>.
      *
-     * @param serialized   the serialized representation of a Features<VersionRange> object,
+     * @param serialized   the serialized representation of a Features<SupportedVersionRange> object,
      *                     generated using the serialize() API.
      *
-     * @return             the deserialized Features<VersionRange> object
+     * @return             the deserialized Features<SupportedVersionRange> object
      */
-    public static Features<VersionRange> deserializeSupportedFeatures(
+    public static Features<SupportedVersionRange> deserializeSupportedFeatures(
         Map<String, Map<String, Long>> serialized) {
         return supportedFeatures(serialized.entrySet().stream().collect(
             Collectors.toMap(
                 Map.Entry::getKey,
-                entry -> VersionRange.deserialize(entry.getValue()))));
+                entry -> SupportedVersionRange.deserialize(entry.getValue()))));
     }
 
     @Override
@@ -128,7 +151,7 @@ public class Features<VersionRangeType extends VersionRange> {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof Features)) {
+        if (other == null || !(other instanceof Features)) {
             return false;
         }
 

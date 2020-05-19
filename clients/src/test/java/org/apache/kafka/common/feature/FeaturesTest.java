@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.feature;
 
 import java.util.HashMap;
@@ -5,6 +21,8 @@ import java.util.Map;
 
 import org.junit.Test;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -17,44 +35,33 @@ public class FeaturesTest {
     public void testEmptyFeatures() {
         Map<String, Map<String, Long>> emptyMap = new HashMap<>();
 
-        Features<VersionLevelRange> emptyFinalizedFeatures = Features.emptyFinalizedFeatures();
-        assertEquals(new HashMap<>(), emptyFinalizedFeatures.all());
+        Features<FinalizedVersionRange> emptyFinalizedFeatures = Features.emptyFinalizedFeatures();
+        assertEquals(new HashMap<>(), emptyFinalizedFeatures.features());
         assertEquals(emptyMap, emptyFinalizedFeatures.serialize());
         assertEquals(emptyFinalizedFeatures, Features.deserializeFinalizedFeatures(emptyMap));
 
-        Features<VersionRange> emptySupportedFeatures = Features.emptySupportedFeatures();
-        assertEquals(new HashMap<>(), emptySupportedFeatures.all());
-        assertEquals(
-            new HashMap<String, HashMap<String, Long>>(),
-            emptySupportedFeatures.serialize());
+        Features<SupportedVersionRange> emptySupportedFeatures = Features.emptySupportedFeatures();
+        assertEquals(new HashMap<>(), emptySupportedFeatures.features());
+        assertEquals(new HashMap<>(), emptySupportedFeatures.serialize());
         assertEquals(emptySupportedFeatures, Features.deserializeSupportedFeatures(emptyMap));
     }
 
     @Test
-    public void testAllAPI() {
-        VersionRange v1 = new VersionRange(1, 2);
-        VersionRange v2 = new VersionRange(3, 4);
-        Map<String, VersionRange> allFeatures = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionRange> features = Features.supportedFeatures(allFeatures);
-        assertEquals(allFeatures, features.all());
+    public void testGetAllFeaturesAPI() {
+        SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
+        SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
+        Map<String, SupportedVersionRange> allFeatures =
+            mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
+        assertEquals(allFeatures, features.features());
     }
 
     @Test
     public void testGetAPI() {
-        VersionRange v1 = new VersionRange(1, 2);
-        VersionRange v2 = new VersionRange(3, 4);
-        Map<String, VersionRange> allFeatures = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionRange> features = Features.supportedFeatures(allFeatures);
+        SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
+        SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
+        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
         assertEquals(v1, features.get("feature_1"));
         assertEquals(v2, features.get("feature_2"));
         assertNull(features.get("nonexistent_feature"));
@@ -62,114 +69,61 @@ public class FeaturesTest {
 
     @Test
     public void testSerializeDeserializeSupportedFeatures() {
-        VersionRange v1 = new VersionRange(1, 2);
-        VersionRange v2 = new VersionRange(3, 4);
-        Map<String, VersionRange> allFeatures = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionRange> features = Features.supportedFeatures(allFeatures);
+        SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
+        SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
+        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
-        Map<String, Map<String, Long>> expected = new HashMap<String, Map<String, Long>>() {
-            {
-                put("feature_1", new HashMap<String, Long>() {
-                    {
-                        put("min_version", 1L);
-                        put("max_version", 2L);
-                    }
-                });
-                put("feature_2", new HashMap<String, Long>() {
-                    {
-                        put("min_version", 3L);
-                        put("max_version", 4L);
-                    }
-                });
-            }
-        };
+        Map<String, Map<String, Long>> expected = mkMap(
+            mkEntry("feature_1", mkMap(mkEntry("min_version", 1L), mkEntry("max_version", 2L))),
+            mkEntry("feature_2", mkMap(mkEntry("min_version", 3L), mkEntry("max_version", 4L))));
+
         assertEquals(expected, features.serialize());
         assertEquals(features, Features.deserializeSupportedFeatures(expected));
     }
 
     @Test
     public void testSerializeDeserializeFinalizedFeatures() {
-        VersionLevelRange v1 = new VersionLevelRange(1, 2);
-        VersionLevelRange v2 = new VersionLevelRange(3, 4);
-        Map<String, VersionLevelRange> allFeatures = new HashMap<String, VersionLevelRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionLevelRange> features = Features.finalizedFeatures(allFeatures);
+        FinalizedVersionRange v1 = new FinalizedVersionRange(1, 2);
+        FinalizedVersionRange v2 = new FinalizedVersionRange(3, 4);
+        Map<String, FinalizedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<FinalizedVersionRange> features = Features.finalizedFeatures(allFeatures);
 
-        Map<String, Map<String, Long>> expected = new HashMap<String, Map<String, Long>>() {
-            {
-                put("feature_1", new HashMap<String, Long>() {
-                    {
-                        put("min_version_level", 1L);
-                        put("max_version_level", 2L);
-                    }
-                });
-                put("feature_2", new HashMap<String, Long>() {
-                    {
-                        put("min_version_level", 3L);
-                        put("max_version_level", 4L);
-                    }
-                });
-            }
-        };
+        Map<String, Map<String, Long>> expected = mkMap(
+            mkEntry("feature_1", mkMap(mkEntry("min_version_level", 1L), mkEntry("max_version_level", 2L))),
+            mkEntry("feature_2", mkMap(mkEntry("min_version_level", 3L), mkEntry("max_version_level", 4L))));
         assertEquals(expected, features.serialize());
         assertEquals(features, Features.deserializeFinalizedFeatures(expected));
     }
 
     @Test
     public void testToStringFinalizedFeatures() {
-        VersionLevelRange v1 = new VersionLevelRange(1, 2);
-        VersionLevelRange v2 = new VersionLevelRange(3, 4);
-        Map<String, VersionLevelRange> allFeatures = new HashMap<String, VersionLevelRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionLevelRange> features = Features.finalizedFeatures(allFeatures);
+        FinalizedVersionRange v1 = new FinalizedVersionRange(1, 2);
+        FinalizedVersionRange v2 = new FinalizedVersionRange(3, 4);
+        Map<String, FinalizedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<FinalizedVersionRange> features = Features.finalizedFeatures(allFeatures);
 
         assertEquals(
-            "Features{(feature_2 -> VersionLevelRange[3, 4]), (feature_1 -> VersionLevelRange[1, 2])}",
+            "Features{(feature_1 -> FinalizedVersionRange[1, 2]), (feature_2 -> FinalizedVersionRange[3, 4])}",
             features.toString());
     }
 
     @Test
     public void testToStringSupportedFeatures() {
-        VersionRange v1 = new VersionRange(1, 2);
-        VersionRange v2 = new VersionRange(3, 4);
-        Map<String, VersionRange> allFeatures = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v1);
-                put("feature_2", v2);
-            }
-        };
-        Features<VersionRange> features = Features.supportedFeatures(allFeatures);
+        SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
+        SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
+        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
         assertEquals(
-            "Features{(feature_2 -> VersionRange[3, 4]), (feature_1 -> VersionRange[1, 2])}",
+            "Features{(feature_1 -> SupportedVersionRange[1, 2]), (feature_2 -> SupportedVersionRange[3, 4])}",
             features.toString());
     }
 
     @Test
     public void testDeserializationFailureSupportedFeatures() {
-        Map<String, Map<String, Long>> invalidFeatures = new HashMap<String, Map<String, Long>>() {
-            {
-                // invalid feature with max_version key missing.
-                put("feature_1", new HashMap<String, Long>() {
-                    {
-                        put("min_version", 1L);
-                    }
-                });
-            }
-        };
+        Map<String, Map<String, Long>> invalidFeatures = mkMap(
+            mkEntry("feature_1", mkMap(mkEntry("min_version", 1L))));
         assertThrows(
             IllegalArgumentException.class,
             () -> Features.deserializeSupportedFeatures(invalidFeatures));
@@ -177,16 +131,8 @@ public class FeaturesTest {
 
     @Test
     public void testDeserializationFailureFinalizedFeatures() {
-        Map<String, Map<String, Long>> invalidFeatures = new HashMap<String, Map<String, Long>>() {
-            {
-                // invalid feature with max_version_level key missing.
-                put("feature_1", new HashMap<String, Long>() {
-                    {
-                        put("min_version_level", 1L);
-                    }
-                });
-            }
-        };
+        Map<String, Map<String, Long>> invalidFeatures = mkMap(
+            mkEntry("feature_1", mkMap(mkEntry("min_version", 1L))));
         assertThrows(
             IllegalArgumentException.class,
             () -> Features.deserializeFinalizedFeatures(invalidFeatures));
@@ -194,23 +140,17 @@ public class FeaturesTest {
 
     @Test
     public void testEquals() {
-        VersionRange v1 = new VersionRange(1, 2);
-        Map<String, VersionRange> allFeatures = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v1);
-            }
-        };
-        Features<VersionRange> features = Features.supportedFeatures(allFeatures);
-        Features<VersionRange> featuresClone = Features.supportedFeatures(allFeatures);
+        SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
+        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1));
+        Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
+        Features<SupportedVersionRange> featuresClone = Features.supportedFeatures(allFeatures);
         assertTrue(features.equals(featuresClone));
 
-        VersionRange v2 = new VersionRange(1, 3);
-        Map<String, VersionRange> allFeaturesDifferent = new HashMap<String, VersionRange>() {
-            {
-                put("feature_1", v2);
-            }
-        };
-        Features<VersionRange> featuresDifferent = Features.supportedFeatures(allFeaturesDifferent);
+        SupportedVersionRange v2 = new SupportedVersionRange(1, 3);
+        Map<String, SupportedVersionRange> allFeaturesDifferent = mkMap(mkEntry("feature_1", v2));
+        Features<SupportedVersionRange> featuresDifferent = Features.supportedFeatures(allFeaturesDifferent);
         assertFalse(features.equals(featuresDifferent));
+
+        assertFalse(features.equals(null));
     }
 }

@@ -46,7 +46,6 @@ import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.feature.{Features, VersionLevelRange}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
@@ -1670,16 +1669,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
             config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures,
-            Optional.empty[Features[VersionLevelRange]],
-            Optional.empty[java.lang.Long])
+            supportedFeatures)
         } else {
           ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures,
-            Optional.of(finalizedFeatures.get.features),
-            Optional.of(finalizedFeatures.get.epoch))
+            finalizedFeatures.get.features,
+            finalizedFeatures.get.epoch)
         }
       }
     }

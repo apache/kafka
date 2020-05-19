@@ -1,19 +1,14 @@
 package kafka.server
 
 import kafka.utils.Logging
-import org.apache.kafka.common.feature.{Features, VersionLevelRange}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 
 // Raised whenever there was an error in updating the FinalizedFeatureCache with features.
 class FeatureCacheUpdateException(message: String) extends RuntimeException(message) {
 }
 
 // Helper class that represents finalized features along with an epoch value.
-case class FinalizedFeaturesAndEpoch(features: Features[VersionLevelRange], epoch: Int) {
-
-  def isValid(newEpoch: Int): Boolean = {
-    newEpoch >= epoch
-  }
-
+case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Int) {
   override def toString(): String = {
     "FinalizedFeaturesAndEpoch(features=%s, epoch=%s)".format(features, epoch)
   }
@@ -21,7 +16,7 @@ case class FinalizedFeaturesAndEpoch(features: Features[VersionLevelRange], epoc
 
 /**
  * A mutable cache containing the latest finalized features and epoch. This cache is populated by a
- * FinalizedFeatureChangeListener.
+ * {@link FinalizedFeatureChangeListener}.
  *
  * Currently the main reader of this cache is the read path that serves an ApiVersionsRequest
  * returning the features information in the response. In the future, as the feature versioning
@@ -65,15 +60,15 @@ object FinalizedFeatureCache extends Logging {
    *                         supported features. In such a case, the existing cache contents are
    *                         not modified.
    */
-  def updateOrThrow(latestFeatures: Features[VersionLevelRange], latestEpoch: Int): Unit = {
+  def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Int): Unit = {
     updateOrThrow(FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch))
   }
 
   private def updateOrThrow(latest: FinalizedFeaturesAndEpoch): Unit = {
-    val existingStr = featuresAndEpoch.map(existing => existing.toString).getOrElse("<empty>")
-    if (!featuresAndEpoch.isEmpty && featuresAndEpoch.get.epoch > latest.epoch) {
+    val oldFeatureAndEpoch = featuresAndEpoch.map(item => item.toString).getOrElse("<empty>")
+    if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
       val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new finalized %s." +
-        " The existing finalized is %s").format(latest, existingStr)
+        " The existing finalized is %s").format(latest, oldFeatureAndEpoch)
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = SupportedFeatures.incompatibleFeatures(latest.features)
@@ -86,7 +81,7 @@ object FinalizedFeatureCache extends Logging {
       }
     }
     val logMsg = "Updated cache from existing finalized %s to latest finalized %s".format(
-      existingStr, latest)
+      oldFeatureAndEpoch, latest)
     featuresAndEpoch = Some(latest)
     info(logMsg)
   }

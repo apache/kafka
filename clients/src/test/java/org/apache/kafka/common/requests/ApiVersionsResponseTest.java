@@ -17,10 +17,9 @@
 
 package org.apache.kafka.common.requests;
 
-import java.util.Optional;
 import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.VersionRange;
-import org.apache.kafka.common.feature.VersionLevelRange;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
@@ -32,7 +31,6 @@ import org.junit.Test;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -48,16 +46,20 @@ public class ApiVersionsResponseTest {
         final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
             RecordBatch.MAGIC_VALUE_V1,
-            Features.emptySupportedFeatures(),
-            Optional.empty(),
-            Optional.empty());
+            Features.emptySupportedFeatures());
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
+        assertTrue(response.data.supportedFeatures().isEmpty());
+        assertTrue(response.data.finalizedFeatures().isEmpty());
+        assertEquals(0L, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
         assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(0L, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -65,11 +67,12 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordBatch.CURRENT_MAGIC_VALUE,
-            Features.emptySupportedFeatures(),
-            Optional.empty(),
-            Optional.empty());
+            Features.emptySupportedFeatures());
         assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
+        assertTrue(response.data.supportedFeatures().isEmpty());
+        assertTrue(response.data.finalizedFeatures().isEmpty());
+        assertEquals(0L, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -95,6 +98,10 @@ public class ApiVersionsResponseTest {
                 assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null", key.responseSchemas[i]);
             }
         }
+
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(0L, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -102,15 +109,13 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
             RecordBatch.MAGIC_VALUE_V1,
-            Features.supportedFeatures(new HashMap<String, VersionRange>() {{
-                put("feature", new VersionRange(1, 4));
+            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {{
+                put("feature", new SupportedVersionRange(1, 4));
             }}),
-            Optional.of(
-                Features.finalizedFeatures(new HashMap<String, VersionLevelRange>() {{
-                    put("feature", new VersionLevelRange(2, 3));
-                }})
-            ),
-            Optional.of(10L));
+            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {{
+                put("feature", new FinalizedVersionRange(2, 3));
+            }}),
+            10L);
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
 

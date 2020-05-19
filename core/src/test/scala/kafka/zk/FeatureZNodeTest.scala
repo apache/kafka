@@ -3,7 +3,7 @@ package kafka.zk
 import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.feature.{Features, VersionLevelRange}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.junit.Assert.{assertEquals, assertThrows}
 import org.junit.Test
@@ -17,9 +17,9 @@ class FeatureZNodeTest {
     val featureZNode = FeatureZNode(
       FeatureZNodeStatus.Enabled,
       Features.finalizedFeatures(
-        Map[String, VersionLevelRange](
-          "feature1" -> new VersionLevelRange(1, 2),
-          "feature2" -> new VersionLevelRange(2, 4)).asJava))
+        Map[String, FinalizedVersionRange](
+          "feature1" -> new FinalizedVersionRange(1, 2),
+          "feature2" -> new FinalizedVersionRange(2, 4)).asJava))
     val decoded = FeatureZNode.decode(FeatureZNode.encode(featureZNode))
     assertEquals(featureZNode.status, decoded.status)
     assertEquals(featureZNode.features, decoded.features)
@@ -38,9 +38,9 @@ class FeatureZNodeTest {
     assertEquals(FeatureZNodeStatus.Enabled, node1.status)
     assertEquals(
       Features.finalizedFeatures(
-        Map[String, VersionLevelRange](
-          "feature1" -> new VersionLevelRange(1, 2),
-          "feature2" -> new VersionLevelRange(2, 4)).asJava), node1.features)
+        Map[String, FinalizedVersionRange](
+          "feature1" -> new FinalizedVersionRange(1, 2),
+          "feature2" -> new FinalizedVersionRange(2, 4)).asJava), node1.features)
 
     val emptyFeatures = "{}"
     val node2 = FeatureZNode.decode(featureZNodeStrTemplate.format(emptyFeatures).getBytes(StandardCharsets.UTF_8))

@@ -46,7 +46,7 @@ import kafka.zookeeper._
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.feature.{Features, VersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
@@ -755,7 +755,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
                                rack: Option[String] = None,
-                               features: Features[VersionRange] = emptySupportedFeatures): BrokerInfo =
+                               features: Features[SupportedVersionRange] = emptySupportedFeatures): BrokerInfo =
     BrokerInfo(
       Broker(
         id,
@@ -772,13 +772,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       1, "test.host", 9999, SecurityProtocol.PLAINTEXT,
       rack = None,
       features = Features.supportedFeatures(
-        Map[String, VersionRange](
-          "feature1" -> new VersionRange(1, 2)).asJava))
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
     val differentBrokerInfoWithSameId = createBrokerInfo(
       1, "test.host2", 9995, SecurityProtocol.SSL,
       features = Features.supportedFeatures(
-        Map[String, VersionRange](
-          "feature2" -> new VersionRange(4, 7)).asJava))
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(4, 7)).asJava))
 
     zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
@@ -831,13 +831,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val brokerInfo0 = createBrokerInfo(
       0, "test.host0", 9998, SecurityProtocol.PLAINTEXT,
       features = Features.supportedFeatures(
-        Map[String, VersionRange](
-          "feature1" -> new VersionRange(1, 2)).asJava))
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
     val brokerInfo1 = createBrokerInfo(
       1, "test.host1", 9999, SecurityProtocol.SSL,
       features = Features.supportedFeatures(
-        Map[String, VersionRange](
-          "feature2" -> new VersionRange(3, 6)).asJava))
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(3, 6)).asJava))
 
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)

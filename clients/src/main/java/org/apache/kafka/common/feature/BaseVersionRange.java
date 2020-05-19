@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.feature;
 
 import java.util.HashMap;
@@ -11,16 +27,8 @@ import java.util.Objects;
  * The class also provides API to serialize/deserialize the version range to/from a map.
  * The class allows for configurable labels for the min/max attributes, which can be specialized by
  * sub-classes (if needed).
- *
- * NOTE: This is the backing class used to define the min/max versions for supported features.
  */
-public class VersionRange {
-    // Label for the min version key, that's used only for serialization/deserialization purposes.
-    private static final String MIN_VERSION_KEY_LABEL = "min_version";
-
-    // Label for the max version key, that's used only for serialization/deserialization purposes.
-    private static final String MAX_VERSION_KEY_LABEL = "max_version";
-
+class BaseVersionRange {
     private final String minKeyLabel;
 
     private final long minValue;
@@ -29,7 +37,7 @@ public class VersionRange {
 
     private final long maxValue;
 
-    protected VersionRange(String minKey, long minValue, String maxKeyLabel, long maxValue) {
+    protected BaseVersionRange(String minKey, long minValue, String maxKeyLabel, long maxValue) {
         if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
@@ -40,10 +48,6 @@ public class VersionRange {
         this.minValue = minValue;
         this.maxKeyLabel = maxKeyLabel;
         this.maxValue = maxValue;
-    }
-
-    public VersionRange(long minVersion, long maxVersion) {
-        this(MIN_VERSION_KEY_LABEL, minVersion, MAX_VERSION_KEY_LABEL, maxVersion);
     }
 
     public long min() {
@@ -67,26 +71,20 @@ public class VersionRange {
         };
     }
 
-    public static VersionRange deserialize(Map<String, Long> serialized) {
-        return new VersionRange(
-            valueOrThrow(MIN_VERSION_KEY_LABEL, serialized),
-            valueOrThrow(MAX_VERSION_KEY_LABEL, serialized));
-    }
-
     @Override
     public boolean equals(Object other) {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof VersionRange)) {
+        if (other == null || !(other instanceof BaseVersionRange)) {
             return false;
         }
 
-        final VersionRange that = (VersionRange) other;
+        final BaseVersionRange that = (BaseVersionRange) other;
         return Objects.equals(this.minKeyLabel, that.minKeyLabel) &&
-            Objects.equals(this.minValue, that.minValue) &&
+            this.minValue == that.minValue &&
             Objects.equals(this.maxKeyLabel, that.maxKeyLabel) &&
-            Objects.equals(this.maxValue, that.maxValue);
+            this.maxValue == that.maxValue;
     }
 
     @Override

@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 
 import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
-import org.apache.kafka.common.feature.{Features, VersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -154,6 +154,27 @@ class BrokerEndPointTest {
   }
 
   @Test
+  def testFromJsonV4WithNoFeatures(): Unit = {
+    val json = """{
+      "version":4,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"2233345666",
+      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+      "rack":"dc1"
+    }"""
+    val broker = parseBrokerJson(1, json)
+    assertEquals(1, broker.id)
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
+    assertEquals("host1", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
+    assertEquals(Some("dc1"), broker.rack)
+    assertEquals(emptySupportedFeatures, broker.features)
+  }
+
+  @Test
   def testFromJsonV5(): Unit = {
     val json = """{
       "version":5,
@@ -173,31 +194,10 @@ class BrokerEndPointTest {
     assertEquals(9092, brokerEndPoint.port)
     assertEquals(Some("dc1"), broker.rack)
     assertEquals(Features.supportedFeatures(
-      Map[String, VersionRange](
-        "feature1" -> new VersionRange(1, 2),
-        "feature2" -> new VersionRange(2, 4)).asJava),
+      Map[String, SupportedVersionRange](
+        "feature1" -> new SupportedVersionRange(1, 2),
+        "feature2" -> new SupportedVersionRange(2, 4)).asJava),
       broker.features)
-  }
-
-  @Test
-  def testFromJsonV4WithNoFeatures(): Unit = {
-    val json = """{
-      "version":4,
-      "host":"localhost",
-      "port":9092,
-      "jmx_port":9999,
-      "timestamp":"2233345666",
-      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
-      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
-      "rack":"dc1"
-    }"""
-    val broker = parseBrokerJson(1, json)
-    assertEquals(1, broker.id)
-    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
-    assertEquals("host1", brokerEndPoint.host)
-    assertEquals(9092, brokerEndPoint.port)
-    assertEquals(Some("dc1"), broker.rack)
-    assertEquals(emptySupportedFeatures, broker.features)
   }
 
   @Test

@@ -1,6 +1,6 @@
 package kafka.server
 
-import org.apache.kafka.common.feature.{Features, VersionLevelRange, VersionRange}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.junit.Assert.{assertEquals, assertThrows, assertTrue}
 import org.junit.{Before, Test}
 
@@ -21,15 +21,16 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testUpdateOrThrowFailedDueToInvalidEpoch(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(1, 4))
+    val features = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(1, 4))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 10)
+    assertTrue(FinalizedFeatureCache.get.isDefined)
     assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
     assertEquals(10, FinalizedFeatureCache.get.get.epoch)
 
@@ -38,18 +39,19 @@ class FinalizedFeatureCacheTest {
       () => FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 9))
 
     // Check that the failed updateOrThrow call did not make any mutations.
+    assertTrue(FinalizedFeatureCache.get.isDefined)
     assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
     assertEquals(10, FinalizedFeatureCache.get.get.epoch)
   }
 
   @Test
   def testUpdateOrThrowFailedDueToInvalidFeatures(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 1))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 1))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(1, 2))
+    val features = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(1, 2))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     assertThrows(
@@ -62,30 +64,32 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testUpdateOrThrowSuccess(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val features = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12)
+    assertTrue(FinalizedFeatureCache.get.isDefined)
     assertEquals(finalizedFeatures,  FinalizedFeatureCache.get.get.features)
     assertEquals(12, FinalizedFeatureCache.get.get.epoch)
   }
 
   @Test
   def testClear(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val features = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12)
+    assertTrue(FinalizedFeatureCache.get.isDefined)
     assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
     assertEquals(12, FinalizedFeatureCache.get.get.epoch)
 

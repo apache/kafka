@@ -231,7 +231,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (config.interBrokerProtocolVersion >= KAFKA_2_6_IV1) {
           // The feature versioning system (KIP-584) is active only when:
           // config.interBrokerProtocolVersion is >= KAFKA_2_6_IV1.
-          _featureChangeListener.initOrThrow(60000)
+          _featureChangeListener.initOrThrow(config.featureChangeListenerCacheUpdateWaitTimeMs)
         }
 
         /* Get or create cluster_id */

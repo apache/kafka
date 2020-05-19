@@ -2,7 +2,7 @@ package kafka.server
 
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion, ZooKeeperTestHarness}
 import kafka.utils.{Exit, TestUtils}
-import org.apache.kafka.common.feature.{Features, VersionLevelRange, VersionRange}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.internals.FatalExitError
 import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.{Before, Test}
@@ -24,13 +24,13 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testInitSuccessAndNotificationSuccess(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4),
-      "feature_2" -> new VersionRange(1, 3))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val initialFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
     zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
     val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -48,8 +48,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertEquals(initialFinalizedFeatures, newCacheContent.features)
     assertEquals(initialVersion, newCacheContent.epoch)
 
-    val updatedFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 4))
+    val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 4))
     val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
     zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, updatedFinalizedFeatures))
     val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -68,13 +68,13 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDeleteNotificationProcessing(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4),
-      "feature_2" -> new VersionRange(1, 3))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val initialFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
     zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
     val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -108,13 +108,13 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDisablingNotificationProcessing(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4),
-      "feature_2" -> new VersionRange(1, 3))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val initialFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
     zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
     val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -132,7 +132,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertEquals(initialFinalizedFeatures, newCacheContent.features)
     assertEquals(initialVersion, newCacheContent.epoch)
 
-    val updatedFinalizedFeaturesMap = Map[String, VersionLevelRange]()
+    val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange]()
     val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
     zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Disabled, updatedFinalizedFeatures))
     val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -151,13 +151,13 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testInitFailureDueToFeatureIncompatibility(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4),
-      "feature_2" -> new VersionRange(1, 3))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val incompatibleFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 5))
+    val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 5))
     val incompatibleFinalizedFeatures = Features.finalizedFeatures(incompatibleFinalizedFeaturesMap.asJava)
     zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, incompatibleFinalizedFeatures))
     val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -184,13 +184,13 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testNotificationFailureDueToFeatureIncompatibility(): Unit = {
-    val supportedFeatures = Map[String, VersionRange](
-      "feature_1" -> new VersionRange(1, 4),
-      "feature_2" -> new VersionRange(1, 3))
+    val supportedFeatures = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val initialFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 3))
+    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
     val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
     zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
     val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -209,8 +209,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertEquals(initialVersion, newCacheContent.epoch)
 
     Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
-    val incompatibleFinalizedFeaturesMap = Map[String, VersionLevelRange](
-      "feature_1" -> new VersionLevelRange(2, 5))
+    val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 5))
     val incompatibleFinalizedFeatures = Features.finalizedFeatures(incompatibleFinalizedFeaturesMap.asJava)
     zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, incompatibleFinalizedFeatures))
     val (mayBeFeatureZNodeIncompatibleBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)

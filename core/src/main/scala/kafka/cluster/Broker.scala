@@ -21,7 +21,7 @@ import java.util
 
 import kafka.common.BrokerEndPointNotAvailableException
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.feature.{Features, VersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.common.network.ListenerName
@@ -44,11 +44,14 @@ object Broker {
 
 /**
  * A Kafka broker.
- * A broker has an id, a collection of end-points, an optional rack and a listener to security protocol map,
- * and optional supported features.
- * Each end-point is (host, port, listenerName).
+ *
+ * @param id          a broker id
+ * @param endPoints   a collection of: end-point and a listener to security protocol map.
+ *                    Each end-point is (host, port, listenerName).
+ * @param rack        an optional rack
+ * @param features    optional supported features
  */
-case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], features: Features[VersionRange]) {
+case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], features: Features[SupportedVersionRange]) {
 
   private val endPointsMap = endPoints.map { endPoint =>
     endPoint.listenerName -> endPoint

@@ -33,7 +33,7 @@ import kafka.utils.Json
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.feature.{Features, VersionLevelRange, VersionRange}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
@@ -96,12 +96,11 @@ object BrokerInfo {
    */
   def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
     val version = {
-      if (apiVersion >= KAFKA_0_10_0_IV1) {
-        if (apiVersion >= KAFKA_2_6_IV1)
-          5
-        else
-          4
-      } else
+      if (apiVersion >= KAFKA_0_10_0_IV1)
+        5
+      else if (apiVersion >= KAFKA_2_6_IV1)
+        4
+      else
         2
     }
     BrokerInfo(broker, version, jmxPort)
@@ -133,7 +132,7 @@ object BrokerIdZNode {
    * The JSON format includes a top level host and port for compatibility with older clients.
    */
   def encode(version: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
-             rack: Option[String], features: Features[VersionRange]): Array[Byte] = {
+             rack: Option[String], features: Features[SupportedVersionRange]): Array[Byte] = {
     val jsonMap = collection.mutable.Map(VersionKey -> version,
       HostKey -> host,
       PortKey -> port,
@@ -164,6 +163,13 @@ object BrokerIdZNode {
       new EndPoint(null, -1, null, null))
     encode(brokerInfo.version, plaintextEndpoint.host, plaintextEndpoint.port, broker.endPoints, brokerInfo.jmxPort,
       broker.rack, broker.features)
+  }
+
+  def asJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Long]] = {
+    FeatureZNode.asJavaMap(brokerInfo
+      .get(FeaturesKey)
+      .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
+      .getOrElse(Map()))
   }
 
   /**
@@ -255,10 +261,7 @@ object BrokerIdZNode {
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
-        val features = FeatureZNode.asJavaMap(brokerInfo
-          .get(FeaturesKey)
-          .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
-          .getOrElse(Map()))
+        val features = asJavaMap(brokerInfo)
         BrokerInfo(
           Broker(id, endpoints, rack, deserializeSupportedFeatures(features)), version, jmxPort)
       case Left(e) =>
@@ -787,7 +790,7 @@ object FeatureZNodeStatus extends Enumeration {
   }
 }
 
-case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[VersionLevelRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {
@@ -848,7 +851,7 @@ object FeatureZNode {
             s"${new String(jsonBytes, UTF_8)}")
         }
 
-        var finalizedFeatures: Features[VersionLevelRange] = null
+        var finalizedFeatures: Features[FinalizedVersionRange] = null
         try {
           finalizedFeatures = deserializeFinalizedFeatures(features)
         } catch {
