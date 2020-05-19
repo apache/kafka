@@ -557,6 +557,63 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldReplaceTxnTimeoutWithInvalidProducerEpochInAddOffsetToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.ADD_OFFSETS_TO_TXN.oldestVersion to ApiKeys.ADD_OFFSETS_TO_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+
+      val groupId = "groupId"
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
+        new AddOffsetsToTxnRequestData()
+          .setGroupId(groupId)
+          .setTransactionalId(transactionalId)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+      ).build(version.toShort)
+      val request = buildRequest(addOffsetsToTxnRequest)
+
+      val partition = 1
+      EasyMock.expect(groupCoordinator.partitionFor(
+        EasyMock.eq(groupId)
+      )).andReturn(partition)
+
+      EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, groupCoordinator)
+
+      createKafkaApis().handleAddOffsetsToTxnRequest(request)
+
+      val response = readResponse(ApiKeys.ADD_OFFSETS_TO_TXN, addOffsetsToTxnRequest, capturedResponse)
+        .asInstanceOf[AddOffsetsToTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+      } else {
+        assertEquals(Errors.TRANSACTION_TIMED_OUT.code, response.data.errorCode)
+      }
+    }
+  }
+
+  @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInAddOffsetToTxnWithOlderClient(): Unit = {
     val topic = "topic"
     setupBasicMetadataCache(topic, numPartitions = 2)
@@ -614,6 +671,60 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldReplaceTxnTimeoutWithInvalidProducerEpochInAddPartitionToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion to ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val partition = 1
+      val topicPartition = new TopicPartition(topic, partition)
+
+      val addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(
+        transactionalId,
+        producerId,
+        epoch,
+        Collections.singletonList(topicPartition)
+      ).build(version.toShort)
+      val request = buildRequest(addPartitionsToTxnRequest)
+
+      EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(Set(topicPartition)),
+
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleAddPartitionToTxnRequest(request)
+
+      val response = readResponse(ApiKeys.ADD_PARTITIONS_TO_TXN, addPartitionsToTxnRequest, capturedResponse)
+        .asInstanceOf[AddPartitionsToTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors())
+      } else {
+        assertEquals(Collections.singletonMap(topicPartition, Errors.TRANSACTION_TIMED_OUT), response.errors())
+      }
+    }
+  }
+
+  @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInAddPartitionToTxnWithOlderClient(): Unit = {
     val topic = "topic"
     setupBasicMetadataCache(topic, numPartitions = 2)
@@ -663,6 +774,57 @@ class KafkaApisTest {
         assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors())
       } else {
         assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors())
+      }
+    }
+  }
+
+  @Test
+  def shouldReplaceTxnTimeoutWithInvalidProducerEpochInEndTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.END_TXN.oldestVersion to ApiKeys.END_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val endTxnRequest = new EndTxnRequest.Builder(
+        new EndTxnRequestData()
+          .setTransactionalId(transactionalId)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+          .setCommitted(true)
+      ).build(version.toShort)
+      val request = buildRequest(endTxnRequest)
+
+      EasyMock.expect(txnCoordinator.handleEndTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(TransactionResult.COMMIT),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleEndTxnRequest(request)
+
+      val response = readResponse(ApiKeys.END_TXN, endTxnRequest, capturedResponse)
+        .asInstanceOf[EndTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+      } else {
+        assertEquals(Errors.TRANSACTION_TIMED_OUT.code, response.data.errorCode)
       }
     }
   }

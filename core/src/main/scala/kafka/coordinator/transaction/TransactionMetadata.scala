@@ -84,6 +84,12 @@ private[transaction] case object Dead extends TransactionState { val byte: Byte 
 
 private[transaction] case object PrepareEpochFence extends TransactionState { val byte: Byte = 7}
 
+/**
+ * We are in the middle of bumping the epoch and abort timeout transactions.
+ */
+
+private[transaction] case object PrepareEpochBumpThenAbort extends TransactionState { val byte: Byte = 8}
+
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
     new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
@@ -109,6 +115,7 @@ private[transaction] object TransactionMetadata {
       case 5 => CompleteAbort
       case 6 => Dead
       case 7 => PrepareEpochFence
+      case 8 => PrepareEpochBumpThenAbort
       case unknown => throw new IllegalStateException("Unknown transaction state byte " + unknown + " from the transaction status message")
     }
   }
@@ -120,11 +127,12 @@ private[transaction] object TransactionMetadata {
     Map(Empty -> Set(Empty, CompleteCommit, CompleteAbort),
       Ongoing -> Set(Ongoing, Empty, CompleteCommit, CompleteAbort),
       PrepareCommit -> Set(Ongoing),
-      PrepareAbort -> Set(Ongoing, PrepareEpochFence),
+      PrepareAbort -> Set(Ongoing, PrepareEpochFence, PrepareEpochBumpThenAbort),
       CompleteCommit -> Set(PrepareCommit),
       CompleteAbort -> Set(PrepareAbort),
       Dead -> Set(Empty, CompleteAbort, CompleteCommit),
-      PrepareEpochFence -> Set(Ongoing)
+      PrepareEpochFence -> Set(Ongoing),
+      PrepareEpochBumpThenAbort -> Set(Ongoing)
     )
 
   def isEpochExhausted(producerEpoch: Short): Boolean = producerEpoch >= Short.MaxValue - 1
@@ -219,6 +227,19 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     val bumpedEpoch = if (hasFailedEpochFence) producerEpoch else (producerEpoch + 1).toShort
 
     prepareTransitionTo(PrepareEpochFence, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+      topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
+  }
+
+  def prepareBumpProducerEpochBeforeAbort(): TxnTransitMetadata = {
+    if (producerEpoch == Short.MaxValue)
+      throw new IllegalStateException(s"Cannot bump epoch when epoch equal to Short.MaxValue since this would " +
+        s"overflow")
+
+    // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
+    // This is safe because we never return the epoch to client if we fail to fence the epoch
+    val bumpedEpoch = (producerEpoch + 1).toShort
+
+    prepareTransitionTo(PrepareEpochBumpThenAbort, producerId, bumpedEpoch, producerEpoch, txnTimeoutMs,
       topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
@@ -417,7 +438,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             topicPartitions.clear()
           }
 
-        case PrepareEpochFence =>
+        case PrepareEpochFence | PrepareEpochBumpThenAbort =>
           // We should never get here, since once we prepare to fence the epoch, we immediately set the pending state
           // to PrepareAbort, and then consequently to CompleteAbort after the markers are written.. So we should never
           // ever try to complete a transition to PrepareEpochFence, as it is not a valid previous state for any other state, and hence

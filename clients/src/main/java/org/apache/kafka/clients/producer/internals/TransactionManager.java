@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -370,7 +371,9 @@ public class TransactionManager {
         // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
-        if (!(abortableError instanceof InvalidPidMappingException)) {
+        boolean needEndTxn = !(abortableError instanceof InvalidPidMappingException)
+                && !(abortableError instanceof TransactionTimeoutException);
+        if (needEndTxn) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()
                             .setTransactionalId(transactionalId)
@@ -1073,6 +1076,7 @@ public class TransactionManager {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
+            abortableError = error;
         } else {
             if (target != State.ABORTING_TRANSACTION) {
                 abortableError = null;
@@ -1430,6 +1434,9 @@ public class TransactionManager {
                     // just treat it the same as PRODUCE_FENCED.
                     fatalError(Errors.PRODUCER_FENCED.exception());
                     return;
+                } else if (error == Errors.TRANSACTION_TIMED_OUT) {
+                    abortableErrorIfPossible(error.exception());
+                    return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatalError(error.exception());
                     return;
@@ -1589,6 +1596,8 @@ public class TransactionManager {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
                 // just treat it the same as PRODUCE_FENCED.
                 fatalError(Errors.PRODUCER_FENCED.exception());
+            } else if (error == Errors.TRANSACTION_TIMED_OUT) {
+                abortableErrorIfPossible(error.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.INVALID_TXN_STATE) {
@@ -1648,6 +1657,8 @@ public class TransactionManager {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
                 // just treat it the same as PRODUCE_FENCED.
                 fatalError(Errors.PRODUCER_FENCED.exception());
+            } else if (error == Errors.TRANSACTION_TIMED_OUT) {
+                abortableErrorIfPossible(error.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {

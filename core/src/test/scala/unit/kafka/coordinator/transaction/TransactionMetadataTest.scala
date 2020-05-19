@@ -304,7 +304,7 @@ class TransactionMetadataTest {
 
     val fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch()
     assertEquals(Short.MaxValue, fencingTransitMetadata.producerEpoch)
-    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, fencingTransitMetadata.lastProducerEpoch)
+    assertEquals(producerEpoch, fencingTransitMetadata.lastProducerEpoch)
     assertEquals(Some(PrepareEpochFence), txnMetadata.pendingState)
 
     // We should reset the pending state to make way for the abort transition.
@@ -437,6 +437,28 @@ class TransactionMetadataTest {
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch, txnMetadata.producerEpoch)
     assertEquals(lastProducerEpoch, txnMetadata.lastProducerEpoch)
+  }
+
+  @Test
+  def testPepareBumpProducerEpochBeforeAbort(): Unit = {
+    val producerEpoch = 735.toShort
+    val lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+
+    val txnMetadata = new TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      lastProducerId = producerId,
+      producerEpoch = producerEpoch,
+      lastProducerEpoch = lastProducerEpoch,
+      txnTimeoutMs = 30000,
+      state = Ongoing,
+      topicPartitions = mutable.Set.empty,
+      txnLastUpdateTimestamp = time.milliseconds())
+
+    val result = txnMetadata.prepareBumpProducerEpochBeforeAbort()
+    assertEquals(producerEpoch+1, result.producerEpoch)
+    assertEquals(producerEpoch, result.lastProducerEpoch)
+    assertEquals(PrepareEpochBumpThenAbort, result.txnState)
   }
 
   @Test

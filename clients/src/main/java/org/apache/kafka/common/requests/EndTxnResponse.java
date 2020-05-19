@@ -34,6 +34,7 @@ import java.util.Map;
  *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
  *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=1
  *   - {@link Errors#PRODUCER_FENCED}
+ *   - {@link Errors#TRANSACTION_TIMED_OUT}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  */
 public class EndTxnResponse extends AbstractResponse {

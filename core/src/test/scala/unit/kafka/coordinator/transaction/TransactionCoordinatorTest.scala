@@ -269,6 +269,18 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldRespondWithTxnTimeoutOnAddPartitionsWhenCurrentEpochEqualTxnLastEpoch(): Unit = {
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
+        new TransactionMetadata(transactionalId, 0, 0, 10, 9, 0, CompleteAbort, mutable.Set.empty, 0, 0)))))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 9, partitions, errorsCallback)
+    assertEquals(Errors.TRANSACTION_TIMED_OUT, error)
+  }
+
+  @Test
   def shouldRespondWithProducerFencedOnAddPartitionsWhenEpochsAreDifferent(): Unit = {
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
@@ -356,6 +368,20 @@ class TransactionCoordinatorTest {
 
     coordinator.handleEndTransaction(transactionalId, 0, 0, TransactionResult.COMMIT, errorsCallback)
     assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def shouldReplyWithTxnTimeoutOnEndTxnWhenEpochIsSameAsTxnLastEpoch(): Unit = {
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
+        new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, (producerEpoch - 1).toShort,
+          1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))))
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleEndTransaction(transactionalId, producerId, (producerEpoch - 1).toShort, TransactionResult.COMMIT,
+      errorsCallback)
+    assertEquals(Errors.TRANSACTION_TIMED_OUT, error)
     EasyMock.verify(transactionManager)
   }
 
