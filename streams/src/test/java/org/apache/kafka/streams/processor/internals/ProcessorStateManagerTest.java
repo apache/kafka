@@ -514,12 +514,13 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void stateStoreRegistrationShouldBeIdempotent() {
+    public void shouldThrowIllegalArgumentExceptionOnRegisterWhenStoreHasAlreadyBeenRegistered() {
         final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
-        stateManager.registerStore(new MockKeyValueStore(persistentStoreName, true), persistentStore.stateRestoreCallback);
 
-        stateManager.registerStore(new MockKeyValueStore(persistentStoreName, false), persistentStore.stateRestoreCallback);
-        assertFalse(stateManager.getStore(persistentStoreName).persistent());
+        stateManager.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+
+        assertThrows(IllegalArgumentException.class, () ->
+            stateManager.registerStore(persistentStore, persistentStore.stateRestoreCallback));
     }
 
     @Test
