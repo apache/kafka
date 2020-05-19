@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -53,7 +54,7 @@ public class SslConfigs {
             + "Allowed values in recent JVMs are TLSv1.2 and TLSv1.3. TLS, TLSv1.1, SSL, SSLv2 and SSLv3 "
             + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
 
-    public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
+    public static final String DEFAULT_SSL_PROTOCOL;
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
@@ -64,7 +65,17 @@ public class SslConfigs {
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections.";
-    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS;
+
+    static {
+        if (Java.IS_JAVA11_COMPATIBLE) {
+            DEFAULT_SSL_PROTOCOL = "TLSv1.3";
+            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
+        } else {
+            DEFAULT_SSL_PROTOCOL = "TLSv1.2";
+            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
+        }
+    }
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "

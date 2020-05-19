@@ -177,6 +177,7 @@ public class KafkaChannel implements AutoCloseable {
                 authenticator.authenticate();
             }
         } catch (AuthenticationException e) {
+            e.printStackTrace();
             // Clients are notified of authentication exceptions to enable operations to be terminated
             // without retries. Other errors are handled as network exceptions in Selector.
             String remoteDesc = remoteAddress != null ? remoteAddress.toString() : null;
