@@ -38,20 +38,20 @@ object ConsoleProducer {
   def main(args: Array[String]): Unit = {
 
     try {
-        val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
-        reader.init(System.in, getReaderProps(config))
+      val config = new ProducerConfig(args)
+      val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
+      reader.init(System.in, getReaderProps(config))
 
-        val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
+      val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
-    Exit.addShutdownHook("producer-shutdown-hook", producer.close)
+      Exit.addShutdownHook("producer-shutdown-hook", producer.close)
 
-        var record: ProducerRecord[Array[Byte], Array[Byte]] = null
-        do {
-          record = reader.readMessage()
-          if (record != null)
-            send(producer, record, config.sync)
-        } while (record != null)
+      var record: ProducerRecord[Array[Byte], Array[Byte]] = null
+      do {
+        record = reader.readMessage()
+        if (record != null)
+          send(producer, record, config.sync)
+      } while (record != null)
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
@@ -64,7 +64,7 @@ object ConsoleProducer {
   }
 
   private def send(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                         record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
+                   record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
     if (sync)
       producer.send(record).get()
     else
@@ -86,13 +86,14 @@ object ConsoleProducer {
 
     props ++= config.extraProducerProps
 
-    if(config.bootstrapServer != null)
+    if (config.bootstrapServer != null)
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     else
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
 
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
-    props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
+    if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 
@@ -136,10 +137,10 @@ object ConsoleProducer {
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
     val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', 'lz4', or 'zstd'." +
-                                                                  "If specified without value, then it defaults to 'gzip'")
-                                    .withOptionalArg()
-                                    .describedAs("compression-codec")
-                                    .ofType(classOf[String])
+      "If specified without value, then it defaults to 'gzip'")
+      .withOptionalArg()
+      .describedAs("compression-codec")
+      .ofType(classOf[String])
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
       .withRequiredArg
       .describedAs("size")
@@ -214,9 +215,9 @@ object ConsoleProducer {
       .describedAs("prop")
       .ofType(classOf[String])
     val producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
-            .withRequiredArg
-            .describedAs("producer_prop")
-            .ofType(classOf[String])
+      .withRequiredArg
+      .describedAs("producer_prop")
+      .ofType(classOf[String])
     val producerConfigOpt = parser.accepts("producer.config", s"Producer config properties file. Note that $producerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
@@ -239,10 +240,10 @@ object ConsoleProducer {
     val sync = options.has(syncOpt)
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
     val compressionCodec = if (options.has(compressionCodecOpt))
-                             if (compressionCodecOptionValue == null || compressionCodecOptionValue.isEmpty)
-                               DefaultCompressionCodec.name
-                             else compressionCodecOptionValue
-                           else NoCompressionCodec.name
+      if (compressionCodecOptionValue == null || compressionCodecOptionValue.isEmpty)
+        DefaultCompressionCodec.name
+      else compressionCodecOptionValue
+    else NoCompressionCodec.name
     val batchSize = options.valueOf(batchSizeOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
