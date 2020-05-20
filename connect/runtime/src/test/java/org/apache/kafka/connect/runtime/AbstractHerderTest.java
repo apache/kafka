@@ -292,7 +292,7 @@ public class AbstractHerderTest {
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(TestSourceConnector.class.getName(), result.name());
         assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP,
-                ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
+                ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
         assertEquals(2, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
@@ -353,6 +353,7 @@ public class AbstractHerderTest {
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP,
                 ConnectorConfig.ERROR_GROUP,
                 SourceConnectorConfig.TOPIC_CREATION_GROUP,
                 "Transforms: xformA",
@@ -471,6 +472,7 @@ public class AbstractHerderTest {
         List<String> expectedGroups = Arrays.asList(
             ConnectorConfig.COMMON_GROUP,
             ConnectorConfig.TRANSFORMS_GROUP,
+            ConnectorConfig.PREDICATES_GROUP,
             ConnectorConfig.ERROR_GROUP,
             SourceConnectorConfig.TOPIC_CREATION_GROUP
         );
