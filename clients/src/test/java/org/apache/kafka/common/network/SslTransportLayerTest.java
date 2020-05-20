@@ -591,10 +591,7 @@ public class SslTransportLayerTest {
             createSelector(sslClientConfigs);
 
             checkAuthentiationFailed("1", "TLSv1.1");
-            server.verifyAuthenticationMetrics(0, 1);
-
             checkAuthentiationFailed("2", "TLSv1");
-            server.verifyAuthenticationMetrics(0, 2);
         }
     }
 
