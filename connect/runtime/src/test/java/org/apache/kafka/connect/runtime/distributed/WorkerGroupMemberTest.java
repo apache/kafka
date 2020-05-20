@@ -26,8 +26,14 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
+import org.easymock.EasyMock;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -38,6 +44,9 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({ConnectUtils.class})
+@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;
@@ -65,8 +74,10 @@ public class WorkerGroupMemberTest {
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
 
+        expectClusterId();
+
         member = new WorkerGroupMember(config, "", configBackingStore,
-        null, Time.SYSTEM, "client-1", logContext, "cluster-1");
+        null, Time.SYSTEM, "client-1", logContext);
 
         for (MetricsReporter reporter : member.getMetrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
@@ -82,4 +93,10 @@ public class WorkerGroupMemberTest {
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
     }
+    private void expectClusterId() {
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("cluster-1").anyTimes();
+        PowerMock.replay(ConnectUtils.class);
+    }
+
 }

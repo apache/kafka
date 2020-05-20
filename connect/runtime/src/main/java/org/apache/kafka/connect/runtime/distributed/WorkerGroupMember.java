@@ -78,8 +78,7 @@ public class WorkerGroupMember {
                              WorkerRebalanceListener listener,
                              Time time,
                              String clientId,
-                             LogContext logContext,
-                             String clusterId) {
+                             LogContext logContext) {
         try {
             this.time = time;
             this.clientId = clientId;
@@ -99,7 +98,7 @@ public class WorkerGroupMember {
 
             Map<String, Object> connectMetadata = new HashMap<>();
             connectMetadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-            connectMetadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+            connectMetadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(config));
             connectMetadata.put(ConnectUtils.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, connectMetadata);
 

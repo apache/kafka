@@ -229,7 +229,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.member = member != null
                       ? member
                       : new WorkerGroupMember(config, restUrl, this.configBackingStore,
-                              new RebalanceListener(time), time, clientId, logContext, kafkaClusterId);
+                              new RebalanceListener(time), time, clientId, logContext);
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS,
