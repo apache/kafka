@@ -280,7 +280,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public ClusterConfigState snapshot() {
         synchronized (lock) {
-            // WARNING: Only a shallow copy is performed here; in order to avoid accidentally corrupting the worker's view
+            // Only a shallow copy is performed here; in order to avoid accidentally corrupting the worker's view
             // of the config topic, any nested structures should be copied before making modifications
             return new ClusterConfigState(
                     offset,
