@@ -135,6 +135,11 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     @Override
+    public String toString() {
+        return data.toString();
+    }
+
+    @Override
     public Struct toStruct(short version) {
         return data.toStruct(version);
     }

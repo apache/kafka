@@ -18,7 +18,7 @@ package kafka.admin
 
 import kafka.admin.TopicCommand.{TopicCommandOptions, ZookeeperTopicService}
 import kafka.server.ConfigType
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
@@ -31,7 +31,7 @@ import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 
-class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   private var topicService: ZookeeperTopicService = _
   private var testTopicName: String = _
@@ -596,5 +596,27 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     expectAlterInternalTopicPartitionCountFailed(Topic.GROUP_METADATA_TOPIC_NAME)
     expectAlterInternalTopicPartitionCountFailed(Topic.TRANSACTION_STATE_TOPIC_NAME)
+  }
+
+  @Test
+  def testCreateWithUnspecifiedReplicationFactorAndPartitionsWithZkClient(): Unit = {
+    assertExitCode(1, () =>
+      new TopicCommandOptions(Array("--create", "--zookeeper", "zk", "--topic", testTopicName)).checkArgs()
+    )
+  }
+
+  def assertExitCode(expected: Int, method: () => Unit): Unit = {
+    def mockExitProcedure(exitCode: Int, exitMessage: Option[String]): Nothing = {
+      assertEquals(expected, exitCode)
+      throw new RuntimeException
+    }
+    Exit.setExitProcedure(mockExitProcedure)
+    try {
+      intercept[RuntimeException] {
+        method()
+      }
+    } finally {
+      Exit.resetExitProcedure()
+    }
   }
 }

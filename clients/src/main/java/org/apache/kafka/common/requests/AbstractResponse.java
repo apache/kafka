@@ -135,7 +135,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
-                return new AddPartitionsToTxnResponse(struct);
+                return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
                 return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:

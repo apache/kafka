@@ -31,9 +31,12 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TimestampedWindowStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedWindowStore<K, V>> {
+    private final Logger log = LoggerFactory.getLogger(TimestampedWindowStoreBuilder.class);
 
     private final WindowBytesStoreSupplier storeSupplier;
 
@@ -56,6 +59,11 @@ public class TimestampedWindowStoreBuilder<K, V>
                 store = new InMemoryTimestampedWindowStoreMarker(store);
             }
         }
+        if (storeSupplier.retainDuplicates() && enableCaching) {
+            log.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
+            enableCaching = false;
+        }
+
         return new MeteredTimestampedWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.windowSize(),

@@ -68,8 +68,8 @@ import scala.Option;
 @Measurement(iterations = 5)
 @Fork(3)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@State(Scope.Benchmark)
-public class HighwatermarkCheckpointBench {
+@State(value = Scope.Benchmark)
+public class CheckpointBench {
 
     @Param({"100", "1000", "2000"})
     public int numTopics;
@@ -174,5 +174,11 @@ public class HighwatermarkCheckpointBench {
     @Threads(1)
     public void measureCheckpointHighWatermarks() {
         this.replicaManager.checkpointHighWatermarks();
+    }
+
+    @Benchmark
+    @Threads(1)
+    public void measureCheckpointLogStartOffsets() {
+        this.logManager.checkpointLogStartOffsets();
     }
 }

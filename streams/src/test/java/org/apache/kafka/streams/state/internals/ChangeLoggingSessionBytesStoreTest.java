@@ -31,12 +31,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-
-
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingSessionBytesStoreTest {
 
@@ -75,13 +69,15 @@ public class ChangeLoggingSessionBytesStoreTest {
 
         init();
 
+        final Bytes binaryKey = SessionKeySchema.toBinary(key1);
+
+        EasyMock.reset(context);
+        context.logChange(store.name(), binaryKey, value1, 0L);
+
+        EasyMock.replay(context);
         store.put(key1, value1);
 
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(SessionKeySchema.toBinary(key1)));
-        assertThat(collector.collected().get(0).value(), equalTo(value1));
-
-        EasyMock.verify(inner);
+        EasyMock.verify(inner, context);
     }
 
     @Test
@@ -93,11 +89,14 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.remove(key1);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(binaryKey));
-        assertThat(collector.collected().get(0).value(), nullValue());
 
-        EasyMock.verify(inner);
+        EasyMock.reset(context);
+        context.logChange(store.name(), binaryKey, null, 0L);
+
+        EasyMock.replay(context);
+        store.remove(key1);
+
+        EasyMock.verify(inner, context);
     }
 
     @Test

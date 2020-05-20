@@ -141,7 +141,7 @@ public class RocksDBMetricsRecorder {
         }
     }
 
-    public void record() {
+    public void record(final long now) {
         logger.debug("Recording metrics for store {}", storeName);
         long bytesWrittenToDatabase = 0;
         long bytesReadFromDatabase = 0;
@@ -178,18 +178,18 @@ public class RocksDBMetricsRecorder {
                 - statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
             numberOfFileErrors += statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
         }
-        bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase);
-        bytesReadFromDatabaseSensor.record(bytesReadFromDatabase);
-        memtableBytesFlushedSensor.record(memtableBytesFlushed);
-        memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses));
-        blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses));
-        blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses));
-        blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses));
-        writeStallDurationSensor.record(writeStallDuration);
-        bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction);
-        bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction);
-        numberOfOpenFilesSensor.record(numberOfOpenFiles);
-        numberOfFileErrorsSensor.record(numberOfFileErrors);
+        bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
+        bytesReadFromDatabaseSensor.record(bytesReadFromDatabase, now);
+        memtableBytesFlushedSensor.record(memtableBytesFlushed, now);
+        memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses), now);
+        blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses), now);
+        blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses), now);
+        blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses), now);
+        writeStallDurationSensor.record(writeStallDuration, now);
+        bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction, now);
+        bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction, now);
+        numberOfOpenFilesSensor.record(numberOfOpenFiles, now);
+        numberOfFileErrorsSensor.record(numberOfFileErrors, now);
     }
 
     private double computeHitRatio(final long hits, final long misses) {
