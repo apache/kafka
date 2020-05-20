@@ -623,6 +623,37 @@ public class SslTransportLayerTest {
     }
 
     /**
+     * Tests that connections fails if TLSv1.3 enabled but cipher suite suitable only for TLSv1.2 used.
+     */
+    @Test
+    public void testCiphersSuiteForTLSv1_2_FailsForTLSv1_3() throws Exception {
+        if (!Java.IS_JAVA11_COMPATIBLE)
+            return;
+
+        String node = "0";
+        SSLContext context = SSLContext.getInstance(tlsProtocol);
+        context.init(null, null, null);
+
+        //Note, that only some ciphers works out of the box. Others requires additional configuration.
+        String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+
+        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.3"));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
+        server = createEchoServer(SecurityProtocol.SSL);
+
+        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.3"));
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    /**
      * Tests that connections can be made with TLSv1.2 and custom cipher suite.
      */
     @Test
