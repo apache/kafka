@@ -1030,6 +1030,8 @@ public class Selector implements Selectable, AutoCloseable {
         private final String metricGrpPrefix;
         private final Map<String, String> metricTags;
         private final boolean metricsPerConnection;
+        private final String metricGrpName;
+        private final String perConnectionMetricGrpName;
 
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
@@ -1054,7 +1056,8 @@ public class Selector implements Selectable, AutoCloseable {
             this.metricGrpPrefix = metricGrpPrefix;
             this.metricTags = metricTags;
             this.metricsPerConnection = metricsPerConnection;
-            String metricGrpName = metricGrpPrefix + "-metrics";
+            this.metricGrpName = metricGrpPrefix + "-metrics";
+            this.perConnectionMetricGrpName = metricGrpPrefix + "-node-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
             for (Map.Entry<String, String> tag: metricTags.entrySet()) {
@@ -1143,10 +1146,12 @@ public class Selector implements Selectable, AutoCloseable {
 
         private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
                 SampledStat stat, String baseName, String descriptiveName) {
-            MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
-                            String.format("The number of %s per second", descriptiveName), metricTags);
-            MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
-                            String.format("The total number of %s", descriptiveName), metricTags);
+            // Reason for using intern here: These strings are very repetitive and can lead to 10K+ identical objects in
+            // memory. They also low QPS (access). Hence, it is ok to intern() them.
+            MetricName rateMetricName = metrics.metricName((baseName + "-rate").intern(), groupName,
+                            String.format("The number of %s per second", descriptiveName).intern(), metricTags);
+            MetricName totalMetricName = metrics.metricName((baseName + "-total").intern(), groupName,
+                            String.format("The total number of %s", descriptiveName).intern(), metricTags);
             if (stat == null)
                 return new Meter(rateMetricName, totalMetricName);
             else
@@ -1180,29 +1185,27 @@ public class Selector implements Selectable, AutoCloseable {
                 String nodeRequestName = "node-" + connectionId + ".bytes-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
                 if (nodeRequest == null) {
-                    String metricGrpName = metricGrpPrefix + "-node-metrics";
-
                     Map<String, String> tags = new LinkedHashMap<>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
-                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "request", "requests sent"));
-                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
+                    nodeRequest.add(createMeter(metrics, perConnectionMetricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+                    nodeRequest.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "request", "requests sent"));
+                    MetricName metricName = metrics.metricName("request-size-avg", perConnectionMetricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
+                    metricName = metrics.metricName("request-size-max", perConnectionMetricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
-                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "response", "responses received"));
+                    nodeResponse.add(createMeter(metrics, perConnectionMetricGrpName, tags, "incoming-byte", "incoming bytes"));
+                    nodeResponse.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "response", "responses received"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);
-                    metricName = metrics.metricName("request-latency-avg", metricGrpName, tags);
+                    metricName = metrics.metricName("request-latency-avg", perConnectionMetricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-latency-max", metricGrpName, tags);
+                    metricName = metrics.metricName("request-latency-max", perConnectionMetricGrpName, tags);
                     nodeRequestTime.add(metricName, new Max());
                 }
             }
