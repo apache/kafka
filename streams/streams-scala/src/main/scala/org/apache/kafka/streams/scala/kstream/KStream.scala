@@ -234,7 +234,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#through`
    * @deprecated use `repartition()` instead
    */
-  @deprecated
+  @deprecated("use `repartition()` instead", "2.6.0")
   def through(topic: String)(implicit produced: Produced[K, V]): KStream[K, V] =
     new KStream(inner.through(topic, produced))
 
