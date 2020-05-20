@@ -657,6 +657,24 @@ public class SslTransportLayerTest {
      * Tests that connections can be made with TLSv1.2 and custom cipher suite.
      */
     @Test
+    public void testCiphersSuiteFailForServerTLSv1_2_ClientTLSv1_3() throws Exception {
+        String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+
+        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
+        server = createEchoServer(SecurityProtocol.SSL);
+
+        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
+
+        checkAuthentiationFailed("0", "TLSv1.3");
+    }
+
+    /**
+     * Tests that connections can be made with TLSv1.2 and custom cipher suite.
+     */
+    @Test
     public void testCiphersSuiteForTLSv1_2() throws Exception {
         String node = "0";
         SSLContext context = SSLContext.getInstance(tlsProtocol);
