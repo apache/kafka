@@ -118,9 +118,9 @@ public class EmbeddedConnectClusterAssertions {
     public void assertExactlyNumBrokersAreUp(int numBrokers, String detailMessage) throws InterruptedException {
         try {
             waitForCondition(
-                    () -> checkBrokersUp(numBrokers, (actual, expected) -> actual == expected).orElse(false),
-                    WORKER_SETUP_DURATION_MS,
-                    "Didn't meet the exact requested number of online brokers: " + numBrokers);
+                () -> checkBrokersUp(numBrokers, (actual, expected) -> actual == expected).orElse(false),
+                WORKER_SETUP_DURATION_MS,
+                "Didn't meet the exact requested number of online brokers: " + numBrokers);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -151,12 +151,12 @@ public class EmbeddedConnectClusterAssertions {
         Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
         AtomicReference<Set<String>> existingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
-                () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
-                    existingTopics.set(actual);
-                    return actual.isEmpty();
-                }).orElse(false),
-                WORKER_SETUP_DURATION_MS,
-                "Unexpectedly found topics " + existingTopics.get());
+            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                existingTopics.set(actual);
+                return actual.isEmpty();
+            }).orElse(false),
+            WORKER_SETUP_DURATION_MS,
+            "Unexpectedly found topics " + existingTopics.get());
     }
 
     /**
@@ -168,14 +168,14 @@ public class EmbeddedConnectClusterAssertions {
         Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
         AtomicReference<Set<String>> missingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
-                () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
-                    Set<String> missing = new HashSet<>(expected);
-                    missing.removeAll(actual);
-                    missingTopics.set(missing);
-                    return missing.isEmpty();
-                }).orElse(false),
-                WORKER_SETUP_DURATION_MS,
-                "Didn't find the topics " + missingTopics.get());
+            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                Set<String> missing = new HashSet<>(expected);
+                missing.removeAll(actual);
+                missingTopics.set(missing);
+                return missing.isEmpty();
+            }).orElse(false),
+            WORKER_SETUP_DURATION_MS,
+            "Didn't find the topics " + missingTopics.get());
     }
 
     protected Optional<Boolean> checkTopicsExist(Set<String> topicNames, BiFunction<Set<String>, Set<String>, Boolean> comp) {
