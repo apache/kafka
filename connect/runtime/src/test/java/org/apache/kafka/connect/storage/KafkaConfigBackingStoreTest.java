@@ -164,7 +164,6 @@ public class KafkaConfigBackingStoreTest {
         expectConfigure();
         expectStart(Collections.emptyList(), Collections.emptyMap());
         expectStop();
-
         PowerMock.replayAll();
 
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
@@ -975,5 +974,4 @@ public class KafkaConfigBackingStoreTest {
             result.put(field.name(), struct.get(field));
         return result;
     }
-
 }

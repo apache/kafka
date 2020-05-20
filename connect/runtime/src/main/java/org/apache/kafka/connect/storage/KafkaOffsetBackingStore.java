@@ -60,9 +60,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
 
-    public KafkaOffsetBackingStore() {
-    }
-
     @Override
     public void configure(final WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
