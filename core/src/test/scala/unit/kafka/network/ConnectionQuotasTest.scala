@@ -290,10 +290,10 @@ class ConnectionQuotasTest {
 
       // since every listener has exactly the max number of listener connections,
       // every listener should block on the next connection creation, even the inter-broker listener
-      val futures2 = listeners.values.map { listener =>
+      val overLimitFutures = listeners.values.map { listener =>
         executor.submit((() => acceptConnections(connectionQuotas, listener, 1)): Runnable)
       }
-      futures2.foreach { future =>
+      overLimitFutures.foreach { future =>
         intercept[TimeoutException](future.get(1, TimeUnit.SECONDS))
       }
       listeners.values.foreach { listener =>
@@ -301,7 +301,7 @@ class ConnectionQuotasTest {
         connectionQuotas.dec(listener.listenerName, listener.defaultIp)
       }
       // all connections should get added
-      futures2.foreach(_.get(5, TimeUnit.SECONDS))
+      overLimitFutures.foreach(_.get(5, TimeUnit.SECONDS))
       listeners.values.foreach { listener =>
         assertEquals(s"Number of connections on $listener:",
           listenerMaxConnections, connectionQuotas.get(listener.defaultIp))
