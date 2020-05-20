@@ -630,7 +630,6 @@ public class SslTransportLayerTest {
         if (!Java.IS_JAVA11_COMPATIBLE)
             return;
 
-        String node = "0";
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
 
@@ -642,14 +641,10 @@ public class SslTransportLayerTest {
         sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
         server = createEchoServer(SecurityProtocol.SSL);
 
-        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.3"));
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuite));
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        checkAuthentiationFailed("0", "TLSv1.3");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -658,6 +653,9 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testCiphersSuiteFailForServerTLSv1_2_ClientTLSv1_3() throws Exception {
+        if (!Java.IS_JAVA11_COMPATIBLE)
+            return;
+
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
         sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
