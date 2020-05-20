@@ -97,7 +97,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
-    private final InternalProcessorContext<Object, Object> processorContext;
+    private final InternalProcessorContext processorContext;
 
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
@@ -153,7 +153,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl<>(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
+        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -545,7 +545,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
 
             if (wallClockTime - idleStartTimeMs >= maxTaskIdleMs) {
-                enforcedProcessingSensor.record();
+                enforcedProcessingSensor.record(1.0d, wallClockTime);
                 return true;
             } else {
                 return false;
@@ -571,7 +571,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         // get the next record to process
-        final StampedRecord record = partitionGroup.nextRecord(recordInfo);
+        final StampedRecord record = partitionGroup.nextRecord(recordInfo, wallClockTime);
 
         // if there is no record to process, return immediately
         if (record == null) {
@@ -585,7 +585,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             log.trace("Start processing one record [{}]", record);
 
-            updateProcessorContext(record, currNode);
+            updateProcessorContext(record, currNode, wallClockTime);
             maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
@@ -625,9 +625,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs) {
+    public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
         bufferedRecordsSensor.record(partitionGroup.numBuffered());
-        processRatioSensor.record((double) processTimeMs / allTaskProcessMs);
+        processRatioSensor.record((double) processTimeMs / allTaskProcessMs, now);
         processTimeMs = 0L;
     }
 
@@ -656,7 +656,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
 
-        updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
+        updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node, time.milliseconds());
 
         if (log.isTraceEnabled()) {
             log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);
@@ -673,7 +673,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?> currNode) {
+    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?> currNode, final long wallClockTime) {
         processorContext.setRecordContext(
             new ProcessorRecordContext(
                 record.timestamp,
@@ -682,6 +682,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 record.topic(),
                 record.headers()));
         processorContext.setCurrentNode(currNode);
+        processorContext.setSystemTimeMs(wallClockTime);
     }
 
     /**
@@ -936,7 +937,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public ProcessorContext<Object, Object> context() {
+    public ProcessorContext context() {
         return processorContext;
     }
 
@@ -1007,7 +1008,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
-    InternalProcessorContext<Object, Object> processorContext() {
+    InternalProcessorContext processorContext() {
         return processorContext;
     }
 

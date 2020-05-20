@@ -16,7 +16,7 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, LinkedHashMap, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig

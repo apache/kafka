@@ -72,7 +72,7 @@ class CachingSessionStore
         this.context = context;
 
         cacheName = context.taskId() + "-" + name();
-        cache = context.getCache();
+        cache = context.cache();
         cache.addDirtyEntryFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);

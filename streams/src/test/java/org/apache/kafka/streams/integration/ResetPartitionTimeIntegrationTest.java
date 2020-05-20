@@ -36,8 +36,10 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -51,9 +53,10 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -89,9 +92,12 @@ public class ResetPartitionTimeIntegrationTest {
     @Parameterized.Parameter
     public String processingGuarantee;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Test
     public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
-        final String appId = "appId";
+        final String appId = "app-" + safeUniqueTestName(getClass(), testName);
         final String input = "input";
         final String outputRaw = "output-raw";
 
@@ -151,7 +157,7 @@ public class ResetPartitionTimeIntegrationTest {
             assertThat(lastRecordedTimestamp, is(5000L));
         } finally {
             kafkaStreams.close();
-            cleanStateAfterTest(CLUSTER, kafkaStreams);
+            quietlyCleanStateAfterTest(CLUSTER, kafkaStreams);
         }
     }
 

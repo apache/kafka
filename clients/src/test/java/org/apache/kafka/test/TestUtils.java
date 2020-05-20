@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.io.FileWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -229,6 +230,19 @@ public class TestUtils {
     }
 
     /**
+     * Create a file with the given contents in the default temporary-file directory,
+     * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+     */
+    public static File tempFile(final String contents) throws IOException {
+        final File file = tempFile();
+        final FileWriter writer = new FileWriter(file);
+        writer.write(contents);
+        writer.close();
+
+        return file;
+    }
+
+    /**
      * Create a temporary relative directory in the default temporary-file directory with the given prefix.
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
@@ -361,9 +375,9 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
-        String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
         retryOnExceptionWithTimeout(maxWaitMs, () -> {
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
                 testCondition.conditionMet());
         });

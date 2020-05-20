@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -32,8 +33,9 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
-public class NoOpProcessorContext extends AbstractProcessorContext<Object, Object> {
+public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
     @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();
@@ -101,5 +103,18 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
+                         final StateRestoreCallback stateRestoreCallback) {
+    }
+
+    @Override
+    public TaskType taskType() {
+        return TaskType.ACTIVE;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+    }
 }

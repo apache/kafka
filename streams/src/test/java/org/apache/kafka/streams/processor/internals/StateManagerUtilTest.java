@@ -153,15 +153,16 @@ public class StateManagerUtilTest {
 
         expect(topology.stateStores()).andReturn(Arrays.asList(store1, store2));
 
+        // Store1 will be registered as it hasn't been registered before.
+        expect(stateManager.getStore(store1.name())).andReturn(null);
+
         processorContext.uninitialize();
         expectLastCall();
         processorContext.register(store1, store1.stateRestoreCallback);
         expectLastCall();
 
-        processorContext.uninitialize();
-        expectLastCall();
-        processorContext.register(store2, store2.stateRestoreCallback);
-        expectLastCall();
+        // Store2 is already registered, so no more registration will happen.
+        expect(stateManager.getStore(store2.name())).andReturn(store2);
 
         stateManager.initializeStoreOffsetsFromCheckpoint(true);
         expectLastCall();

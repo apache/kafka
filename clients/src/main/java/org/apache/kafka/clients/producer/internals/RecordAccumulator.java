@@ -174,7 +174,7 @@ public final class RecordAccumulator {
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
-     *                        running the the partitioner's onNewBatch method before trying to append again
+     *                        running the partitioner's onNewBatch method before trying to append again
      * @param nowMs The current time, in milliseconds
      */
     public RecordAppendResult append(TopicPartition tp,
@@ -514,7 +514,7 @@ public final class RecordAccumulator {
                     // 0 could be written before earlier batches complete, which would cause out of sequence errors
                     ProducerBatch firstInFlightBatch = transactionManager.nextBatchBySequence(tp);
 
-                    if (firstInFlightBatch != null && !transactionManager.matchesProducerIdAndEpoch(firstInFlightBatch)) {
+                    if (firstInFlightBatch != null && transactionManager.producerIdOrEpochNotMatch(firstInFlightBatch)) {
                         return true;
                     }
                 }

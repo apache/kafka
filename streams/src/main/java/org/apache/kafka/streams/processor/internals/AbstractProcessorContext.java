@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -30,8 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-
-public abstract class AbstractProcessorContext<K, V> implements InternalProcessorContext<K, V> {
+public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
     public static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;
@@ -44,6 +44,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?> currentNode;
+    private long currentSystemTimeMs;
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -59,6 +60,16 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+    }
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        currentSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return currentSystemTimeMs;
     }
 
     @Override
@@ -127,6 +138,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
         }
+
         return recordContext.partition();
     }
 
@@ -194,7 +206,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     }
 
     @Override
-    public ThreadCache getCache() {
+    public ThreadCache cache() {
         return cache;
     }
 
@@ -206,5 +218,10 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     @Override
     public void uninitialize() {
         initialized = false;
+    }
+
+    @Override
+    public TaskType taskType() {
+        return stateManager.taskType();
     }
 }

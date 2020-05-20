@@ -25,16 +25,17 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>> {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
 
-    public SubscriptionWrapperSerde(final String primaryKeySerializationPseudoTopic,
+    public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                     final Serde<K> primaryKeySerde) {
-        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopic,
+        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
                                                          primaryKeySerde == null ? null : primaryKeySerde.serializer());
-        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerializationPseudoTopic,
+        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerializationPseudoTopicSupplier,
                                                              primaryKeySerde == null ? null : primaryKeySerde.deserializer());
     }
 
@@ -51,12 +52,13 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
     private static class SubscriptionWrapperSerializer<K>
         implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K> {
 
-        private final String primaryKeySerializationPseudoTopic;
+        private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
+        private String primaryKeySerializationPseudoTopic = null;
         private Serializer<K> primaryKeySerializer;
 
-        SubscriptionWrapperSerializer(final String primaryKeySerializationPseudoTopic,
+        SubscriptionWrapperSerializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                       final Serializer<K> primaryKeySerializer) {
-            this.primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopic;
+            this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeySerializer = primaryKeySerializer;
         }
 
@@ -74,6 +76,10 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
             //7-bit (0x7F) maximum for data version.
             if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
                 throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
+            }
+
+            if (primaryKeySerializationPseudoTopic == null) {
+                primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
             final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(
@@ -106,12 +112,13 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
     private static class SubscriptionWrapperDeserializer<K>
         implements Deserializer<SubscriptionWrapper<K>>, WrappingNullableDeserializer<SubscriptionWrapper<K>, K> {
 
-        private final String primaryKeySerializationPseudoTopic;
+        private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
+        private String primaryKeySerializationPseudoTopic = null;
         private Deserializer<K> primaryKeyDeserializer;
 
-        SubscriptionWrapperDeserializer(final String primaryKeySerializationPseudoTopic,
+        SubscriptionWrapperDeserializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                         final Deserializer<K> primaryKeyDeserializer) {
-            this.primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopic;
+            this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
@@ -144,6 +151,11 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
 
             final byte[] primaryKeyRaw = new byte[data.length - lengthSum]; //The remaining data is the serialized pk
             buf.get(primaryKeyRaw, 0, primaryKeyRaw.length);
+
+            if (primaryKeySerializationPseudoTopic == null) {
+                primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
+            }
+
             final K primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerializationPseudoTopic,
                                                                     primaryKeyRaw);
 

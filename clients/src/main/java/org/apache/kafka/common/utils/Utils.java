@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
@@ -60,9 +61,13 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -881,6 +886,18 @@ public final class Utils {
     }
 
     /**
+     * An {@link AutoCloseable} interface without a throws clause in the signature
+     *
+     * This is used with lambda expressions in try-with-resources clauses
+     * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
+     */
+    @FunctionalInterface
+    public interface UncheckedCloseable extends AutoCloseable {
+        @Override
+        void close();
+    }
+
+    /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
@@ -1092,5 +1109,79 @@ public final class Utils {
                 entry -> valueMapper.apply(entry.getValue())
             )
         );
+    }
+
+    /**
+     * A Collector that offers two kinds of convenience:
+     * 1. You can specify the concrete type of the returned Map
+     * 2. You can turn a stream of Entries directly into a Map without having to mess with a key function
+     *    and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
+     *
+     *
+     * One thing to be wary of: These types are too "distant" for IDE type checkers to warn you if you
+     * try to do something like build a TreeMap of non-Comparable elements. You'd get a runtime exception for that.
+     *
+     * @param mapSupplier The constructor for your concrete map type.
+     * @param <K> The Map key type
+     * @param <V> The Map value type
+     * @param <M> The type of the Map itself.
+     * @return new Collector<Map.Entry<K, V>, M, M>
+     */
+    public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
+        return new Collector<Map.Entry<K, V>, M, M>() {
+            @Override
+            public Supplier<M> supplier() {
+                return mapSupplier;
+            }
+
+            @Override
+            public BiConsumer<M, Map.Entry<K, V>> accumulator() {
+                return (map, entry) -> map.put(entry.getKey(), entry.getValue());
+            }
+
+            @Override
+            public BinaryOperator<M> combiner() {
+                return (map, map2) -> {
+                    map.putAll(map2);
+                    return map;
+                };
+            }
+
+            @Override
+            public Function<M, M> finisher() {
+                return map -> map;
+            }
+
+            @Override
+            public Set<Characteristics> characteristics() {
+                return EnumSet.of(Characteristics.UNORDERED, Characteristics.IDENTITY_FINISH);
+            }
+        };
+    }
+
+    @SafeVarargs
+    public static <E> Set<E> union(final Supplier<Set<E>> constructor, final Set<E>... set) {
+        final Set<E> result = constructor.get();
+        for (final Set<E> s : set) {
+            result.addAll(s);
+        }
+        return result;
+    }
+
+    @SafeVarargs
+    public static <E> Set<E> intersection(final Supplier<Set<E>> constructor, final Set<E> first, final Set<E>... set) {
+        final Set<E> result = constructor.get();
+        result.addAll(first);
+        for (final Set<E> s : set) {
+            result.retainAll(s);
+        }
+        return result;
+    }
+
+    public static <E> Set<E> diff(final Supplier<Set<E>> constructor, final Set<E> left, final Set<E> right) {
+        final Set<E> result = constructor.get();
+        result.addAll(left);
+        result.removeAll(right);
+        return result;
     }
 }

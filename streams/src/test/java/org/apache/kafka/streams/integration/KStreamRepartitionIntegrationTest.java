@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -45,8 +44,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -60,11 +61,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -75,6 +74,7 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
 import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -83,7 +83,6 @@ import static org.junit.Assert.assertTrue;
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final AtomicInteger TEST_NUM = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -107,17 +106,20 @@ public class KStreamRepartitionIntegrationTest {
         });
     }
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws InterruptedException {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        final int testNum = TEST_NUM.incrementAndGet();
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
 
-        topicB = "topic-b-" + testNum;
-        inputTopic = "input-topic-" + testNum;
-        outputTopic = "output-topic-" + testNum;
-        applicationId = "kstream-repartition-stream-test-" + testNum;
+        topicB = "topic-b-" + safeTestName;
+        inputTopic = "input-topic-" + safeTestName;
+        outputTopic = "output-topic-" + safeTestName;
+        applicationId = "app-" + safeTestName;
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
@@ -139,50 +141,6 @@ public class KStreamRepartitionIntegrationTest {
                              .forEach(KafkaStreams::close);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() throws InterruptedException {
-        final String topicBRepartitionedName = "topic-b-scale-up";
-        final String inputTopicRepartitionedName = "input-topic-scale-up";
-        final int topicBNumberOfPartitions = 2;
-        final int inputTopicNumberOfPartitions = 4;
-        final AtomicReference<Throwable> throwable = new AtomicReference<>();
-
-        CLUSTER.createTopic(topicB, 1, 1);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-            .<Integer, String>as(inputTopicRepartitionedName)
-            .withNumberOfPartitions(inputTopicNumberOfPartitions);
-
-        final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
-            .<Integer, String>as(topicBRepartitionedName)
-            .withNumberOfPartitions(topicBNumberOfPartitions);
-
-        final KStream<Integer, String> topicBStream = builder
-            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(topicBRepartitioned);
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition(inputTopicRepartitioned)
-               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-               .to(outputTopic);
-
-        startStreams(builder, REBALANCING, ERROR, (t, e) -> throwable.set(e));
-
-        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-            Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-            Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
-        );
-
-        final String expectedErrorMessage = String.format("Following topics do not have the same " +
-                                                          "number of partitions: [%s]",
-                                                          new TreeMap<>(repartitionTopicsWithNumOfPartitions));
-
-        assertNotNull(throwable.get());
-        assertTrue(throwable.get().getMessage().contains(expectedErrorMessage));
     }
 
     @Test
@@ -802,11 +760,12 @@ public class KStreamRepartitionIntegrationTest {
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
                                                  final Deserializer<V> valueSerializer,
-                                                 final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
+                                                 final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + TEST_NUM.get());
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,

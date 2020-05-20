@@ -26,15 +26,16 @@ import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.test.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
@@ -161,9 +162,22 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      "--entity-name", "1",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
       "--add-config", "a=b,c=d"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config-file", "/tmp/new.properties"))
     createOpts.checkArgs()
 
     // For alter and deleted config
@@ -224,6 +238,47 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfAddAndAddFile(): Unit = {
+    // Should not parse correctly
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "a=b,c=d",
+      "--add-config-file", "/tmp/new.properties"
+    ))
+    createOpts.checkArgs()
+  }
+
+  @Test
+  def testParseConfigsToBeAddedForAddConfigFile(): Unit = {
+    val fileContents =
+      """a=b
+        |c = d
+        |json = {"key": "val"}
+        |nested = [[1, 2], [3, 4]]
+        |""".stripMargin
+
+    val file = TestUtils.tempFile(fileContents)
+
+    val addConfigFileArgs = Array("--add-config-file", file.getPath)
+
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter")
+      ++ addConfigFileArgs)
+    createOpts.checkArgs()
+
+    val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
+    assertEquals(4, addedProps.size())
+    assertEquals("b", addedProps.getProperty("a"))
+    assertEquals("d", addedProps.getProperty("c"))
+    assertEquals("{\"key\": \"val\"}", addedProps.getProperty("json"))
+    assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
   }
 
   def doTestOptionEntityTypeNames(zkConfig: Boolean): Unit = {
@@ -343,16 +398,32 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @Test
-  def shouldAddClientConfig(): Unit = {
+  def testShouldAddClientConfig(user: Option[String], clientId: Option[String]): Unit = {
+    def toValues(entityName: Option[String], entityType: String, command: String):
+        (Array[String], Option[String], Option[ClientQuotaFilterComponent]) = {
+      entityName match {
+        case Some(null) =>
+          (Array("--entity-type", command, "--entity-default"), Some(null),
+            Some(ClientQuotaFilterComponent.ofDefaultEntity(entityType)))
+        case Some(name) =>
+          (Array("--entity-type", command, "--entity-name", name), Some(name),
+            Some(ClientQuotaFilterComponent.ofEntity(entityType, name)))
+        case None => (Array.empty, None, None)
+      }
+    }
+    val (userArgs, userEntity, userComponent) = toValues(user, ClientQuotaEntity.USER, "users")
+    val (clientIdArgs, clientIdEntity, clientIdComponent) = toValues(clientId, ClientQuotaEntity.CLIENT_ID, "clients")
+
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-name", "my-client-id",
-      "--entity-type", "clients",
       "--alter",
       "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
-      "--delete-config", "request_percentage"))
+      "--delete-config", "request_percentage") ++ userArgs ++ clientIdArgs)
 
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "my-client-id")).asJava)
+    // Explicitly populate a HashMap to ensure nulls are recorded properly.
+    val entityMap = new java.util.HashMap[String, String]
+    userEntity.foreach(u => entityMap.put(ClientQuotaEntity.USER, u))
+    clientIdEntity.foreach(c => entityMap.put(ClientQuotaEntity.CLIENT_ID, c))
+    val entity = new ClientQuotaEntity(entityMap)
 
     var describedConfigs = false
     val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
@@ -369,12 +440,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
-        assertEquals(1, filter.components.size)
         assertTrue(filter.strict)
-        val component = filter.components.asScala.head
-        assertEquals(ClientQuotaEntity.CLIENT_ID, component.entityType)
-        assertTrue(component.`match`.isPresent)
-        assertEquals("my-client-id", component.`match`.get)
+        val components = filter.components.asScala.toSeq
+        userComponent.foreach(c => assertTrue(components.contains(c)))
+        clientIdComponent.foreach(c => assertTrue(components.contains(c)))
         describedConfigs = true
         describeResult
       }
@@ -403,6 +472,19 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     EasyMock.reset(alterResult, describeResult)
   }
 
+
+  @Test
+  def shouldAddClientConfig(): Unit = {
+    testShouldAddClientConfig(Some("test-user-1"), Some("test-client-1"))
+    testShouldAddClientConfig(Some("test-user-2"), Some(null))
+    testShouldAddClientConfig(Some("test-user-3"), None)
+    testShouldAddClientConfig(Some(null), Some("test-client-2"))
+    testShouldAddClientConfig(Some(null), Some(null))
+    testShouldAddClientConfig(Some(null), None)
+    testShouldAddClientConfig(None, Some("test-client-3"))
+    testShouldAddClientConfig(None, Some(null))
+  }
+
   @Test
   def shouldAddTopicConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
@@ -424,12 +506,29 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldAlterTopicConfig(): Unit = {
+    doShouldAlterTopicConfig(false)
+  }
+
+  @Test
+  def shouldAlterTopicConfigFile(): Unit = {
+    doShouldAlterTopicConfig(true)
+  }
+
+  def doShouldAlterTopicConfig(file: Boolean): Unit = {
+    var filePath = ""
+    val addedConfigs = Seq("delete.retention.ms=1000000", "min.insync.replicas=2")
+    if (file) {
+      val file = TestUtils.tempFile(addedConfigs.mkString("\n"))
+      filePath = file.getPath
+    }
+
     val resourceName = "my-topic"
     val alterOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", resourceName,
       "--entity-type", "topics",
       "--alter",
-      "--add-config", "delete.retention.ms=1000000,min.insync.replicas=2",
+      if (file) "--add-config-file" else "--add-config",
+      if (file) filePath else addedConfigs.mkString(","),
       "--delete-config", "unclean.leader.election.enable"))
     var alteredConfigs = false
 
@@ -531,12 +630,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddBrokerDynamicConfig(): Unit = {
-    val node = new Node(1, "localhost", 9092)
-    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
-  }
-
-  @Test
   def shouldAddBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     verifyAlterBrokerLoggerConfig(node, "1", "1", List(
@@ -548,7 +641,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
-    val optsList = List("--zookeeper", "localhost:9092",
+    val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
       "--describe"
     )
@@ -638,6 +731,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     verifyAlterBrokerConfig(node, "", List("--entity-default"))
   }
 
+  @Test
+  def shouldAddBrokerDynamicConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
+  }
+
   def verifyAlterBrokerConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", "brokers",
@@ -674,7 +773,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val resource = entry.getKey
         val config = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        config.entries.forEach { e => brokerConfigs.put(e.name, e.value) }
         alterResult
       }
     }
@@ -682,6 +781,40 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
+  }
+
+  @Test
+  def shouldDescribeConfigBrokerWithoutEntityName(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    val BrokerDefaultEntityName = ""
+    val resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, BrokerDefaultEntityName)
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    val emptyConfig = new Config(util.Collections.emptyList[ConfigEntry])
+    val resultMap = Map(resourceCustom -> emptyConfig, resourceDefault -> emptyConfig).asJava
+    future.complete(resultMap)
+    val describeResult: DescribeConfigsResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
+    // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
+    EasyMock.expect(describeResult.all()).andReturn(future).times(2)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue("Synonyms not requested", options.includeSynonyms())
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.BROKER, resource.`type`)
+        assertTrue(resourceCustom.name == resource.name || resourceDefault.name == resource.name)
+        assertEquals(1, resources.size)
+        describeResult
+      }
+    }
+    EasyMock.replay(describeResult)
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    EasyMock.verify(describeResult)
+    EasyMock.reset(describeResult)
   }
 
   def verifyAlterBrokerLoggerConfig(node: Node, resourceName: String, entityName: String,

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
@@ -43,7 +42,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(error(), 1);
+        return errorCounts(error());
     }
 
     @Override

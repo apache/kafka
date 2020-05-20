@@ -130,8 +130,9 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (EpochEndOffset response : epochEndOffsetsByPartition.values())
-            updateErrorCounts(errorCounts, response.error());
+        epochEndOffsetsByPartition.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error())
+        );
         return errorCounts;
     }
 
