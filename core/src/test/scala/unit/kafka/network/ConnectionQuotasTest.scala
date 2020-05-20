@@ -301,7 +301,7 @@ class ConnectionQuotasTest {
         connectionQuotas.dec(listener.listenerName, listener.defaultIp)
       }
       // all connections should get added
-      futures.foreach(_.get(5, TimeUnit.SECONDS))
+      futures2.foreach(_.get(5, TimeUnit.SECONDS))
       listeners.values.foreach { listener =>
         assertEquals(s"Number of connections on $listener:",
           listenerMaxConnections, connectionQuotas.get(listener.defaultIp))
