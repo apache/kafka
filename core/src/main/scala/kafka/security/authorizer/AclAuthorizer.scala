@@ -17,7 +17,7 @@
 package kafka.security.authorizer
 
 import java.{lang, util}
-import java.util.concurrent.{CompletableFuture, CompletionStage}
+import java.util.concurrent.{CompletableFuture, CompletionStage, TimeUnit}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
@@ -35,6 +35,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.stats.{Rate, WindowedCount}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
@@ -119,6 +121,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private var zkClient: KafkaZkClient = _
   private var aclChangeListeners: Iterable[AclChangeSubscription] = Iterable.empty
   private var extendedAclSupport: Boolean = _
+  private var authorizerMetrics: AuthorizerMetrics = _
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
@@ -167,6 +170,10 @@ class AclAuthorizer extends Authorizer with Logging {
     // between loading cache and processing change notifications.
     startZkChangeListeners()
     loadCache()
+  }
+
+  override def monitor(metrics: Metrics): Unit = {
+    authorizerMetrics = new AuthorizerMetrics(metrics)
   }
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
@@ -282,6 +289,16 @@ class AclAuthorizer extends Authorizer with Logging {
     if (zkClient != null) zkClient.close()
   }
 
+  // Visible for testing only
+  def setupAuthorizerMetrics(metrics: Metrics): Unit = {
+    authorizerMetrics = new AuthorizerMetrics(metrics)
+  }
+
+  // Visible for testing only
+  def totalAcls(): Int = {
+    aclCache.size
+  }
+
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = action.resourcePattern
     if (resource.patternType != PatternType.LITERAL) {
@@ -334,6 +351,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val authorized = isSuperUser(principal) || aclsAllowAccess
 
     logAuditMessage(requestContext, action, authorized)
+    authorizerMetrics.recordAuthorizerMetrics(authorized)
     if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
   }
 
@@ -548,6 +566,33 @@ class AclAuthorizer extends Authorizer with Logging {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)
       }
+    }
+  }
+
+  class AuthorizerMetrics(metrics: Metrics) {
+    val GROUP_NAME = "kafka.security.authorizer.metrics"
+    val authorizationAllowedSensor = metrics.sensor("authorizer-authorization-allowed")
+    authorizationAllowedSensor.add(metrics.metricName("authorization-allowed-rate-per-minute", GROUP_NAME,
+      "The number of authoization allowed per hour"), new Rate(TimeUnit.MINUTES, new WindowedCount()))
+
+    val authorizationDeniedSensor = metrics.sensor("authorizer-authorization-denied")
+    authorizationDeniedSensor.add(metrics.metricName("authorization-denied-rate-per-minute", GROUP_NAME,
+      "The number of authoization denied per hour"), new Rate(TimeUnit.MINUTES, new WindowedCount()))
+
+    val authorizationRequestSensor = metrics.sensor("authorizer-authorization-request")
+    authorizationRequestSensor.add(metrics.metricName("authorization-request-rate-per-minute", GROUP_NAME,
+      "The number of authoization request per hour"), new Rate(TimeUnit.MINUTES, new WindowedCount()))
+
+    metrics.addMetric(metrics.metricName("acls-total-count", GROUP_NAME, "The number of acls defined"),
+      (config, now) => aclCache.size)
+
+    def recordAuthorizerMetrics(authorized: Boolean): Unit = {
+      if (authorized) {
+        authorizationAllowedSensor.record()
+      } else {
+        authorizationDeniedSensor.record()
+      }
+      authorizationRequestSensor.record()
     }
   }
 }

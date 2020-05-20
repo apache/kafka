@@ -27,6 +27,7 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.Monitorable;
 
 /**
  *
@@ -63,7 +64,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * </p>
  */
 @InterfaceStability.Evolving
-public interface Authorizer extends Configurable, Closeable {
+public interface Authorizer extends Configurable, Closeable, Monitorable {
 
     /**
      * Starts loading authorization metadata and returns futures that can be used to wait until
