@@ -573,18 +573,6 @@ public class ConsumerConfig extends AbstractConfig {
         return newConfigs;
     }
 
-    public static Properties addDeserializerToConfig(Properties properties,
-                                                     Deserializer<?> keyDeserializer,
-                                                     Deserializer<?> valueDeserializer) {
-        Properties newProperties = new Properties();
-        newProperties.putAll(properties);
-        if (keyDeserializer != null)
-            newProperties.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
-        if (valueDeserializer != null)
-            newProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
-        return newProperties;
-    }
-
     boolean maybeOverrideEnableAutoCommit() {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
         boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);

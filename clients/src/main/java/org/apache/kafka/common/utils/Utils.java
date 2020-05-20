@@ -20,6 +20,7 @@ import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -738,6 +739,19 @@ public final class Utils {
             result.put(entry.getKey(), entry.getValue());
         }
         return result;
+    }
+
+    public static Map<String, Object> propsToMap(Properties properties) {
+        Map<String, Object> map = new HashMap<>(properties.size());
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                String k = (String) entry.getKey();
+                map.put(k, properties.get(k));
+            } else {
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+            }
+        }
+        return map;
     }
 
     /**

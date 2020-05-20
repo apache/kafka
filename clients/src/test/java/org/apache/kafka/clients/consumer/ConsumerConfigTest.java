@@ -69,33 +69,6 @@ public class ConsumerConfigTest {
     }
 
     @Test
-    public void testDeserializerToPropertyConfig() {
-        Properties properties = new Properties();
-        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
-        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
-        Properties newProperties = ConsumerConfig.addDeserializerToConfig(properties, null, null);
-        assertEquals(newProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClassName);
-        assertEquals(newProperties.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClassName);
-
-        properties.clear();
-        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
-        newProperties = ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, null);
-        assertEquals(newProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClassName);
-        assertEquals(newProperties.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClassName);
-
-        properties.clear();
-        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
-        newProperties = ConsumerConfig.addDeserializerToConfig(properties, null, valueDeserializer);
-        assertEquals(newProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClassName);
-        assertEquals(newProperties.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClassName);
-
-        properties.clear();
-        newProperties = ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer);
-        assertEquals(newProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClassName);
-        assertEquals(newProperties.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClassName);
-    }
-
-    @Test
     public void testDeserializerToMapConfig() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);

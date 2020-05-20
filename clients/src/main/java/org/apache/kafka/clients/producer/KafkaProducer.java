@@ -75,7 +75,6 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -84,6 +83,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 
 /**
@@ -1235,18 +1236,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         log.debug("Kafka producer has been closed");
     }
 
-    private static Map<String, Object> propsToMap(Properties properties) {
-        Map<String, Object> map = new HashMap<>(properties.size());
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
-            if (entry.getKey() instanceof String) {
-                String k = (String) entry.getKey();
-                map.put(k, properties.get(k));
-            } else {
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
-            }
-        }
-        return map;
-    }
 
     private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
