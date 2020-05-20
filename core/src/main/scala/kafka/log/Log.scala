@@ -180,6 +180,17 @@ object RollParams {
   }
 }
 
+sealed trait LogStartIncrementCause
+case object ClientRecordDeletion extends LogStartIncrementCause {
+  override def toString: String = "client delete records request"
+}
+case object LeaderOffsetIncremented extends LogStartIncrementCause {
+  override def toString: String = "leader offset increment"
+}
+case object SegmentDeletion extends LogStartIncrementCause {
+  override def toString: String = "segment deletion to enforce retention"
+}
+
 /**
  * An append-only log for storing messages.
  *
@@ -1261,10 +1272,9 @@ class Log(@volatile private var _dir: File,
   }
 
   /**
-   * Increment the log start offset if the provided offset is larger. Return true if the
-   * log start offset is incremented
+   * Increment the log start offset if the provided offset is larger.
    */
-  private[log] def maybeIncrementLogStartOffset(newLogStartOffset: Long): Boolean = {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, cause: LogStartIncrementCause): Unit = {
     if (newLogStartOffset > highWatermark)
       throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
         s"since it is larger than the high watermark $highWatermark")
@@ -1277,23 +1287,13 @@ class Log(@volatile private var _dir: File,
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           updateLogStartOffset(newLogStartOffset)
+          info(s"Incremented log start offset to $newLogStartOffset after $cause")
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.truncateHead(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
-          true
         }
       }
     }
-
-    false
-  }
-
-  /**
-   * Increment the log start offset if the provided offset is larger.
-   */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long, cause: => String): Unit = {
-    if (maybeIncrementLogStartOffset(newLogStartOffset))
-      info(s"Incremented log start offset to $newLogStartOffset due to $cause")
   }
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
@@ -1722,7 +1722,7 @@ class Log(@volatile private var _dir: File,
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           removeAndDeleteSegments(deletable, asyncDelete = true)
-          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, "segment deletion")
+          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentDeletion)
         }
       }
       numToDelete
