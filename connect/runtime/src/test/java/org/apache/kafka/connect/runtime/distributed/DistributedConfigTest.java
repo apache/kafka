@@ -260,8 +260,8 @@ public class DistributedConfigTest {
         topicSettings.put("partitions", "3");
 
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> {
-            settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + e.getKey(), e.getValue());
+        topicSettings.forEach((k, v) -> {
+            settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + k, v);
         });
         DistributedConfig config = new DistributedConfig(settings);
         Map<String, Object> actual = config.configStorageTopicSettings();
@@ -279,8 +279,8 @@ public class DistributedConfigTest {
         topicSettings.put("cleanup.policy", "something-else");
 
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> {
-            settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + e.getKey(), e.getValue());
+        topicSettings.forEach((k, v) -> {
+            settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + k, v);
         });
         DistributedConfig config = new DistributedConfig(settings);
         Map<String, Object> actual = config.offsetStorageTopicSettings();
@@ -298,8 +298,8 @@ public class DistributedConfigTest {
         topicSettings.put("cleanup.policy", "something-else");
 
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> {
-            settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + e.getKey(), e.getValue());
+        topicSettings.forEach((k, v) -> {
+            settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + k, v);
         });
         DistributedConfig config = new DistributedConfig(settings);
         Map<String, Object> actual = config.statusStorageTopicSettings();

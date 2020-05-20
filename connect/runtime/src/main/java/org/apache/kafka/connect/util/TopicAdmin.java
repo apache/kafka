@@ -60,8 +60,8 @@ public class TopicAdmin implements AutoCloseable {
      */
     public static class NewTopicBuilder {
         private String name;
-        private Integer numPartitions = null;
-        private Short replicationFactor = null;
+        private int numPartitions = NO_PARTITIONS;
+        private short replicationFactor = NO_REPLICATION_FACTOR;
         private Map<String, String> configs = new HashMap<>();
 
         NewTopicBuilder(String name) {
@@ -76,9 +76,6 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder partitions(int numPartitions) {
-            if (numPartitions == NO_PARTITIONS) {
-                return defaultPartitions();
-            }
             this.numPartitions = numPartitions;
             return this;
         }
@@ -90,7 +87,7 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder defaultPartitions() {
-            this.numPartitions = null;
+            this.numPartitions = NO_PARTITIONS;
             return this;
         }
 
@@ -102,9 +99,6 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder replicationFactor(short replicationFactor) {
-            if (replicationFactor == NO_REPLICATION_FACTOR) {
-                return defaultReplicationFactor();
-            }
             this.replicationFactor = replicationFactor;
             return this;
         }
@@ -116,7 +110,7 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder defaultReplicationFactor() {
-            this.replicationFactor = null;
+            this.replicationFactor = NO_REPLICATION_FACTOR;
             return this;
         }
 
@@ -179,8 +173,8 @@ public class TopicAdmin implements AutoCloseable {
         public NewTopic build() {
             return new NewTopic(
                     name,
-                    Optional.ofNullable(numPartitions),
-                    Optional.ofNullable(replicationFactor)
+                    Optional.of(numPartitions),
+                    Optional.of(replicationFactor)
             ).configs(configs);
         }
     }

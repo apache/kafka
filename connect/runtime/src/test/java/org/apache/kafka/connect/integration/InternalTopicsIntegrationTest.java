@@ -38,7 +38,6 @@ public class InternalTopicsIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopicsIntegrationTest.class);
 
-    private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
     Map<String, String> workerProps = new HashMap<>();
     Properties brokerProps = new Properties();
@@ -47,13 +46,6 @@ public class InternalTopicsIntegrationTest {
     public void setup() {
         // setup Kafka broker properties
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
-
-        // build a Connect cluster backed by Kafka and Zk
-        connectBuilder = new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
-                .numWorkers(1)
-                .numBrokers(1)
-                .brokerProps(brokerProps);
     }
 
     @After
@@ -88,9 +80,6 @@ public class InternalTopicsIntegrationTest {
         log.info("Stopping the Connect worker");
         connect.removeWorker();
 
-        // Sleep for a bit
-        Thread.sleep(3000);
-
         // And restart
         log.info("Starting the Connect worker");
         connect.startConnect();
@@ -110,7 +99,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 1;
         int numBrokers = 2;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-2")
+        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
@@ -136,7 +125,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 1;
         int numBrokers = 1;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-3")
+        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)

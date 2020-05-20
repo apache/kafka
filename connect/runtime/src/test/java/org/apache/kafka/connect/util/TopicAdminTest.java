@@ -107,19 +107,19 @@ public class TopicAdminTest {
         for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
             int expectedReplicas = Math.min(3, numBrokers);
             int maxDefaultRf = Math.min(numBrokers, 5);
-            for (int numPartitions = 1; numPartitions != 30; ++numPartitions) {
+            for (int numPartitions = 1; numPartitions < 30; ++numPartitions) {
                 NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(numPartitions).compacted().build();
 
                 // Try clusters with no default replication factor or default partitions
                 assertTopicCreation(numBrokers, newTopic, null, null, expectedReplicas, numPartitions);
 
                 // Try clusters with different default partitions
-                for (int defaultPartitions = 1; defaultPartitions != 20; ++defaultPartitions) {
+                for (int defaultPartitions = 1; defaultPartitions < 20; ++defaultPartitions) {
                     assertTopicCreation(numBrokers, newTopic, defaultPartitions, null, expectedReplicas, numPartitions);
                 }
 
                 // Try clusters with different default replication factors
-                for (int defaultRF = 1; defaultRF != maxDefaultRf; ++defaultRF) {
+                for (int defaultRF = 1; defaultRF < maxDefaultRf; ++defaultRF) {
                     assertTopicCreation(numBrokers, newTopic, null, defaultRF, defaultRF, numPartitions);
                 }
             }
@@ -131,19 +131,19 @@ public class TopicAdminTest {
         for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
             int maxRf = Math.min(numBrokers, 5);
             int maxDefaultRf = Math.min(numBrokers, 5);
-            for (short rf = 1; rf != maxRf; ++rf) {
+            for (short rf = 1; rf < maxRf; ++rf) {
                 NewTopic newTopic = TopicAdmin.defineTopic("myTopic").replicationFactor(rf).compacted().build();
 
                 // Try clusters with no default replication factor or default partitions
                 assertTopicCreation(numBrokers, newTopic, null, null, rf, 1);
 
                 // Try clusters with different default partitions
-                for (int numPartitions = 1; numPartitions != 30; ++numPartitions) {
+                for (int numPartitions = 1; numPartitions < 30; ++numPartitions) {
                     assertTopicCreation(numBrokers, newTopic, numPartitions, null, rf, numPartitions);
                 }
 
                 // Try clusters with different default replication factors
-                for (int defaultRF = 1; defaultRF != maxDefaultRf; ++defaultRF) {
+                for (int defaultRF = 1; defaultRF < maxDefaultRf; ++defaultRF) {
                     assertTopicCreation(numBrokers, newTopic, null, defaultRF, rf, 1);
                 }
             }
