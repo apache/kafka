@@ -175,7 +175,7 @@ class ReplicaFetcherThread(name: String,
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
     val followerHighWatermark = log.updateHighWatermark(partitionData.highWatermark)
-    log.maybeIncrementLogStartOffset(leaderLogStartOffset)
+    log.maybeIncrementLogStartOffset(leaderLogStartOffset, "leader offset increment")
     if (logTrace)
       trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
 

@@ -122,7 +122,7 @@ class ReplicaAlterLogDirsThread(name: String,
       None
 
     futureLog.updateHighWatermark(partitionData.highWatermark)
-    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset)
+    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset, "leader offset increment")
 
     if (partition.maybeReplaceCurrentWithFutureReplica())
       removePartitions(Set(topicPartition))

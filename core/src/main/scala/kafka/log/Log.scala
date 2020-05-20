@@ -1261,9 +1261,10 @@ class Log(@volatile private var _dir: File,
   }
 
   /**
-   * Increment the log start offset if the provided offset is larger.
+   * Increment the log start offset if the provided offset is larger. Return true if the
+   * log start offset is incremented
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long): Unit = {
+  private[log] def maybeIncrementLogStartOffset(newLogStartOffset: Long): Boolean = {
     if (newLogStartOffset > highWatermark)
       throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
         s"since it is larger than the high watermark $highWatermark")
@@ -1275,14 +1276,24 @@ class Log(@volatile private var _dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
-          info(s"Incrementing log start offset to $newLogStartOffset")
           updateLogStartOffset(newLogStartOffset)
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.truncateHead(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
+          true
         }
       }
     }
+
+    false
+  }
+
+  /**
+   * Increment the log start offset if the provided offset is larger.
+   */
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, cause: => String): Unit = {
+    if (maybeIncrementLogStartOffset(newLogStartOffset))
+      info(s"Incremented log start offset to $newLogStartOffset due to $cause")
   }
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
@@ -1711,7 +1722,7 @@ class Log(@volatile private var _dir: File,
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           removeAndDeleteSegments(deletable, asyncDelete = true)
-          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
+          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, "segment deletion")
         }
       }
       numToDelete
