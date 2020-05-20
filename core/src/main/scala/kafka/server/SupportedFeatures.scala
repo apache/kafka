@@ -44,7 +44,7 @@ object SupportedFeatures extends Logging {
    * cluster-wide finalized feature:
    *  1) Does not exist in the Broker (i.e. it is unknown to the Broker).
    *           [OR]
-   *  2) Exists but the version level range does not match with the supported feature's version range.
+   *  2) Exists but the FinalizedVersionRange does not match with the supported feature's SupportedVersionRange.
    *
    * @param finalized   The finalized features against which incompatibilities need to be checked for.
    *
