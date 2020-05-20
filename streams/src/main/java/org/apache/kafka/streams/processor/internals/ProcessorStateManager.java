@@ -219,7 +219,7 @@ public class ProcessorStateManager implements StateManager {
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
-                        // and hence we are uncertain the the current local state only contains committed data;
+                        // and hence we are uncertain that the current local state only contains committed data;
                         // in that case we need to treat it as a task-corrupted exception
                         if (eosEnabled && !storeDirIsEmpty) {
                             log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
