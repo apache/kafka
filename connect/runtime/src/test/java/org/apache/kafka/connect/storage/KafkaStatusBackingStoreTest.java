@@ -77,7 +77,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Before
     public void setup() {
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog, CLUSTER_ID);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
     }
 
     @Test

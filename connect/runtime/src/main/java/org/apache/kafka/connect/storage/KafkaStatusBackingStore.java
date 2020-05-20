@@ -131,20 +131,18 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
-    private final String clusterId;
 
-    public KafkaStatusBackingStore(Time time, Converter converter, String clusterId) {
+    public KafkaStatusBackingStore(Time time, Converter converter) {
         this.time = time;
         this.converter = converter;
-        this.clusterId = clusterId;
         this.tasks = new Table<>();
         this.connectors = new HashMap<>();
         this.topics = new ConcurrentHashMap<>();
     }
 
     // visible for testing
-    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog, String clusterId) {
-        this(time, converter, clusterId);
+    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
+        this(time, converter);
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
     }
@@ -155,6 +153,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (this.statusTopic == null || this.statusTopic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector status.");
 
+        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

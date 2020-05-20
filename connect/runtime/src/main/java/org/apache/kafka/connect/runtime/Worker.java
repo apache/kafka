@@ -93,6 +93,7 @@ public class Worker {
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
+    //kafka cluster id
     private final String clusterId;
     private final Plugins plugins;
     private final ConnectMetrics metrics;
@@ -115,9 +116,8 @@ public class Worker {
         Plugins plugins,
         WorkerConfig config,
         OffsetBackingStore offsetBackingStore,
-        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-        String clusterId) {
-        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy, clusterId);
+        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
     }
 
     @SuppressWarnings("deprecation")
@@ -128,13 +128,12 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore,
             ExecutorService executorService,
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-            String clusterId
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
+        this.clusterId = ConnectUtils.lookupKafkaClusterId(config);
         this.metrics = new ConnectMetrics(workerId, config, time, clusterId);
         this.executor = executorService;
         this.workerId = workerId;
-        this.clusterId = clusterId;
         this.time = time;
         this.plugins = plugins;
         this.config = config;

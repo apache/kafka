@@ -101,25 +101,24 @@ public class ConnectDistributed {
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(kafkaClusterId);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
         offsetBackingStore.configure(config);
 
         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
                 config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
                 config, ConnectorClientConfigOverridePolicy.class);
 
-        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy, kafkaClusterId);
+        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
 
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, kafkaClusterId);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
         statusBackingStore.configure(config);
 
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
                 config,
-                configTransformer,
-                kafkaClusterId);
+                configTransformer);
 
         DistributedHerder herder = new DistributedHerder(config, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,

@@ -59,10 +59,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
-    private final String clusterId;
 
-    public KafkaOffsetBackingStore(String clusterId) {
-        this.clusterId = clusterId;
+    public KafkaOffsetBackingStore() {
     }
 
     @Override
@@ -71,6 +69,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
 
+        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         data = new HashMap<>();
 
         Map<String, Object> originals = config.originals();

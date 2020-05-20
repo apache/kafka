@@ -93,7 +93,7 @@ public class ConnectStandalone {
                 config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
                 config, ConnectorClientConfigOverridePolicy.class);
             Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore(),
-                                       connectorClientConfigOverridePolicy, kafkaClusterId);
+                                       connectorClientConfigOverridePolicy);
 
             Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy);
             final Connect connect = new Connect(herder, rest);

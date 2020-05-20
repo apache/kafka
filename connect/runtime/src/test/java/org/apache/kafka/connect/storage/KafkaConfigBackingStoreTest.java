@@ -27,9 +27,11 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
@@ -61,7 +63,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaConfigBackingStore.class)
+@PrepareForTest({KafkaConfigBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaConfigBackingStoreTest {
@@ -143,10 +145,16 @@ public class KafkaConfigBackingStoreTest {
     private Capture<Callback<ConsumerRecord<String, byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
 
     private long logOffset = 0;
+    private Capture<WorkerConfig> capturedCfg = EasyMock.newCapture();
+
 
     @Before
     public void setUp() {
-        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, null, "test-cluster");
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
+        PowerMock.replay(ConnectUtils.class);
+
+        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, null);
         Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
     }

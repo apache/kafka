@@ -233,18 +233,17 @@ public class MirrorMaker {
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(distributedConfig);
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(kafkaClusterId);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
         offsetBackingStore.configure(distributedConfig);
-        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY, kafkaClusterId);
+        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, kafkaClusterId);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
         statusBackingStore.configure(distributedConfig);
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
                 distributedConfig,
-                configTransformer,
-                kafkaClusterId);
+                configTransformer);
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY);

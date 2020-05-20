@@ -239,14 +239,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final WorkerConfigTransformer configTransformer;
 
-    private final String clusterId;
-
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer, String clusterId) {
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
-        this.clusterId = clusterId;
 
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
         if (this.topic == null || this.topic.trim().length() == 0)
@@ -447,6 +444,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
+        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

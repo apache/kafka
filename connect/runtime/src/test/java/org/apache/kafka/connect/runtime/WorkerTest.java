@@ -102,7 +102,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({Worker.class, Plugins.class})
+@PrepareForTest({Worker.class, Plugins.class, ConnectUtils.class})
 @PowerMockIgnore("javax.management.*")
 public class WorkerTest extends ThreadedTest {
 
@@ -232,10 +232,11 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -297,9 +298,11 @@ public class WorkerTest extends ThreadedTest {
         );
         EasyMock.expectLastCall();
 
+        expectClusterId();
+
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -358,10 +361,11 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -424,10 +428,11 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -452,10 +457,11 @@ public class WorkerTest extends ThreadedTest {
         expectConverters();
         expectStartStorage();
         expectFileConfigProvider();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -511,10 +517,11 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
 
@@ -625,11 +632,12 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+                            noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -741,6 +749,8 @@ public class WorkerTest extends ThreadedTest {
         workerTask.stop();
         EasyMock.expectLastCall();
 
+        expectClusterId();
+
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
@@ -749,8 +759,7 @@ public class WorkerTest extends ThreadedTest {
             config,
             offsetBackingStore,
             executorService,
-            noneConnectorClientConfigOverridePolicy,
-            CLUSTER_ID);
+            noneConnectorClientConfigOverridePolicy);
 
         worker.herder = herder;
 
@@ -801,6 +810,8 @@ public class WorkerTest extends ThreadedTest {
         taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
         EasyMock.expectLastCall();
 
+        expectClusterId();
+
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
@@ -808,8 +819,7 @@ public class WorkerTest extends ThreadedTest {
             plugins,
             config,
             offsetBackingStore,
-            noneConnectorClientConfigOverridePolicy,
-            CLUSTER_ID);
+            noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
 
         Worker.ConnectorStatusMetricsGroup metricGroup = new Worker.ConnectorStatusMetricsGroup(
@@ -849,9 +859,11 @@ public class WorkerTest extends ThreadedTest {
         taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
         EasyMock.expectLastCall();
 
+        expectClusterId();
+
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -944,11 +956,12 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+                            noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -1040,11 +1053,12 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+                            noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -1297,6 +1311,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         expectStopStorage();
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -1305,8 +1320,7 @@ public class WorkerTest extends ThreadedTest {
                 plugins,
                 config,
                 offsetBackingStore,
-                noneConnectorClientConfigOverridePolicy,
-                CLUSTER_ID
+                noneConnectorClientConfigOverridePolicy
                 );
         MetricName name = worker.metrics().metrics().metricName("test.avg", "grp1");
         worker.metrics().metrics().addMetric(name, new Avg());
@@ -1461,6 +1475,11 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         return props;
+    }
+
+    private void expectClusterId() {
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
