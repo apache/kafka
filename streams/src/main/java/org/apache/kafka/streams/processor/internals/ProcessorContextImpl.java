@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -223,6 +224,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final V value) {
         setCurrentNode(child);
         child.process(key, value);
+        streamTask.maybeRecordE2ELatency(timestamp(), child.name());
     }
 
     @Override

@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -97,6 +99,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
+    private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
     private final InternalProcessorContext processorContext;
 
     private long idleStartTimeMs;
@@ -139,6 +142,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
+
+        for (final String terminalNode : topology.terminalNodes()) {
+            e2eLatencySensors.put(
+                terminalNode,
+                ProcessorNodeMetrics.recordE2ELatencySensor(threadId, taskId, terminalNode, RecordingLevel.INFO, streamsMetrics)
+            );
+        }
+
+        for (final ProcessorNode<?, ?> sourceNode : topology.sources()) {
+            final String processorId = sourceNode.name();
+            e2eLatencySensors.put(
+                processorId,
+                ProcessorNodeMetrics.recordE2ELatencySensor(threadId, taskId, processorId, RecordingLevel.INFO, streamsMetrics)
+            );
+        }
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
@@ -586,7 +604,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode, wallClockTime);
-            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
+            maybeMeasureLatency(
+                () -> currNode.process(record.key(), record.value()),
+                time,
+                processLatencySensor
+            );
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -897,6 +919,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return punctuated;
+    }
+
+    void maybeRecordE2ELatency(final long recordTimestamp, final String nodeName) {
+        final Sensor e2eLatencySensor = e2eLatencySensors.get(nodeName);
+        if (e2eLatencySensor != null) {
+            final long now = time.milliseconds();
+            e2eLatencySensor.record(now - recordTimestamp, now);
+        }
     }
 
     /**

@@ -241,5 +241,6 @@ public class AbstractProcessorContextTest {
                               final byte[] value,
                               final long timestamp) {
         }
+
     }
 }

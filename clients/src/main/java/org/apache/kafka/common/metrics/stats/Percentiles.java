@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.kafka.common.metrics.CompoundStat;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
@@ -63,11 +62,10 @@ public class Percentiles extends SampledStat implements CompoundStat {
         List<NamedMeasurable> ms = new ArrayList<>(this.percentiles.length);
         for (Percentile percentile : this.percentiles) {
             final double pct = percentile.percentile();
-            ms.add(new NamedMeasurable(percentile.name(), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return value(config, now, pct / 100.0);
-                }
-            }));
+            ms.add(new NamedMeasurable(
+                percentile.name(),
+                (config, now) -> value(config, now, pct / 100.0))
+            );
         }
         return ms;
     }

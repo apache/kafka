@@ -102,5 +102,4 @@ public interface InternalProcessorContext extends ProcessorContext {
                    final Bytes key,
                    final byte[] value,
                    final long timestamp);
-
 }

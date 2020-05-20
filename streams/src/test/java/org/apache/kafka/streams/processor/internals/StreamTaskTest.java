@@ -133,11 +133,13 @@ public class StreamTaskTest {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
-    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
-    private final MockTime time = new MockTime();
+
+    private MockTime time = new MockTime();
+    private Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
+    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+
 
     private StateDirectory stateDirectory;
     private StreamTask task;
@@ -421,6 +423,45 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRecordE2ELatency() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
+
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode= "MOCK-SOURCE-1";
+
+        final KafkaMetric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final KafkaMetric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
+
+        // e2e latency = 10
+        time.setCurrentTimeMs(10L);
+        task.maybeRecordE2ELatency(0L, sourceNode);
+        assertThat(maxMetric.metricValue(), equalTo(10d));
+        assertThat(minMetric.metricValue(), equalTo(10d));
+
+        // e2e latency = 15
+        time.setCurrentTimeMs(25L);
+        task.maybeRecordE2ELatency(10L, sourceNode);
+        assertThat(maxMetric.metricValue(), equalTo(15d));
+        assertThat(minMetric.metricValue(), equalTo(10d));
+
+        // e2e latency = 25
+        time.setCurrentTimeMs(30L);
+        task.maybeRecordE2ELatency(5L, sourceNode);
+        assertThat(maxMetric.metricValue(), equalTo(25d));
+        assertThat(minMetric.metricValue(), equalTo(10d));
+
+        // e2e latency = 20
+        time.setCurrentTimeMs(40L);
+        task.maybeRecordE2ELatency(35L, sourceNode);
+        assertThat(maxMetric.metricValue(), equalTo(25d));
+        assertThat(minMetric.metricValue(), equalTo(5d));
+    }
+
+    @Test
     public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
@@ -528,9 +569,9 @@ public class StreamTaskTest {
     }
 
     private KafkaMetric getMetric(final String operation,
-                                  final String nameFormat,
-                                  final String taskId,
-                                  final String builtInMetricsVersion) {
+                                   final String nameFormat,
+                                   final String taskId,
+                                   final String builtInMetricsVersion) {
         final String descriptionIsNotVerified = "";
         return metrics.metrics().get(metrics.metricName(
             String.format(nameFormat, operation),
@@ -538,6 +579,28 @@ public class StreamTaskTest {
             descriptionIsNotVerified,
             mkMap(
                 mkEntry("task-id", taskId),
+                mkEntry(
+                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
+                        : THREAD_ID_TAG_0100_TO_24,
+                    Thread.currentThread().getName()
+                )
+            )
+        ));
+    }
+
+    private KafkaMetric getProcessorMetric(final String operation,
+                                           final String nameFormat,
+                                           final String taskId,
+                                           final String processorNodeId,
+                                           final String builtInMetricsVersion) {
+        final String descriptionIsNotVerified = "";
+        return metrics.metrics().get(metrics.metricName(
+            String.format(nameFormat, operation),
+            "stream-processor-node-metrics",
+            descriptionIsNotVerified,
+            mkMap(
+                mkEntry("task-id", taskId),
+                mkEntry("processor-node-id", processorNodeId),
                 mkEntry(
                     StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
                         : THREAD_ID_TAG_0100_TO_24,

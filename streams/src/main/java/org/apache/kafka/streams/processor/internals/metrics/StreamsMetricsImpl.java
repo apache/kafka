@@ -28,6 +28,9 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
+import org.apache.kafka.common.metrics.stats.Percentile;
+import org.apache.kafka.common.metrics.stats.Percentiles;
+import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -128,6 +131,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
+    public static final String P99_SUFFIX = "-p99";
+    public static final String P90_SUFFIX = "-p90";
 
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
@@ -639,6 +644,57 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 descriptionOfMax,
                 tags),
             new Max()
+        );
+    }
+
+    public static void addMinAndMaxAndP99AndP90ToSensor(final Sensor sensor,
+                                                        final String group,
+                                                        final Map<String, String> tags,
+                                                        final String operation,
+                                                        final String descriptionOfMax,
+                                                        final String descriptionOfMin,
+                                                        final String descriptionOfP99,
+                                                        final String descriptionOfP90) {
+        sensor.add(
+            new MetricName(
+                operation + MIN_SUFFIX,
+                group,
+                descriptionOfMin,
+                tags),
+            new Min()
+        );
+
+        sensor.add(
+            new MetricName(
+                operation + MAX_SUFFIX,
+                group,
+                descriptionOfMax,
+                tags),
+            new Max()
+        );
+
+        final int sizeInBytes = 1000 * 1000; // 1 MB
+        double maximumValue = 100 * 24 * 60 * 60 * 1000d; // maximum latency is 1000 days
+
+        sensor.add(
+            new Percentiles(
+                sizeInBytes,
+                maximumValue,
+                BucketSizing.LINEAR,
+                new Percentile(
+                    new MetricName(
+                        operation + P99_SUFFIX,
+                        group,
+                        descriptionOfP99,
+                        tags),
+                    99),
+                new Percentile(
+                    new MetricName(
+                        operation + P90_SUFFIX,
+                        group,
+                        descriptionOfP90,
+                        tags),
+                    90))
         );
     }
 
