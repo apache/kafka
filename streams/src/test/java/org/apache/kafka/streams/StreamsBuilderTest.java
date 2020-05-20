@@ -265,7 +265,7 @@ public class StreamsBuilderTest {
                  processorSupplier.theCapturedProcessor().processed);
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldProcessViaThroughTopic() {
         final KStream<String, String> source = builder.stream("topic-source");

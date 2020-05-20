@@ -194,6 +194,7 @@ public class StreamsGraphTest {
     }
 
     // no need to optimize as user has already performed the repartitioning manually
+    @Deprecated
     @Test
     public void shouldNotOptimizeWhenAThroughOperationIsDone() {
         final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
@@ -253,7 +254,7 @@ public class StreamsGraphTest {
 
     }
 
-    @SuppressWarnings("deprecation") // specifically testing the deprecated variant
+    @Deprecated // specifically testing the deprecated variant
     private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
