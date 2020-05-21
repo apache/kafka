@@ -54,7 +54,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
-import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -62,14 +61,11 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -1257,7 +1253,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
-            getStoreNamesAndMaybeAddStores(transformerSupplier, stateStoreNames));
+            stateStoreNames);
         transformNode.keyChangingOperation(true);
 
         builder.addGraphNode(streamsGraphNode, transformNode);
@@ -1323,7 +1319,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamTransformValues<>(valueTransformerWithKeySupplier), name),
-            getStoreNamesAndMaybeAddStores(valueTransformerWithKeySupplier, stateStoreNames));
+            stateStoreNames);
         transformNode.setValueChangingOperation(true);
 
         builder.addGraphNode(streamsGraphNode, transformNode);
@@ -1387,7 +1383,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamFlatTransformValues<>(valueTransformerWithKeySupplier), name),
-            getStoreNamesAndMaybeAddStores(valueTransformerWithKeySupplier, stateStoreNames));
+            stateStoreNames);
         transformNode.setValueChangingOperation(true);
 
         builder.addGraphNode(streamsGraphNode, transformNode);
@@ -1424,25 +1420,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
-            getStoreNamesAndMaybeAddStores(processorSupplier, stateStoreNames));
+            stateStoreNames);
 
         builder.addGraphNode(streamsGraphNode, processNode);
-    }
-
-    /**
-     * Provides store names that should be connected to a {@link StatefulProcessorNode}, from two sources:
-     * 1) Store names are provided as arguments to process(...), transform(...), etc.
-     * 2) {@link StoreBuilder}s are provided by the Processor/TransformerSupplier itself, by returning a set from
-     * {@link ConnectedStoreProvider#stores()}.  The {@link StoreBuilder}s will also be added to the topology.
-     */
-    private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String... varargsStoreNames) {
-        final List<String> allStoreNames = new ArrayList<>(Arrays.asList(varargsStoreNames));
-        final Set<StoreBuilder<?>> stores = storeProvider.stores();
-        if (stores != null) {
-            stores.forEach(builder::addStateStore);
-            stores.stream().map(StoreBuilder::name)
-                .forEach(allStoreNames::add);
-        }
-        return allStoreNames.toArray(new String[]{});
     }
 }
