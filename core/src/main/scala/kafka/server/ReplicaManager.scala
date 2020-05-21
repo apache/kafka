@@ -98,7 +98,6 @@ case class LogReadResult(info: FetchDataInfo,
                          readSize: Int,
                          lastStableOffset: Option[Long],
                          preferredReadReplica: Option[Int] = None,
-                         followerNeedsHwUpdate: Boolean = false,
                          exception: Option[Throwable] = None) {
 
   def error: Errors = exception match {
@@ -110,8 +109,15 @@ case class LogReadResult(info: FetchDataInfo,
     copy(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY))
 
   override def toString =
-    s"Fetch Data: [$info], HW: [$highWatermark], leaderLogStartOffset: [$leaderLogStartOffset], leaderLogEndOffset: [$leaderLogEndOffset], " +
-    s"followerLogStartOffset: [$followerLogStartOffset], fetchTimeMs: [$fetchTimeMs], readSize: [$readSize], lastStableOffset: [$lastStableOffset], error: [$error]"
+    s"Fetch Data: [$info], " +
+      s"HW: [$highWatermark], " +
+      s"leaderLogStartOffset: [$leaderLogStartOffset], " +
+      s"leaderLogEndOffset: [$leaderLogEndOffset], " +
+      s"followerLogStartOffset: [$followerLogStartOffset], " +
+      s"fetchTimeMs: [$fetchTimeMs], " +
+      s"readSize: [$readSize], " +
+      s"lastStableOffset: [$lastStableOffset], " +
+      s"error: [$error]"
 
 }
 
@@ -971,7 +977,6 @@ class ReplicaManager(val config: KafkaConfig,
     var bytesReadable: Long = 0
     var errorReadingData = false
     val logReadResultMap = new mutable.HashMap[TopicPartition, LogReadResult]
-    var anyPartitionsNeedHwUpdate = false
     logReadResults.foreach { case (topicPartition, logReadResult) =>
       brokerTopicStats.topicStats(topicPartition.topic).totalFetchRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
@@ -980,17 +985,13 @@ class ReplicaManager(val config: KafkaConfig,
         errorReadingData = true
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
       logReadResultMap.put(topicPartition, logReadResult)
-      if (isFromFollower && logReadResult.followerNeedsHwUpdate) {
-        anyPartitionsNeedHwUpdate = true
-      }
     }
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
-    //                        5) any of the requested partitions need HW update
-    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
+    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
           result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
@@ -1079,10 +1080,6 @@ class ReplicaManager(val config: KafkaConfig,
             fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
 
-          // Check if the HW known to the follower is behind the actual HW if a replica selector is defined
-          val followerNeedsHwUpdate = replicaSelectorOpt.isDefined &&
-            partition.getReplica(replicaId).exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
-
           val fetchDataInfo = if (shouldLeaderThrottle(quota, partition, replicaId)) {
             // If the partition is being throttled, simply return an empty set.
             FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
@@ -1103,7 +1100,6 @@ class ReplicaManager(val config: KafkaConfig,
             readSize = adjustedMaxBytes,
             lastStableOffset = Some(readInfo.lastStableOffset),
             preferredReadReplica = preferredReadReplica,
-            followerNeedsHwUpdate = followerNeedsHwUpdate,
             exception = None)
         }
       } catch {
@@ -1633,8 +1629,7 @@ class ReplicaManager(val config: KafkaConfig,
               followerFetchOffsetMetadata = readResult.info.fetchOffsetMetadata,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
-              leaderEndOffset = readResult.leaderLogEndOffset,
-              lastSentHighwatermark = readResult.highWatermark)) {
+              leaderEndOffset = readResult.leaderLogEndOffset)) {
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
