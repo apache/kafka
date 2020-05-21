@@ -1399,7 +1399,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
     val listGroupsRequest = request.body[ListGroupsRequest]
-    val states = listGroupsRequest.data.states.asScala.toList
+    val states = if (listGroupsRequest.data.statesFilter == null)
+      // Handle a null array the same as empty
+      List()
+    else 
+      listGroupsRequest.data.statesFilter.asScala.toList
 
     def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
        new ListGroupsResponse(new ListGroupsResponseData()
@@ -1408,8 +1412,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val listedGroup = new ListGroupsResponseData.ListedGroup()
                   .setGroupId(group.groupId)
                   .setProtocolType(group.protocolType)
-                if (!states.isEmpty)
-                  listedGroup.setGroupState(group.state.toString)
+                  .setGroupState(group.state.toString)
                 listedGroup
             }.asJava)
             .setThrottleTimeMs(throttleMs)

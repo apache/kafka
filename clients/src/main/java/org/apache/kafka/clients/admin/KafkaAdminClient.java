@@ -3052,11 +3052,13 @@ public class KafkaAdminClient extends AdminClient {
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         ListGroupsRequest.Builder createRequest(int timeoutMs) {
-                            List<String> states = options.states().orElse(Collections.emptySet())
-                                    .stream()
-                                    .map(s -> s.toString())
-                                    .collect(Collectors.toList());
-                            return new ListGroupsRequest.Builder(new ListGroupsRequestData().setStates(states));
+                            List<String> states = (options.states().isEmpty())
+                                    ? null
+                                    : options.states()
+                                        .stream()
+                                        .map(s -> s.toString())
+                                        .collect(Collectors.toList());
+                            return new ListGroupsRequest.Builder(new ListGroupsRequestData().setStatesFilter(states));
                         }
 
                         private void maybeAddConsumerGroup(ListGroupsResponseData.ListedGroup group) {

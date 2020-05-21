@@ -46,7 +46,7 @@ public class ListGroupsRequest extends AbstractRequest {
 
         @Override
         public ListGroupsRequest build(short version) {
-            if (!data.states().isEmpty() && version < 4) {
+            if (data.statesFilter() != null && version < 4) {
                 throw new UnsupportedVersionException("The broker only supports ListGroups " +
                         "v" + version + ", but we need v4 or newer to request groups by states.");
             }

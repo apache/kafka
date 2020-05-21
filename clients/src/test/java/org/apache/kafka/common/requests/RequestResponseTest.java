@@ -230,11 +230,13 @@ public class RequestResponseTest {
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
+
         for (short v = ApiKeys.LIST_GROUPS.oldestVersion(); v <= ApiKeys.LIST_GROUPS.latestVersion(); v++) {
             checkRequest(createListGroupsRequest(v), false);
             checkErrorResponse(createListGroupsRequest(v), new UnknownServerException(), true);
+            checkResponse(createListGroupsResponse(v), v, true);
         }
-        checkResponse(createListGroupsResponse(), 0, true);
+
         checkRequest(createDescribeGroupRequest(), true);
         checkErrorResponse(createDescribeGroupRequest(), new UnknownServerException(), true);
         checkResponse(createDescribeGroupResponse(), 0, true);
@@ -816,7 +818,7 @@ public class RequestResponseTest {
     @Test(expected = UnsupportedVersionException.class)
     public void testListGroupRequestV3FailsWithStates() {
         ListGroupsRequestData data = new ListGroupsRequestData()
-                .setStates(asList(ConsumerGroupState.STABLE.name()));
+                .setStatesFilter(asList(ConsumerGroupState.STABLE.name()));
         new ListGroupsRequest.Builder(data).build((short) 3);
     }
 
@@ -1079,19 +1081,20 @@ public class RequestResponseTest {
     private ListGroupsRequest createListGroupsRequest(short version) {
         ListGroupsRequestData data = new ListGroupsRequestData();
         if (version >= 4)
-            data.setStates(Arrays.asList("Stable"));
+            data.setStatesFilter(Arrays.asList("Stable"));
         return new ListGroupsRequest.Builder(data).build(version);
     }
 
-    private ListGroupsResponse createListGroupsResponse() {
-        return new ListGroupsResponse(
-                new ListGroupsResponseData()
-                        .setErrorCode(Errors.NONE.code())
-                        .setGroups(Collections.singletonList(
-                                new ListGroupsResponseData.ListedGroup()
-                                        .setGroupId("test-group")
-                                        .setProtocolType("consumer")
-                )));
+    private ListGroupsResponse createListGroupsResponse(int version) {
+        ListGroupsResponseData.ListedGroup group = new ListGroupsResponseData.ListedGroup()
+                .setGroupId("test-group")
+                .setProtocolType("consumer");
+        if (version >= 4)
+            group.setGroupState("Stable");
+        ListGroupsResponseData data = new ListGroupsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setGroups(Collections.singletonList(group));
+        return new ListGroupsResponse(data);
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {

@@ -1725,15 +1725,16 @@ class KafkaApisTest {
     EasyMock.verify(replicaManager)
   }
 
+  @Test
   def testListGroupsRequest(): Unit = {
     val overviews = List(
       GroupOverview("group1", "protocol1", "Stable"),
-      GroupOverview("goupp2", "qwerty", "Empty")
+      GroupOverview("group2", "qwerty", "Empty")
     )
     val response = listGroupRequest(None, overviews)
     assertEquals(2, response.data.groups.size)
-    assertNull(response.data.groups.get(0).groupState)
-    assertNull(response.data.groups.get(1).groupState)
+    assertEquals("Stable", response.data.groups.get(0).groupState)
+    assertEquals("Empty", response.data.groups.get(1).groupState)
   }
 
   @Test
@@ -1751,7 +1752,7 @@ class KafkaApisTest {
 
     val data = new ListGroupsRequestData()
     if (state.isDefined)
-      data.setStates(Collections.singletonList(state.get))
+      data.setStatesFilter(Collections.singletonList(state.get))
     val listGroupsRequest = new ListGroupsRequest.Builder(data).build()
     val requestChannelRequest = buildRequest(listGroupsRequest)
 

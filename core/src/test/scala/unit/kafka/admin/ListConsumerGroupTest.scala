@@ -75,13 +75,19 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.waitUntilTrue(() => {
       foundListing = service.listConsumerGroupsWithState(List(ConsumerGroupState.STABLE)).toSet
       expectedListingStable == foundListing
-    }, s"Expected to show groups expectedListingStable, but found $foundListing")
+    }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
 
   @Test
   def testConsumerGroupStatesFromString(): Unit = {
-    val result = ConsumerGroupCommand.consumerGroupStatesFromString("STABLE, stable, Stable, eMpTy")
-    assertEquals(List(ConsumerGroupState.STABLE, ConsumerGroupState.EMPTY), result)
+    var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
+    assertEquals(List(ConsumerGroupState.STABLE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable, PreparingRebalance")
+    assertEquals(List(ConsumerGroupState.STABLE, ConsumerGroupState.PREPARING_REBALANCE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
+    assertEquals(List(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
     try {
       ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
@@ -90,13 +96,13 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     try {
-      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, ")
+      ConsumerGroupCommand.consumerGroupStatesFromString("stable")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
 
     try {
-      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, stable")
+      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
@@ -127,7 +133,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
     }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
-    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state", "stable")
+    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state", "Stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")

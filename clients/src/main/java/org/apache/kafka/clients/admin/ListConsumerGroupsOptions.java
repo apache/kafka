@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.EnumSet;
-import java.util.Optional;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.ConsumerGroupState;
@@ -32,18 +32,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Evolving
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
-    private Optional<Set<ConsumerGroupState>> states = Optional.empty();
+    private Set<ConsumerGroupState> states = Collections.emptySet();
 
     /**
      * Only groups in these states will be returned by listConsumerGroups()
-     * If not set, all groups are returned without their states
-     * throw IllegalArgumentException if states is empty
+     * If not set, all groups are returned with their states
      */
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
-        if (states == null || states.isEmpty()) {
-            throw new IllegalArgumentException("states should not be null or empty");
-        }
-        this.states = Optional.of(states);
+        this.states = (states == null) ? Collections.emptySet() : new HashSet<>(states);
         return this;
     }
 
@@ -51,14 +47,14 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * All groups with their states will be returned by listConsumerGroups()
      */
     public ListConsumerGroupsOptions inAnyState() {
-        this.states = Optional.of(EnumSet.allOf(ConsumerGroupState.class));
+        this.states = Collections.emptySet();
         return this;
     }
 
     /**
-     * Returns the list of States that are requested
+     * Returns the list of States that are requested or empty if no states have been specified
      */
-    public Optional<Set<ConsumerGroupState>> states() {
+    public Set<ConsumerGroupState> states() {
         return states;
     }
 }

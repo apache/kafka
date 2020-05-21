@@ -23,7 +23,7 @@
   //
   // Version 3 is the first flexible version.
   //
-  // Version 4 adds the GroupState flexible field (KIP-518).
+  // Version 4 adds the GroupState field (KIP-518).
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
@@ -37,8 +37,8 @@
         "about": "The group ID." },
       { "name": "ProtocolType", "type": "string", "versions": "0+",
         "about": "The group protocol type." },
-      { "name": "GroupState", "type": "string", "versions": "4+", "tag": 0, "taggedVersions": "4+", "ignorable": true,
-        "nullableVersions": "4+", "default": "null", "about": "The group state string." }
+      { "name": "GroupState", "type": "string", "versions": "4+", "nullableVersions": "0+", "ignorable": true, "default": "null",
+        "about": "The group state name." }
     ]}
   ]
 }

@@ -98,7 +98,7 @@ object ConsumerGroupCommand extends Logging {
   }
 
   def consumerGroupStatesFromString(input: String): List[ConsumerGroupState] = {
-    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim.toLowerCase.capitalize)).toSet.toList
+    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet.toList
     if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
       val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
