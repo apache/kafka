@@ -242,7 +242,6 @@ public class Worker {
             ConnectorStatus.Listener statusListener,
             TargetState initialState
     ) {
-
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             if (connectors.containsKey(connName))
                 throw new ConnectException("Connector with name " + connName + " already exists");

@@ -81,7 +81,6 @@ public class WorkerConnector {
     public void initialize(ConnectorConfig connectorConfig) {
         try {
             this.config = connectorConfig.originalsStrings();
-
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
