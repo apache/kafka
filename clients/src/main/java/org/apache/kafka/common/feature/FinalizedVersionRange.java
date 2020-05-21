@@ -39,19 +39,16 @@ public class FinalizedVersionRange extends BaseVersionRange {
             BaseVersionRange.valueOrThrow(MAX_VERSION_LEVEL_KEY_LABEL, serialized));
     }
 
-    private boolean isCompatibleWith(BaseVersionRange versionRange) {
-        return min() >= versionRange.min() && max() <= versionRange.max();
-    }
-
     /**
      * Checks if the [min, max] version level range of this object does *NOT* fall within the
      * [min, max] version range of the provided SupportedVersionRange parameter.
      *
-     * @param versionRange   the SupportedVersionRange to be checked
+     * @param supportedVersionRange   the SupportedVersionRange to be checked
      *
-     * @return               true, if the version levels are compatible and false otherwise
+     * @return                        - true, if the version levels are compatible
+     *                                - false otherwise
      */
-    public boolean isIncompatibleWith(SupportedVersionRange versionRange) {
-        return !isCompatibleWith(versionRange);
+    public boolean isIncompatibleWith(SupportedVersionRange supportedVersionRange) {
+        return min() < supportedVersionRange.min() || max() > supportedVersionRange.max();
     }
 }

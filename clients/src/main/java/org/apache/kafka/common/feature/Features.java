@@ -24,7 +24,7 @@ import java.util.Objects;
 import static java.util.stream.Collectors.joining;
 
 /**
- * Represents an immutable dictionary with key being feature name, and value being VersionRangeType.
+ * Represents an immutable dictionary with key being feature name, and value being <VersionRangeType>.
  * Also provides API to serialize/deserialize the features and their version ranges to/from a map.
  *
  * This class can be instantiated only using its factory functions, with the important ones being:
@@ -45,22 +45,25 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      *                   for the Features object.
      */
     private Features(Map<String, VersionRangeType> features) {
+        if (features == null) {
+            throw new IllegalArgumentException("Provided features can not be null.");
+        }
         this.features = features;
     }
 
     /**
-     * @param features   Map of feature name to VersionRange, as the backing data structure
-     *                   for the Features object.
-     * @return           Returns a new Features object representing "supported" features.
+     * @param features   Map of feature name to SupportedVersionRange.
+     *
+     * @return           Returns a new Features object representing supported features.
      */
     public static Features<SupportedVersionRange> supportedFeatures(Map<String, SupportedVersionRange> features) {
         return new Features<>(features);
     }
 
     /**
-     * @param features   Map of feature name to FinalizedVersionRange, as the backing data structure
-     *                   for the Features object.
-     * @return           Returns a new Features object representing "finalized" features.
+     * @param features   Map of feature name to FinalizedVersionRange.
+     *
+     * @return           Returns a new Features object representing finalized features.
      */
     public static Features<FinalizedVersionRange> finalizedFeatures(Map<String, FinalizedVersionRange> features) {
         return new Features<>(features);
@@ -105,13 +108,37 @@ public class Features<VersionRangeType extends BaseVersionRange> {
 
     /**
      * @return   A map with underlying features serialized. The returned value can be deserialized
-     *           using one of the deserialize* APIs.
+     *           using one of the provided deserialize() APIs of this class.
      */
     public Map<String, Map<String, Long>> serialize() {
         return features.entrySet().stream().collect(
             Collectors.toMap(
                 Map.Entry::getKey,
                 entry -> entry.getValue().serialize()));
+    }
+
+    /**
+     * An interface that defines deserialization behavior for an object of type BaseVersionRange.
+     */
+    private interface BaseVersionRangeDeserializer<V extends BaseVersionRange> {
+
+        /**
+         * Deserialize the serialized representation of an object of type BaseVersionRange, to an
+         * object of type <V>.
+         *
+         * @param  serialized   the serialized representation of a BaseVersionRange object.
+         *
+         * @return              the deserialized object of type <V>
+         */
+        V deserialize(Map<String, Long> serialized);
+    }
+
+    private static <V extends BaseVersionRange> Features<V> deserializeFeatures(
+        Map<String, Map<String, Long>> serialized, BaseVersionRangeDeserializer<V> deserializer) {
+        return new Features<>(serialized.entrySet().stream().collect(
+            Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> deserializer.deserialize(entry.getValue()))));
     }
 
     /**
@@ -124,10 +151,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      */
     public static Features<FinalizedVersionRange> deserializeFinalizedFeatures(
         Map<String, Map<String, Long>> serialized) {
-        return finalizedFeatures(serialized.entrySet().stream().collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> FinalizedVersionRange.deserialize(entry.getValue()))));
+        return deserializeFeatures(serialized, FinalizedVersionRange::deserialize);
     }
 
     /**
@@ -140,10 +164,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      */
     public static Features<SupportedVersionRange> deserializeSupportedFeatures(
         Map<String, Map<String, Long>> serialized) {
-        return supportedFeatures(serialized.entrySet().stream().collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> SupportedVersionRange.deserialize(entry.getValue()))));
+        return deserializeFeatures(serialized, SupportedVersionRange::deserialize);
     }
 
     @Override

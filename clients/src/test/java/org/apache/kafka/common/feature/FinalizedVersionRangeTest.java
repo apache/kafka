@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.kafka.common.feature;
 
 import java.util.Map;
@@ -7,31 +24,16 @@ import org.junit.Test;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Unit tests for the FinalizedVersionRange class.
+ *
+ * Most of the unit tests required for BaseVersionRange are part of the SupportedVersionRangeTest
+ * suite. This suite only tests behavior very specific to FinalizedVersionRange.
+ */
 public class FinalizedVersionRangeTest {
-
-    @Test
-    public void testCreateFailDueToInvalidParams() {
-        // min and max can't be < 1.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new FinalizedVersionRange(0, 0));
-        // min can't be < 1.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new FinalizedVersionRange(0, 1));
-        // max can't be < 1.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new FinalizedVersionRange(1, 0));
-        // min can't be > max.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new FinalizedVersionRange(2, 1));
-    }
 
     @Test
     public void testSerializeDeserialize() {
@@ -54,65 +56,9 @@ public class FinalizedVersionRangeTest {
     }
 
     @Test
-    public void testDeserializationFailureTest() {
-        // min_version_level can't be < 1.
-        Map<String, Long> invalidWithBadMinVersion =
-            mkMap(mkEntry("min_version_level", 0L),
-                mkEntry("max_version_level", 1L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithBadMinVersion));
-
-        // max_version_level can't be < 1.
-        Map<String, Long> invalidWithBadMaxVersion =
-            mkMap(mkEntry("min_version_level", 1L),
-                mkEntry("max_version_level", 0L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithBadMaxVersion));
-
-        // min_version_level and max_version_level can't be < 1.
-        Map<String, Long> invalidWithBadMinMaxVersion =
-            mkMap(mkEntry("min_version_level", 0L),
-                mkEntry("max_version_level", 0L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithBadMinMaxVersion));
-
-        // min_version_level can't be > max_version_level.
-        Map<String, Long> invalidWithLowerMaxVersion =
-            mkMap(mkEntry("min_version_level", 2L),
-                mkEntry("max_version_level", 1L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithLowerMaxVersion));
-
-        // min_version_level key missing.
-        Map<String, Long> invalidWithMinKeyMissing =
-            mkMap(mkEntry("max_version_level", 1L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithMinKeyMissing));
-
-        // max_version_level key missing.
-        Map<String, Long> invalidWithMaxKeyMissing =
-            mkMap(mkEntry("min_version_level", 1L));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> FinalizedVersionRange.deserialize(invalidWithMaxKeyMissing));
-    }
-
-    @Test
     public void testToString() {
         assertEquals("FinalizedVersionRange[1, 1]", new FinalizedVersionRange(1, 1).toString());
         assertEquals("FinalizedVersionRange[1, 2]", new FinalizedVersionRange(1, 2).toString());
-    }
-
-    @Test
-    public void testEquals() {
-        assertTrue(new FinalizedVersionRange(1, 1).equals(new FinalizedVersionRange(1, 1)));
-        assertFalse(new FinalizedVersionRange(1, 1).equals(new FinalizedVersionRange(1, 2)));
-        assertFalse(new FinalizedVersionRange(1, 1).equals(null));
     }
 
     @Test

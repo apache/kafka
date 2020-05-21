@@ -1568,7 +1568,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     createRecursive(path, data = null, throwIfPathExists = false)
   }
 
-  // Visible for testing.
   def createFeatureZNode(nodeContents: FeatureZNode): Unit = {
     val createRequest = CreateRequest(
       FeatureZNode.path,
@@ -1579,7 +1578,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     response.maybeThrow
   }
 
-  // Visible for testing.
   def updateFeatureZNode(nodeContents: FeatureZNode): Unit = {
     val setRequest = SetDataRequest(
       FeatureZNode.path,
@@ -1589,7 +1587,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     response.maybeThrow
   }
 
-  // Visible for testing.
   def deleteFeatureZNode(): Unit = {
     val deleteRequest = DeleteRequest(
       FeatureZNode.path,

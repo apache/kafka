@@ -23,8 +23,8 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
    * Helper class used to update the FinalizedFeatureCache.
    *
    * @param featureZkNodePath   the path to the ZK feature node to be read
-   * @param maybeNotifyOnce     an optional latch that can be used to propvide notification
-   *                            when an update operation is over
+   * @param maybeNotifyOnce     an optional latch that can be used to notify the caller when an
+   *                            updateOrThrow() operation is over
    */
   private class FeatureCacheUpdater(featureZkNodePath: String, maybeNotifyOnce: Option[CountDownLatch]) {
 
@@ -37,6 +37,15 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      *
      * NOTE: if a notifier was provided in the constructor, then, this method can be invoked
      * only exactly once successfully.
+     *
+     * @throws   IllegalStateException, if a non-empty notifier was provided in the constructor, and
+     *           this method is called again after a successful previous invocation.
+     *
+     *           FeatureCacheUpdateException, if there was an error in updating the
+     *           FinalizedFeatureCache.
+     *
+     *           RuntimeException, if there was a failure in reading/deserializing the
+     *           contents of the feature ZK node.
      */
     def updateLatestOrThrow(): Unit = {
       maybeNotifyOnce.foreach(notifier => {
@@ -47,7 +56,30 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
       })
 
       info(s"Reading feature ZK node at path: $featureZkNodePath")
-      val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(featureZkNodePath)
+      var mayBeFeatureZNodeBytes: Option[Array[Byte]] = null
+      var version: Int = ZkVersion.UnknownVersion
+      try {
+        val result = zkClient.getDataAndVersion(featureZkNodePath)
+        mayBeFeatureZNodeBytes = result._1
+        version = result._2
+      } catch {
+        // Convert to RuntimeException, to avoid a confusion that there is no argument passed
+        // to the updateOrThrow() method.
+        case e: IllegalArgumentException => throw new RuntimeException(e)
+      }
+
+      // There are 4 cases:
+      //
+      // (empty dataBytes, valid version)       => The empty dataBytes will fail FeatureZNode deserialization.
+      //                                           FeatureZNode, when present in ZK, can not have empty contents.
+      // (non-empty dataBytes, valid version)   => This is a valid case, and should pass FeatureZNode deserialization
+      //                                           if dataBytes contains valid data.
+      // (empty dataBytes, unknown version)     => This is a valid case, and this can happen if the FeatureZNode
+      //                                           does not exist in ZK.
+      // (non-empty dataBytes, unknown version) => This case is impossible, since, KafkaZkClient.getDataAndVersion
+      //                                           API ensures that unknown version is returned only when the
+      //                                           ZK node is absent. Therefore dataBytes should be empty in such
+      //                                           a case.
       if (version == ZkVersion.UnknownVersion) {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
         FinalizedFeatureCache.clear()
@@ -73,9 +105,10 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      *
      * @param waitTimeMs   the timeout for the wait operation
      *
-     * @throws             - RuntimeException if the thread was interrupted during wait
-     *                     - TimeoutException if the wait can not be completed in waitTimeMs
-     *                       milli seconds
+     * @throws             RuntimeException if the thread was interrupted during wait
+     *
+     *                     TimeoutException if the wait can not be completed in waitTimeMs
+     *                     milli seconds
      */
     def awaitUpdateOrThrow(waitTimeMs: Long): Unit = {
       maybeNotifyOnce.foreach(notifier => {
@@ -108,7 +141,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
       try {
         queue.take.updateLatestOrThrow()
       } catch {
-        case e: InterruptedException => info(s"Interrupted", e)
+        case e: InterruptedException => info(s"Change notification queue interrupted", e)
         case e: Exception => {
           error("Failed to process feature ZK node change event. The broker will exit.", e)
           throw new FatalExitError(1)
@@ -121,18 +154,14 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
   object FeatureZNodeChangeHandler extends ZNodeChangeHandler {
     override val path: String = FeatureZNode.path
 
-    private def processNotification(): Unit = {
-      queue.add(new FeatureCacheUpdater(path))
-    }
-
     override def handleCreation(): Unit = {
       info(s"Feature ZK node created at path: $path")
-      processNotification()
+      queue.add(new FeatureCacheUpdater(path))
     }
 
     override def handleDataChange(): Unit = {
       info(s"Feature ZK node updated at path: $path")
-      processNotification()
+      queue.add(new FeatureCacheUpdater(path))
     }
 
     override def handleDeletion(): Unit = {
@@ -140,7 +169,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
       // This event may happen, rarely (ex: operational error).
       // In such a case, we prefer to just log a warning and treat the case as if the node is absent,
       // and populate the FinalizedFeatureCache with empty finalized features.
-      processNotification()
+      queue.add(new FeatureCacheUpdater(path))
     }
   }
 
@@ -166,8 +195,8 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     zkClient.registerZNodeChangeHandlerAndCheckExistence(FeatureZNodeChangeHandler)
 
     if (waitOnceForCacheUpdateMs > 0) {
-      val barrier = new CountDownLatch(1)
-      val ensureCacheUpdateOnce = new FeatureCacheUpdater(FeatureZNodeChangeHandler.path, Some(barrier))
+      val ensureCacheUpdateOnce = new FeatureCacheUpdater(
+        FeatureZNodeChangeHandler.path, Some(new CountDownLatch(1)))
       queue.add(ensureCacheUpdateOnce)
       try {
         ensureCacheUpdateOnce.awaitUpdateOrThrow(waitOnceForCacheUpdateMs)
@@ -191,12 +220,12 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     thread.join()
   }
 
-  // Useful for testing.
+  // For testing only.
   def isListenerInitiated: Boolean = {
     thread.isRunning && thread.isAlive
   }
 
-  // Useful for testing.
+  // For testing only.
   def isListenerDead: Boolean = {
     !thread.isRunning && !thread.isAlive
   }

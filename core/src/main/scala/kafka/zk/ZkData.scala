@@ -96,9 +96,9 @@ object BrokerInfo {
    */
   def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
     val version = {
-      if (apiVersion >= KAFKA_0_10_0_IV1)
+      if (apiVersion >= KAFKA_2_6_IV1)
         5
-      else if (apiVersion >= KAFKA_2_6_IV1)
+      else if (apiVersion >= KAFKA_0_10_0_IV1)
         4
       else
         2
@@ -165,7 +165,7 @@ object BrokerIdZNode {
       broker.rack, broker.features)
   }
 
-  def asJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Long]] = {
+  def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Long]] = {
     FeatureZNode.asJavaMap(brokerInfo
       .get(FeaturesKey)
       .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
@@ -261,7 +261,7 @@ object BrokerIdZNode {
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
-        val features = asJavaMap(brokerInfo)
+        val features = featuresAsJavaMap(brokerInfo)
         BrokerInfo(
           Broker(id, endpoints, rack, deserializeSupportedFeatures(features)), version, jmxPort)
       case Left(e) =>
@@ -785,15 +785,15 @@ object DelegationTokenInfoZNode {
 /**
  * Represents the status of the FeatureZNode.
  *
- * - Enabled  -> This status means the feature versioning scheme (KIP-584) is enabled, and, the
- *               finalized features stored in the FeatureZNode are active. This status is written by
- *               the controller to the FeatureZNode only when the broker IBP config is greater than
- *               or equal to KAFKA_2_6_IV1.
+ * Enabled  -> This status means the feature versioning system (KIP-584) is enabled, and, the
+ *             finalized features stored in the FeatureZNode are active. This status is written by
+ *             the controller to the FeatureZNode only when the broker IBP config is greater than
+ *             or equal to KAFKA_2_6_IV1.
  *
- * - Disabled -> This status means the feature versioning scheme (KIP-584) is disabled, and, the
- *               the finalized features stored in the FeatureZNode is not relevant. This status is
- *               written by the controller to the FeatureZNode only when the broker IBP config
- *               is less than KAFKA_2_6_IV1.
+ * Disabled -> This status means the feature versioning system (KIP-584) is disabled, and, the
+ *             the finalized features stored in the FeatureZNode is not relevant. This status is
+ *             written by the controller to the FeatureZNode only when the broker IBP config
+ *             is less than KAFKA_2_6_IV1.
  *
  * The purpose behind the FeatureZNodeStatus is that it helps differentiates between the following
  * cases:
@@ -802,9 +802,9 @@ object DelegationTokenInfoZNode {
  *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
  *    with all the possible supported features finalized immediately. The new cluster will almost
  *    never be started with an old IBP config that’s less than KAFKA_2_6_IV1. In such a case, the
- *    controller will start up and notice that the FeatureZNode is absent. To handle the
- *    requirement, the controller will create a FeatureZNode (with enabled status) containing the
- *    entire set of supported features as it’s finalized features.
+ *    controller will start up and notice that the FeatureZNode is absent in the new cluster.
+ *    To handle the requirement, the controller will create a FeatureZNode (with enabled status)
+ *    containing the entire list of supported features as it’s finalized features.
  *
  * 2. Cluster upgrade:
  *    Imagine that a Kafka cluster exists already and the IBP config is less than KAFKA_2_6_IV1, but
@@ -853,9 +853,9 @@ object FeatureZNode {
   private val StatusKey = "status"
   private val FeaturesKey = "features"
 
-  // Version0 contains 'version', 'status' and 'features' keys.
-  val Version0 = 0
-  val CurrentVersion = Version0
+  // V0 contains 'version', 'status' and 'features' keys.
+  val V0 = 0
+  val CurrentVersion = V0
 
   def path = "/feature"
 
@@ -888,15 +888,15 @@ object FeatureZNode {
    *
    * @return            deserialized FeatureZNode
    *
-   * @throws KafkaException   if the Array[Byte] can not be decoded.
+   * @throws IllegalArgumentException   if the Array[Byte] can not be decoded.
    */
   def decode(jsonBytes: Array[Byte]): FeatureZNode = {
     Json.tryParseBytes(jsonBytes) match {
       case Right(js) =>
         val featureInfo = js.asJsonObject
         val version = featureInfo(VersionKey).to[Int]
-        if (version < Version0 || version > CurrentVersion) {
-          throw new KafkaException(s"Unsupported version: $version of feature information: " +
+        if (version < V0 || version > CurrentVersion) {
+          throw new IllegalArgumentException(s"Unsupported version: $version of feature information: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
 
@@ -904,7 +904,7 @@ object FeatureZNode {
           .get(FeaturesKey)
           .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
         if (featuresMap.isEmpty) {
-          throw new KafkaException("Features map can not be absent in: " +
+          throw new IllegalArgumentException("Features map can not be absent in: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
         val features = asJavaMap(featuresMap.get)
@@ -913,25 +913,25 @@ object FeatureZNode {
           .get(StatusKey)
           .flatMap(_.to[Option[Int]])
         if (statusInt.isEmpty) {
-          throw new KafkaException("Status can not be absent in feature information: " +
+          throw new IllegalArgumentException("Status can not be absent in feature information: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
         val status = FeatureZNodeStatus.withNameOpt(statusInt.get)
         if (status.isEmpty) {
-          throw new KafkaException("Malformed status found in feature information: " +
-            s"${new String(jsonBytes, UTF_8)}")
+          throw new IllegalArgumentException(
+            s"Malformed status: $statusInt  found in feature information: ${new String(jsonBytes, UTF_8)}")
         }
 
         var finalizedFeatures: Features[FinalizedVersionRange] = null
         try {
           finalizedFeatures = deserializeFinalizedFeatures(features)
         } catch {
-          case e: Exception => throw new KafkaException(
+          case e: Exception => throw new IllegalArgumentException(
             "Unable to deserialize finalized features: " + features, e)
         }
         FeatureZNode(status.get, finalizedFeatures)
       case Left(e) =>
-        throw new KafkaException(s"Failed to parse feature information: " +
+        throw new IllegalArgumentException(s"Failed to parse feature information: " +
           s"${new String(jsonBytes, UTF_8)}", e)
     }
   }

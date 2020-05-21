@@ -18,35 +18,53 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     SupportedFeatures.clear()
   }
 
+  private def createSupportedFeatures(): Features[SupportedVersionRange] = {
+    val supportedFeaturesMap = Map[String, SupportedVersionRange](
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
+    SupportedFeatures.update(Features.supportedFeatures(supportedFeaturesMap.asJava))
+    SupportedFeatures.get
+  }
+
+  private def createFinalizedFeatures(): FinalizedFeaturesAndEpoch = {
+    val finalizedFeaturesMap = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
+    val finalizedFeatures = Features.finalizedFeatures(finalizedFeaturesMap.asJava)
+    zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, finalizedFeatures))
+    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
+    assertNotEquals(version, ZkVersion.UnknownVersion)
+    assertFalse(mayBeFeatureZNodeBytes.isEmpty)
+    FinalizedFeaturesAndEpoch(finalizedFeatures, version)
+  }
+
+  private def createListener(expectedCacheContent: Option[FinalizedFeaturesAndEpoch]): FinalizedFeatureChangeListener = {
+    val listener = new FinalizedFeatureChangeListener(zkClient)
+    assertFalse(listener.isListenerInitiated)
+    assertTrue(FinalizedFeatureCache.empty)
+    listener.initOrThrow(15000)
+    assertTrue(listener.isListenerInitiated)
+    if (expectedCacheContent.isDefined) {
+      val mayBeNewCacheContent = FinalizedFeatureCache.get
+      assertFalse(mayBeNewCacheContent.isEmpty)
+      val newCacheContent = mayBeNewCacheContent.get
+      assertEquals(expectedCacheContent.get.features, newCacheContent.features)
+      assertEquals(expectedCacheContent.get.epoch, newCacheContent.epoch)
+    } else {
+      val mayBeNewCacheContent = FinalizedFeatureCache.get
+      assertTrue(mayBeNewCacheContent.isEmpty)
+    }
+    listener
+  }
+
   /**
    * Tests that the listener can be initialized, and that it can listen to ZK notifications
    * successfully from an "Enabled" FeatureZNode (the ZK data has no feature incompatibilities).
    */
   @Test
   def testInitSuccessAndNotificationSuccess(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4),
-      "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
-
-    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
-    zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
-    val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(initialVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeBytes.isEmpty)
-
-    val listener = new FinalizedFeatureChangeListener(zkClient)
-    assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.empty)
-    listener.initOrThrow(15000)
-    assertTrue(listener.isListenerInitiated)
-    val mayBeNewCacheContent = FinalizedFeatureCache.get
-    assertFalse(mayBeNewCacheContent.isEmpty)
-    val newCacheContent = mayBeNewCacheContent.get
-    assertEquals(initialFinalizedFeatures, newCacheContent.features)
-    assertEquals(initialVersion, newCacheContent.epoch)
+    createSupportedFeatures()
+    val initialFinalizedFeatures = createFinalizedFeatures()
+    val listener = createListener(Some(initialFinalizedFeatures))
 
     val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 4))
@@ -55,7 +73,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
     assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
-    assertTrue(updatedVersion > initialVersion)
+    assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
     TestUtils.waitUntilTrue(() => {
       FinalizedFeatureCache.get.get.equals(FinalizedFeaturesAndEpoch(updatedFinalizedFeatures, updatedVersion))
     }, "Timed out waiting for FinalizedFeatureCache to be updated with new features")
@@ -68,29 +86,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDeleteNotificationProcessing(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4),
-      "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
-
-    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
-    zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
-    val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(initialVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeBytes.isEmpty)
-
-    val listener = new FinalizedFeatureChangeListener(zkClient)
-    assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.empty)
-    listener.initOrThrow(15000)
-    assertTrue(listener.isListenerInitiated)
-    val mayBeNewCacheContent = FinalizedFeatureCache.get
-    assertFalse(mayBeNewCacheContent.isEmpty)
-    val newCacheContent = mayBeNewCacheContent.get
-    assertEquals(initialFinalizedFeatures, newCacheContent.features)
-    assertEquals(initialVersion, newCacheContent.epoch)
+    createSupportedFeatures()
+    val initialFinalizedFeatures = createFinalizedFeatures()
+    val listener = createListener(Some(initialFinalizedFeatures))
 
     zkClient.deleteFeatureZNode()
     val (mayBeFeatureZNodeDeletedBytes, deletedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -108,29 +106,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDisablingNotificationProcessing(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4),
-      "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
-
-    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
-    zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
-    val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(initialVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeBytes.isEmpty)
-
-    val listener = new FinalizedFeatureChangeListener(zkClient)
-    assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.empty)
-    listener.initOrThrow(15000)
-    assertTrue(listener.isListenerInitiated)
-    val mayBeNewCacheContent = FinalizedFeatureCache.get
-    assertFalse(mayBeNewCacheContent.isEmpty)
-    val newCacheContent = mayBeNewCacheContent.get
-    assertEquals(initialFinalizedFeatures, newCacheContent.features)
-    assertEquals(initialVersion, newCacheContent.epoch)
+    createSupportedFeatures()
+    val initialFinalizedFeatures = createFinalizedFeatures()
+    val listener = createListener(Some(initialFinalizedFeatures))
 
     val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange]()
     val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
@@ -138,7 +116,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
     assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
-    assertTrue(updatedVersion > initialVersion)
+    assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
     TestUtils.waitUntilTrue(() => {
       FinalizedFeatureCache.empty
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
@@ -151,10 +129,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testInitFailureDueToFeatureIncompatibility(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4),
-      "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
+    createSupportedFeatures()
 
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 5))
@@ -184,29 +159,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testNotificationFailureDueToFeatureIncompatibility(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4),
-      "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
-
-    val initialFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3))
-    val initialFinalizedFeatures = Features.finalizedFeatures(initialFinalizedFeaturesMap.asJava)
-    zkClient.createFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, initialFinalizedFeatures))
-    val (mayBeFeatureZNodeBytes, initialVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(initialVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeBytes.isEmpty)
-
-    val listener = new FinalizedFeatureChangeListener(zkClient)
-    assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.empty)
-    listener.initOrThrow(15000)
-    assertTrue(listener.isListenerInitiated)
-    val mayBeNewCacheContent = FinalizedFeatureCache.get
-    assertFalse(mayBeNewCacheContent.isEmpty)
-    val newCacheContent = mayBeNewCacheContent.get
-    assertEquals(initialFinalizedFeatures, newCacheContent.features)
-    assertEquals(initialVersion, newCacheContent.epoch)
+    createSupportedFeatures
+    val initialFinalizedFeatures = createFinalizedFeatures()
+    val listener = createListener(Some(initialFinalizedFeatures))
 
     Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
@@ -219,7 +174,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
 
     try {
       TestUtils.waitUntilTrue(() => {
-        !listener.isListenerInitiated && listener.isListenerDead && (FinalizedFeatureCache.get.get.equals(newCacheContent))
+        !listener.isListenerInitiated && listener.isListenerDead && FinalizedFeatureCache.get.get.equals(initialFinalizedFeatures)
       }, "Timed out waiting for listener death and FinalizedFeatureCache to be updated")
     } finally {
       Exit.resetExitProcedure()

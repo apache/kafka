@@ -7,9 +7,11 @@ import org.apache.kafka.common.feature.Features._
 import scala.jdk.CollectionConverters._
 
 /**
- * A common object used in the Broker to define the latest features supported by the Broker.
- * Also provides API to check for incompatibilities between the latest features supported by the
- * Broker and cluster-wide finalized features.
+ * A common immutable object used in the Broker to define the latest features supported by the
+ * Broker. Also provides API to check for incompatibilities between the latest features supported
+ * by the Broker and cluster-wide finalized features.
+ *
+ * NOTE: the update() and clear() APIs of this class should be used only for testing purposes.
  */
 object SupportedFeatures extends Logging {
 
@@ -21,7 +23,7 @@ object SupportedFeatures extends Logging {
   @volatile private var supportedFeatures = emptySupportedFeatures
 
   /**
-   * Returns the latest features supported by the Broker.
+   * Returns a reference to the latest features supported by the Broker.
    */
   def get: Features[SupportedVersionRange] = {
     supportedFeatures
@@ -48,27 +50,27 @@ object SupportedFeatures extends Logging {
    *
    * @param finalized   The finalized features against which incompatibilities need to be checked for.
    *
-   * @return            The set of incompatible feature names. If the returned set is empty, it
-   *                    means there were no feature incompatibilities found.
+   * @return            The sub-set of input features which are incompatible. If the returned object
+   *                    is empty, it means there were no feature incompatibilities found.
    */
-  def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Set[String] = {
+  def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
     val incompatibilities = finalized.features.asScala.collect {
       case (feature, versionLevels) => {
         val supportedVersions = supportedFeatures.get(feature);
         if (supportedVersions == null) {
-          (feature, "{feature=%s, reason='Unsupported feature'}".format(feature))
+          (feature, versionLevels, "{feature=%s, reason='Unsupported feature'}".format(feature))
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
-          (feature, "{feature=%s, reason='Finalized %s is incompatible with supported %s'}".format(
+          (feature, versionLevels, "{feature=%s, reason='Finalized %s is incompatible with supported %s'}".format(
             feature, versionLevels, supportedVersions))
         } else {
-          (feature, null)
+          (feature, versionLevels, null)
         }
       }
-    }.filter(entry => entry._2 != null)
+    }.filter(entry => entry._3 != null).toList
 
     if (incompatibilities.nonEmpty) {
-      warn("Feature incompatibilities seen: " + incompatibilities.values.toSet)
+      warn("Feature incompatibilities seen: " + incompatibilities.map(item => item._1))
     }
-    incompatibilities.keys.toSet
+    Features.finalizedFeatures(incompatibilities.map(item => (item._1, item._2)).toMap.asJava)
   }
 }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.feature;
 
 import java.util.HashMap;
@@ -44,6 +45,16 @@ public class FeaturesTest {
         assertEquals(new HashMap<>(), emptySupportedFeatures.features());
         assertEquals(new HashMap<>(), emptySupportedFeatures.serialize());
         assertEquals(emptySupportedFeatures, Features.deserializeSupportedFeatures(emptyMap));
+    }
+
+    @Test
+    public void testNullFeatures() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> Features.finalizedFeatures(null));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> Features.supportedFeatures(null));
     }
 
     @Test

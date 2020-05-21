@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -109,12 +108,8 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
             RecordBatch.MAGIC_VALUE_V1,
-            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {{
-                put("feature", new SupportedVersionRange(1, 4));
-            }}),
-            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {{
-                put("feature", new FinalizedVersionRange(2, 3));
-            }}),
+            Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1, 4)))),
+            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2, 3)))),
             10L);
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());

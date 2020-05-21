@@ -24,13 +24,16 @@ class SupportedFeaturesTest {
       "feature_2" -> new SupportedVersionRange(1, 3))
     SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
 
-    val features = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 3),
+    val compatibleFeatures = Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 3))
+    val inCompatibleFeatures = Map[String, FinalizedVersionRange](
       "feature_2" -> new FinalizedVersionRange(1, 4),
       "feature_3" -> new FinalizedVersionRange(3, 4))
+    val features = compatibleFeatures++inCompatibleFeatures
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
-    val incompatibleFeatures = SupportedFeatures.incompatibleFeatures(finalizedFeatures)
-    assertEquals(Set("feature_2", "feature_3"), incompatibleFeatures)
+    assertEquals(
+      Features.finalizedFeatures(inCompatibleFeatures.asJava),
+      SupportedFeatures.incompatibleFeatures(finalizedFeatures))
   }
 }

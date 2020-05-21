@@ -19,8 +19,7 @@ package org.apache.kafka.common.feature;
 import java.util.Map;
 
 /**
- * A specialization of VersionRange representing a range of versions.
- * NOTE: This is the backing class used to define the min/max versions for supported features.
+ * An extended BaseVersionRange representing the min/max versions for supported features.
  */
 public class SupportedVersionRange extends BaseVersionRange {
     // Label for the min version key, that's used only for serialization/deserialization purposes.

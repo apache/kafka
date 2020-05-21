@@ -18,10 +18,8 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
  * A mutable cache containing the latest finalized features and epoch. This cache is populated by a
  * {@link FinalizedFeatureChangeListener}.
  *
- * Currently the main reader of this cache is the read path that serves an ApiVersionsRequest
- * returning the features information in the response. In the future, as the feature versioning
- * system in KIP-584 is used more widely, this cache could be read by other read paths trying to
- * learn the finalized feature information.
+ * Currently the main reader of this cache is the read path that serves an ApiVersionsRequest,
+ * returning the features information in the response.
  */
 object FinalizedFeatureCache extends Logging {
   @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
@@ -72,17 +70,17 @@ object FinalizedFeatureCache extends Logging {
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = SupportedFeatures.incompatibleFeatures(latest.features)
-      if (incompatibleFeatures.nonEmpty) {
-        val errorMsg = ("FinalizedFeatureCache updated failed since feature compatibility" +
-          " checks failed! Supported %s has incompatibilities with the latest finalized %s." +
-          " The incompatible features are: %s.").format(
-          SupportedFeatures.get, latest, incompatibleFeatures)
+      if (!incompatibleFeatures.empty) {
+        val errorMsg = ("FinalizedFeatureCache update failed since feature compatibility" +
+          " checks failed! Supported %s has incompatibilities with the latest finalized %s."
+          ).format(SupportedFeatures.get, latest)
         throw new FeatureCacheUpdateException(errorMsg)
+      } else {
+        val logMsg = "Updated cache from existing finalized %s to latest finalized %s".format(
+          oldFeatureAndEpoch, latest)
+        featuresAndEpoch = Some(latest)
+        info(logMsg)
       }
     }
-    val logMsg = "Updated cache from existing finalized %s to latest finalized %s".format(
-      oldFeatureAndEpoch, latest)
-    featuresAndEpoch = Some(latest)
-    info(logMsg)
   }
 }
