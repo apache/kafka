@@ -59,7 +59,7 @@ public class MirrorTaskConfig extends MirrorConnectorConfig {
         return metrics;
     }
  
-    protected static final ConfigDef TASK_CONFIG_DEF = CONNECTOR_CONFIG_DEF
+    protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
         .define(
             TASK_TOPIC_PARTITIONS,
             ConfigDef.Type.LIST,
