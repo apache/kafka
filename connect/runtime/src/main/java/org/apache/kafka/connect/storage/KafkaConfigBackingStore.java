@@ -459,7 +459,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                                             ? ((DistributedConfig) config).configStorageTopicSettings()
                                             : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
-                .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
+                .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
                 .partitions(1)
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))

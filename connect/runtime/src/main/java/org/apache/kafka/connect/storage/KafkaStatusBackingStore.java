@@ -168,7 +168,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                                             ? ((DistributedConfig) config).statusStorageTopicSettings()
                                             : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
-                .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
+                .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
                 .partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG))
                 .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))

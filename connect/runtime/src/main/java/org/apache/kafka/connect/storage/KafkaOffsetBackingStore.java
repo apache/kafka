@@ -84,7 +84,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                                             ? ((DistributedConfig) config).offsetStorageTopicSettings()
                                             : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
-                .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
+                .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
                 .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
                 .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
