@@ -1176,7 +1176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(consumerSet.size -1, testGroupDescription.members().size())
 
-          // Delete all active members remained (a static member + a dynamic member)
+          // Delete all active members remaining (a static member + a dynamic member)
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
           assertNull(removeMembersResult.all().get())
 
