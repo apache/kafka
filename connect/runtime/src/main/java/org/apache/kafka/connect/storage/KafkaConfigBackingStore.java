@@ -50,6 +50,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -454,10 +455,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
 
-        Map<String, Object> topicSettings = null;
-        if (config instanceof DistributedConfig) {
-            topicSettings = ((DistributedConfig) config).configStorageTopicSettings();
-        }
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).configStorageTopicSettings()
+                                            : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
                 .compacted()

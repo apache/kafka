@@ -164,10 +164,9 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
 
-        Map<String, Object> topicSettings = null;
-        if (config instanceof DistributedConfig) {
-            topicSettings = ((DistributedConfig) config).statusStorageTopicSettings();
-        }
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).statusStorageTopicSettings()
+                                            : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
                 .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
                 .compacted()

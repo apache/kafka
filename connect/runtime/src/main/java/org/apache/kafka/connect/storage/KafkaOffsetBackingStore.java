@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -79,10 +80,9 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
 
-        Map<String, Object> topicSettings = null;
-        if (config instanceof DistributedConfig) {
-            topicSettings = ((DistributedConfig) config).offsetStorageTopicSettings();
-        }
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).offsetStorageTopicSettings()
+                                            : Collections.emptyMap();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that cleanup policy is overwritten to be compacted
                 .compacted()
