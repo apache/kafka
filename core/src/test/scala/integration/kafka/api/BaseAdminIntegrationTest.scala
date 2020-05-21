@@ -96,7 +96,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
+
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -194,6 +194,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
       config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      // Set up CreateTopicPolicy to be included in test.
+      config.setProperty(KafkaConfig.DefaultReplicationFactorProp, "1")
+      config.setProperty(KafkaConfig.CreateTopicPolicyClassNameProp, "kafka.server.LiCreateTopicPolicy")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))

@@ -18,6 +18,7 @@ package kafka.controller
 
 import java.util
 import java.util.concurrent.TimeUnit
+
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
@@ -36,7 +37,7 @@ import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChange
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, PolicyViolationException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.metrics.Metrics
@@ -44,6 +45,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -66,6 +68,44 @@ object KafkaController extends Logging {
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
+
+  def satisfiesLiCreateTopicPolicy(createTopicPolicy : Option[CreateTopicPolicy],
+                                   zkClient : KafkaZkClient,
+                                   topicIdReplicaAssignment: TopicIdReplicaAssignment): Boolean = {
+    try {
+      createTopicPolicy match {
+        case Some(policy) =>
+          if (policy.isInstanceOf[LiCreateTopicPolicy]) {
+            val partitionAssignment = topicIdReplicaAssignment.assignment
+            val replicaAssignmentAsJava = partitionAssignment.map {
+              case(partition, replicaAssignment) => (
+                new Integer(partition.partition()),
+                replicaAssignment.replicas.map(new Integer(_)).asJava
+              )
+            }.asJava
+
+            // Use min size of all replica lists as a stand in for replicationFactor.
+            // Generally replicas sizes should be the same, but minBy gets us the worst case.
+            val replicationFactor = partitionAssignment.minBy(_._2.replicas.size)._2.replicas.size.toShort
+            policy.validate(new CreateTopicPolicy.RequestMetadata(
+              topicIdReplicaAssignment.topic,
+              partitionAssignment.size,
+              replicationFactor,
+              replicaAssignmentAsJava,
+              java.util.Collections.emptyMap()
+            ))
+          }
+          true
+        case None => true
+      }
+    } catch {
+      case e : PolicyViolationException =>
+        if (zkClient.getTopicPartitions(topicIdReplicaAssignment.topic).isEmpty) {
+          info(e.getMessage)
+          false
+        } else true
+    }
+  }
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -129,6 +169,9 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var replicasToDeleteCount = 0
   @volatile private var ineligibleTopicsToDeleteCount = 0
   @volatile private var ineligibleReplicasToDeleteCount = 0
+
+  private val createTopicPolicy =
+    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -907,7 +950,7 @@ class KafkaController(val config: KafkaConfig,
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
     controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
-    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(controllerContext.allTopics.toSet)
+    val replicaAssignmentAndTopicIds: Set[TopicIdReplicaAssignment] = getReplicaAssignmentPolicyCompliant(controllerContext.allTopics.toSet)
     processTopicIds(replicaAssignmentAndTopicIds)
 
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(_, _, assignments) =>
@@ -1640,7 +1683,7 @@ class KafkaController(val config: KafkaConfig,
     controllerContext.setAllTopics(topics)
 
     registerPartitionModificationsHandlers(newTopics.toSeq)
-    val addedPartitionReplicaAssignment = zkClient.getReplicaAssignmentAndTopicIdForTopics(newTopics)
+    val addedPartitionReplicaAssignment = getReplicaAssignmentPolicyCompliant(newTopics)
     deletedTopics.foreach(controllerContext.removeTopic)
     processTopicIds(addedPartitionReplicaAssignment)
 
@@ -2475,6 +2518,46 @@ class KafkaController(val config: KafkaConfig,
     onControllerResignation()
   }
 
+
+  // For any topics that fail to meet min RF requirement, generate new valid partition assignment and reset ZNode
+  private def fixTopicsFailingPolicy(topicIdReplicaAssignments: Set[TopicIdReplicaAssignment]) : Unit = {
+    if (topicIdReplicaAssignments.isEmpty) return
+
+    val replicationFactor = config.defaultReplicationFactor
+    val brokers = controllerContext.liveOrShuttingDownBrokers.map { sb => kafka.admin.BrokerMetadata(sb.id, sb.rack) }.toSeq
+
+    topicIdReplicaAssignments.foreach{ topicsIdReplicaAssignment =>
+      val topic = topicsIdReplicaAssignment.topic
+      val topicId = topicsIdReplicaAssignment.topicId
+      val numPartitions = topicsIdReplicaAssignment.assignment.size
+      val assignment =
+        AdminUtils.assignReplicasToBrokers(brokers, numPartitions, replicationFactor)
+          .map { case(partition, replicas) => (new TopicPartition(topic, partition), ReplicaAssignment(replicas))}
+      zkClient.setTopicAssignment(topic, topicId, assignment, controllerContext.epochZkVersion)
+      info(s"Updated topic [$topic] with $assignment for replica assignment")
+    }
+  }
+
+  // Reset partition replica assignment for topics, if any, that fail replication factor check
+  private def getReplicaAssignmentPolicyCompliant(topics : immutable.Set[String]) : Set[TopicIdReplicaAssignment] = {
+    val replicaAssignments = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
+    val (compliantAssignments, incompliantAssignments) =
+      replicaAssignments.partition(KafkaController.satisfiesLiCreateTopicPolicy(createTopicPolicy, zkClient, _))
+
+    var retTopicAssignment = compliantAssignments
+    if (incompliantAssignments.nonEmpty) {
+      val incompliantTopicNames = incompliantAssignments.map(_.topic).toSeq
+      // Since fixTopicsFailingPolicy() will trigger PartitionModification event, need to temporarily unregister
+      // event handler
+      unregisterPartitionModificationsHandlers(incompliantTopicNames)
+      fixTopicsFailingPolicy(incompliantAssignments)
+      registerPartitionModificationsHandlers(incompliantTopicNames)
+
+      // the new partition assignments should be valid now
+      retTopicAssignment ++= zkClient.getReplicaAssignmentAndTopicIdForTopics(incompliantTopicNames.toSet)
+    }
+    retTopicAssignment
+  }
 
   override def process(event: ControllerEvent): Unit = {
     try {
