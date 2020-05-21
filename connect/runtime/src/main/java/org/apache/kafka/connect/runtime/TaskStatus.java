@@ -62,13 +62,9 @@ public class TaskStatus extends AbstractStatus<ConnectorTaskId> {
         void onShutdown(ConnectorTaskId id);
 
         /**
-         * Invoked after the task is no longer needed. This differs from
-         * {@link #onShutdown(ConnectorTaskId)} in that a shut down task may be expected to restart
-         * soon (as in the case of a rebalance), whereas a destroyed task will not be restarted
-         * until and unless a reconfiguration of its connector occurs.
-         * 
-         * This may occur after the number of tasks for a connector is reduced.
-         * 
+         * Invoked after the task has been deleted. Can be called if the
+         * connector tasks have been reduced, or if the connector itself has
+         * been deleted.
          * @param id The id of the task
          */
         void onDeletion(ConnectorTaskId id);
