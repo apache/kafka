@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.LambdaValidator;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -429,7 +430,7 @@ public class DistributedConfig extends WorkerConfig {
         if (CONFIG_STORAGE_PREFIX.equals(prefix) && result.containsKey(PARTITIONS_SUFFIX)) {
             log.warn("Ignoring '{}{}={}' setting, since config topic partitions is always 1", prefix, PARTITIONS_SUFFIX, result.get("partitions"));
         }
-        Object removedPolicy = result.remove("cleanup.policy");
+        Object removedPolicy = result.remove(TopicConfig.CLEANUP_POLICY_CONFIG);
         if (removedPolicy != null) {
             log.warn("Ignoring '{}cleanup.policy={}' setting, since compaction is always used", prefix, removedPolicy);
         }
