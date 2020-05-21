@@ -205,6 +205,9 @@ public final class MessageDataGenerator {
         generateHashSetFindAllMethod(className, struct);
         buffer.printf("%n");
         generateCollectionDuplicateMethod(className, struct);
+        buffer.printf("%n");
+        generateHashSetGetOrCreateMethod(className, struct);
+        buffer.printf("%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -235,7 +238,6 @@ public final class MessageDataGenerator {
     }
 
     private void generateHashSetFindMethod(String className, StructSpec struct) {
-        headerGenerator.addImport(MessageGenerator.LIST_CLASS);
         buffer.printf("public %s find(%s) {%n", className,
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
@@ -276,6 +278,13 @@ public final class MessageDataGenerator {
             collect(Collectors.joining(", "));
     }
 
+    private String commaSeparatedHashSetFields(StructSpec struct) {
+        return struct.fields().stream().
+            filter(f -> f.mapKey()).
+            map(f -> String.format("%s", f.camelCaseName())).
+            collect(Collectors.joining(", "));
+    }
+
     private void generateCollectionDuplicateMethod(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.LIST_CLASS);
         buffer.printf("public %s duplicate() {%n", collectionType(className));
@@ -288,6 +297,21 @@ public final class MessageDataGenerator {
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("return _duplicate;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHashSetGetOrCreateMethod(String className, StructSpec struct) {
+        headerGenerator.addImport(MessageGenerator.LIST_CLASS);
+        buffer.printf("public %s getOrCreate(%s) {%n", className,
+            commaSeparatedHashSetFieldAndTypes(struct));
+        buffer.incrementIndent();
+        buffer.printf("%s _existing = find(%s);%n",
+                className, commaSeparatedHashSetFields(struct));
+        buffer.printf("if (_existing != null) return _existing;%n");
+        generateKeyElement(className, struct);
+        buffer.printf("add(_key);%n");
+        buffer.printf("return _key;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
