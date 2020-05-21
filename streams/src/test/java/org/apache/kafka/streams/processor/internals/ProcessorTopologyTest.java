@@ -56,6 +56,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -263,8 +264,8 @@ public class ProcessorTopologyTest {
         topology
             .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addSource("source2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-            .addProcessor("processor1", defineWithStores(new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
-            .addProcessor("processor2", defineWithStores(new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
+            .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
+            .addProcessor("processor2", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
@@ -639,7 +640,7 @@ public class ProcessorTopologyTest {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", defineWithStores(new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
+            .addProcessor("processor", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
@@ -817,11 +818,12 @@ public class ProcessorTopologyTest {
         return () -> processor;
     }
 
-    private <K, V> ProcessorSupplier<K, V> defineWithStores(final Processor<K, V> processor, final Set<StoreBuilder<?>> stores) {
+    private <K, V> ProcessorSupplier<K, V> defineWithStores(final Supplier<Processor<K, V>> supplier,
+                                                            final Set<StoreBuilder<?>> stores) {
         return new ProcessorSupplier<K, V>() {
             @Override
             public Processor<K, V> get() {
-                return processor;
+                return supplier.get();
             }
 
             @Override
