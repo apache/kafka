@@ -782,6 +782,55 @@ object DelegationTokenInfoZNode {
   def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
 }
 
+/**
+ * Represents the status of the FeatureZNode.
+ *
+ * - Enabled  -> This status means the feature versioning scheme (KIP-584) is enabled, and, the
+ *               finalized features stored in the FeatureZNode are active. This status is written by
+ *               the controller to the FeatureZNode only when the broker IBP config is greater than
+ *               or equal to KAFKA_2_6_IV1.
+ *
+ * - Disabled -> This status means the feature versioning scheme (KIP-584) is disabled, and the
+ *               the finalized features stored in the FeatureZNode is not relevant. This status is
+ *               written by the controller to the FeatureZNode only when the broker IBP config
+ *               is less than KAFKA_2_6_IV1.
+ *
+ * The purpose behind the FeatureZNodeStatus is that it helps differentiates between the following
+ * cases:
+ *
+ * 1. New cluster bootstrap:
+ *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
+ *    with all the possible supported features finalized immediately. The new cluster will almost
+ *    never be started with an old IBP config that’s less than KAFKA_2_6_IV1. In such a case, the
+ *    controller will start up and notice that the FeatureZNode is absent. To handle the
+ *    requirement, the controller will create a FeatureZNode (with enabled status) containing the
+ *    entire set of supported features as it’s finalized features.
+ *
+ * 2. Cluster upgrade:
+ *    Imagine that a Kafka cluster exists already and the IBP config is less than KAFKA_2_6_IV1, but
+ *    the Broker binary has been upgraded to a state where it supports the feature versioning system
+ *    defined in KIP-584. This means the user is upgrading from an earlier version of the Broker
+ *    binary. In this case, we want to start with no finalized features and allow the user to enable
+ *    them whenever they are ready i.e. in the future whenever the user sets IBP config
+ *    to be >= KAFKA_2_6_IV1. The reason is that enabling all the possible features immediately after
+ *    an upgrade could be harmful to the cluster.
+ *    In such a case:
+ *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_6_IV1), the controller
+ *        will start up and check if the FeatureZNode is absent. If true, then it will react by
+ *        creating an empty FeatureZNode with disabled status.
+ *      - After the Broker upgrade (i.e. IBP config set to greater than or equal to KAFKA_2_6_IV1),
+ *        when the controller starts up it will check if the FeatureZNode exists and whether it is
+ *        disabled. In such a case, it won’t upgrade all features immediately. Instead it will just
+ *        switch the FeatureZNode status to enabled status with empty features. This lets the user
+ *        finalize the features later.
+ *
+ * 2. Cluster downgrade:
+ *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
+ *    KAFKA_2_6_IV1. Then, the user decided to downgrade the cluster by setting IBP config to a
+ *    value less than KAFKA_2_6_IV1. This means the user is also disabling the feature versioning
+ *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
+ *    will switch the FeatureZNode status to disabled along with empty features.
+ */
 object FeatureZNodeStatus extends Enumeration {
   val Disabled, Enabled = Value
 
@@ -790,6 +839,12 @@ object FeatureZNodeStatus extends Enumeration {
   }
 }
 
+/**
+ * Represents the contents of the ZK node containing finalized feature information.
+ *
+ * @param status     the status of the ZK node
+ * @param features   the cluster-wide finalized features
+ */
 case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
 }
 
@@ -811,6 +866,13 @@ object FeatureZNode {
       .asJava
   }
 
+  /**
+   * Encodes a FeatureZNode to JSON.
+   *
+   * @param featureZNode   FeatureZNode to be encoded
+   *
+   * @return               JSON representation of the FeatureZNode, as an Array[Byte]
+   */
   def encode(featureZNode: FeatureZNode): Array[Byte] = {
     val jsonMap = collection.mutable.Map(
       VersionKey -> CurrentVersion,
@@ -819,6 +881,15 @@ object FeatureZNode {
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
+  /**
+   * Decodes the contents of the feature ZK node from Array[Byte] to a FeatureZNode.
+   *
+   * @param jsonBytes   the contents of the feature ZK node
+   *
+   * @return            deserialized FeatureZNode
+   *
+   * @throws KafkaException   if the Array[Byte] can not be decoded.
+   */
   def decode(jsonBytes: Array[Byte]): FeatureZNode = {
     Json.tryParseBytes(jsonBytes) match {
       case Right(js) =>
