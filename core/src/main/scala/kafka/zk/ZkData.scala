@@ -790,7 +790,7 @@ object DelegationTokenInfoZNode {
  *               the controller to the FeatureZNode only when the broker IBP config is greater than
  *               or equal to KAFKA_2_6_IV1.
  *
- * - Disabled -> This status means the feature versioning scheme (KIP-584) is disabled, and the
+ * - Disabled -> This status means the feature versioning scheme (KIP-584) is disabled, and, the
  *               the finalized features stored in the FeatureZNode is not relevant. This status is
  *               written by the controller to the FeatureZNode only when the broker IBP config
  *               is less than KAFKA_2_6_IV1.
@@ -808,12 +808,12 @@ object DelegationTokenInfoZNode {
  *
  * 2. Cluster upgrade:
  *    Imagine that a Kafka cluster exists already and the IBP config is less than KAFKA_2_6_IV1, but
- *    the Broker binary has been upgraded to a state where it supports the feature versioning system
- *    defined in KIP-584. This means the user is upgrading from an earlier version of the Broker
+ *    the Broker binary has been upgraded to a state where it supports the feature versioning
+ *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
  *    binary. In this case, we want to start with no finalized features and allow the user to enable
  *    them whenever they are ready i.e. in the future whenever the user sets IBP config
- *    to be >= KAFKA_2_6_IV1. The reason is that enabling all the possible features immediately after
- *    an upgrade could be harmful to the cluster.
+ *    to be greater than or equal to KAFKA_2_6_IV1. The reason is that enabling all the possible
+ *    features immediately after an upgrade could be harmful to the cluster.
  *    In such a case:
  *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_6_IV1), the controller
  *        will start up and check if the FeatureZNode is absent. If true, then it will react by
