@@ -180,14 +180,14 @@ object RollParams {
   }
 }
 
-sealed trait LogStartIncrementCause
-case object ClientRecordDeletion extends LogStartIncrementCause {
+sealed trait LogStartOffsetIncrementCause
+case object ClientRecordDeletion extends LogStartOffsetIncrementCause {
   override def toString: String = "client delete records request"
 }
-case object LeaderOffsetIncremented extends LogStartIncrementCause {
+case object LeaderOffsetIncremented extends LogStartOffsetIncrementCause {
   override def toString: String = "leader offset increment"
 }
-case object SegmentDeletion extends LogStartIncrementCause {
+case object SegmentDeletion extends LogStartOffsetIncrementCause {
   override def toString: String = "segment deletion to enforce retention"
 }
 
@@ -1274,7 +1274,7 @@ class Log(@volatile private var _dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long, cause: LogStartIncrementCause): Unit = {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, cause: LogStartOffsetIncrementCause): Unit = {
     if (newLogStartOffset > highWatermark)
       throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
         s"since it is larger than the high watermark $highWatermark")
