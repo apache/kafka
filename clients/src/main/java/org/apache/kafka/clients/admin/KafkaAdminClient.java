@@ -3620,7 +3620,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         List<MemberIdentity> memberToRemove = new ArrayList<>();
-        for (final MemberDescription member: members) {
+        for (final MemberDescription member : members) {
             if (member.groupInstanceId().isPresent()) {
                 memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get())
                 );
@@ -3642,15 +3642,15 @@ public class KafkaAdminClient extends AdminClient {
         ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context =
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
-        Call findCoordinatorCall;
+        List<MemberIdentity> members;
         if (options.removeAll()) {
-            List<MemberIdentity> members = getMembersFromGroup(groupId);
-            findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> getRemoveMembersFromGroupCall(context, members));
+            members = getMembersFromGroup(groupId);
         } else {
-            findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> getRemoveMembersFromGroupCall(context, new ArrayList<>()));
+            members = options.members().stream().map(
+                    MemberToRemove::toMemberIdentity).collect(Collectors.toList());
         }
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> getRemoveMembersFromGroupCall(context, members));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new RemoveMembersFromConsumerGroupResult(future, options.members());
@@ -3663,14 +3663,8 @@ public class KafkaAdminClient extends AdminClient {
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                if (context.options().removeAll()) {
                     return new LeaveGroupRequest.Builder(context.groupId(),
                             allMembers);
-                } else {
-                    return new LeaveGroupRequest.Builder(context.groupId(),
-                            context.options().members().stream().map(
-                                    MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
-                }
             }
 
             @Override

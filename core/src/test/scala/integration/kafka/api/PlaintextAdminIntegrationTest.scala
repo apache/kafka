@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
-import org.junit.Assert.{assertEquals, _}
+import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
@@ -1041,20 +1041,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val testInstanceId1 = testInstanceId + "1"
       val fakeGroupId = "fake_group_id"
 
-
-      def createConsumerByGroupInstanceId(groupInstanceId: String) = {
+      def createProperties(groupInstanceId: String): Properties = {
         val newConsumerConfig = new Properties(consumerConfig)
         newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
         newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-        if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID ) {
+        if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {
           newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
         }
-        createConsumer(configOverrides = newConsumerConfig)
+        newConsumerConfig
       }
 
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId, testInstanceId1, EMPTY_GROUP_INSTANCE_ID)
-      val consumerSet = groupInstanceSet.map(createConsumerByGroupInstanceId(_))
+      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
 
       val latch = new CountDownLatch(consumerSet.size)
@@ -1066,7 +1065,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
               try {
                 while (true) {
                   consumer.poll(JDuration.ofSeconds(5))
-                  if ( !consumer.assignment.isEmpty && latch.getCount > 0L)
+                  if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
                   consumer.commitSync()
                 }

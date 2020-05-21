@@ -48,5 +48,4 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     public boolean removeAll() {
         return members.isEmpty();
     }
-
 }

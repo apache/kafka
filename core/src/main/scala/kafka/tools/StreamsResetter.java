@@ -121,7 +121,9 @@ public class StreamsResetter {
             + "* This tool will not clean up the local state on the stream application instances (the persisted "
             + "stores used to cache aggregation results).\n"
             + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
-            + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n\n"
+            + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n"
+            + "*Please use the \"--force\" option to force remove active members in case long session "
+            + "timeout has been configured.\n\n"
             + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
             + "reset tool!\n\n";
 
