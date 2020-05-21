@@ -21,7 +21,7 @@ import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.Time
 
 import java.util.concurrent.TimeUnit
-import java.util.Random
+import java.util.concurrent.ThreadLocalRandom
 
 import scala.math._
 
@@ -84,13 +84,12 @@ class Throttler(desiredRatePerSec: Double,
 object Throttler {
   
   def main(args: Array[String]): Unit = {
-    val rand = new Random()
     val throttler = new Throttler(100000, 100, true, time = Time.SYSTEM)
     val interval = 30000
     var start = System.currentTimeMillis
     var total = 0
     while(true) {
-      val value = rand.nextInt(1000)
+      val value = ThreadLocalRandom.current().nextInt(1000)
       Thread.sleep(1)
       throttler.maybeThrottle(value)
       total += value

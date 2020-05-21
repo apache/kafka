@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.util.Random
+import java.util.concurrent.ThreadLocalRandom
 
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException}
@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplic
 import collection.{Map, mutable, _}
 
 object AdminUtils extends Logging {
-  val rand = new Random
   val AdminClientId = "__admin_client"
 
   /**
@@ -129,9 +128,9 @@ object AdminUtils extends Logging {
                                                  startPartitionId: Int): Map[Int, Seq[Int]] = {
     val ret = mutable.Map[Int, Seq[Int]]()
     val brokerArray = brokerList.toArray
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else ThreadLocalRandom.current().nextInt(brokerArray.length)
     var currentPartitionId = math.max(0, startPartitionId)
-    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else ThreadLocalRandom.current().nextInt(brokerArray.length)
     for (_ <- 0 until nPartitions) {
       if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
         nextReplicaShift += 1
@@ -157,9 +156,9 @@ object AdminUtils extends Logging {
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
     val numBrokers = arrangedBrokerList.size
     val ret = mutable.Map[Int, Seq[Int]]()
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else ThreadLocalRandom.current().nextInt(arrangedBrokerList.size)
     var currentPartitionId = math.max(0, startPartitionId)
-    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else ThreadLocalRandom.current().nextInt(arrangedBrokerList.size)
     for (_ <- 0 until nPartitions) {
       if (currentPartitionId > 0 && (currentPartitionId % arrangedBrokerList.size == 0))
         nextReplicaShift += 1
