@@ -336,7 +336,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // the maximum of the depending sub-topologies source topics' number of partitions
         final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
-        final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
+        Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
         try {
             allRepartitionTopicPartitions = prepareRepartitionTopics(topicGroups, metadata);
         } catch (final TaskAssignmentException e) {
@@ -480,7 +480,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return map from repartition topic to its partition info
      */
     private Map<TopicPartition, PartitionInfo> prepareRepartitionTopics(final Map<Integer, TopicsInfo> topicGroups,
-                                                                           final Cluster metadata) {
+                                                                        final Cluster metadata) {
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicMetadata(topicGroups, metadata);
 
         setRepartitionTopicMetadataNumberOfPartitions(repartitionTopicMetadata, topicGroups, metadata);
@@ -492,7 +492,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary
-        internalTopicManager.makeReady(repartitionTopicMetadata);
+        if(internalTopicManager.makeReady(repartitionTopicMetadata) == null) {
+            return Collections.emptyMap();
+        }
 
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
@@ -683,9 +685,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
 
-        final Set<String> newlyCreatedTopics = internalTopicManager.makeReady(changelogTopicMetadata);
-        log.debug("Created state changelog topics {} from the parsed topology.", changelogTopicMetadata.values());
-        return newlyCreatedTopics;
+        return internalTopicManager.makeReady(changelogTopicMetadata);
     }
 
     /**
@@ -714,12 +714,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
 
-        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
-
+        final TaskAssignor taskAssignor = createTaskAssignor(newlyCreatedChangelogs == null, lagComputationSuccessful);
         final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
-                                                                   allTasks,
-                                                                   statefulTasks,
-                                                                   assignmentConfigs);
+            allTasks,
+            statefulTasks,
+            assignmentConfigs);
 
         log.info("Assigned tasks to clients as {}{}.",
             Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
@@ -727,9 +726,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return probingRebalanceNeeded;
     }
 
-    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+    private TaskAssignor createTaskAssignor(final boolean topicCreationFailed,
+                                            final boolean lagComputationSuccessful) {
         final TaskAssignor taskAssignor = taskAssignorSupplier.get();
-        if (taskAssignor instanceof StickyTaskAssignor) {
+        if (topicCreationFailed) {
+            log.warn("Failed to create internal changelog topics, will return previous assignment to clients and "
+                         + "trigger another rebalance to retry.");
+            return new FallbackPriorTaskAssignor();
+        } else if (taskAssignor instanceof StickyTaskAssignor) {
             // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
             // whether or not lag computation failed.
             return taskAssignor;
@@ -767,7 +771,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     .collect(Collectors.toList());
 
             final Collection<TopicPartition> allPreexistingChangelogPartitions = new ArrayList<>(allChangelogPartitions);
-            allPreexistingChangelogPartitions.removeIf(partition -> newlyCreatedChangelogs.contains(partition.topic()));
+            if (newlyCreatedChangelogs != null) {
+                allPreexistingChangelogPartitions.removeIf(partition -> newlyCreatedChangelogs.contains(partition.topic()));
+            }
 
             final Collection<TopicPartition> allNewlyCreatedChangelogPartitions = new ArrayList<>(allChangelogPartitions);
             allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);

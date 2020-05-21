@@ -24,14 +24,12 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -97,7 +95,7 @@ public class InternalTopicManager {
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
      *
      * @param topics the set of given internal topics.
-     * @return the set of topics which had to be newly created
+     * @return the set of topics which had to be newly created, null if the creation was not successful.
      */
     public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         // we will do the validation / topic-creation in a loop, until we have confirmed all topics
@@ -173,7 +171,7 @@ public class InternalTopicManager {
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
             log.error(timeoutAndRetryError);
-            throw new TaskMigratedException("Time out for creating internal topics", new TimeoutException(timeoutAndRetryError));
+            return null;
         }
         log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
 
