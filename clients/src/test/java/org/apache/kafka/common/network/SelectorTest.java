@@ -48,6 +48,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -903,6 +904,60 @@ public class SelectorTest {
         selector.write(channel);
         assertEquals(asList(send), selector.completedSends());
     }
+
+    /**
+     * Ensure that no errors are thrown if channels are closed while processing multiple completed receives
+     */
+    @Test
+    public void testChannelCloseWhileProcessingReceives() throws Exception {
+        int numChannels = 4;
+        Map<String, KafkaChannel> channels = TestUtils.fieldValue(selector, Selector.class, "channels");
+        Set<SelectionKey> selectionKeys = new HashSet<>();
+        for (int i = 0; i < numChannels; i++) {
+            String id = String.valueOf(i);
+            KafkaChannel channel = mock(KafkaChannel.class);
+            channels.put(id, channel);
+            when(channel.id()).thenReturn(id);
+            when(channel.state()).thenReturn(ChannelState.READY);
+            when(channel.isConnected()).thenReturn(true);
+            when(channel.ready()).thenReturn(true);
+            when(channel.read()).thenReturn(1L);
+
+            SelectionKey selectionKey = mock(SelectionKey.class);
+            when(channel.selectionKey()).thenReturn(selectionKey);
+            when(selectionKey.isValid()).thenReturn(true);
+            when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_READ);
+            selectionKey.attach(channel);
+            selectionKeys.add(selectionKey);
+
+            NetworkReceive receive = mock(NetworkReceive.class);
+            when(receive.source()).thenReturn(id);
+            when(receive.size()).thenReturn(10);
+            when(receive.bytesRead()).thenReturn(1);
+            when(receive.payload()).thenReturn(ByteBuffer.allocate(10));
+            when(channel.maybeCompleteReceive()).thenReturn(receive);
+        }
+
+        selector.pollSelectionKeys(selectionKeys, false, System.nanoTime());
+        assertEquals(numChannels, selector.completedReceives().size());
+        Set<KafkaChannel> closed = new HashSet<>();
+        Set<KafkaChannel> notClosed = new HashSet<>();
+        for (NetworkReceive receive : selector.completedReceives()) {
+            KafkaChannel channel = selector.channel(receive.source());
+            assertNotNull(channel);
+            if (closed.size() < 2) {
+                selector.close(channel.id());
+                closed.add(channel);
+            } else
+                notClosed.add(channel);
+        }
+        assertEquals(notClosed, new HashSet<>(selector.channels()));
+        closed.forEach(channel -> assertNull(selector.channel(channel.id())));
+
+        selector.poll(0);
+        assertEquals(0, selector.completedReceives().size());
+    }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

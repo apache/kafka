@@ -1597,6 +1597,8 @@ class SocketServerTest {
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+      assertEquals(1, testableServer.uncaughtExceptions)
+      testableServer.uncaughtExceptions = 0
     })
   }
 
@@ -1675,6 +1677,7 @@ class SocketServerTest {
         testWithServer(testableServer)
     } finally {
       shutdownServerAndMetrics(testableServer)
+      assertEquals(0, testableServer.uncaughtExceptions)
     }
   }
 
@@ -1730,6 +1733,7 @@ class SocketServerTest {
       new Metrics, time, credentialProvider) {
 
     @volatile var selector: Option[TestableSelector] = None
+    @volatile var uncaughtExceptions = 0
 
     override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
@@ -1741,6 +1745,12 @@ class SocketServerTest {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
            selector = Some(testableSelector)
            testableSelector
+        }
+
+        override private[network] def processException(errorMessage: String, throwable: Throwable, isUncaught: Boolean): Unit = {
+          if (isUncaught)
+            uncaughtExceptions += 1
+          super.processException(errorMessage, throwable, isUncaught)
         }
       }
     }
@@ -1807,6 +1817,7 @@ class SocketServerTest {
           currentPollValues ++= newValues
         } else
           deferredValues ++= newValues
+        newValues.clear()
       }
       def reset(): Unit = {
         currentPollValues.clear()
@@ -1875,6 +1886,14 @@ class SocketServerTest {
         cachedCompletedReceives.update(super.completedReceives.asScala.toBuffer)
         cachedCompletedSends.update(super.completedSends.asScala)
         cachedDisconnected.update(super.disconnected.asScala.toBuffer)
+
+        val map: util.Map[KafkaChannel, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
+        cachedCompletedReceives.currentPollValues.foreach { receive =>
+          val channel = Option(super.channel(receive.source)).orElse(Option(super.closingChannel(receive.source)))
+          channel.foreach(map.put(_, receive))
+        }
+        cachedCompletedSends.currentPollValues.foreach(super.completedSends.add)
+        cachedDisconnected.currentPollValues.foreach { case (id, state) => super.disconnected.put(id, state) }
       }
     }
 
@@ -1898,12 +1917,6 @@ class SocketServerTest {
           super.wakeup()
       }
     }
-
-    override def disconnected: java.util.Map[String, ChannelState] = cachedDisconnected.currentPollValues.toMap.asJava
-
-    override def completedSends: java.util.List[Send] = cachedCompletedSends.currentPollValues.asJava
-
-    override def completedReceives: java.util.List[NetworkReceive] = cachedCompletedReceives.currentPollValues.asJava
 
     override def close(id: String): Unit = {
       runOp(SelectorOperation.Close, Some(id)) {
