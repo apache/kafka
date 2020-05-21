@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.errors.KafkaRaftException;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -34,17 +35,23 @@ import java.util.OptionalInt;
 
 public class RaftUtil {
 
-    public static ByteBuffer serializeRecords(Records records) throws IOException {
+    public static ByteBuffer serializeRecords(Records records) throws KafkaRaftException {
         if (records instanceof MemoryRecords) {
             MemoryRecords memoryRecords = (MemoryRecords) records;
             return memoryRecords.buffer();
         } else if (records instanceof FileRecords) {
             FileRecords fileRecords = (FileRecords) records;
             ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
-            fileRecords.readInto(buffer, 0);
+
+            try {
+                fileRecords.readInto(buffer, 0);
+            } catch (IOException e) {
+                throw new KafkaRaftException("File records read failed", e);
+            }
             return buffer;
         } else {
-            throw new UnsupportedOperationException("Serialization not yet supported for " + records.getClass());
+            throw new KafkaRaftException("No supported serialization",
+                new UnsupportedOperationException("Serialization not yet supported for " + records.getClass()));
         }
     }
 
