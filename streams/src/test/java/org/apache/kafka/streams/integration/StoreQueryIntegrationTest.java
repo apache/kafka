@@ -332,6 +332,7 @@ public class StoreQueryIntegrationTest {
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         return config;
     }
 }
