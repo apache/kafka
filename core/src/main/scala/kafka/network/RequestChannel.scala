@@ -139,11 +139,11 @@ object RequestChannel extends Logging {
 
         case alterConfigs: IncrementalAlterConfigsRequest =>
           val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
-          alterConfigs.data().resources().asScala.foreach { resource =>
+          alterConfigs.data.resources.forEach { resource =>
             val newResource = new AlterConfigsResource()
               .setResourceName(resource.resourceName)
               .setResourceType(resource.resourceType)
-            resource.configs.asScala.foreach { config =>
+            resource.configs.forEach { config =>
               newResource.configs.add(new AlterableConfig()
                 .setName(config.name)
                 .setValue(loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))

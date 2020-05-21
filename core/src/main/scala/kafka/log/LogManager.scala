@@ -111,7 +111,7 @@ class LogManager(logDirs: Seq[File],
 
   private def offlineLogDirs: Iterable[File] = {
     val logDirsSet = mutable.Set[File]() ++= logDirs
-    _liveLogDirs.asScala.foreach(logDirsSet -=)
+    _liveLogDirs.forEach(dir => logDirsSet -= dir)
     logDirsSet
   }
 

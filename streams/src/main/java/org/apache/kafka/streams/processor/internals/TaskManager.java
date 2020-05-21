@@ -464,6 +464,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
+
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                 } catch (final RuntimeException e) {
@@ -516,6 +517,10 @@ public class TaskManager {
      * assigned the task as a result of the rebalance). This method should be idempotent.
      */
     private void tryToLockAllNonEmptyTaskDirectories() {
+        // Always clear the set at the beginning as we're always dealing with the
+        // current set of actually-locked tasks.
+        lockedTaskDirectories.clear();
+
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
@@ -732,15 +737,16 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
+    // For testing only.
+    int commitAll() {
+        return commit(tasks.values());
+    }
+
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commitAll() {
-        return commit(tasks.values());
-    }
-
     int commit(final Collection<Task> tasks) {
         if (rebalanceInProgress) {
             return -1;

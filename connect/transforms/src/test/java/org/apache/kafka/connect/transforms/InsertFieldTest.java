@@ -26,6 +26,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -61,7 +62,7 @@ public class InsertFieldTest {
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final Struct simpleStruct = new Struct(simpleStructSchema).put("magic", 42L);
 
-        final SourceRecord record = new SourceRecord(null, null, "test", 0, simpleStructSchema, simpleStruct);
+        final SourceRecord record = new SourceRecord(null, null, "test", 0, null, null, simpleStructSchema, simpleStruct, 789L);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(simpleStructSchema.name(), transformedRecord.valueSchema().name());
@@ -78,7 +79,7 @@ public class InsertFieldTest {
         assertEquals(0, ((Struct) transformedRecord.value()).getInt32("partition_field").intValue());
 
         assertEquals(Timestamp.builder().optional().build(), transformedRecord.valueSchema().field("timestamp_field").schema());
-        assertEquals(null, ((Struct) transformedRecord.value()).getInt64("timestamp_field"));
+        assertEquals(789L, ((Date) ((Struct) transformedRecord.value()).get("timestamp_field")).getTime());
 
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, transformedRecord.valueSchema().field("instance_id").schema());
         assertEquals("my-instance-id", ((Struct) transformedRecord.value()).getString("instance_id"));
@@ -101,17 +102,16 @@ public class InsertFieldTest {
         xformValue.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-                null, Collections.singletonMap("magic", 42L));
+                null, null, null, Collections.singletonMap("magic", 42L), 123L);
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
         assertEquals("test", ((Map<?, ?>) transformedRecord.value()).get("topic_field"));
         assertEquals(0, ((Map<?, ?>) transformedRecord.value()).get("partition_field"));
-        assertEquals(null, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
+        assertEquals(123L, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
     }
-
 
     @Test
     public void insertConfiguredFieldsIntoTombstoneEventWithoutSchemaLeavesValueUnchanged() {
