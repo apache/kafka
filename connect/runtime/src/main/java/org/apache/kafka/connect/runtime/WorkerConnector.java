@@ -86,13 +86,13 @@ public class WorkerConnector {
                 SinkConnectorConfig.validate(config);
             }
 
-            final ConnectorContext delegateCtx = new DelegateToWorkerConnectorContext();
-
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
-                connector.initialize(new DelegateSinkConnectorContext(delegateCtx));
+                connector.initialize(new WorkerSinkConnectorContext());
+            } else if (isSourceConnector()) {
+                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             } else {
-                connector.initialize(new DelegateSourceConnectorContext(delegateCtx, offsetStorageReader));
+                connector.initialize(new WorkerConnectorContext());
             }
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
@@ -321,7 +321,7 @@ public class WorkerConnector {
         }
     }
 
-    private class DelegateToWorkerConnectorContext implements ConnectorContext {
+    private class WorkerConnectorContext implements ConnectorContext {
 
         @Override
         public void requestTaskReconfiguration() {
@@ -336,50 +336,15 @@ public class WorkerConnector {
         }
     }
 
-    /**
-     * An internal SinkConnectorContext that delegates to worker connector.
-     */
-    private static class DelegateSinkConnectorContext implements SinkConnectorContext {
-
-        private final ConnectorContext delegateCtx;
-
-        DelegateSinkConnectorContext(final ConnectorContext delegateCtx) {
-            this.delegateCtx = delegateCtx;
-        }
-
-        @Override
-        public void requestTaskReconfiguration() {
-            delegateCtx.requestTaskReconfiguration();
-        }
-
-        @Override
-        public void raiseError(Exception e) {
-            delegateCtx.raiseError(e);
-        }
+    private class WorkerSinkConnectorContext extends WorkerConnectorContext implements SinkConnectorContext {
     }
 
-    /**
-     * An internal SourceConnectorContext that delegates to worker connector.
-     */
-    private static class DelegateSourceConnectorContext implements SourceConnectorContext {
+    private class WorkerSourceConnectorContext extends WorkerConnectorContext implements SourceConnectorContext {
 
-        private final ConnectorContext delegateCtx;
         private final OffsetStorageReader offsetStorageReader;
 
-        DelegateSourceConnectorContext(final ConnectorContext delegateCtx,
-                                       final OffsetStorageReader offsetStorageReader) {
-            this.delegateCtx = delegateCtx;
+        WorkerSourceConnectorContext(final OffsetStorageReader offsetStorageReader) {
             this.offsetStorageReader = offsetStorageReader;
-        }
-
-        @Override
-        public void requestTaskReconfiguration() {
-            delegateCtx.requestTaskReconfiguration();
-        }
-
-        @Override
-        public void raiseError(Exception e) {
-            delegateCtx.raiseError(e);
         }
 
         @Override
