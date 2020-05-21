@@ -674,6 +674,15 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+    * Gets all partitions in for a topic
+    * @param topic topic name
+    * @return all partitions for the topic
+    */
+  def getTopicPartitions(topic: String) : Seq[String] = {
+    getChildren(TopicPartitionsZNode.path(topic))
+  }
+
+  /**
    * Gets the data and version at the given zk path
    * @param path zk node path
    * @return A tuple of 2 elements, where first element is zk node data as an array of bytes

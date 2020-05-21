@@ -243,6 +243,33 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get expected partition state upon topic creation")
   }
 
+  /*
+  * Tests that controller will fix insufficient RF topic by assigning sufficient replicas
+  * */
+  @Test
+  def testTopicCreationWithFixingRF(): Unit = {
+    val topicRF1 = "test_topic_rf1"
+    val partition = 0
+    val defaultRF = 2
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
+      .map(prop => {
+        prop.setProperty(KafkaConfig.DefaultReplicationFactorProp,defaultRF.toString)
+        prop.setProperty(KafkaConfig.CreateTopicPolicyClassNameProp, "kafka.server.LiCreateTopicPolicy")
+        prop
+      }).map(KafkaConfig.fromProps)
+    servers = serverConfigs.map(s => TestUtils.createServer(s))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val assignment = Map(partition -> List(controllerId)) // topicRF1 original RF set to 1
+    TestUtils.createTopic(zkClient, topicRF1, partitionReplicaAssignment = assignment, servers = servers, new Properties())
+
+    waitForPartitionState(new TopicPartition(topicRF1, partition), firstControllerEpoch, zkClient.getAllBrokersInCluster.map(b => b.id),
+      LeaderAndIsr.initialLeaderEpoch, "failed to get expected partition state upon valid RF topic creation")
+
+    // Actual RF should be corrected to 2
+    assertEquals(defaultRF, zkClient.getReplicasForPartition(new TopicPartition(topicRF1, partition)).size)
+  }
+
   @Test
   def testTopicPartitionExpansion(): Unit = {
     servers = makeServers(1)
@@ -685,6 +712,18 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
+    }, message)
+  }
+
+  private def waitForPartitionState(tp: TopicPartition,
+    controllerEpoch: Int,
+    leaders: Seq[Int],
+    leaderEpoch: Int,
+    message: String): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+      leaderIsrAndControllerEpochMap.contains(tp) && leaders.exists(
+        leader=> isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch))
     }, message)
   }
 
