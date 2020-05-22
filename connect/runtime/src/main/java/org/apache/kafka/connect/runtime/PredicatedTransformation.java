@@ -69,4 +69,13 @@ class PredicatedTransformation<R extends ConnectRecord<R>> implements Transforma
         Utils.closeQuietly(delegate, "predicated");
         Utils.closeQuietly(predicate, "predicate");
     }
+
+    @Override
+    public String toString() {
+        return "PredicatedTransformation{" +
+                "predicate=" + predicate +
+                ", delegate=" + delegate +
+                ", negate=" + negate +
+                '}';
+    }
 }

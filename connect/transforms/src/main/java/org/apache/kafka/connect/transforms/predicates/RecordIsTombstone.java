@@ -48,4 +48,9 @@ public class RecordIsTombstone<R extends ConnectRecord<R>> implements Predicate<
     public void configure(Map<String, ?> configs) {
 
     }
+
+    @Override
+    public String toString() {
+        return "RecordIsTombstone{}";
+    }
 }

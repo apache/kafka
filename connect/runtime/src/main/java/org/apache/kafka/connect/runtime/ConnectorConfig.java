@@ -315,7 +315,6 @@ public class ConnectorConfig extends AbstractConfig {
                 return (Set) plugins.transformations();
             }
 
-
             @Override
             protected ConfigDef initialConfigDef() {
                 // All Transformations get these config parameters implicitly

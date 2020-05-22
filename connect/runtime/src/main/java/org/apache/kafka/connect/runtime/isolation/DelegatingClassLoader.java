@@ -412,6 +412,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);
+        addAliases(predicates);
         addAliases(restExtensions);
         addAliases(connectorClientConfigPolicies);
     }

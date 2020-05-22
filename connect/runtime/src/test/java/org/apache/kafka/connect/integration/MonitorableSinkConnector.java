@@ -125,7 +125,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         @Override
         public void put(Collection<SinkRecord> records) {
             for (SinkRecord rec : records) {
-                taskHandle.record();
+                taskHandle.record(rec);
                 TopicPartition tp = cachedTopicPartitions
                         .computeIfAbsent(rec.topic(), v -> new HashMap<>())
                         .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));

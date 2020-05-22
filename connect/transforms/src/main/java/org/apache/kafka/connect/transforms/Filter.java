@@ -29,6 +29,11 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  */
 public class Filter<R extends ConnectRecord<R>> implements Transformation<R> {
 
+    public static final String OVERVIEW_DOC = "Drops all records, filtering them from subsequent transformations in the chain. " +
+            "This is intended to be used conditionally to filter out records matching (or not matching) " +
+            "a particular Predicate.";
+    public static final ConfigDef CONFIG_DEF = new ConfigDef();
+
     @Override
     public R apply(R record) {
         return null;
@@ -36,7 +41,7 @@ public class Filter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     @Override
     public ConfigDef config() {
-        return new ConfigDef();
+        return CONFIG_DEF;
     }
 
     @Override

@@ -56,4 +56,11 @@ public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
     public void configure(Map<String, ?> configs) {
         this.name = new SimpleConfig(config(), configs).getString(NAME_CONFIG);
     }
+
+    @Override
+    public String toString() {
+        return "HasHeaderKey{" +
+                "name='" + name + '\'' +
+                '}';
+    }
 }

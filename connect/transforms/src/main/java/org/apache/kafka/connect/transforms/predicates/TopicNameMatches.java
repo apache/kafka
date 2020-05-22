@@ -23,6 +23,7 @@ import java.util.regex.PatternSyntaxException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.transforms.util.RegexValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 /**
@@ -32,29 +33,14 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 public class TopicNameMatches<R extends ConnectRecord<R>> implements Predicate<R> {
 
     private static final String PATTERN_CONFIG = "pattern";
-    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(PATTERN_CONFIG, ConfigDef.Type.STRING, null,
-            new ConfigDef.Validator() {
-                @Override
-                public void ensureValid(String name, Object value) {
-                    if (value instanceof String) {
-                        compile(name, (String) value);
-                    }
-                }
-            }, ConfigDef.Importance.MEDIUM,
+    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(PATTERN_CONFIG, ConfigDef.Type.STRING, ".*",
+            new RegexValidator(), ConfigDef.Importance.MEDIUM,
             "A Java regular expression for matching against the name of a record's topic.");
     private Pattern pattern;
 
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;
-    }
-
-    private static Pattern compile(String name, String value) {
-        try {
-            return Pattern.compile(value);
-        } catch (PatternSyntaxException e) {
-            throw new ConfigException(name, value, "entry must be a Java-compatible regular expression: " + e.getMessage());
-        }
     }
 
     @Override
@@ -70,6 +56,20 @@ public class TopicNameMatches<R extends ConnectRecord<R>> implements Predicate<R
     @Override
     public void configure(Map<String, ?> configs) {
         SimpleConfig simpleConfig = new SimpleConfig(config(), configs);
-        this.pattern = compile(PATTERN_CONFIG, simpleConfig.getString(PATTERN_CONFIG));
+        Pattern result;
+        String value = simpleConfig.getString(PATTERN_CONFIG);
+        try {
+            result = Pattern.compile(value);
+        } catch (PatternSyntaxException e) {
+            throw new ConfigException(PATTERN_CONFIG, value, "entry must be a Java-compatible regular expression: " + e.getMessage());
+        }
+        this.pattern = result;
+    }
+
+    @Override
+    public String toString() {
+        return "TopicNameMatches{" +
+                "pattern=" + pattern +
+                '}';
     }
 }
