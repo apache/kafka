@@ -295,6 +295,34 @@ public class InternalTopicManagerTest {
     }
 
     @Test
+    public void shouldLogWhenTopicLeaderNotAvailableAndNotThrowException() {
+        final String topicLeaderNotAvailable = "LeaderNotAvailable";
+        mockAdminClient.addTopic(
+                false,
+                topicLeaderNotAvailable,
+                Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+                null);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topicLeaderNotAvailable, Collections.emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+
+        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
+        topicConfigMap.put(topicLeaderNotAvailable, internalTopicConfig);
+
+        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
+            internalTopicManager.makeReady(topicConfigMap);
+
+            assertThat(
+                    appender.getMessages(),
+                    hasItem("stream-thread [" + threadName + "] The leader of the Topic LeaderNotAvailable is not available, will retry 1 times.\n" +
+                            "Error message was: org.apache.kafka.common.errors.LeaderNotAvailableException: " +
+                            "The leader of Topic LeaderNotAvailable is not available.")
+            );
+        }
+    }
+
+    @Test
     public void shouldExhaustRetriesOnMarkedForDeletionTopic() {
         mockAdminClient.addTopic(
             false,
