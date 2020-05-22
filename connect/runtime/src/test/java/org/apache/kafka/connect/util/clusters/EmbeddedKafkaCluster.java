@@ -166,7 +166,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         try {
             producer.close();
         } catch (Exception e) {
-            log.error("Could not shutdown producer ", e);
+            log.error("Could not shutdown producer for embedded Kafka cluster", e);
             throw new RuntimeException("Could not shutdown producer", e);
         }
 
