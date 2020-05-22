@@ -110,6 +110,19 @@ public class Timer {
     }
 
     /**
+     * Reset the timer's deadline directly.
+     *
+     * @param deadlineMs The new deadline in milliseconds
+     */
+    public void resetDeadline(long deadlineMs) {
+        if (deadlineMs < 0)
+            throw new IllegalArgumentException("Invalid negative deadline " + deadlineMs);
+
+        this.startMs = this.currentTimeMs;
+        this.deadlineMs = deadlineMs;
+    }
+
+    /**
      * Use the underlying {@link Time} implementation to update the current cached time. If
      * the underlying time returns a value which is smaller than the current cached time,
      * the update will be ignored.

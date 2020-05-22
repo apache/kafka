@@ -120,6 +120,14 @@ public class FollowerState implements EpochState {
         return votedIdOpt.orElse(-1) == candidateId;
     }
 
+    public int votedId() {
+        if (!votedIdOpt.isPresent()) {
+            throw new IllegalArgumentException("Cannot access voted id of epoch " + epoch +
+                    " since we do not know it");
+        }
+        return votedIdOpt.getAsInt();
+    }
+
     public void updateHighWatermark(OptionalLong highWatermark) {
         if (!hasLeader())
             throw new IllegalArgumentException("Cannot update high watermark without an acknowledged leader");
