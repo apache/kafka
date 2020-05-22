@@ -593,7 +593,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Update the follower's state in the leader based on the last fetch request. See
-   * [[kafka.cluster.Replica#updateLogReadResult]] for details.
+   * [[Replica.updateFetchState()]] for details.
    *
    * @return true if the follower's fetch state was updated, false if the followerId is not recognized
    */
