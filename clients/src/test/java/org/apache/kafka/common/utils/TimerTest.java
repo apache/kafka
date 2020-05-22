@@ -91,6 +91,21 @@ public class TimerTest {
     }
 
     @Test
+    public void testTimerResetDeadlineUsesCurrentTime() {
+        Timer timer = time.timer(500);
+        timer.sleep(200);
+        assertEquals(300, timer.remainingMs());
+        assertEquals(200, timer.elapsedMs());
+
+        timer.sleep(100);
+        timer.resetDeadline(time.milliseconds() + 200);
+        assertEquals(200, timer.remainingMs());
+
+        timer.update();
+        assertEquals(200, timer.remainingMs());
+    }
+
+    @Test
     public void testTimeoutOverflow() {
         Timer timer = time.timer(Long.MAX_VALUE);
         assertEquals(Long.MAX_VALUE - timer.currentTimeMs(), timer.remainingMs());

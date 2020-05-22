@@ -53,7 +53,8 @@ import static org.junit.Assume.assumeTrue;
 
 public class RaftEventSimulationTest {
     private static final int ELECTION_TIMEOUT_MS = 1000;
-    private static final int ELECTION_JITTER_MS = 10;
+    private static final int ELECTION_JITTER_MS = 100;
+    private static final int FETCH_TIMEOUT_MS = 5000;
     private static final int RETRY_BACKOFF_MS = 50;
     private static final int REQUEST_TIMEOUT_MS = 500;
 
@@ -509,7 +510,7 @@ public class RaftEventSimulationTest {
             Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.quorum.isLeader())
                     .max((node1, node2) -> Integer.compare(node2.quorum.epoch(), node1.quorum.epoch()));
             if (leaderWithMaxEpoch.isPresent()) {
-                return leaderWithMaxEpoch.get().manager.highWatermark();
+                return leaderWithMaxEpoch.get().client.highWatermark();
             } else {
                 return OptionalLong.empty();
             }
@@ -632,7 +633,7 @@ public class RaftEventSimulationTest {
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time,
                 new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
-                ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
+                ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
                 logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
@@ -643,7 +644,7 @@ public class RaftEventSimulationTest {
 
     private static class RaftNode {
         final int nodeId;
-        final KafkaRaftClient manager;
+        final KafkaRaftClient client;
         final MockLog log;
         final MockNetworkChannel channel;
         final MockQuorumStateStore store;
@@ -652,14 +653,14 @@ public class RaftEventSimulationTest {
         DistributedCounter counter;
 
         private RaftNode(int nodeId,
-                         KafkaRaftClient manager,
+                         KafkaRaftClient client,
                          MockLog log,
                          MockNetworkChannel channel,
                          MockQuorumStateStore store,
                          QuorumState quorum,
                          LogContext logContext) {
             this.nodeId = nodeId;
-            this.manager = manager;
+            this.client = client;
             this.log = log;
             this.channel = channel;
             this.store = store;
@@ -668,7 +669,7 @@ public class RaftEventSimulationTest {
         }
 
         void initialize() {
-            this.counter = new DistributedCounter(manager, logContext);
+            this.counter = new DistributedCounter(client, logContext);
             try {
                 counter.initialize();
             } catch (IOException e) {
@@ -678,7 +679,7 @@ public class RaftEventSimulationTest {
 
         void poll() {
             try {
-                manager.poll();
+                client.poll();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -861,7 +862,7 @@ public class RaftEventSimulationTest {
 
         @Override
         public void verify() {
-            cluster.forAllRunning(node -> assertCommittedData(node.nodeId, node.manager, node.log));
+            cluster.forAllRunning(node -> assertCommittedData(node.nodeId, node.client, node.log));
         }
     }
 

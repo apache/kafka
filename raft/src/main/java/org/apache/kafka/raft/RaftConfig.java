@@ -44,6 +44,11 @@ public class RaftConfig extends AbstractConfig {
     private static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
 
+    public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = "quorum.fetch.timeout.ms";
+    private static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
+        "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
+        "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
+
     public static final String QUORUM_ELECTION_JITTER_MAX_MS_CONFIG = "quorum.election.jitter.max.ms";
     private static final String QUORUM_ELECTION_JITTER_MAX_MS_DOC = "Maximum jitter to delay new elections. " +
         "This helps prevent gridlocked elections";
@@ -89,15 +94,21 @@ public class RaftConfig extends AbstractConfig {
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 30000,
-                atLeast(0L),
+                atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
             .define(QUORUM_ELECTION_JITTER_MAX_MS_CONFIG,
                 ConfigDef.Type.INT,
                 100,
-                atLeast(0L),
+                atLeast(0),
                 ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_JITTER_MAX_MS_DOC);
+                QUORUM_ELECTION_JITTER_MAX_MS_DOC)
+            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
+                ConfigDef.Type.INT,
+                15000,
+                atLeast(0),
+                ConfigDef.Importance.HIGH,
+                QUORUM_FETCH_TIMEOUT_MS_DOC);
     }
 
 
