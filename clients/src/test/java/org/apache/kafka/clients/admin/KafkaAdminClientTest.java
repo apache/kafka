@@ -2456,7 +2456,7 @@ public class KafkaAdminClientTest {
                     groupId,
                     new RemoveMembersFromConsumerGroupOptions()
             );
-            TestUtils.assertFutureError(partialFailureResults.all(), UnknownMemberIdException.class);
+            TestUtils.assertFutureError(partialFailureResults.all(), KafkaException.class);
 
             // Return with success for "removeAll" scenario
             // 1 prepare response for AdminClient.describeConsumerGroups
