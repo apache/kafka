@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
@@ -276,8 +277,7 @@ public class ConnectorConfig extends AbstractConfig {
 
             try {
                 @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = getClass(prefix + "type").asSubclass(Transformation.class)
-                        .getDeclaredConstructor().newInstance();
+                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 Object predicateAlias = configs.remove("predicate");
                 Object negate = configs.remove("negate");
@@ -285,8 +285,7 @@ public class ConnectorConfig extends AbstractConfig {
                 if (predicateAlias != null) {
                     String predicatePrefix = "predicates." + predicateAlias + ".";
                     @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = getClass(predicatePrefix + "type").asSubclass(Predicate.class)
-                            .getDeclaredConstructor().newInstance();
+                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
@@ -499,7 +498,7 @@ public class ConnectorConfig extends AbstractConfig {
             }
             T transformation;
             try {
-                transformation = cls.asSubclass(baseClass).getConstructor().newInstance();
+                transformation = Utils.newInstance(cls, baseClass);
             } catch (Exception e) {
                 throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
             }
