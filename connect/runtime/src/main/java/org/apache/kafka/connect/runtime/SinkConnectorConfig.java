@@ -137,6 +137,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return dqlTopicStr != null && !dqlTopicStr.trim().isEmpty();
     }
 
+    @SuppressWarnings("unchecked")
     public static List<String> parseTopicsList(Map<String, String> props) {
         List<String> topics = (List<String>) ConfigDef.parseType(TOPICS_CONFIG, props.get(TOPICS_CONFIG), Type.LIST);
         return topics
