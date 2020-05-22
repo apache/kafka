@@ -423,10 +423,25 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRecordE2ELatencyOnProcessForSourceNodes() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode= "MOCK-SOURCE-1";
+        final KafkaMetric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        // e2e latency = 10
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.process(100L);
+
+        assertThat(maxMetric.metricValue(), equalTo(100d));
+    }
+
+    @Test
     public void shouldRecordE2ELatencyMinAndMax() {
         time = new MockTime(0L, 0L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
         final String sourceNode= "MOCK-SOURCE-1";
@@ -466,7 +481,6 @@ public class StreamTaskTest {
     public void shouldRecordE2ELatencyPercentiles() {
         time = new MockTime(0L, 0L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
         final String sourceNode= "MOCK-SOURCE-1";
