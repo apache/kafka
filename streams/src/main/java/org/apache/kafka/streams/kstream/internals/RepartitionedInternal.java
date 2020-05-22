@@ -21,9 +21,9 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
-class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
+public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
 
-    RepartitionedInternal(final Repartitioned<K, V> repartitioned) {
+    public RepartitionedInternal(final Repartitioned<K, V> repartitioned) {
         super(repartitioned);
     }
 
@@ -31,23 +31,23 @@ class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
         return new InternalTopicProperties(numberOfPartitions());
     }
 
-    String name() {
+    public String name() {
         return name;
     }
 
-    Serde<K> keySerde() {
+    public Serde<K> keySerde() {
         return keySerde;
     }
 
-    Serde<V> valueSerde() {
+    public Serde<V> valueSerde() {
         return valueSerde;
     }
 
-    StreamPartitioner<K, V> streamPartitioner() {
+    public StreamPartitioner<K, V> streamPartitioner() {
         return partitioner;
     }
 
-    Integer numberOfPartitions() {
+    public Integer numberOfPartitions() {
         return numberOfPartitions;
     }
 }

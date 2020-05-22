@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -144,7 +145,9 @@ public class StandbyTaskTest {
     public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(false);
-        EasyMock.replay(stateDirectory);
+        EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.STANDBY);
+
+        EasyMock.replay(stateDirectory, stateManager);
 
         task = createStandbyTask();
 
