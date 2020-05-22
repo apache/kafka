@@ -96,6 +96,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -104,6 +105,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     private static final String TOPIC = "topic";
+    private static final String OTHER_TOPIC = "other-topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
 
@@ -148,7 +150,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private static final List<SourceRecord> RECORDS = Arrays.asList(
-            new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
+            new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
     // when this test becomes parameterized, this variable will be a test parameter
@@ -512,7 +514,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
         List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
+        records.add(new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
 
@@ -535,7 +537,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask();
 
         List<SourceRecord> records = Collections.singletonList(
-                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
+                new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
@@ -557,7 +559,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask();
 
         List<SourceRecord> records = Collections.singletonList(
-                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
+                new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
@@ -577,7 +579,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask();
 
         List<SourceRecord> records = Collections.singletonList(
-                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
+                new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
@@ -598,9 +600,9 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask();
 
         // Differentiate only by Kafka partition so we can reuse conversion expectations
-        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectTopicCreation(TOPIC);
 
@@ -633,8 +635,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     public void testSendRecordsProducerCallbackFail() throws Exception {
         createWorkerTask();
 
-        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectTopicCreation(TOPIC);
 
@@ -646,14 +648,15 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Whitebox.invokeMethod(workerTask, "sendRecords");
     }
 
+
     @Test
     public void testSendRecordsTaskCommitRecordFail() throws Exception {
         createWorkerTask();
 
         // Differentiate only by Kafka partition so we can reuse conversion expectations
-        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectTopicCreation(TOPIC);
 
@@ -792,11 +795,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask();
 
         List<SourceRecord> records = new ArrayList<>();
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, null, connectHeaders));
+        records.add(new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, null, connectHeaders));
 
         expectTopicCreation(TOPIC);
 
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(true, false, true, true, true, headers);
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(TOPIC, true, false, true, true, true, headers);
 
         PowerMock.replayAll();
 
@@ -823,19 +826,19 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         String encodingA = "latin2";
         headersA.addString("encoding", encodingA);
 
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a", Schema.STRING_SCHEMA, stringA, null, headersA));
+        records.add(new SourceRecord(PARTITION, OFFSET, TOPIC, null, Schema.STRING_SCHEMA, "a", Schema.STRING_SCHEMA, stringA, null, headersA));
 
         String stringB = "Тестовое сообщение";
         org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders();
         String encodingB = "koi8_r";
         headersB.addString("encoding", encodingB);
 
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b", Schema.STRING_SCHEMA, stringB, null, headersB));
+        records.add(new SourceRecord(PARTITION, OFFSET, TOPIC, null, Schema.STRING_SCHEMA, "b", Schema.STRING_SCHEMA, stringB, null, headersB));
 
         expectTopicCreation(TOPIC);
 
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(false, false, true, true, false, null);
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(false, false, true, true, false, null);
+        Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(TOPIC, false, false, true, true, false, null);
+        Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(TOPIC, false, false, true, true, false, null);
 
         PowerMock.replayAll();
 
@@ -859,20 +862,196 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
-    public void testSendRecordsAdminCallbackFail() throws Exception {
+    @Test
+    public void testSendRecordsTopicDescribeRetries() throws Exception {
         createWorkerTask();
 
-        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectTopicCreation(TOPIC, false, false, false);
-        expectSendRecordProducerCallbackFail();
+        expectPreliminaryCalls();
+        // First round - call to describe the topic times out
+        EasyMock.expect(admin.describeTopics(TOPIC))
+                .andThrow(new RetriableException(new TimeoutException("timeout")));
+
+        // Second round - calls to describe and create succeed
+        expectTopicCreation(TOPIC);
+        // Exactly two records are sent
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
 
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertEquals(Arrays.asList(record1, record2), Whitebox.getInternalState(workerTask, "toSend"));
+
+        // Next they all succeed
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+    }
+
+    @Test
+    public void testSendRecordsTopicCreateRetries() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // First call to describe the topic times out
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+                .andThrow(new RetriableException(new TimeoutException("timeout")));
+
+        // Second round
+        expectTopicCreation(TOPIC);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertEquals(Arrays.asList(record1, record2), Whitebox.getInternalState(workerTask, "toSend"));
+
+        // Next they all succeed
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+    }
+
+    @Test
+    public void testSendRecordsTopicDescribeRetriesMidway() throws Exception {
+        createWorkerTask();
+
+        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // First round
+        expectPreliminaryCalls(OTHER_TOPIC);
+        expectTopicCreation(TOPIC);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        // First call to describe the topic times out
+        EasyMock.expect(admin.describeTopics(OTHER_TOPIC))
+                .andThrow(new RetriableException(new TimeoutException("timeout")));
+
+        // Second round
+        expectTopicCreation(OTHER_TOPIC);
+        expectSendRecord(OTHER_TOPIC, false, true, true, true, true, emptyHeaders());
+
+        PowerMock.replayAll();
+
+        // Try to send 3, make first pass, second fail. Should save last two
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertEquals(Arrays.asList(record3), Whitebox.getInternalState(workerTask, "toSend"));
+
+        // Next they all succeed
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSendRecordsTopicCreateRetriesMidway() throws Exception {
+        createWorkerTask();
+
+        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // First round
+        expectPreliminaryCalls(OTHER_TOPIC);
+        expectTopicCreation(TOPIC);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        EasyMock.expect(admin.describeTopics(OTHER_TOPIC)).andReturn(Collections.emptyMap());
+        // First call to create the topic times out
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+                .andThrow(new RetriableException(new TimeoutException("timeout")));
+
+        // Second round
+        expectTopicCreation(OTHER_TOPIC);
+        expectSendRecord(OTHER_TOPIC, false, true, true, true, true, emptyHeaders());
+
+        PowerMock.replayAll();
+
+        // Try to send 3, make first pass, second fail. Should save last two
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertEquals(Arrays.asList(record3), Whitebox.getInternalState(workerTask, "toSend"));
+
+        // Next they all succeed
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testTopicDescribeFails() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC))
+                .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testTopicCreateFails() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
+
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+                .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertNotNull(newTopicCapture.getValue());
+    }
+
+    private void expectPreliminaryCalls() {
+        expectPreliminaryCalls(TOPIC);
+    }
+
+    private void expectPreliminaryCalls(String topic) {
+        expectConvertHeadersAndKeyValue(topic, true, emptyHeaders());
+        expectApplyTransformationChain(false);
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
     }
 
     private CountDownLatch expectEmptyPolls(int minimum, final AtomicInteger count) throws InterruptedException {
@@ -940,31 +1119,32 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordProducerCallbackFail() throws InterruptedException {
-        return expectSendRecord(false, false, false, false, true, emptyHeaders());
+        return expectSendRecord(TOPIC, false, false, false, false, true, emptyHeaders());
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(anyTimes, isRetry, true, true, true, emptyHeaders());
+        return expectSendRecord(TOPIC, anyTimes, isRetry, true, true, true, emptyHeaders());
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(anyTimes, isRetry, true, false, true, emptyHeaders());
+        return expectSendRecord(TOPIC, anyTimes, isRetry, true, false, true, emptyHeaders());
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
-        return expectSendRecord(anyTimes, isRetry, succeed, true, true, emptyHeaders());
+        return expectSendRecord(TOPIC, anyTimes, isRetry, succeed, true, true, emptyHeaders());
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(
-        boolean anyTimes,
-        boolean isRetry,
-        boolean sendSuccess,
-        boolean commitSuccess,
-        boolean isMockedConverters,
-        Headers headers
+            String topic,
+            boolean anyTimes,
+            boolean isRetry,
+            boolean sendSuccess,
+            boolean commitSuccess,
+            boolean isMockedConverters,
+            Headers headers
     ) throws InterruptedException {
         if (isMockedConverters) {
-            expectConvertHeadersAndKeyValue(anyTimes, headers);
+            expectConvertHeadersAndKeyValue(topic, anyTimes, headers);
         }
 
         expectApplyTransformationChain(anyTimes);
@@ -1016,23 +1196,23 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     private void expectConvertHeadersAndKeyValue(boolean anyTimes) {
-        expectConvertHeadersAndKeyValue(anyTimes, emptyHeaders());
+        expectConvertHeadersAndKeyValue(TOPIC, anyTimes, emptyHeaders());
     }
 
-    private void expectConvertHeadersAndKeyValue(boolean anyTimes, Headers headers) {
+    private void expectConvertHeadersAndKeyValue(String topic, boolean anyTimes, Headers headers) {
         for (Header header : headers) {
-            IExpectationSetters<byte[]> convertHeaderExpect = EasyMock.expect(headerConverter.fromConnectHeader(TOPIC, header.key(), Schema.STRING_SCHEMA, new String(header.value())));
+            IExpectationSetters<byte[]> convertHeaderExpect = EasyMock.expect(headerConverter.fromConnectHeader(topic, header.key(), Schema.STRING_SCHEMA, new String(header.value())));
             if (anyTimes)
                 convertHeaderExpect.andStubReturn(header.value());
             else
                 convertHeaderExpect.andReturn(header.value());
         }
-        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, headers, KEY_SCHEMA, KEY));
+        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY));
         if (anyTimes)
             convertKeyExpect.andStubReturn(SERIALIZED_KEY);
         else
             convertKeyExpect.andReturn(SERIALIZED_KEY);
-        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, headers, RECORD_SCHEMA, RECORD));
+        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD));
         if (anyTimes)
             convertValueExpect.andStubReturn(SERIALIZED_RECORD);
         else
@@ -1176,23 +1356,10 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     private void expectTopicCreation(String topic) {
-        expectTopicCreation(topic, false, true, true);
-    }
-    private void expectTopicCreation(String topic, boolean anyTimes, boolean describeSuccess,
-                                     boolean createSuccess) {
         if (config.topicCreationEnable()) {
-            if (describeSuccess) {
-                EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
-            } else {
-                EasyMock.expect(admin.describeTopics(topic)).andThrow(new RetriableException("timeout"));
-            }
-
+            EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            if (createSuccess) {
-                EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
-            } else {
-                EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andThrow(new RetriableException("timeout"));
-            }
+            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
         }
     }
 }
