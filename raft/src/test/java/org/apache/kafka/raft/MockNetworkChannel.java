@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.ApiKeys;
+
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -76,18 +78,34 @@ public class MockNetworkChannel implements NetworkChannel {
         return messages;
     }
 
-    public List<RaftResponse.Outbound> drainSentResponses() {
+    public List<RaftRequest.Outbound> drainSentRequests(ApiKeys apiKey) {
+        List<RaftRequest.Outbound> requests = new ArrayList<>();
+        Iterator<RaftMessage> iterator = sendQueue.iterator();
+        while (iterator.hasNext()) {
+            RaftMessage message = iterator.next();
+            if (message instanceof RaftRequest.Outbound && message.data().apiKey() == apiKey.id) {
+                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+                requests.add(request);
+                iterator.remove();
+            }
+        }
+        return requests;
+    }
+
+    public List<RaftResponse.Outbound> drainSentResponses(ApiKeys apiKey) {
         List<RaftResponse.Outbound> responses = new ArrayList<>();
         Iterator<RaftMessage> iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
             RaftMessage message = iterator.next();
-            if (message instanceof RaftResponse.Outbound) {
-                responses.add((RaftResponse.Outbound) message);
+            if (message instanceof RaftResponse.Outbound && message.data().apiKey() == apiKey.id) {
+                RaftResponse.Outbound response = (RaftResponse.Outbound) message;
+                responses.add(response);
                 iterator.remove();
             }
         }
         return responses;
     }
+
 
     public boolean hasSentMessages() {
         return !sendQueue.isEmpty();

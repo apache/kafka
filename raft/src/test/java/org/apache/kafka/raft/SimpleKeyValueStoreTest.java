@@ -19,7 +19,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
@@ -42,9 +41,11 @@ public class SimpleKeyValueStoreTest {
         int fetchTimeoutMs = 5000;
         int retryBackoffMs = 100;
         int requestTimeoutMs = 5000;
+        int fetchMaxWaitMs = 500;
         Set<Integer> voters = Collections.singleton(localId);
         QuorumStateStore store = new MockQuorumStateStore();
-        Time time = new MockTime();
+        MockTime time = new MockTime();
+        MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
         ReplicatedLog log = new MockLog();
         NetworkChannel channel = new MockNetworkChannel();
         LogContext logContext = new LogContext();
@@ -54,10 +55,10 @@ public class SimpleKeyValueStoreTest {
             .map(id -> new InetSocketAddress("localhost", 9990 + id))
             .collect(Collectors.toList());
 
-        return new KafkaRaftClient(channel, log, quorum, time,
+        return new KafkaRaftClient(channel, log, quorum, time, purgatory,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, fetchTimeoutMs, retryBackoffMs, requestTimeoutMs,
-            logContext, new Random());
+            fetchMaxWaitMs, logContext, new Random());
     }
 
     @Test
