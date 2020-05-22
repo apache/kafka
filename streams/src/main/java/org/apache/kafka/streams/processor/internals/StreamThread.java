@@ -555,26 +555,33 @@ public class StreamThread extends Thread {
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
-
-                taskManager.commit(
-                    taskManager.tasks()
-                        .values()
-                        .stream()
-                        .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                        .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
-                        .collect(Collectors.toSet())
-                );
-                taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
+                try {
+                    taskManager.commit(
+                        taskManager.tasks()
+                            .values()
+                            .stream()
+                            .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                            .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
+                            .collect(Collectors.toSet())
+                    );
+                    taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
+                } catch (final TaskMigratedException taskMigrated) {
+                    handleTaskMigrated(taskMigrated);
+                }
             } catch (final TaskMigratedException e) {
-                log.warn("Detected that the thread is being fenced. " +
-                             "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                             "Will close out all assigned tasks and rejoin the consumer group.", e);
-
-                taskManager.handleLostAll();
-                mainConsumer.unsubscribe();
-                subscribeConsumer();
+                handleTaskMigrated(e);
             }
         }
+    }
+
+    private void handleTaskMigrated(final TaskMigratedException e) {
+        log.warn("Detected that the thread is being fenced. " +
+                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                     "Will close out all assigned tasks and rejoin the consumer group.", e);
+
+        taskManager.handleLostAll();
+        mainConsumer.unsubscribe();
+        subscribeConsumer();
     }
 
     private void subscribeConsumer() {

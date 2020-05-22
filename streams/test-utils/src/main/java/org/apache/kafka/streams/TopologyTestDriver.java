@@ -991,7 +991,7 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            final StateStore stateStore = ((ProcessorContextImpl) task.context()).stateManager().getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);

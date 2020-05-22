@@ -292,14 +292,16 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
-    void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        cluster.createTopic(INTERMEDIATE_USER_TOPIC);
+    void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned) throws Exception {
+        if (!useRepartitioned) {
+            cluster.createTopic(INTERMEDIATE_USER_TOPIC);
+        }
 
         appID = testId + "-from-scratch-with-intermediate-topic";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2), streamsConfig);
+        streams = new KafkaStreams(setupTopologyWithIntermediateTopic(useRepartitioned, OUTPUT_TOPIC_2), streamsConfig);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         // receive only first values to make sure intermediate user topic is not consumed completely
@@ -312,19 +314,21 @@ public abstract class AbstractResetIntegrationTest {
         // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
         final KeyValue<Long, String> badMessage = new KeyValue<>(-1L, "badRecord-ShouldBeSkipped");
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            INTERMEDIATE_USER_TOPIC,
-            Collections.singleton(badMessage),
+        if (!useRepartitioned) {
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                INTERMEDIATE_USER_TOPIC,
+                Collections.singleton(badMessage),
                 producerConfig,
-            mockTime.milliseconds());
+                mockTime.milliseconds());
+        }
 
         // RESET
-        streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfig);
+        streams = new KafkaStreams(setupTopologyWithIntermediateTopic(useRepartitioned, OUTPUT_TOPIC_2_RERUN), streamsConfig);
         streams.cleanUp();
-        cleanGlobal(true, null, null);
+        cleanGlobal(!useRepartitioned, null, null);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
-        assertInternalTopicsGotDeleted(INTERMEDIATE_USER_TOPIC);
+        assertInternalTopicsGotDeleted(useRepartitioned ? null : INTERMEDIATE_USER_TOPIC);
 
         // RE-RUN
         streams.start();
@@ -335,18 +339,22 @@ public abstract class AbstractResetIntegrationTest {
         assertThat(resultRerun, equalTo(result));
         assertThat(resultRerun2, equalTo(result2));
 
-        final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), testId + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
-        final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
+        if (!useRepartitioned) {
+            final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), testId + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
+            final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
 
-        for (int i = 0; i < 10; i++) {
-            assertThat(resultIntermediate.get(i), equalTo(resultIntermediate.get(i + 11)));
+            for (int i = 0; i < 10; i++) {
+                assertThat(resultIntermediate.get(i), equalTo(resultIntermediate.get(i + 11)));
+            }
+            assertThat(resultIntermediate.get(10), equalTo(badMessage));
         }
-        assertThat(resultIntermediate.get(10), equalTo(badMessage));
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(true, null, null);
+        cleanGlobal(!useRepartitioned, null, null);
 
-        cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
+        if (!useRepartitioned) {
+            cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
+        }
     }
 
     void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -472,7 +480,8 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
-    private Topology setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
+    private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
+                                                        final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
@@ -484,8 +493,14 @@ public abstract class AbstractResetIntegrationTest {
             .toStream()
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
 
-        input.through(INTERMEDIATE_USER_TOPIC)
-            .groupByKey()
+        final KStream<Long, String> stream;
+        if (useRepartitioned) {
+            stream = input.repartition();
+        } else {
+            input.to(INTERMEDIATE_USER_TOPIC);
+            stream = builder.stream(INTERMEDIATE_USER_TOPIC);
+        }
+        stream.groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()

@@ -477,19 +477,25 @@
   Throttle was removed.</pre>
 
   <p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
-      configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker
+      configuration used to manage the throttling process. First pair refers to the throttle value itself. This is configured, at a broker
       level, using the dynamic properties: </p>
 
-  <pre class="brush: text;">leader.replication.throttled.rate
-  follower.replication.throttled.rate</pre>
+  <pre class="brush: text;">
+    leader.replication.throttled.rate
+    follower.replication.throttled.rate
+  </pre>
 
-  <p>There is also an enumerated set of throttled replicas: </p>
+  <p>Then there is the configuration pair of enumerated sets of throttled replicas: </p>
 
-  <pre class="brush: text;">leader.replication.throttled.replicas
-  follower.replication.throttled.replicas</pre>
+  <pre class="brush: text;">
+    leader.replication.throttled.replicas
+    follower.replication.throttled.replicas
+  </pre>
 
-  <p>Which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions.sh
-      (discussed below). </p>
+  <p>Which are configured per topic. </p>
+
+  <p>All four config values are automatically assigned by kafka-reassign-partitions.sh (discussed below).</p>
+
   <p>To view the throttle limit configuration:</p>
 
   <pre class="brush: bash;">

@@ -235,7 +235,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
-        return overwriteInternalTopicManagerWithMock();
+        return overwriteInternalTopicManagerWithMock(false);
     }
 
     private void createDefaultMockTaskManager() {
@@ -281,9 +281,13 @@ public class StreamsPartitionAssignorTest {
         EasyMock.replay(result);
     }
 
-    private MockInternalTopicManager overwriteInternalTopicManagerWithMock() {
-        final MockInternalTopicManager mockInternalTopicManager =
-            new MockInternalTopicManager(new StreamsConfig(configProps()), mockClientSupplier.restoreConsumer);
+    // If mockCreateInternalTopics is true the internal topic manager will report that it had to create all internal
+    // topics and we will skip the listOffsets request for these changelogs
+    private MockInternalTopicManager overwriteInternalTopicManagerWithMock(final boolean mockCreateInternalTopics) {
+        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+            new StreamsConfig(configProps()),
+            mockClientSupplier.restoreConsumer,
+            mockCreateInternalTopics);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
         return mockInternalTopicManager;
     }
@@ -1274,6 +1278,7 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() {
+        createDefaultMockTaskManager();
         assertThrows(ConfigException.class, () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:j87yhk")));
     }
 
@@ -1793,7 +1798,7 @@ public class StreamsPartitionAssignorTest {
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 2 * 60 * 1000);
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getAdminClientTimeout(), is(2 * 60 * 1000));
+        assertThat(assignorConfiguration.adminClientTimeout(), is(2 * 60 * 1000));
     }
 
     @Test
@@ -1804,7 +1809,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getNextScheduledRebalanceMs(props).get(), equalTo(5 * 60 * 1000L));
+        assertThat(assignorConfiguration.nextScheduledRebalanceMs().get(), equalTo(5 * 60 * 1000L));
     }
 
     @Test
@@ -1815,7 +1820,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.getTime(props).milliseconds(), equalTo(Long.MAX_VALUE));
+        assertThat(assignorConfiguration.time().milliseconds(), equalTo(Long.MAX_VALUE));
     }
 
     @Test
@@ -1860,6 +1865,35 @@ public class StreamsPartitionAssignorTest {
                 defaultSubscriptionInfo.encode()
             ));
         assertThrows(IllegalStateException.class, () -> partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)));
+    }
+
+    @Test
+    public void shouldSkipListOffsetsRequestForNewlyCreatedChangelogTopics() {
+        adminClient = EasyMock.createMock(AdminClient.class);
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(emptyMap());
+
+        expect(adminClient.listOffsets(emptyMap())).andStubReturn(result);
+        expect(result.all()).andReturn(allFuture);
+
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
+
+        subscriptions.put("consumer10",
+                          new Subscription(
+                              singletonList("topic1"),
+                              defaultSubscriptionInfo.encode()
+                          ));
+
+        EasyMock.replay(result);
+        configureDefault();
+        overwriteInternalTopicManagerWithMock(true);
+
+        partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
+
+        EasyMock.verify(adminClient);
     }
 
     private static ByteBuffer encodeFutureSubscription() {

@@ -2078,6 +2078,22 @@ class LogTest {
       case _: RecordTooLargeException => // this is good
     }
   }
+
+  @Test
+  def testMessageSizeCheckInAppendAsFollower(): Unit = {
+    val first = MemoryRecords.withRecords(0, CompressionType.NONE, 0,
+      new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
+    val second = MemoryRecords.withRecords(5, CompressionType.NONE, 0,
+      new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes),
+      new SimpleRecord("More padding boo hoo".getBytes))
+
+    val log = createLog(logDir, LogTest.createLogConfig(maxMessageBytes = second.sizeInBytes - 1))
+
+    log.appendAsFollower(first)
+    // the second record is larger then limit but appendAsFollower does not validate the size.
+    log.appendAsFollower(second)
+  }
+
   /**
    * Append a bunch of messages to a log and then re-open it both with and without recovery and check that the log re-initializes correctly.
    */

@@ -77,7 +77,13 @@ final class StateManagerUtil {
         // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
         // the state stores have been registered; we should not try to load at the state manager construction time.
         // See https://issues.apache.org/jira/browse/KAFKA-8574
+
         for (final StateStore store : topology.stateStores()) {
+            if (stateMgr.getStore(store.name()) != null) {
+                log.warn("Skip the registration of store {} since it is already registered. This could be due " +
+                    "to a half-way registration in the previous round of initialization.", store.name());
+                continue;
+            }
             processorContext.uninitialize();
             store.init(processorContext, store);
             log.trace("Registered state store {}", store.name());

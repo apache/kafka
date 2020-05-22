@@ -714,16 +714,16 @@ class AdminManager(val config: KafkaConfig,
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
   }
 
-  private def sanitizeEntityName(entityName: String): String = {
-    if (entityName == ConfigEntityName.Default)
-      throw new InvalidRequestException(s"Entity name '${ConfigEntityName.Default}' is reserved")
-    Sanitizer.sanitize(Option(entityName).getOrElse(ConfigEntityName.Default))
-  }
+  private def sanitizeEntityName(entityName: String): String =
+    Option(entityName) match {
+      case None => ConfigEntityName.Default
+      case Some(name) => Sanitizer.sanitize(name)
+    }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
-    Sanitizer.desanitize(sanitizedEntityName) match {
+    sanitizedEntityName match {
       case ConfigEntityName.Default => null
-      case name => name
+      case name => Sanitizer.desanitize(name)
     }
 
   private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {

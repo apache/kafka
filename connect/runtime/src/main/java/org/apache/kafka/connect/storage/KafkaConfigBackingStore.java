@@ -548,6 +548,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         // Connector deletion will be written as a null value
                         log.info("Successfully processed removal of connector '{}'", connectorName);
                         connectorConfigs.remove(connectorName);
+                        connectorTaskCounts.remove(connectorName);
+                        taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
                         removed = true;
                     } else {
                         // Connector configs can be applied and callbacks invoked immediately
