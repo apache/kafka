@@ -17,7 +17,6 @@
 package kafka.raft
 
 import java.net.InetSocketAddress
-import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -29,7 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, Node}
-import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResponse}
+import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResponse, RaftUtil}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -116,7 +115,7 @@ class KafkaNetworkChannel(time: Time,
           if (client.connectionFailed(node)) {
             pendingOutbound.poll()
             val apiKey = ApiKeys.forId(request.data.apiKey)
-            val disconnectResponse = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
+            val disconnectResponse = RaftUtil.errorResponse(apiKey, Errors.BROKER_NOT_AVAILABLE)
             val success = undelivered.offer(new RaftResponse.Inbound(
               request.correlationId, disconnectResponse, request.destinationId))
             if (!success) {
@@ -134,7 +133,7 @@ class KafkaNetworkChannel(time: Time,
         case None =>
           pendingOutbound.poll()
           val apiKey = ApiKeys.forId(request.data.apiKey)
-          val responseData = errorResponseData(apiKey, Errors.BROKER_NOT_AVAILABLE)
+          val responseData = RaftUtil.errorResponse(apiKey, Errors.BROKER_NOT_AVAILABLE)
           val response = new RaftResponse.Inbound(request.correlationId, responseData, request.destinationId)
           if (!undelivered.offer(response))
             throw new KafkaException("Undelivered queue is full")
@@ -142,47 +141,12 @@ class KafkaNetworkChannel(time: Time,
     }
   }
 
-  private def errorResponseData(apiKey: ApiKeys, error: Errors): ApiMessage = {
-    apiKey match {
-      case ApiKeys.VOTE =>
-        new VoteResponseData()
-          .setErrorCode(error.code)
-          .setVoteGranted(false)
-          .setLeaderEpoch(-1)
-          .setLeaderId(-1)
-      case ApiKeys.BEGIN_QUORUM_EPOCH =>
-        new BeginQuorumEpochResponseData()
-          .setErrorCode(error.code)
-          .setLeaderEpoch(-1)
-          .setLeaderId(-1)
-      case ApiKeys.END_QUORUM_EPOCH =>
-        new EndQuorumEpochResponseData()
-          .setErrorCode(error.code)
-          .setLeaderEpoch(-1)
-          .setLeaderId(-1)
-      case ApiKeys.FETCH_QUORUM_RECORDS =>
-        new FetchQuorumRecordsResponseData()
-          .setErrorCode(error.code)
-          .setLeaderEpoch(-1)
-          .setLeaderId(-1)
-          .setHighWatermark(-1)
-          .setRecords(ByteBuffer.wrap(Array.emptyByteArray))
-      case ApiKeys.FIND_QUORUM =>
-        new FindQuorumResponseData()
-          .setErrorCode(error.code)
-          .setLeaderEpoch(-1)
-          .setLeaderId(-1)
-      case _ =>
-        throw new IllegalArgumentException(s"Received response for unexpected request type: $apiKey")
-    }
-  }
-
   private def buildInboundRaftResponse(response: ClientResponse): RaftResponse.Inbound = {
     val header = response.requestHeader()
     val data = if (response.authenticationException != null) {
-      errorResponseData(header.apiKey, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      RaftUtil.errorResponse(header.apiKey, Errors.CLUSTER_AUTHORIZATION_FAILED)
     } else if (response.wasDisconnected) {
-      errorResponseData(header.apiKey, Errors.BROKER_NOT_AVAILABLE)
+      RaftUtil.errorResponse(header.apiKey, Errors.BROKER_NOT_AVAILABLE)
     } else {
       responseData(response.responseBody)
     }
