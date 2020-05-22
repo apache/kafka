@@ -278,12 +278,11 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         // Reset would fail since long session timeout has been configured
-        int exitCode = tryCleanGlobal(false, null, null);
-        Assert.assertEquals(1, exitCode);
+        boolean cleanResult = tryCleanGlobal(false, null, null);
+        Assert.assertEquals(false, cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
-        exitCode = tryCleanGlobal(false, "--force", null);
-        Assert.assertEquals(0, exitCode);
+        cleanGlobal(false, "--force", null);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
@@ -295,7 +294,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
-        tryCleanGlobal(false, "--force", null);
+        cleanGlobal(false, "--force", null);
     }
 
     void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -544,9 +543,9 @@ public abstract class AbstractResetIntegrationTest {
         return builder.build();
     }
 
-    private int tryCleanGlobal(final boolean withIntermediateTopics,
-                             final String resetScenario,
-                             final String resetScenarioArg) throws Exception {
+    private boolean tryCleanGlobal(final boolean withIntermediateTopics,
+                                   final String resetScenario,
+                                   final String resetScenarioArg) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
@@ -583,15 +582,14 @@ public abstract class AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
-        return exitCode;
+        return new StreamsResetter().run(parameters, cleanUpConfig) == 0;
     }
 
     private void cleanGlobal(final boolean withIntermediateTopics,
                              final String resetScenario,
                              final String resetScenarioArg) throws Exception {
-        final int exitCode = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
-        Assert.assertEquals(0, exitCode);
+        final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
+        Assert.assertEquals(true, cleanResult);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {

@@ -379,6 +379,22 @@ public class KafkaAdminClientTest {
             MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
+    private static DescribeGroupsResponseData prepareDescribeGroupsResponseData(String groupId, List<String> groupInstances,
+                                                                                List<TopicPartition> topicPartitions) {
+        final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
+        byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+        List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember("0", groupInstance, "clientId0", "clientHost", memberAssignmentBytes, null)).collect(Collectors.toList());
+        DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+        data.groups().add(DescribeGroupsResponse.groupMetadata(
+                groupId,
+                Errors.NONE,
+                "",
+                ConsumerProtocol.PROTOCOL_TYPE,
+                "",
+                describedGroupMembers,
+                Collections.emptySet()));
+        return data;
+    }
     /**
      * Test that the client properly times out when we don't receive any metadata.
      */
@@ -2412,9 +2428,7 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.memberResult(memberOne).get());
             assertNull(noErrorResult.memberResult(memberTwo).get());
 
-            // Return with success for "removeAll" scenario
-            // 1. KafkaAdminClient should query all members successfully
-            // 1.1 construct the DescribeGroupsResponse
+            // Test the "removeAll" scenario
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
             TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
             TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
@@ -2424,21 +2438,28 @@ public class KafkaAdminClientTest {
             topicPartitions.add(1, myTopicPartition1);
             topicPartitions.add(2, myTopicPartition2);
 
-            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
-            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
-            DescribedGroupMember groupInstanceOne = DescribeGroupsResponse.groupMember("0", instanceOne, "clientId0", "clientHost", memberAssignmentBytes, null);
-            DescribedGroupMember groupInstanceTwo = DescribeGroupsResponse.groupMember("1", instanceTwo, "clientId1", "clientHost", memberAssignmentBytes, null);
-            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    groupId,
-                    Errors.NONE,
-                    "",
-                    ConsumerProtocol.PROTOCOL_TYPE,
-                    "",
-                    asList(groupInstanceOne, groupInstanceTwo),
-                    Collections.emptySet()));
+            // construct the DescribeGroupsResponse
+            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(groupId, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
 
-            // 1.2 prepare response for AdminClient.describeConsumerGroups
+            // Return with partial failure for "removeAll" scenario
+            // 1 prepare response for AdminClient.describeConsumerGroups
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            // 2 KafkaAdminClient encounter partial failure when trying to delete all members
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                            Arrays.asList(responseOne, responseTwo))
+            ));
+            final RemoveMembersFromConsumerGroupResult partialFailureResults = env.adminClient().removeMembersFromConsumerGroup(
+                    groupId,
+                    new RemoveMembersFromConsumerGroupOptions()
+            );
+            TestUtils.assertFutureError(partialFailureResults.all(), UnknownMemberIdException.class);
+
+            // Return with success for "removeAll" scenario
+            // 1 prepare response for AdminClient.describeConsumerGroups
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 

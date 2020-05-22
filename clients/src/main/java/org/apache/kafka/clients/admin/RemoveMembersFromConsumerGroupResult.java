@@ -46,33 +46,30 @@ public class RemoveMembersFromConsumerGroupResult {
      * If not, the first member error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        if (removeAll()) {
             final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
             this.future.whenComplete((memberErrors, throwable) -> {
                 if (throwable != null) {
                     result.completeExceptionally(throwable);
                 } else {
-                    System.out.println("Remove all active members succeeded, removed " + memberErrors.size() + " members: " + memberErrors.keySet());
-                    result.complete(null);
-                }
-            });
-            return result;
-        } else {
-            final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-            this.future.whenComplete((memberErrors, throwable) -> {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else {
-                    for (MemberToRemove memberToRemove : memberInfos) {
-                        if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
-                            return;
+                    if (removeAll()) {
+                        for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
+                            Exception exception = entry.getValue().exception();
+                            if (exception != null) {
+                                result.completeExceptionally(exception);
+                                return;
+                            }
+                        }
+                    } else {
+                        for (MemberToRemove memberToRemove : memberInfos) {
+                            if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
+                                return;
+                            }
                         }
                     }
                     result.complete(null);
                 }
             });
             return result;
-        }
     }
 
     /**

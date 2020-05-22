@@ -3615,15 +3615,14 @@ public class KafkaAdminClient extends AdminClient {
         Collection<MemberDescription> members;
         try {
             members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
-        } catch (Throwable ex) {
+        } catch (Exception ex) {
             throw new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex);
         }
 
         List<MemberIdentity> memberToRemove = new ArrayList<>();
         for (final MemberDescription member : members) {
             if (member.groupInstanceId().isPresent()) {
-                memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get())
-                );
+                memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get()));
             } else {
                 memberToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
             }
@@ -3640,7 +3639,7 @@ public class KafkaAdminClient extends AdminClient {
         KafkaFutureImpl<Map<MemberIdentity, Errors>> future = new KafkaFutureImpl<>();
 
         ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context =
-                new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         List<MemberIdentity> members;
         if (options.removeAll()) {
@@ -3657,14 +3656,13 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>,
-            RemoveMembersFromConsumerGroupOptions> context, List<MemberIdentity> allMembers) {
+            RemoveMembersFromConsumerGroupOptions> context, List<MemberIdentity> members) {
         return new Call("leaveGroup",
                         context.deadline(),
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                    return new LeaveGroupRequest.Builder(context.groupId(),
-                            allMembers);
+                    return new LeaveGroupRequest.Builder(context.groupId(), members);
             }
 
             @Override
@@ -3673,7 +3671,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
-                    Call call = getRemoveMembersFromGroupCall(context, allMembers);
+                    Call call = getRemoveMembersFromGroupCall(context, members);
                     rescheduleFindCoordinatorTask(context, () -> call, this);
                     return;
                 }

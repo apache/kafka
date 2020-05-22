@@ -1037,8 +1037,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val EMPTY_GROUP_INSTANCE_ID = ""
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
-      val testInstanceId = "test_instance_id"
-      val testInstanceId1 = testInstanceId + "1"
+      val testInstanceId1 = "test_instance_id_1"
+      val testInstanceId2 = "test_instance_id_2"
       val fakeGroupId = "fake_group_id"
 
       def createProperties(groupInstanceId: String): Properties = {
@@ -1052,7 +1052,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }
 
       // contains two static members and one dynamic member
-      val groupInstanceSet = Set(testInstanceId, testInstanceId1, EMPTY_GROUP_INSTANCE_ID)
+      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, EMPTY_GROUP_INSTANCE_ID)
       val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
 
@@ -1099,12 +1099,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
-          val member = testGroupDescription.members().iterator().next()
-          assertEquals(testClientId, member.clientId())
           val members = testGroupDescription.members()
-          assertEquals(testClientId, members.asScala.head.clientId())
+          members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
           val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          topicSet.map { case topic =>
+          topicSet.map { topic =>
             val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
             assertEquals(testNumPartitions, topicPartitions.size)
           }
@@ -1158,14 +1156,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           // Test delete one correct static member
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(testInstanceId))
+            Collections.singleton(new MemberToRemove(testInstanceId1))
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId1))
           assertNull(validMemberFuture.get())
 
-          // The group's active members number should decrease by 1
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
           assertEquals(1, describeTestGroupResult.describedGroups().size())
@@ -1174,7 +1171,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertEquals(testGroupId, testGroupDescription.groupId)
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(consumerSet.size -1, testGroupDescription.members().size())
+          assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
 
           // Delete all active members remaining (a static member + a dynamic member)
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
@@ -1199,7 +1196,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             consumerThread.join()
         }
       }
-      }finally {
+      } finally {
         consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
       }
     } finally {

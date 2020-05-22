@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -192,7 +193,12 @@ public class StreamsResetter {
         if (!members.isEmpty()) {
             if (options.has(forceOption)) {
                 System.out.println("Force deleting all active members in the group: " + groupId);
-                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all();
+                try {
+                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                } catch (Exception e) {
+                    throw new KafkaException("Encounter exception when force removing active members in group: "
+                            + groupId + "exception: " + e);
+                }
             } else {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "

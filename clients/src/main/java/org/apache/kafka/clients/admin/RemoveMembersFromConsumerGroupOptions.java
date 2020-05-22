@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -38,7 +39,7 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     }
 
     public RemoveMembersFromConsumerGroupOptions() {
-        this.members = new HashSet<>();
+        this.members = Collections.emptySet();;
     }
 
     public Set<MemberToRemove> members() {
