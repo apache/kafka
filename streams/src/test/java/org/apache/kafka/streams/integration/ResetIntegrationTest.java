@@ -74,7 +74,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
     }
 
     @Test
@@ -93,7 +98,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhileStreamsRunning() throws Exception {
+    public void shouldNotAllowToResetWhileStreamsRunning() {
         super.shouldNotAllowToResetWhileStreamsIsRunning();
     }
 
