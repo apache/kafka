@@ -56,14 +56,17 @@ final class TaskMovement {
         return caughtUpClients.size();
     }
 
-    /**
-     * @return true if this client is caught-up for this task, or the task has no caught-up clients
-     */
+    private static boolean taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(final TaskId task,
+                                                                                 final UUID client,
+                                                                                 final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+        return !taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients);
+    }
+
     private static boolean taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(final TaskId task,
                                                                           final UUID client,
                                                                           final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
-        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
-        return caughtUpClients == null || caughtUpClients.contains(client);
+        final Set<UUID> caughtUpClients = requireNonNull(tasksToCaughtUpClients.get(task), "uninitialized set");
+        return caughtUpClients.isEmpty() || caughtUpClients.contains(client);
     }
 
     static int assignActiveTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
@@ -89,7 +92,7 @@ final class TaskMovement {
                 // if the desired client is not caught up, and there is another client that _is_ caught up, then
                 // we schedule a movement, so we can move the active task to the caught-up client. We'll try to
                 // assign a warm-up to the desired client so that we can move it later on.
-                if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {
+                if (taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {
                     taskMovements.add(new TaskMovement(task, client, tasksToCaughtUpClients.get(task)));
                 }
             }
@@ -154,7 +157,7 @@ final class TaskMovement {
             for (final TaskId task : state.standbyTasks()) {
                 if (warmups.getOrDefault(destination, Collections.emptySet()).contains(task)) {
                     // this is a warmup, so we won't move it.
-                } else if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, destination, tasksToCaughtUpClients)) {
+                } else if (taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(task, destination, tasksToCaughtUpClients)) {
                     // if the desired client is not caught up, and there is another client that _is_ caught up, then
                     // we schedule a movement, so we can move the active task to the caught-up client. We'll try to
                     // assign a warm-up to the desired client so that we can move it later on.

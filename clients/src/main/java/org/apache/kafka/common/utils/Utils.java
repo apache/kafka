@@ -755,6 +755,20 @@ public final class Utils {
     }
 
     /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkObjectProperties(final Map<String, Object> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param rootFile The root file at which to begin deleting
