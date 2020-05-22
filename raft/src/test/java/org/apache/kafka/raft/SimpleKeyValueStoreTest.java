@@ -37,8 +37,9 @@ public class SimpleKeyValueStoreTest {
 
     private KafkaRaftClient setupSingleNodeRaftManager() {
         int localId = 1;
-        int electionTimeoutMs = 10000;
+        int electionTimeoutMs = 1000;
         int electionJitterMs = 50;
+        int fetchTimeoutMs = 5000;
         int retryBackoffMs = 100;
         int requestTimeoutMs = 5000;
         Set<Integer> voters = Collections.singleton(localId);
@@ -55,8 +56,8 @@ public class SimpleKeyValueStoreTest {
 
         return new KafkaRaftClient(channel, log, quorum, time,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
-            electionTimeoutMs, electionJitterMs, retryBackoffMs, requestTimeoutMs, logContext,
-            new Random());
+            electionTimeoutMs, electionJitterMs, fetchTimeoutMs, retryBackoffMs, requestTimeoutMs,
+            logContext, new Random());
     }
 
     @Test
