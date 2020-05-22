@@ -494,7 +494,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testPercentilesWithLinearBucketing() {
+    public void testPercentilesWithRandomNumbers() {
         long seed = new Random().nextLong();
         int sizeInBytes = 1000 * 1000;   // 1MB
         long maximumValue = 1000 * 24 * 60 * 60 * 1000L; // if values are ms, max is 1000 days
@@ -517,7 +517,7 @@ public class MetricsTest {
             final List<Long> values = new ArrayList<>(numberOfValues);
             // record two windows worth of sequential values
             for (int i = 0; i < numberOfValues; ++i) {
-                long value = prng.nextInt() % maximumValue;
+                long value = Math.abs(prng.nextLong()) % maximumValue;
                 values.add(value);
                 sensor.record(value);
             }
@@ -530,8 +530,8 @@ public class MetricsTest {
             double expectedP90 = values.get(p90Index - 1);
             double expectedP99 = values.get(p99Index - 1);
 
-            assertEquals(expectedP90, (Double) p90.metricValue(), maximumValue / 20);
-            assertEquals(expectedP99, (Double) p99.metricValue(), maximumValue / 20);
+            assertEquals(expectedP90, (Double) p90.metricValue(), expectedP90 / 10);
+            assertEquals(expectedP99, (Double) p99.metricValue(), expectedP99 / 10);
 
         } catch (AssertionError e) {
 

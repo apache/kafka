@@ -154,6 +154,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
+    public static final int PERCENTILES_SIZE_IN_BYTES = 1000 * 1000;    // 1 MB
+    public static double MAXIMUM_E2E_LATENCY = 100 * 24 * 60 * 60 * 1000d; // maximum latency is 1000 days
+    public static double MINIMUM_E2E_LATENCY = 0d;
+
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
@@ -673,13 +677,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             new Max()
         );
 
-        final int sizeInBytes = 1000 * 1000; // 1 MB
-        double maximumValue = 100 * 24 * 60 * 60 * 1000d; // maximum latency is 1000 days
-
         sensor.add(
             new Percentiles(
-                sizeInBytes,
-                maximumValue,
+                PERCENTILES_SIZE_IN_BYTES,
+                MINIMUM_E2E_LATENCY,
+                MAXIMUM_E2E_LATENCY,
                 BucketSizing.LINEAR,
                 new Percentile(
                     new MetricName(

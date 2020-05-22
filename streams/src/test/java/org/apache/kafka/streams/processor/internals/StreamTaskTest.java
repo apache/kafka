@@ -423,9 +423,9 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRecordE2ELatency() {
+    public void shouldRecordE2ELatencyMinAndMax() {
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
@@ -434,31 +434,53 @@ public class StreamTaskTest {
         final KafkaMetric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
         final KafkaMetric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
 
+        assertThat(minMetric.metricValue(), equalTo(Double.NaN));
         assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
 
         // e2e latency = 10
         time.setCurrentTimeMs(10L);
         task.maybeRecordE2ELatency(0L, sourceNode);
-        assertThat(maxMetric.metricValue(), equalTo(10d));
         assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(10d));
 
         // e2e latency = 15
         time.setCurrentTimeMs(25L);
         task.maybeRecordE2ELatency(10L, sourceNode);
-        assertThat(maxMetric.metricValue(), equalTo(15d));
         assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(15d));
 
         // e2e latency = 25
         time.setCurrentTimeMs(30L);
         task.maybeRecordE2ELatency(5L, sourceNode);
-        assertThat(maxMetric.metricValue(), equalTo(25d));
         assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(25d));
 
         // e2e latency = 20
         time.setCurrentTimeMs(40L);
         task.maybeRecordE2ELatency(35L, sourceNode);
-        assertThat(maxMetric.metricValue(), equalTo(25d));
         assertThat(minMetric.metricValue(), equalTo(5d));
+        assertThat(maxMetric.metricValue(), equalTo(25d));
+    }
+
+    @Test
+    public void shouldRecordE2ELatencyPercentiles() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode= "MOCK-SOURCE-1";
+
+        final KafkaMetric p99Metric = getProcessorMetric("record-e2e-latency", "%s-p99", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final KafkaMetric p90Metric = getProcessorMetric("record-e2e-latency", "%s-p90", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        for (int i = 0; i < 100; i++) {
+            time.setCurrentTimeMs(i);
+            task.maybeRecordE2ELatency(0L, sourceNode);
+        }
+
+        assertEquals((double) p99Metric.metricValue(), 99d, 5.0);
+        assertEquals((double) p90Metric.metricValue(), 90d, 5.0);
     }
 
     @Test
