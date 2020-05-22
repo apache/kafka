@@ -299,6 +299,26 @@ public class ProcessorNodeMetrics {
         return processAtSourceSensor(threadId, taskId, processorNodeId, streamsMetrics);
     }
 
+    public static Sensor recordE2ELatencySensor(final String threadId,
+                                                final String taskId,
+                                                final String processorNodeId,
+                                                final RecordingLevel recordingLevel,
+                                                final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORD_E2E_LATENCY, recordingLevel);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        addMinAndMaxAndP99AndP90ToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            RECORD_E2E_LATENCY,
+            RECORD_E2E_LATENCY_MIN_DESCRIPTION,
+            RECORD_E2E_LATENCY_MAX_DESCRIPTION,
+            RECORD_E2E_LATENCY_P99_DESCRIPTION,
+            RECORD_E2E_LATENCY_P90_DESCRIPTION
+        );
+        return sensor;
+    }
+
     private static Sensor throughputAndLatencySensorWithParent(final String threadId,
                                                                final String taskId,
                                                                final String processorNodeId,
@@ -437,28 +457,6 @@ public class ProcessorNodeMetrics {
             metricNamePrefix,
             descriptionOfRate,
             descriptionOfCount
-        );
-        return sensor;
-    }
-
-    // Source and sink (terminal) nodes are INFO level
-    // Stateful nodes are TRACE level
-    public static Sensor recordE2ELatencySensor(final String threadId,
-                                                final String taskId,
-                                                final String processorNodeId,
-                                                final RecordingLevel recordingLevel,
-                                                final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORD_E2E_LATENCY, recordingLevel);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
-        addMinAndMaxAndP99AndP90ToSensor(
-            sensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            RECORD_E2E_LATENCY,
-            RECORD_E2E_LATENCY_MIN_DESCRIPTION,
-            RECORD_E2E_LATENCY_MAX_DESCRIPTION,
-            RECORD_E2E_LATENCY_P99_DESCRIPTION,
-            RECORD_E2E_LATENCY_P90_DESCRIPTION
         );
         return sensor;
     }

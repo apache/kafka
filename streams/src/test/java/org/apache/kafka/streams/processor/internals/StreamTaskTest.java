@@ -428,7 +428,7 @@ public class StreamTaskTest {
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
-        final String sourceNode= "MOCK-SOURCE-1";
+        final String sourceNode = "MOCK-SOURCE-1";
         final KafkaMetric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
 
         // e2e latency = 10
@@ -444,7 +444,7 @@ public class StreamTaskTest {
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
-        final String sourceNode= "MOCK-SOURCE-1";
+        final String sourceNode = "MOCK-SOURCE-1";
 
         final KafkaMetric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
         final KafkaMetric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
@@ -483,7 +483,7 @@ public class StreamTaskTest {
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
-        final String sourceNode= "MOCK-SOURCE-1";
+        final String sourceNode = "MOCK-SOURCE-1";
 
         final KafkaMetric p99Metric = getProcessorMetric("record-e2e-latency", "%s-p99", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
         final KafkaMetric p90Metric = getProcessorMetric("record-e2e-latency", "%s-p90", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
@@ -605,9 +605,9 @@ public class StreamTaskTest {
     }
 
     private KafkaMetric getMetric(final String operation,
-                                   final String nameFormat,
-                                   final String taskId,
-                                   final String builtInMetricsVersion) {
+                                  final String nameFormat,
+                                  final String taskId,
+                                  final String builtInMetricsVersion) {
         final String descriptionIsNotVerified = "";
         return metrics.metrics().get(metrics.metricName(
             String.format(nameFormat, operation),

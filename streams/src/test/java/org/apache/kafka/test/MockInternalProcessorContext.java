@@ -131,5 +131,4 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
                           final byte[] value,
                           final long timestamp) {
     }
-
 }

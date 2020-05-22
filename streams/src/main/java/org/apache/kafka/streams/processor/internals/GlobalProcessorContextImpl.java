@@ -117,5 +117,4 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
                           final long timestamp) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }
-
 }

@@ -607,11 +607,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             updateProcessorContext(record, currNode, wallClockTime);
             maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
-            maybeMeasureLatency(
-                () -> currNode.process(record.key(), record.value()),
-                time,
-                processLatencySensor
-            );
+            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -932,7 +928,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Sensor e2eLatencySensor = e2eLatencySensors.get(nodeName);
         if (e2eLatencySensor == null) {
             throw new IllegalStateException("Requested to record e2e latency but could not find sensor for node " + nodeName);
-        } else if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()){
+        } else if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
             final long e2eLatency = now - recordTimestamp;
             if (e2eLatency >  MAXIMUM_E2E_LATENCY) {
                 log.warn("Skipped recording e2e latency for node {} because {} is higher than maximum allowed latency {}",

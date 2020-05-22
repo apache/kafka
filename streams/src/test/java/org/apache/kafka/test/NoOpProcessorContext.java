@@ -117,5 +117,4 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
                           final byte[] value,
                           final long timestamp) {
     }
-
 }

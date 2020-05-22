@@ -494,7 +494,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testPercentilesWithRandomNumbers() {
+    public void testPercentilesWithRandomNumbersAndLinearBucketing() {
         long seed = new Random().nextLong();
         int sizeInBytes = 1000 * 1000;   // 1MB
         long maximumValue = 1000 * 24 * 60 * 60 * 1000L; // if values are ms, max is 1000 days
