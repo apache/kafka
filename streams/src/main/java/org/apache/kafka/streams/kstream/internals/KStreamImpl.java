@@ -994,7 +994,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             optimizableRepartitionNodeBuilder);
 
-        if (repartitionNode == null) {
+        if (repartitionNode == null || !name.equals(repartitionName)) {
             repartitionNode = optimizableRepartitionNodeBuilder.build();
             builder.addGraphNode(streamsGraphNode, repartitionNode);
         }

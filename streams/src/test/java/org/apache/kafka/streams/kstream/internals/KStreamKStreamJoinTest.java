@@ -1590,61 +1590,70 @@ public class KStreamKStreamJoinTest {
     }
 
 
-    private final String expectedTopologyWithUserNamedRepartitionTopics = "Topologies:\n"
-        + "   Sub-topology: 0\n"
-        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
-        + "      --> KSTREAM-MAP-0000000003\n"
-        + "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n"
-        + "      --> first-join-left-repartition-filter\n"
-        + "      <-- KSTREAM-SOURCE-0000000000\n"
-        + "    Processor: first-join-left-repartition-filter (stores: [])\n"
-        + "      --> first-join-left-repartition-sink\n"
-        + "      <-- KSTREAM-MAP-0000000003\n"
-        + "    Sink: first-join-left-repartition-sink (topic: first-join-left-repartition)\n"
-        + "      <-- first-join-left-repartition-filter\n"
-        + "\n"
-        + "  Sub-topology: 1\n"
-        + "    Source: first-join-left-repartition-source (topics: [first-join-left-repartition])\n"
-        + "      --> first-join-this-windowed, second-join-this-windowed\n"
-        + "    Source: KSTREAM-SOURCE-0000000001 (topics: [topic2])\n"
-        + "      --> first-join-other-windowed\n"
-        + "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic3])\n"
-        + "      --> second-join-other-windowed\n"
-        + "    Processor: first-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000010-store])\n"
-        + "      --> first-join-other-join\n"
-        + "      <-- KSTREAM-SOURCE-0000000001\n"
-        + "    Processor: first-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000009-store])\n"
-        + "      --> first-join-this-join\n"
-        + "      <-- first-join-left-repartition-source\n"
-        + "    Processor: second-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000019-store])\n"
-        + "      --> second-join-other-join\n"
-        + "      <-- KSTREAM-SOURCE-0000000002\n"
-        + "    Processor: second-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000018-store])\n"
-        + "      --> second-join-this-join\n"
-        + "      <-- first-join-left-repartition-source\n"
-        + "    Processor: first-join-other-join (stores: [KSTREAM-JOINTHIS-0000000009-store])\n"
-        + "      --> first-join-merge\n"
-        + "      <-- first-join-other-windowed\n"
-        + "    Processor: first-join-this-join (stores: [KSTREAM-JOINOTHER-0000000010-store])\n"
-        + "      --> first-join-merge\n"
-        + "      <-- first-join-this-windowed\n"
-        + "    Processor: second-join-other-join (stores: [KSTREAM-JOINTHIS-0000000018-store])\n"
-        + "      --> second-join-merge\n"
-        + "      <-- second-join-other-windowed\n"
-        + "    Processor: second-join-this-join (stores: [KSTREAM-JOINOTHER-0000000019-store])\n"
-        + "      --> second-join-merge\n"
-        + "      <-- second-join-this-windowed\n"
-        + "    Processor: first-join-merge (stores: [])\n"
-        + "      --> KSTREAM-SINK-0000000012\n"
-        + "      <-- first-join-this-join, first-join-other-join\n"
-        + "    Processor: second-join-merge (stores: [])\n"
-        + "      --> KSTREAM-SINK-0000000021\n"
-        + "      <-- second-join-this-join, second-join-other-join\n"
-        + "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n"
-        + "      <-- first-join-merge\n"
-        + "    Sink: KSTREAM-SINK-0000000021 (topic: out-two)\n"
-        + "      <-- second-join-merge\n\n";
-
+    private final String expectedTopologyWithUserNamedRepartitionTopics = "Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+            "      --> KSTREAM-MAP-0000000003\n" +
+            "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+            "      --> second-join-left-repartition-filter, first-join-left-repartition-filter\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: first-join-left-repartition-filter (stores: [])\n" +
+            "      --> first-join-left-repartition-sink\n" +
+            "      <-- KSTREAM-MAP-0000000003\n" +
+            "    Processor: second-join-left-repartition-filter (stores: [])\n" +
+            "      --> second-join-left-repartition-sink\n" +
+            "      <-- KSTREAM-MAP-0000000003\n" +
+            "    Sink: first-join-left-repartition-sink (topic: first-join-left-repartition)\n" +
+            "      <-- first-join-left-repartition-filter\n" +
+            "    Sink: second-join-left-repartition-sink (topic: second-join-left-repartition)\n" +
+            "      <-- second-join-left-repartition-filter\n" +
+            "\n" +
+            "  Sub-topology: 1\n" +
+            "    Source: KSTREAM-SOURCE-0000000001 (topics: [topic2])\n" +
+            "      --> first-join-other-windowed\n" +
+            "    Source: first-join-left-repartition-source (topics: [first-join-left-repartition])\n" +
+            "      --> first-join-this-windowed\n" +
+            "    Processor: first-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> first-join-other-join\n" +
+            "      <-- KSTREAM-SOURCE-0000000001\n" +
+            "    Processor: first-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> first-join-this-join\n" +
+            "      <-- first-join-left-repartition-source\n" +
+            "    Processor: first-join-other-join (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> first-join-merge\n" +
+            "      <-- first-join-other-windowed\n" +
+            "    Processor: first-join-this-join (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> first-join-merge\n" +
+            "      <-- first-join-this-windowed\n" +
+            "    Processor: first-join-merge (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000012\n" +
+            "      <-- first-join-this-join, first-join-other-join\n" +
+            "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n" +
+            "      <-- first-join-merge\n" +
+            "\n" +
+            "  Sub-topology: 2\n" +
+            "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic3])\n" +
+            "      --> second-join-other-windowed\n" +
+            "    Source: second-join-left-repartition-source (topics: [second-join-left-repartition])\n" +
+            "      --> second-join-this-windowed\n" +
+            "    Processor: second-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> second-join-other-join\n" +
+            "      <-- KSTREAM-SOURCE-0000000002\n" +
+            "    Processor: second-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> second-join-this-join\n" +
+            "      <-- second-join-left-repartition-source\n" +
+            "    Processor: second-join-other-join (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> second-join-merge\n" +
+            "      <-- second-join-other-windowed\n" +
+            "    Processor: second-join-this-join (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> second-join-merge\n" +
+            "      <-- second-join-this-windowed\n" +
+            "    Processor: second-join-merge (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000021\n" +
+            "      <-- second-join-this-join, second-join-other-join\n" +
+            "    Sink: KSTREAM-SINK-0000000021 (topic: out-two)\n" +
+            "      <-- second-join-merge\n\n";
+    
     private final String expectedTopologyWithGeneratedRepartitionTopic = "Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
