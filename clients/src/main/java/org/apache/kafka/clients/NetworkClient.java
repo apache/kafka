@@ -502,14 +502,8 @@ public class NetworkClient implements KafkaClient {
         String destination = clientRequest.destination();
         RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
-            int latestClientVersion = clientRequest.apiKey().latestVersion();
-            if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} with correlation id {} to node {}", clientRequest.apiKey(), request,
-                        clientRequest.correlationId(), destination);
-            } else {
-                log.debug("Using older server API v{} to send {} {} with correlation id {} to node {}",
-                        header.apiVersion(), clientRequest.apiKey(), request, clientRequest.correlationId(), destination);
-            }
+            log.debug("Sending {} request with header {} and timeout {} to node {}: {}",
+                clientRequest.apiKey(), header, clientRequest.requestTimeoutMs(), destination, request);
         }
         Send send = request.toSend(destination, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
@@ -839,20 +833,22 @@ public class NetworkClient implements KafkaClient {
             InFlightRequest req = inFlightRequests.completeNext(source);
             Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
                 throttleTimeSensor, now);
-            if (log.isTraceEnabled()) {
-                log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
-                    req.header.apiKey(), req.header.correlationId(), responseStruct);
+            AbstractResponse response = AbstractResponse.
+                parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
+
+            if (log.isDebugEnabled()) {
+                log.debug("Received {} response from node {} for request with header {}: {}",
+                    req.header.apiKey(), req.destination, req.header, response);
             }
+
             // If the received response includes a throttle delay, throttle the connection.
-            AbstractResponse body = AbstractResponse.
-                    parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
-            maybeThrottle(body, req.header.apiVersion(), req.destination, now);
-            if (req.isInternalRequest && body instanceof MetadataResponse)
-                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) body);
-            else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
-                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
+            maybeThrottle(response, req.header.apiVersion(), req.destination, now);
+            if (req.isInternalRequest && response instanceof MetadataResponse)
+                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
+            else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
+                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
             else
-                responses.add(req.completed(body, now));
+                responses.add(req.completed(response, now));
         }
     }
 
