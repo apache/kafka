@@ -1102,7 +1102,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           val members = testGroupDescription.members()
           members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
           val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          topicSet.map { topic =>
+          topicSet.foreach { topic =>
             val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
             assertEquals(testNumPartitions, topicPartitions.size)
           }

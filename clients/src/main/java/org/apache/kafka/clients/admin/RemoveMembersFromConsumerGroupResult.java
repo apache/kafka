@@ -47,32 +47,32 @@ public class RemoveMembersFromConsumerGroupResult {
      * If not, the first member error shall be returned.
      */
     public KafkaFuture<Void> all() {
-            final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-            this.future.whenComplete((memberErrors, throwable) -> {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else {
-                    if (removeAll()) {
-                        for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
-                            Exception exception = entry.getValue().exception();
-                            if (exception != null) {
-                                Throwable ex = new KafkaException("Encounter exception when trying to remove: "
-                                        + entry.getKey() + ", " + exception);
-                                result.completeExceptionally(ex);
-                                return;
-                            }
-                        }
-                    } else {
-                        for (MemberToRemove memberToRemove : memberInfos) {
-                            if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
-                                return;
-                            }
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+        this.future.whenComplete((memberErrors, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else {
+                if (removeAll()) {
+                    for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
+                        Exception exception = entry.getValue().exception();
+                        if (exception != null) {
+                            Throwable ex = new KafkaException("Encounter exception when trying to remove: "
+                                    + entry.getKey() + ", " + exception);
+                            result.completeExceptionally(ex);
+                            return;
                         }
                     }
-                    result.complete(null);
+                } else {
+                    for (MemberToRemove memberToRemove : memberInfos) {
+                        if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
+                            return;
+                        }
+                    }
                 }
-            });
-            return result;
+                result.complete(null);
+            }
+        });
+        return result;
     }
 
     /**

@@ -3619,15 +3619,15 @@ public class KafkaAdminClient extends AdminClient {
             throw new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex);
         }
 
-        List<MemberIdentity> memberToRemove = new ArrayList<>();
+        List<MemberIdentity> membersToRemove = new ArrayList<>();
         for (final MemberDescription member : members) {
             if (member.groupInstanceId().isPresent()) {
-                memberToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get()));
+                membersToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get()));
             } else {
-                memberToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
+                membersToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
             }
         }
-        return memberToRemove;
+        return membersToRemove;
     }
 
     @Override
@@ -3645,11 +3645,9 @@ public class KafkaAdminClient extends AdminClient {
         if (options.removeAll()) {
             members = getMembersFromGroup(groupId);
         } else {
-            members = options.members().stream().map(
-                    MemberToRemove::toMemberIdentity).collect(Collectors.toList());
+            members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
         }
-        Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> getRemoveMembersFromGroupCall(context, members));
+        Call findCoordinatorCall = getFindCoordinatorCall(context, () -> getRemoveMembersFromGroupCall(context, members));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new RemoveMembersFromConsumerGroupResult(future, options.members());
@@ -3662,7 +3660,7 @@ public class KafkaAdminClient extends AdminClient {
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                    return new LeaveGroupRequest.Builder(context.groupId(), members);
+                return new LeaveGroupRequest.Builder(context.groupId(), members);
             }
 
             @Override
@@ -3681,8 +3679,6 @@ public class KafkaAdminClient extends AdminClient {
 
                 final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
                 for (MemberResponse memberResponse : response.memberResponses()) {
-                    // We set member.id to empty here explicitly, so that the lookup will succeed as user doesn't
-                    // know the exact member.id.
                     memberErrors.put(new MemberIdentity()
                                          .setMemberId(memberResponse.memberId())
                                          .setGroupInstanceId(memberResponse.groupInstanceId()),
