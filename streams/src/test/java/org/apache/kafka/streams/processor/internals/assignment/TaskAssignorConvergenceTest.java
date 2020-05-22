@@ -338,7 +338,7 @@ public class TaskAssignorConvergenceTest {
                         throw new IllegalStateException("Unexpected event: " + event);
                 }
                 if (!harness.clientStates.isEmpty()) {
-                    testForConvergence(harness, configs, numStatefulTasks * 2);
+                    testForConvergence(harness, configs, 2 * (numStatefulTasks + numStatefulTasks * numStandbyReplicas));
                     verifyValidAssignment(numStandbyReplicas, harness);
                     verifyBalancedAssignment(harness);
                 }
