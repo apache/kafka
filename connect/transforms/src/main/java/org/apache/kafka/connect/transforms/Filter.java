@@ -36,7 +36,7 @@ public class Filter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     @Override
     public ConfigDef config() {
-        return null;
+        return new ConfigDef();
     }
 
     @Override
