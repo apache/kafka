@@ -279,8 +279,8 @@ public class ConnectorConfig extends AbstractConfig {
                 @SuppressWarnings("unchecked")
                 final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
-                Object predicateAlias = configs.remove("predicate");
-                Object negate = configs.remove("negate");
+                Object predicateAlias = configs.remove(PredicatedTransformation.PREDICATE_CONFIG);
+                Object negate = configs.remove(PredicatedTransformation.NEGATE_CONFIG);
                 transformation.configure(configs);
                 if (predicateAlias != null) {
                     String predicatePrefix = "predicates." + predicateAlias + ".";
@@ -307,7 +307,7 @@ public class ConnectorConfig extends AbstractConfig {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
-        new EnrichablePlugin<Transformation<?>>("transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
+        new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
             @SuppressWarnings("rawtypes")
             @Override
@@ -320,9 +320,9 @@ public class ConnectorConfig extends AbstractConfig {
             protected ConfigDef initialConfigDef() {
                 // All Transformations get these config parameters implicitly
                 return super.initialConfigDef()
-                        .define("predicate", Type.STRING, "", Importance.MEDIUM,
+                        .define(PredicatedTransformation.PREDICATE_CONFIG, Type.STRING, "", Importance.MEDIUM,
                                 "The alias of a predicate used to determine whether to apply this transformation.")
-                        .define("negate", Type.BOOLEAN, false, Importance.MEDIUM,
+                        .define(PredicatedTransformation.NEGATE_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM,
                                 "Whether the configured predicate should be negated.");
             }
 
@@ -331,8 +331,10 @@ public class ConnectorConfig extends AbstractConfig {
                 return super.configDefsForClass(typeConfig)
                     .filter(entry -> {
                         // The implicit parameters mask any from the transformer with the same name
-                        if ("predicate".equals(entry.getValue()) || "negate".equals(entry.getValue())) {
-                            log.warn("Transformer config " + entry.getValue() + " is masked by implicit config of that name");
+                        if (PredicatedTransformation.PREDICATE_CONFIG.equals(entry.getValue())
+                                || PredicatedTransformation.NEGATE_CONFIG.equals(entry.getValue())) {
+                            log.warn("Transformer config {} is masked by implicit config of that name",
+                                    entry.getValue());
                             return false;
                         } else {
                             return true;
@@ -347,14 +349,18 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             protected void validateProps(String prefix) {
-                if (props.containsKey(prefix + "negate") &&
-                        !props.containsKey(prefix + "predicate")) {
-                    throw new ConfigException("Config '" + prefix + "negate' provided but there is no config '" + prefix + "predicate' to be negated.");
+                String prefixedNegate = prefix + PredicatedTransformation.NEGATE_CONFIG;
+                String prefixedPredicate = prefix + PredicatedTransformation.PREDICATE_CONFIG;
+                if (props.containsKey(prefixedNegate) &&
+                        !props.containsKey(prefixedPredicate)) {
+                    throw new ConfigException("Config '" + prefixedNegate + "' was provided " +
+                            "but there is no config '" + prefixedPredicate + "' defining a predicate to be negated.");
                 }
             }
         }.enrich(newDef);
 
-        new EnrichablePlugin<Predicate<?>>("predicate", PREDICATES_CONFIG, PREDICATES_GROUP, (Class) Predicate.class, props, requireFullConfig) {
+        new EnrichablePlugin<Predicate<?>>("Predicate", PREDICATES_CONFIG, PREDICATES_GROUP,
+                (Class) Predicate.class, props, requireFullConfig) {
             @Override
             protected Set<PluginDesc<Predicate<?>>> plugins() {
                 return (Set) plugins.predicates();
@@ -425,7 +431,7 @@ public class ConnectorConfig extends AbstractConfig {
                     }
                 };
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
-                        "Class for the '" + alias + "' " + aliasKind + ".", group, orderInGroup++, Width.LONG,
+                        "Class for the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " type for " + alias,
                         Collections.emptyList(), new ClassRecommender());
 
@@ -490,7 +496,6 @@ public class ConnectorConfig extends AbstractConfig {
                         .filter(c -> Modifier.isPublic(c.getModifiers()))
                         .map(Class::getName)
                         .collect(Collectors.joining(", "));
-                String aliasKind = this.aliasKind.substring(0, 1).toUpperCase(Locale.ENGLISH) + this.aliasKind.substring(1);
                 String message = childClassNames.trim().isEmpty() ?
                         aliasKind + " is abstract and cannot be created." :
                         aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";

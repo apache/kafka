@@ -21,6 +21,7 @@ import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
@@ -31,9 +32,11 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
  */
 class PredicatedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    /*test*/ final Predicate<R> predicate;
-    /*test*/ final Transformation<R> delegate;
-    /*test*/ final boolean negate;
+    static final String PREDICATE_CONFIG = "predicate";
+    static final String NEGATE_CONFIG = "negate";
+    /*test*/ Predicate<R> predicate;
+    /*test*/ Transformation<R> delegate;
+    /*test*/ boolean negate;
 
     PredicatedTransformation(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
         this.predicate = predicate;
@@ -43,7 +46,8 @@ class PredicatedTransformation<R extends ConnectRecord<R>> implements Transforma
 
     @Override
     public void configure(Map<String, ?> configs) {
-
+        throw new ConnectException(PredicatedTransformation.class.getName() + ".configure() " +
+                "should never be called directly.");
     }
 
     @Override
@@ -56,7 +60,8 @@ class PredicatedTransformation<R extends ConnectRecord<R>> implements Transforma
 
     @Override
     public ConfigDef config() {
-        return null;
+        throw new ConnectException(PredicatedTransformation.class.getName() + ".config() " +
+                "should never be called directly.");
     }
 
     @Override

@@ -363,7 +363,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
-    static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
+    public static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
 
         int param;
 
@@ -391,7 +391,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
+    public static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
 
         public AbstractTestPredicate() { }
 
