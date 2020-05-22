@@ -196,8 +196,7 @@ public class StreamsResetter {
                 try {
                     adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
                 } catch (Exception e) {
-                    throw new KafkaException("Encounter exception when force removing active members in group: "
-                            + groupId + "exception: " + e);
+                    throw e;
                 }
             } else {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "

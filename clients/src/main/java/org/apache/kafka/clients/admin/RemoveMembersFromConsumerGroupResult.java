@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -55,7 +56,9 @@ public class RemoveMembersFromConsumerGroupResult {
                         for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
                             Exception exception = entry.getValue().exception();
                             if (exception != null) {
-                                result.completeExceptionally(exception);
+                                Throwable ex = new KafkaException("Encounter exception when trying to remove: "
+                                        + entry.getKey() + ", " + exception);
+                                result.completeExceptionally(ex);
                                 return;
                             }
                         }
