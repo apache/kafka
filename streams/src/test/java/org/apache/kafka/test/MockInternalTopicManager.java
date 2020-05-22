@@ -63,13 +63,12 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    protected GetNumPartitionResults getNumPartitions(final Set<String> topics) {
-        final GetNumPartitionResults getNumPartitionResults = new GetNumPartitionResults(new HashMap<>(), new ArrayList<>());
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (final String topic : topics) {
-            getNumPartitionResults.putExistedTopicPartitions(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
+            partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
         }
 
-        return getNumPartitionResults;
+        return partitions;
     }
 }

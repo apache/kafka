@@ -331,8 +331,8 @@ public class MockAdminClient extends AdminClient {
                 future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + requestedTopic + " not found."));
                 topicDescriptions.put(requestedTopic, future);
             }
-            // try to simulate the leader not available situation when topic name is "LeaderNotAvailable"
-            if (requestedTopic.equals("LeaderNotAvailable")) {
+            // try to simulate the leader not available situation when topic name is "LeaderNotAvailableTopic"
+            if (requestedTopic.equals("LeaderNotAvailableTopic")) {
                 KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new LeaderNotAvailableException("The leader of Topic " + requestedTopic + " is not available."));
                 topicDescriptions.put(requestedTopic, future);

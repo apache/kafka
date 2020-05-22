@@ -39,7 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.ArrayList;
+import java.util.HashSet;
 
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
@@ -60,31 +60,9 @@ public class InternalTopicManager {
 
     private final int retries;
     private final long retryBackOffMs;
+    private int remainingRetries;
 
-    /**
-     * Represents data for the describe.
-     */
-    public static class GetNumPartitionResults {
-        private final Map<String, Integer> existedTopicPartitions;
-        private final ArrayList<String> needRetryTopics;
-
-        public GetNumPartitionResults(final Map<String, Integer> existedTopicPartitions, final ArrayList<String> needRetryTopics) {
-            this.existedTopicPartitions = existedTopicPartitions;
-            this.needRetryTopics = needRetryTopics;
-        }
-        public void putExistedTopicPartitions(final String topicName, final Integer numPartition) {
-            this.existedTopicPartitions.put(topicName, numPartition);
-        }
-        public Map<String, Integer> getExistedTopicPartitions() {
-            return this.existedTopicPartitions;
-        }
-        public void addNeedRetryTopics(final String topicName) {
-            this.needRetryTopics.add(topicName);
-        }
-        public ArrayList<String> getNeedRetryTopics() {
-            return this.needRetryTopics;
-        }
-    }
+    private HashSet<String> needRetryTopics = new HashSet<>();
 
     public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
@@ -126,11 +104,11 @@ public class InternalTopicManager {
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
         log.debug("Starting to validate internal topics {} in partition assignor.", topics);
 
-        int remainingRetries = retries;
+        remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
 
-        while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
+        while (isNeedRetry(topicsNotReady) && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
             newlyCreatedTopics.addAll(topicsNotReady);
 
@@ -183,8 +161,8 @@ public class InternalTopicManager {
             }
 
 
-            if (!topicsNotReady.isEmpty()) {
-                log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
+            if (isNeedRetry(topicsNotReady)) {
+                log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
 
                 Utils.sleep(retryBackOffMs);
 
@@ -192,7 +170,7 @@ public class InternalTopicManager {
             }
         }
 
-        if (!topicsNotReady.isEmpty()) {
+        if (isNeedRetry(topicsNotReady)) {
             final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
@@ -210,18 +188,21 @@ public class InternalTopicManager {
      * Topics that were not able to get its description will simply not be returned
      */
     // visible for testing
-    protected GetNumPartitionResults getNumPartitions(final Set<String> topics) {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
 
-        final GetNumPartitionResults getNumPartitionResults = new GetNumPartitionResults(new HashMap<>(), new ArrayList<>());
+        final Map<String, Integer> existedTopicPartition = new HashMap<>();
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
             final String topicName = topicFuture.getKey();
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
-                getNumPartitionResults.putExistedTopicPartitions(topicName, topicDescription.partitions().size());
+                existedTopicPartition.put(topicName, topicDescription.partitions().size());
+                if (needRetryTopics.contains(topicName)) {
+                    needRetryTopics.remove(topicName);
+                }
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -234,9 +215,14 @@ public class InternalTopicManager {
                     log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
                         "Error message was: {}", topicName, cause.toString());
                 } else if (cause instanceof LeaderNotAvailableException) {
-                    getNumPartitionResults.addNeedRetryTopics(topicName);
-                    log.debug("The leader of the Topic {} is not available, will retry {} times.\n" +
-                        "Error message was: {}", topicName, retries, cause.toString());
+                    needRetryTopics.add(topicName);
+                    if (remainingRetries > 0) {
+                        log.debug("The leader of the Topic {} is not available, with {} retries left.\n" +
+                            "Error message was: {}", topicName, remainingRetries, cause.toString());
+                    } else { // run out of retries, throw exception directly
+                        throw new StreamsException(
+                            String.format("The leader of the Topic %s is not available after %d retries.", topicName, retries), cause);
+                    }
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -245,7 +231,7 @@ public class InternalTopicManager {
             }
         }
 
-        return getNumPartitionResults;
+        return existedTopicPartition;
     }
 
     /**
@@ -257,9 +243,7 @@ public class InternalTopicManager {
                 topicsToValidate + " trying to validate.");
         }
 
-        final GetNumPartitionResults getNumPartitionResults = getNumPartitions(topicsToValidate);
-        final Map<String, Integer> existedTopicPartition = getNumPartitionResults.getExistedTopicPartitions();
-        final ArrayList<String> needRetryTopics = getNumPartitionResults.getNeedRetryTopics();
+        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
 
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
@@ -283,5 +267,13 @@ public class InternalTopicManager {
         }
 
         return topicsToCreate;
+    }
+
+    private boolean isNeedRetry(final Set<String> topicsNotReady) {
+        return !topicsNotReady.isEmpty() || hasNeedRetryTopic();
+    }
+
+    private boolean hasNeedRetryTopic() {
+        return needRetryTopics.size() > 0;
     }
 }
