@@ -141,6 +141,13 @@ public class LeaderState implements EpochState {
         return state;
     }
 
+    /**
+     * Update the local end offset after a log append to the leader. Return true if this
+     * update results in a bump to the high watermark.
+     *
+     * @param endOffset The new log end offset
+     * @return true if the high watermark increased, false otherwise
+     */
     public boolean updateLocalEndOffset(long endOffset) {
         return updateEndOffset(localId, endOffset);
     }

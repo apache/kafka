@@ -28,6 +28,8 @@
     {"name": "FetchOffset", "type": "int64", "versions": "0+",
       "about": "The next expected offset to be replicated"},
     {"name": "LastFetchedEpoch", "type": "int32", "versions": "0+",
-      "about": "The epoch of the last replicated record"}
+      "about": "The epoch of the last replicated record"},
+    {"name":  "MaxWaitTimeMs", "type":  "int32", "versions": "0+",
+      "about": "The maximum time to wait for new data to arrive" }
   ]
 }

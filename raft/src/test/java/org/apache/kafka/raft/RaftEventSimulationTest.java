@@ -57,6 +57,7 @@ public class RaftEventSimulationTest {
     private static final int FETCH_TIMEOUT_MS = 5000;
     private static final int RETRY_BACKOFF_MS = 50;
     private static final int REQUEST_TIMEOUT_MS = 500;
+    private static final int FETCH_MAX_WAIT_MS = 100;
 
     @Test
     public void testInitialLeaderElectionQuorumSizeOne() {
@@ -469,7 +470,7 @@ public class RaftEventSimulationTest {
     private static class Cluster {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
-        final Time time = new MockTime();
+        final MockTime time = new MockTime();
         final Set<Integer> voters = new HashSet<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -625,6 +626,7 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
+            MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
 
             // For the bootstrap server, we use a pretend VIP which internally routes
             // to any of the nodes randomly.
@@ -632,9 +634,9 @@ public class RaftEventSimulationTest {
                 new InetSocketAddress("localhost", 9000));
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time,
-                new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
+                purgatory, new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
                 ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
-                logContext, random);
+                FETCH_MAX_WAIT_MS, logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();
