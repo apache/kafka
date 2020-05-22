@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.ArrayList;
 
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
@@ -59,6 +60,31 @@ public class InternalTopicManager {
 
     private final int retries;
     private final long retryBackOffMs;
+
+    /**
+     * Represents data for the describe.
+     */
+    public static class GetNumPartitionResults {
+        private final Map<String, Integer> existedTopicPartitions;
+        private final ArrayList<String> needRetryTopics;
+
+        public GetNumPartitionResults(final Map<String, Integer> existedTopicPartitions, final ArrayList<String> needRetryTopics) {
+            this.existedTopicPartitions = existedTopicPartitions;
+            this.needRetryTopics = needRetryTopics;
+        }
+        public void putExistedTopicPartitions(final String topicName, final Integer numPartition) {
+            this.existedTopicPartitions.put(topicName, numPartition);
+        }
+        public Map<String, Integer> getExistedTopicPartitions() {
+            return this.existedTopicPartitions;
+        }
+        public void addNeedRetryTopics(final String topicName) {
+            this.needRetryTopics.add(topicName);
+        }
+        public ArrayList<String> getNeedRetryTopics() {
+            return this.needRetryTopics;
+        }
+    }
 
     public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
@@ -184,20 +210,18 @@ public class InternalTopicManager {
      * Topics that were not able to get its description will simply not be returned
      */
     // visible for testing
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+    protected GetNumPartitionResults getNumPartitions(final Set<String> topics) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
 
-        final Map<String, Integer> existedTopicPartition = new HashMap<>();
+        final GetNumPartitionResults getNumPartitionResults = new GetNumPartitionResults(new HashMap<>(), new ArrayList<>());
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
             final String topicName = topicFuture.getKey();
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
-                existedTopicPartition.put(
-                    topicFuture.getKey(),
-                    topicDescription.partitions().size());
+                getNumPartitionResults.putExistedTopicPartitions(topicName, topicDescription.partitions().size());
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -205,10 +229,14 @@ public class InternalTopicManager {
                 throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
             } catch (final ExecutionException couldNotDescribeTopicException) {
                 final Throwable cause = couldNotDescribeTopicException.getCause();
-                if (cause instanceof UnknownTopicOrPartitionException ||
-                    cause instanceof LeaderNotAvailableException) {
-                    // This topic didn't exist or leader is not known yet, proceed to try to create it
-                    log.debug("Topic {} is unknown or not found, hence not existed yet: {}", topicName, cause.toString());
+                if (cause instanceof UnknownTopicOrPartitionException) {
+                    // This topic didn't exist, proceed to try to create it
+                    log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
+                        "Error message was: {}", topicName, cause.toString());
+                } else if (cause instanceof LeaderNotAvailableException) {
+                    getNumPartitionResults.addNeedRetryTopics(topicName);
+                    log.debug("The leader of the Topic {} is not available, will retry {} times.\n" +
+                        "Error message was: {}", topicName, retries, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -217,7 +245,7 @@ public class InternalTopicManager {
             }
         }
 
-        return existedTopicPartition;
+        return getNumPartitionResults;
     }
 
     /**
@@ -229,7 +257,9 @@ public class InternalTopicManager {
                 topicsToValidate + " trying to validate.");
         }
 
-        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
+        final GetNumPartitionResults getNumPartitionResults = getNumPartitions(topicsToValidate);
+        final Map<String, Integer> existedTopicPartition = getNumPartitionResults.getExistedTopicPartitions();
+        final ArrayList<String> needRetryTopics = getNumPartitionResults.getNeedRetryTopics();
 
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
@@ -247,7 +277,7 @@ public class InternalTopicManager {
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
-            } else {
+            } else if (!needRetryTopics.contains(topicName)) {
                 topicsToCreate.add(topicName);
             }
         }

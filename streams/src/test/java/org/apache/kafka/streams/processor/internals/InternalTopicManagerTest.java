@@ -108,7 +108,8 @@ public class InternalTopicManagerTest {
             topic,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList())),
             null);
-        assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
+        assertEquals(Collections.singletonMap(topic, 1),
+                internalTopicManager.getNumPartitions(Collections.singleton(topic)).getExistedTopicPartitions());
     }
 
     @Test
@@ -287,8 +288,8 @@ public class InternalTopicManagerTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet:" +
-                    " org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found.")
+                hasItem("stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet.\n" +
+                    "Error message was: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found.")
             );
         }
     }
