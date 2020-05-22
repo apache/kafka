@@ -446,7 +446,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() throws Exception {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
@@ -456,6 +456,17 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01)).anyTimes();
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
+
+        makeTaskFolders(taskId00.toString(), taskId01.toString());
+        expectLockObtainedFor(taskId00, taskId01);
+
+        // The second attempt will return empty tasks.
+        makeTaskFolders();
+        expectLockObtainedFor();
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(emptySet());
+        assertThat(taskManager.lockedTaskDirectories(), Matchers.is(mkSet(taskId00, taskId01)));
 
         // `handleLostAll`
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
@@ -473,6 +484,13 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), is(singletonMap(taskId01, task01)));
+
+        // The locked task map will not be cleared.
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+
+        taskManager.handleRebalanceStart(emptySet());
+
+        assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
     }
 
     @Test

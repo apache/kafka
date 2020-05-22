@@ -24,7 +24,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -45,7 +47,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasProperty;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -65,11 +67,13 @@ public class TaskMovementTest {
         final ClientState client3 = getClientStateWithActiveAssignment(asList(TASK_0_2, TASK_1_2));
 
         assertThat(
-            assignTaskMovements(
+            assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 getClientStatesMap(client1, client2, client3),
-                maxWarmupReplicas),
-            is(false)
+                new TreeMap<>(),
+                new AtomicInteger(maxWarmupReplicas)
+            ),
+            is(0)
         );
     }
 
@@ -82,11 +86,13 @@ public class TaskMovementTest {
         final ClientState client3 = getClientStateWithActiveAssignment(asList(TASK_0_2, TASK_1_2));
 
         assertThat(
-            assignTaskMovements(
+            assignActiveTaskMovements(
                 emptyMap(),
                 getClientStatesMap(client1, client2, client3),
-                maxWarmupReplicas),
-            is(false)
+                new TreeMap<>(),
+                new AtomicInteger(maxWarmupReplicas)
+            ),
+            is(0)
         );
     }
 
@@ -106,11 +112,13 @@ public class TaskMovementTest {
 
         assertThat(
             "should have assigned movements",
-            assignTaskMovements(
+            assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 clientStates,
-                maxWarmupReplicas),
-            is(true)
+                new TreeMap<>(),
+                new AtomicInteger(maxWarmupReplicas)
+            ),
+            is(2)
         );
         // The active tasks have changed to the ones that each client is caught up on
         assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
@@ -139,11 +147,13 @@ public class TaskMovementTest {
 
         assertThat(
             "should have assigned movements",
-            assignTaskMovements(
+            assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 clientStates,
-                maxWarmupReplicas),
-            is(true)
+                new TreeMap<>(),
+                new AtomicInteger(maxWarmupReplicas)
+            ),
+            is(2)
         );
         // The active tasks have changed to the ones that each client is caught up on
         assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
@@ -175,11 +185,13 @@ public class TaskMovementTest {
 
         assertThat(
             "should have assigned movements",
-            assignTaskMovements(
+            assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 clientStates,
-                maxWarmupReplicas),
-            is(true)
+                new TreeMap<>(),
+                new AtomicInteger(maxWarmupReplicas)
+            ),
+            is(1)
         );
         // Even though we have no warmups allowed, we still let client1 take over active processing while
         // client2 "warms up" because client1 was a caught-up standby, so it can "trade" standby status with

@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -65,6 +67,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private TaskType taskType = TaskType.ACTIVE;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -345,6 +348,31 @@ public class InternalMockProcessorContext
             return new RecordHeaders();
         }
         return recordContext.headers();
+    }
+
+    @Override
+    public TaskType taskType() {
+        return taskType;
+    }
+
+    public void setTaskType(final TaskType taskType) {
+        this.taskType = taskType;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        recordCollector().send(
+            storeName + "-changelog",
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER);
     }
 
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {

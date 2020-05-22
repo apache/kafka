@@ -47,6 +47,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.analyzeTaskAssignmentBalance;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
@@ -54,10 +55,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasAssignedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.fail;
@@ -76,6 +79,64 @@ public class HighAvailabilityTaskAssignorTest {
         /*numStandbyReplicas*/ 1,
         /*probingRebalanceIntervalMs*/ 60 * 1000L
     );
+
+    @Test
+    public void shouldBeStickyForActiveAndStandbyTasksEvenIfNoWarmups() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
+        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), 1);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, clientState1),
+            mkEntry(UUID_2, clientState2),
+            mkEntry(UUID_3, clientState3)
+        );
+
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(11L, 0, 1, 0L)
+        );
+
+        assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState2, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState3, hasAssignedTasks(0));
+
+        assertThat(unstable, is(false));
+    }
+
+    @Test
+    public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
+        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), 1);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, clientState1),
+            mkEntry(UUID_2, clientState2),
+            mkEntry(UUID_3, clientState3)
+        );
+
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(11L, 2, 1, 0L)
+        );
+
+        assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState2, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState3, hasAssignedTasks(2));
+
+        assertThat(unstable, is(true));
+    }
 
     @Test
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks() {
@@ -170,7 +231,7 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignActiveStatefulTasksEvenlyOverClientsWithLessClientsThanTasks() {
+    public void shouldAssignActiveStatefulTasksEvenlyOverClientsWithMoreClientsThanTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, 1);
@@ -195,15 +256,70 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsAndStreamThreadsWithMoreStreamThreadsThanTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, 6);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, 6);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, 6);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, 9);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, 9);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, 9);
         final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
         final boolean unstable = new HighAvailabilityTaskAssignor().assign(
             clientStates,
             allTaskIds,
             allTaskIds,
             new AssignmentConfigs(0L, 0, 0, 0L)
+        );
+
+        assertThat(unstable, is(false));
+        assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
+        assertBalancedTasks(clientStates);
+    }
+
+    @Test
+    public void shouldAssignWarmUpTasksIfStatefulActiveTasksBalancedOverStreamThreadsButNotOverClients() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
+        final Map<TaskId, Long> lagsForNotCaughtUpClient =
+            allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
+        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, 5);
+        final ClientState notCaughtUpClientState1 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, 5);
+        final ClientState notCaughtUpClientState2 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, 5);
+        final Map<UUID, ClientState> clientStates =
+            getClientStatesMap(caughtUpClientState, notCaughtUpClientState1, notCaughtUpClientState2);
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
+        );
+
+        assertThat(unstable, is(true));
+        assertThat(notCaughtUpClientState1.standbyTaskCount(), greaterThanOrEqualTo(allTaskIds.size() / 3));
+        assertThat(notCaughtUpClientState2.standbyTaskCount(), greaterThanOrEqualTo(allTaskIds.size() / 3));
+        assertValidAssignment(0, allTaskIds.size() / 3 + 1, allTaskIds, emptySet(), clientStates, new StringBuilder());
+    }
+
+    @Test
+    public void shouldEvenlyAssignActiveStatefulTasksIfClientsAreWarmedUpToBalanceTaskOverClients() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final Set<TaskId> warmedUpTaskIds1 = mkSet(TASK_0_1);
+        final Set<TaskId> warmedUpTaskIds2 = mkSet(TASK_1_0);
+        final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
+        final Map<TaskId, Long> lagsForWarmedUpClient1 =
+            allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
+        lagsForWarmedUpClient1.put(TASK_0_1, 0L);
+        final Map<TaskId, Long> lagsForWarmedUpClient2 =
+            allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
+        lagsForWarmedUpClient2.put(TASK_1_0, 0L);
+        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, 5);
+        final ClientState warmedUpClientState1 = new ClientState(emptySet(), warmedUpTaskIds1, lagsForWarmedUpClient1, 5);
+        final ClientState warmedUpClientState2 = new ClientState(emptySet(), warmedUpTaskIds2, lagsForWarmedUpClient2, 5);
+        final Map<UUID, ClientState> clientStates =
+            getClientStatesMap(caughtUpClientState, warmedUpClientState1, warmedUpClientState2);
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
         );
 
         assertThat(unstable, is(false));

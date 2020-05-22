@@ -110,7 +110,7 @@ public class StreamsResetter {
     private static String usage = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
-            + "intermediate topics (topics used in the through() method).\n"
+            + "intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "You do not need to specify internal topics because the tool finds them automatically.\n"
@@ -209,7 +209,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics used in the through() method). For these topics, the tool will skip to the end.")
+        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
@@ -649,7 +649,7 @@ public class StreamsResetter {
 
     // visible for testing
     public void doDelete(final List<String> topicsToDelete,
-                          final Admin adminClient) {
+                         final Admin adminClient) {
         boolean hasDeleteErrors = false;
         final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
         final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
@@ -673,11 +673,17 @@ public class StreamsResetter {
         // Even is this is not expected in general, we need to exclude those topics here
         // and don't consider them as internal topics even if they follow the same naming schema.
         // Cf. https://issues.apache.org/jira/browse/KAFKA-7930
-        return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
-            && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
-            && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
-                || topicName.endsWith("-subscription-registration-topic")
-                || topicName.endsWith("-subscription-response-topic"));
+        return !isInputTopic(topicName) && !isIntermediateTopic(topicName) && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
+               && matchesInternalTopicFormat(topicName);
+    }
+
+    // visible for testing
+    public boolean matchesInternalTopicFormat(final String topicName) {
+        return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
+               || topicName.endsWith("-subscription-registration-topic")
+               || topicName.endsWith("-subscription-response-topic")
+               || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
+               || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
     }
 
     public static void main(final String[] args) {

@@ -815,9 +815,10 @@ public interface KStream<K, V> {
      *
      * @param topic the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @see #repartition()
-     * @see #repartition(Repartitioned)
+     * @deprecated since 2.6; used {@link #repartition()} instead
      */
+    // TODO: when removed, update `StreamsResetter` decription of --intermediate-topics
+    @Deprecated
     KStream<K, V> through(final String topic);
 
     /**
@@ -835,9 +836,9 @@ public interface KStream<K, V> {
      * @param topic     the topic name
      * @param produced  the options to use when producing to the topic
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @see #repartition()
-     * @see #repartition(Repartitioned)
+     * @deprecated since 2.6; use {@link #repartition(Repartitioned)} instead
      */
+    @Deprecated
     KStream<K, V> through(final String topic,
                           final Produced<K, V> produced);
 
@@ -846,7 +847,6 @@ public interface KStream<K, V> {
      * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      * <p>
-     * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
      * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
      * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
      * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
@@ -854,8 +854,6 @@ public interface KStream<K, V> {
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      *
      * @return {@code KStream} that contains the exact same repartitioned records as this {@code KStream}.
-     * @see #through(String)
-     * @see #through(String, Produced)
      */
     KStream<K, V> repartition();
 
@@ -864,7 +862,6 @@ public interface KStream<K, V> {
      * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
      * <p>
-     * This operation is similar to {@link #through(String)}, however, Kafka Streams manages the used topic automatically.
      * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
      * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
      * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
@@ -876,8 +873,6 @@ public interface KStream<K, V> {
      *                      {@link StreamPartitioner} which determines how records are distributed among partitions of the topic,
      *                      part of the topic name, and number of partitions for a repartition topic.
      * @return a {@code KStream} that contains the exact same repartitioned records as this {@code KStream}.
-     * @see #through(String)
-     * @see #through(String, Produced)
      */
     KStream<K, V> repartition(final Repartitioned<K, V> repartitioned);
 
@@ -925,9 +920,8 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -952,9 +946,8 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -980,9 +973,8 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -1009,9 +1001,8 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -1141,10 +1132,9 @@ public interface KStream<K, V> {
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later
-     * operator depends on the newly selected key.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
+     * Kafka if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -1171,10 +1161,9 @@ public interface KStream<K, V> {
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka
-     * if a later operator depends on the newly selected key.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
+     * Kafka if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -1202,10 +1191,9 @@ public interface KStream<K, V> {
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later operator
-     * depends on the newly selected key.
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
+     * Kafka if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * &lt;name&gt; is either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally
@@ -1262,8 +1250,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1339,8 +1327,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1421,8 +1409,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1504,8 +1492,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1585,8 +1573,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1671,8 +1659,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1755,8 +1743,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1837,8 +1825,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1924,8 +1912,8 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
-     * join, using a pre-created topic with the "correct" number of partitions.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
+     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -2010,8 +1998,9 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
-     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} for this {@code KStream}
+     * before doing the join, specifying the same number of partitions via {@link Repartitioned} parameter as the given
+     * {@link KTable}.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
@@ -2085,8 +2074,9 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
-     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} for this {@code KStream}
+     * before doing the join, specifying the same number of partitions via {@link Repartitioned} parameter as the given
+     * {@link KTable}.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
@@ -2166,8 +2156,9 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
-     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} for this {@code KStream}
+     * before doing the join, specifying the same number of partitions via {@link Repartitioned} parameter as the given
+     * {@link KTable}.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
@@ -2244,8 +2235,9 @@ public interface KStream<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
-     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} for this {@code KStream}
+     * before doing the join, specifying the same number of partitions via {@link Repartitioned} parameter as the given
+     * {@link KTable}.
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
@@ -2481,8 +2473,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transform()}.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code transform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
@@ -2575,8 +2566,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transform()}.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code transform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
@@ -2674,7 +2664,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
@@ -2767,7 +2757,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
@@ -2856,7 +2846,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code transformValues()}.
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
@@ -2932,7 +2922,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code transformValues()}.
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
@@ -3013,7 +3003,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code transformValues()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
@@ -3093,7 +3083,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition() should be performed before
      * {@code transformValues()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
@@ -3181,7 +3171,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransformValues()}.
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
@@ -3270,7 +3260,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransformValues()}.
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
@@ -3361,7 +3351,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransformValues()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
@@ -3451,7 +3441,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code flatTransformValues()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
@@ -3528,7 +3518,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
      * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
      * @param stateStoreNames   the names of the state store used by the processor
@@ -3590,7 +3580,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
      * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
      * @param named             a {@link Named} config used to name the processor in the topology

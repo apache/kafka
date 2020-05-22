@@ -31,12 +31,14 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.diff;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignTaskMovements;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignStandbyTaskMovements;
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
@@ -57,13 +59,41 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             configs.numStandbyReplicas
         );
 
-        final boolean probingRebalanceNeeded = assignTaskMovements(
-            tasksToCaughtUpClients(statefulTasks, clientStates, configs.acceptableRecoveryLag),
+        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas);
+
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(
+            statefulTasks,
             clientStates,
-            configs.maxWarmupReplicas
+            configs.acceptableRecoveryLag
+        );
+
+        // We temporarily need to know which standby tasks were intended as warmups
+        // for active tasks, so that we don't move them (again) when we plan standby
+        // task movements. We can then immediately treat warmups exactly the same as
+        // hot-standby replicas, so we just track it right here as metadata, rather
+        // than add "warmup" assignments to ClientState, for example.
+        final Map<UUID, Set<TaskId>> warmups = new TreeMap<>();
+
+        final int neededActiveTaskMovements = assignActiveTaskMovements(
+            tasksToCaughtUpClients,
+            clientStates,
+            warmups,
+            remainingWarmupReplicas
+        );
+
+        final int neededStandbyTaskMovements = assignStandbyTaskMovements(
+            tasksToCaughtUpClients,
+            clientStates,
+            remainingWarmupReplicas,
+            warmups
         );
 
         assignStatelessActiveTasks(clientStates, diff(TreeSet::new, allTaskIds, statefulTasks));
+
+        // We shouldn't plan a probing rebalance if we _needed_ task movements, but couldn't do any
+        // due to being configured for no warmups.
+        final boolean probingRebalanceNeeded =
+            configs.maxWarmupReplicas > 0 && neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
         log.info("Decided on assignment: " +
                      clientStates +

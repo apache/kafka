@@ -84,7 +84,7 @@ class CachingWindowStore
             Serdes.Bytes(),
             Serdes.ByteArray());
         name = context.taskId() + "-" + name();
-        cache = this.context.getCache();
+        cache = this.context.cache();
 
         cache.addDirtyEntryFlushListener(name, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {

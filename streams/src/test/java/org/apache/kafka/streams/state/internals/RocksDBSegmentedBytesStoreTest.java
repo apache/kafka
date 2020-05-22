@@ -37,9 +37,4 @@ public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedByte
     KeyValueSegments newSegments() {
         return new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval);
     }
-
-    @Override
-    Options getOptions(final KeyValueSegment segment) {
-        return segment.getOptions();
-    }
 }

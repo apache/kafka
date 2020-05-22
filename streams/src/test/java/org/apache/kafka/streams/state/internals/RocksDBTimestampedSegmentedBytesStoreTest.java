@@ -37,9 +37,4 @@ public class RocksDBTimestampedSegmentedBytesStoreTest
     TimestampedSegments newSegments() {
         return new TimestampedSegments(storeName, METRICS_SCOPE, retention, segmentInterval);
     }
-
-    @Override
-    Options getOptions(final TimestampedSegment segment) {
-        return segment.getOptions();
-    }
 }

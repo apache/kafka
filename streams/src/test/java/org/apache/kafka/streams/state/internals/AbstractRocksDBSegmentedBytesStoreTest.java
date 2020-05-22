@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -141,8 +142,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     abstract AbstractRocksDBSegmentedBytesStore<S> getBytesStore();
 
     abstract AbstractSegments<S> newSegments();
-
-    abstract Options getOptions(S segment);
 
     @Test
     public void shouldPutAndFetch() {
@@ -356,7 +355,18 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldRestoreToByteStore() {
+    public void shouldRestoreToByteStoreForActiveTask() {
+        shouldRestoreToByteStore(TaskType.ACTIVE);
+    }
+
+    @Test
+    public void shouldRestoreToByteStoreForStandbyTask() {
+        shouldRestoreToByteStore(TaskType.STANDBY);
+    }
+
+    private void shouldRestoreToByteStore(final TaskType taskType) {
+        context.setTaskType(taskType);
+        bytesStore.init(context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
