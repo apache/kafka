@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
@@ -490,6 +491,52 @@ public class MetricsTest {
         assertEquals(25, (Double) p25.metricValue(), 1.0);
         assertEquals(50, (Double) p50.metricValue(), 1.0);
         assertEquals(75, (Double) p75.metricValue(), 1.0);
+    }
+
+    @Test
+    public void testPercentilesWithLinearBucketing() {
+        long seed = new Random().nextLong();
+        int sizeInBytes = 1000 * 1000;   // 1MB
+        long maximumValue = 1000 * 24 * 60 * 60 * 1000L; // if values are ms, max is 1000 days
+
+        try {
+            Random prng = new Random(seed);
+            int numberOfValues = 5000 + prng.nextInt(10_000);  // ranges is [5000, 15000]
+
+            Percentiles percs = new Percentiles(sizeInBytes,
+                                                maximumValue,
+                                                BucketSizing.LINEAR,
+                                                new Percentile(metrics.metricName("test.p90", "grp1"), 90),
+                                                new Percentile(metrics.metricName("test.p99", "grp1"), 99));
+            MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+            Sensor sensor = metrics.sensor("test", config);
+            sensor.add(percs);
+            Metric p90 = this.metrics.metrics().get(metrics.metricName("test.p90", "grp1"));
+            Metric p99 = this.metrics.metrics().get(metrics.metricName("test.p99", "grp1"));
+
+            final List<Long> values = new ArrayList<>(numberOfValues);
+            // record two windows worth of sequential values
+            for (int i = 0; i < numberOfValues; ++i) {
+                long value = prng.nextInt() % maximumValue;
+                values.add(value);
+                sensor.record(value);
+            }
+
+            Collections.sort(values);
+
+            int p90Index = (int)Math.ceil(((double)(90 * numberOfValues)) / 100);
+            int p99Index = (int)Math.ceil(((double)(99 * numberOfValues)) / 100);
+
+            double expectedP90 = values.get(p90Index - 1);
+            double expectedP99 = values.get(p99Index - 1);
+
+            assertEquals(expectedP90, (Double) p90.metricValue(), maximumValue / 20);
+            assertEquals(expectedP99, (Double) p99.metricValue(), maximumValue / 20);
+
+        } catch (AssertionError e) {
+
+            throw new AssertionError("Assertion failed in randomized test. Reproduce with seed = " + seed + " .", e);
+        }
     }
 
     @Test
