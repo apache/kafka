@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.connect.transforms.predicates;
 
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 /**
  * A predicate which is true for records with at least one header with the configured name.
@@ -27,19 +30,21 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  */
 public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
 
-    private static final String NAME_CONFIG_KEY = "name";
+    private static final String NAME_CONFIG = "name";
+    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(NAME_CONFIG, ConfigDef.Type.STRING, null,
+            new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
+            "The header name.");
     private String name;
 
     @Override
     public ConfigDef config() {
-        return new ConfigDef().define(NAME_CONFIG_KEY, ConfigDef.Type.STRING, null,
-                new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
-                "The header name.");
+        return CONFIG_DEF;
     }
 
     @Override
     public boolean test(R record) {
-        return record.headers().allWithName(name).hasNext();
+        Iterator<Header> headerIterator = record.headers().allWithName(name);
+        return headerIterator != null && headerIterator.hasNext();
     }
 
     @Override
@@ -49,6 +54,6 @@ public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        this.name = (String) configs.get(NAME_CONFIG_KEY);
+        this.name = new SimpleConfig(config(), configs).getString(NAME_CONFIG);
     }
 }

@@ -22,18 +22,21 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 /**
- * A predicate which is true for records which are tombstones (i.e. have null key).
+ * A predicate which is true for records which are tombstones (i.e. have null value).
  * @param <R> The type of connect record.
  */
 public class RecordIsTombstone<R extends ConnectRecord<R>> implements Predicate<R> {
+
+    private static final ConfigDef CONFIG_DEF = new ConfigDef();
+
     @Override
     public ConfigDef config() {
-        return new ConfigDef();
+        return CONFIG_DEF;
     }
 
     @Override
     public boolean test(R record) {
-        return record.key() == null;
+        return record.value() == null;
     }
 
     @Override
