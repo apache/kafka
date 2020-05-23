@@ -383,9 +383,8 @@ public class KafkaAdminClientTest {
     private static DescribeGroupsResponseData prepareDescribeGroupsResponseData(String groupId, List<String> groupInstances,
                                                                                 List<TopicPartition> topicPartitions) {
         final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
-        byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
         List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember(JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                groupInstance, "clientId0", "clientHost", memberAssignmentBytes, null)).collect(Collectors.toList());
+                groupInstance, "clientId0", "clientHost", new byte[memberAssignment.remaining()], null)).collect(Collectors.toList());
         DescribeGroupsResponseData data = new DescribeGroupsResponseData();
         data.groups().add(DescribeGroupsResponse.groupMetadata(
                 groupId,
@@ -2431,15 +2430,8 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.memberResult(memberTwo).get());
 
             // Test the "removeAll" scenario
-            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
-            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
-            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
-
-            final List<TopicPartition> topicPartitions = new ArrayList<>();
-            topicPartitions.add(0, myTopicPartition0);
-            topicPartitions.add(1, myTopicPartition1);
-            topicPartitions.add(2, myTopicPartition2);
-
+            final List<TopicPartition> topicPartitions = Arrays.asList(1, 2, 3).stream().map(partition -> new TopicPartition("my_topic", partition))
+                    .collect(Collectors.toList());
             // construct the DescribeGroupsResponse
             DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(groupId, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
 

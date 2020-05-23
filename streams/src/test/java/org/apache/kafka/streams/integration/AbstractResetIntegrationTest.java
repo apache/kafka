@@ -278,7 +278,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         // Reset would fail since long session timeout has been configured
-        boolean cleanResult = tryCleanGlobal(false, null, null);
+        final boolean cleanResult = tryCleanGlobal(false, null, null);
         Assert.assertEquals(false, cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
