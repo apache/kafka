@@ -60,7 +60,7 @@ object SupportedFeatures extends Logging {
         if (supportedVersions == null) {
           (feature, versionLevels, "{feature=%s, reason='Unsupported feature'}".format(feature))
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
-          (feature, versionLevels, "{feature=%s, reason='Finalized %s is incompatible with supported %s'}".format(
+          (feature, versionLevels, "{feature=%s, reason='%s is incompatible with %s'}".format(
             feature, versionLevels, supportedVersions))
         } else {
           (feature, versionLevels, null)
@@ -69,7 +69,7 @@ object SupportedFeatures extends Logging {
     }.filter(entry => entry._3 != null).toList
 
     if (incompatibilities.nonEmpty) {
-      warn("Feature incompatibilities seen: " + incompatibilities.map(item => item._1))
+      warn("Feature incompatibilities seen: " + incompatibilities.map(item => item._3))
     }
     Features.finalizedFeatures(incompatibilities.map(item => (item._1, item._2)).toMap.asJava)
   }
