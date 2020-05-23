@@ -78,8 +78,7 @@ public class JmxReporter implements MetricsReporter {
      */
     @Deprecated
     public JmxReporter(String prefix) {
-        Objects.requireNonNull(prefix);
-        this.prefix = prefix;
+        this.prefix = prefix != null ? prefix : "";
     }
 
     @Override
@@ -327,12 +326,13 @@ public class JmxReporter implements MetricsReporter {
 
     @Override
     public void contextChange(MetricsContext metricsContext) {
-        Objects.requireNonNull(metricsContext.metadata().get(MetricsContext.NAMESPACE));
+        String namespace = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+        Objects.requireNonNull(namespace);
         synchronized (LOCK) {
             if (!mbeans.isEmpty()) {
                 throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
             }
-            prefix = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+            prefix = namespace;
         }
     }
 }

@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -82,8 +83,8 @@ public class WorkerGroupMemberTest {
         for (MetricsReporter reporter : member.getMetrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
                 MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
-                assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID));
-                assertEquals("group-1", mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_GROUP_ID));
+                assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+                assertEquals("group-1", mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_GROUP_ID));
             }
         }
 

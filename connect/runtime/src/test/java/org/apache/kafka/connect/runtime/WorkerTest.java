@@ -1332,8 +1332,8 @@ public class WorkerTest extends ThreadedTest {
             if (reporter instanceof MockMetricsReporter) {
                 MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) reporter;
                 //verify connect cluster is set in MetricsContext
-                assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID));
-                assertEquals(GROUP_ID, mockMetricsReporter.getMetricsContext().metadata().get(ConnectUtils.CONNECT_GROUP_ID));
+                assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+                assertEquals(GROUP_ID, mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_GROUP_ID));
             }
         }
         //verify metric is created with correct jmx prefix

@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,10 +85,10 @@ public class ConnectMetrics {
 
         Map<String, Object> metadata = new HashMap<>();
         metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        metadata.put(ConnectUtils.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        metadata.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
-            metadata.put(ConnectUtils.CONNECT_GROUP_ID, groupId);
+            metadata.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
         }
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, metadata);
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);

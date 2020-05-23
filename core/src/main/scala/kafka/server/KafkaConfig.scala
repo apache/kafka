@@ -950,6 +950,10 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  /** ********* properties for MetricsContext  ****************/
+  val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  val KAFKA_BROKER_ID: String = "kafka.broker.id"
+
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._

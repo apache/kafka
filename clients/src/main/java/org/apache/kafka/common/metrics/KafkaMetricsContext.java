@@ -27,7 +27,7 @@ public class KafkaMetricsContext implements MetricsContext {
     /**
      * Client or Service's metadata map.
      */
-    private Map<String, String> metadata = new HashMap<>();
+    private final Map<String, String> metadata = new HashMap<>();
 
     /**
      * Create a MetricsContext with namespace, no service or client properties
