@@ -66,13 +66,13 @@ object FinalizedFeatureCache extends Logging {
     val oldFeatureAndEpoch = featuresAndEpoch.map(item => item.toString).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
       val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new finalized %s." +
-        " The existing finalized is %s").format(latest, oldFeatureAndEpoch)
+        " The existing cache contents are %s").format(latest, oldFeatureAndEpoch)
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = SupportedFeatures.incompatibleFeatures(latest.features)
       if (!incompatibleFeatures.empty) {
         val errorMsg = ("FinalizedFeatureCache update failed since feature compatibility" +
-          " checks failed! Supported %s has incompatibilities with the latest finalized %s."
+          " checks failed! Supported %s has incompatibilities with the latest %s."
           ).format(SupportedFeatures.get, latest)
         throw new FeatureCacheUpdateException(errorMsg)
       } else {
