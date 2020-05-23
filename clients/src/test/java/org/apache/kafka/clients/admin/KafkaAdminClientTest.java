@@ -114,6 +114,7 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -383,7 +384,8 @@ public class KafkaAdminClientTest {
                                                                                 List<TopicPartition> topicPartitions) {
         final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
         byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
-        List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember("0", groupInstance, "clientId0", "clientHost", memberAssignmentBytes, null)).collect(Collectors.toList());
+        List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember(JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                groupInstance, "clientId0", "clientHost", memberAssignmentBytes, null)).collect(Collectors.toList());
         DescribeGroupsResponseData data = new DescribeGroupsResponseData();
         data.groups().add(DescribeGroupsResponse.groupMetadata(
                 groupId,
@@ -2456,7 +2458,9 @@ public class KafkaAdminClientTest {
                     groupId,
                     new RemoveMembersFromConsumerGroupOptions()
             );
-            TestUtils.assertFutureError(partialFailureResults.all(), KafkaException.class);
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> partialFailureResults.all().get());
+            assertTrue(exception.getCause() instanceof KafkaException);
+            assertTrue(exception.getCause().getCause() instanceof UnknownMemberIdException);
 
             // Return with success for "removeAll" scenario
             // 1 prepare response for AdminClient.describeConsumerGroups

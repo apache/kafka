@@ -57,7 +57,7 @@ public class RemoveMembersFromConsumerGroupResult {
                         Exception exception = entry.getValue().exception();
                         if (exception != null) {
                             Throwable ex = new KafkaException("Encounter exception when trying to remove: "
-                                    + entry.getKey() + ", " + exception);
+                                    + entry.getKey(), exception);
                             result.completeExceptionally(ex);
                             return;
                         }

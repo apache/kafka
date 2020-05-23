@@ -32,7 +32,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -123,8 +122,10 @@ public class StreamsResetter {
             + "stores used to cache aggregation results).\n"
             + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
             + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n"
-            + "*Please use the \"--force\" option to force remove active members in case long session "
-            + "timeout has been configured.\n\n"
+            + "* When long session timeout has been configured, active members could take longer to get expired on the "
+            + "broker thus blocking the reset job to complete. Use the \"--force\" option could remove those left-over "
+            + "members immediately. Make sure to stop all stream applications when this option is specified "
+            + "to avoid unexpected disruptions.\n\n"
             + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
             + "reset tool!\n\n";
 

@@ -39,7 +39,7 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     }
 
     public RemoveMembersFromConsumerGroupOptions() {
-        this.members = Collections.emptySet();;
+        this.members = Collections.emptySet();
     }
 
     public Set<MemberToRemove> members() {
