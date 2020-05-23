@@ -537,7 +537,7 @@ public class Worker {
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             TopicAdmin admin;
             Map<String, NewTopicCreationGroup> topicCreationGroups;
-            if (config.topicCreationEnable()) {
+            if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
                 Map<String, Object> adminProps = adminConfigs(id, "connector-adminclient-" + id, config,
                         sourceConfig, connectorClass, connectorClientConfigOverridePolicy);
                 admin = new TopicAdmin(adminProps);

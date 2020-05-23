@@ -122,7 +122,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
         super(plugins, config, props);
-        if (createTopics) {
+        if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {
             ConfigDef defaultConfigDef = embedDefaultGroup(config);
             AbstractConfig defaultGroup = new AbstractConfig(defaultConfigDef, props, false);
             enrichedSourceConfig = new EnrichedSourceConnectorConfig(enrich(defaultConfigDef, props,
@@ -130,6 +130,10 @@ public class SourceConnectorConfig extends ConnectorConfig {
         } else {
             enrichedSourceConfig = null;
         }
+    }
+
+    public boolean usesTopicCreation() {
+        return enrichedSourceConfig != null;
     }
 
     public List<String> topicCreationInclude(String group) {

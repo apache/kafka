@@ -159,7 +159,8 @@ class WorkerSourceTask extends WorkerTask {
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
-        this.isTopicCreationEnabled = workerConfig.getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
+        this.isTopicCreationEnabled =
+                workerConfig.getBoolean(TOPIC_CREATION_ENABLE_CONFIG) && topicGroups != null;
         if (isTopicCreationEnabled) {
             this.defaultTopicGroup = topicGroups.get(DEFAULT_TOPIC_CREATION_GROUP);
             this.topicGroups = new LinkedHashMap<>(topicGroups);
