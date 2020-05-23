@@ -17,9 +17,12 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.Cluster;
@@ -34,11 +37,14 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class TopicAdminTest {
 
@@ -97,12 +103,65 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void shouldCreateTopicWhenItDoesNotExist() {
-        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
-        Cluster cluster = createCluster(1);
-        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
-            assertTrue(admin.createTopic(newTopic));
+    public void shouldCreateTopicWithPartitionsWhenItDoesNotExist() {
+        for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
+            int expectedReplicas = Math.min(3, numBrokers);
+            int maxDefaultRf = Math.min(numBrokers, 5);
+            for (int numPartitions = 1; numPartitions < 30; ++numPartitions) {
+                NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(numPartitions).compacted().build();
+
+                // Try clusters with no default replication factor or default partitions
+                assertTopicCreation(numBrokers, newTopic, null, null, expectedReplicas, numPartitions);
+
+                // Try clusters with different default partitions
+                for (int defaultPartitions = 1; defaultPartitions < 20; ++defaultPartitions) {
+                    assertTopicCreation(numBrokers, newTopic, defaultPartitions, null, expectedReplicas, numPartitions);
+                }
+
+                // Try clusters with different default replication factors
+                for (int defaultRF = 1; defaultRF < maxDefaultRf; ++defaultRF) {
+                    assertTopicCreation(numBrokers, newTopic, null, defaultRF, defaultRF, numPartitions);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void shouldCreateTopicWithReplicationFactorWhenItDoesNotExist() {
+        for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
+            int maxRf = Math.min(numBrokers, 5);
+            int maxDefaultRf = Math.min(numBrokers, 5);
+            for (short rf = 1; rf < maxRf; ++rf) {
+                NewTopic newTopic = TopicAdmin.defineTopic("myTopic").replicationFactor(rf).compacted().build();
+
+                // Try clusters with no default replication factor or default partitions
+                assertTopicCreation(numBrokers, newTopic, null, null, rf, 1);
+
+                // Try clusters with different default partitions
+                for (int numPartitions = 1; numPartitions < 30; ++numPartitions) {
+                    assertTopicCreation(numBrokers, newTopic, numPartitions, null, rf, numPartitions);
+                }
+
+                // Try clusters with different default replication factors
+                for (int defaultRF = 1; defaultRF < maxDefaultRf; ++defaultRF) {
+                    assertTopicCreation(numBrokers, newTopic, null, defaultRF, rf, 1);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void shouldCreateTopicWithDefaultPartitionsAndReplicationFactorWhenItDoesNotExist() {
+        NewTopic newTopic = TopicAdmin.defineTopic("my-topic")
+                                      .defaultPartitions()
+                                      .defaultReplicationFactor()
+                                      .compacted()
+                                      .build();
+
+        for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
+            int expectedReplicas = Math.min(3, numBrokers);
+            assertTopicCreation(numBrokers, newTopic, null, null, expectedReplicas, 1);
+            assertTopicCreation(numBrokers, newTopic, 30, null, expectedReplicas, 30);
         }
     }
 
@@ -162,5 +221,50 @@ public class TopicAdminTest {
                 setErrorMessage(error.message()));
         }
         return new CreateTopicsResponse(response);
+    }
+
+    protected void assertTopicCreation(
+            int brokers,
+            NewTopic newTopic,
+            Integer defaultPartitions,
+            Integer defaultReplicationFactor,
+            int expectedReplicas,
+            int expectedPartitions
+    ) {
+        Cluster cluster = createCluster(brokers);
+        MockAdminClient.Builder clientBuilder = MockAdminClient.create();
+        if (defaultPartitions != null) {
+            clientBuilder.defaultPartitions(defaultPartitions.shortValue());
+        }
+        if (defaultReplicationFactor != null) {
+            clientBuilder.defaultReplicationFactor(defaultReplicationFactor.intValue());
+        }
+        clientBuilder.brokers(cluster.nodes());
+        clientBuilder.controller(0);
+        try (MockAdminClient admin = clientBuilder.build()) {
+            TopicAdmin topicClient = new TopicAdmin(null, admin, false);
+            assertTrue(topicClient.createTopic(newTopic));
+            assertTopic(admin, newTopic.name(), expectedPartitions, expectedReplicas);
+        }
+    }
+
+    protected void assertTopic(MockAdminClient admin, String topicName, int expectedPartitions, int expectedReplicas) {
+        TopicDescription desc = null;
+        try {
+            desc = topicDescription(admin, topicName);
+        } catch (Throwable t) {
+            fail("Failed to find topic description for topic '" + topicName + "'");
+        }
+        assertEquals(expectedPartitions, desc.partitions().size());
+        for (TopicPartitionInfo tp : desc.partitions()) {
+            assertEquals(expectedReplicas, tp.replicas().size());
+        }
+    }
+
+    protected TopicDescription topicDescription(MockAdminClient admin, String topicName)
+            throws ExecutionException, InterruptedException {
+        DescribeTopicsResult result = admin.describeTopics(Collections.singleton(topicName));
+        Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+        return byName.get(topicName).get();
     }
 }

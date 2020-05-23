@@ -163,11 +163,16 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic).
-                compacted().
-                partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).statusStorageTopicSettings()
+                                            : Collections.emptyMap();
+        NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
+                .config(topicSettings) // first so that we override user-supplied settings as needed
+                .compacted()
+                .partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG))
+                .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
             @Override

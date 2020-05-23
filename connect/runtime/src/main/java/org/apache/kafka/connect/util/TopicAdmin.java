@@ -21,7 +21,9 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -43,20 +46,21 @@ import java.util.concurrent.ExecutionException;
  */
 public class TopicAdmin implements AutoCloseable {
 
-    private static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
-    private static final String CLEANUP_POLICY_COMPACT = "compact";
+    public static final int NO_PARTITIONS = -1;
+    public static final short NO_REPLICATION_FACTOR = -1;
 
-    private static final String MIN_INSYNC_REPLICAS_CONFIG = "min.insync.replicas";
-
-    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
+    private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
+    private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
+    private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
+    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 
     /**
      * A builder of {@link NewTopic} instances.
      */
     public static class NewTopicBuilder {
         private String name;
-        private int numPartitions;
-        private short replicationFactor;
+        private int numPartitions = NO_PARTITIONS;
+        private short replicationFactor = NO_REPLICATION_FACTOR;
         private Map<String, String> configs = new HashMap<>();
 
         NewTopicBuilder(String name) {
@@ -66,7 +70,8 @@ public class TopicAdmin implements AutoCloseable {
         /**
          * Specify the desired number of partitions for the topic.
          *
-         * @param numPartitions the desired number of partitions; must be positive
+         * @param numPartitions the desired number of partitions; must be positive, or -1 to
+         *                      signify using the broker's default
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder partitions(int numPartitions) {
@@ -75,13 +80,36 @@ public class TopicAdmin implements AutoCloseable {
         }
 
         /**
+         * Specify the topic's number of partition should be the broker configuration for
+         * {@code num.partitions}.
+         *
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder defaultPartitions() {
+            this.numPartitions = NO_PARTITIONS;
+            return this;
+        }
+
+        /**
          * Specify the desired replication factor for the topic.
          *
-         * @param replicationFactor the desired replication factor; must be positive
+         * @param replicationFactor the desired replication factor; must be positive, or -1 to
+         *                          signify using the broker's default
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder replicationFactor(short replicationFactor) {
             this.replicationFactor = replicationFactor;
+            return this;
+        }
+
+        /**
+         * Specify the replication factor for the topic should be the broker configurations for
+         * {@code default.replication.factor}.
+         *
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder defaultReplicationFactor() {
+            this.replicationFactor = NO_REPLICATION_FACTOR;
             return this;
         }
 
@@ -142,7 +170,11 @@ public class TopicAdmin implements AutoCloseable {
          * @return the topic description; never null
          */
         public NewTopic build() {
-            return new NewTopic(name, numPartitions, replicationFactor).configs(configs);
+            return new NewTopic(
+                    name,
+                    Optional.of(numPartitions),
+                    Optional.of(replicationFactor)
+            ).configs(configs);
         }
     }
 
@@ -159,6 +191,7 @@ public class TopicAdmin implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TopicAdmin.class);
     private final Map<String, Object> adminConfig;
     private final Admin admin;
+    private final boolean logCreation;
 
     /**
      * Create a new topic admin component with the given configuration.
@@ -171,8 +204,14 @@ public class TopicAdmin implements AutoCloseable {
 
     // visible for testing
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(adminConfig, adminClient, true);
+    }
+
+    // visible for testing
+    TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
         this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
+        this.logCreation = logCreation;
     }
 
    /**
@@ -227,7 +266,9 @@ public class TopicAdmin implements AutoCloseable {
             String topic = entry.getKey();
             try {
                 entry.getValue().get();
-                log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                if (logCreation) {
+                    log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                }
                 newlyCreatedTopicNames.add(topic);
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
@@ -252,6 +293,10 @@ public class TopicAdmin implements AutoCloseable {
                                     " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return Collections.emptySet();
+                }
+                if (cause instanceof InvalidConfigurationException) {
+                    throw new ConnectException("Unable to create topic(s) '" + topicNameList + "': " + cause.getMessage(),
+                            cause);
                 }
                 if (cause instanceof TimeoutException) {
                     // Timed out waiting for the operation to complete
