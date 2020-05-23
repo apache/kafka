@@ -130,6 +130,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
+  //properties for MetricsContext
+  val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  val KAFKA_BROKER_ID: String = "kafka.broker.id"
+
 
   private var logContext: LogContext = null
 
@@ -396,8 +400,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[server] def createKafkaMetricsContext() : KafkaMetricsContext = {
     val metadata = new util.HashMap[String, Object]
-    metadata.put(KafkaConfig.KAFKA_CLUSTER_ID, clusterId)
-    metadata.put(KafkaConfig.KAFKA_BROKER_ID, config.brokerId.toString)
+    metadata.put(KAFKA_CLUSTER_ID, clusterId)
+    metadata.put(KAFKA_BROKER_ID, config.brokerId.toString)
     val metricsContext = new KafkaMetricsContext(jmxPrefix, metadata)
     metricsContext
   }
