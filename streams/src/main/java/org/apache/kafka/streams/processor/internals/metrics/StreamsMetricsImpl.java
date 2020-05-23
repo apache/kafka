@@ -155,8 +155,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
     public static final int PERCENTILES_SIZE_IN_BYTES = 1000 * 1000;    // 1 MB
-    public static double MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000d; // maximum latency is 10 days
-    public static double MINIMUM_E2E_LATENCY = 0d;
+    public static long MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000L; // maximum latency is 10 days
+    public static long MINIMUM_E2E_LATENCY = 0L;
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -680,8 +680,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         sensor.add(
             new Percentiles(
                 PERCENTILES_SIZE_IN_BYTES,
-                MINIMUM_E2E_LATENCY,
-                MAXIMUM_E2E_LATENCY,
+                (double) MINIMUM_E2E_LATENCY,
+                (double) MAXIMUM_E2E_LATENCY,
                 BucketSizing.LINEAR,
                 new Percentile(
                     new MetricName(
