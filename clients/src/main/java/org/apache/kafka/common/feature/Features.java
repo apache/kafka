@@ -45,9 +45,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      *                   for the Features object.
      */
     private Features(Map<String, VersionRangeType> features) {
-        if (features == null) {
-            throw new IllegalArgumentException("Provided features can not be null.");
-        }
+        Objects.requireNonNull(features,"Provided features can not be null.");
         this.features = features;
     }
 

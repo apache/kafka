@@ -56,7 +56,7 @@ object SupportedFeatures extends Logging {
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
     val incompatibilities = finalized.features.asScala.collect {
       case (feature, versionLevels) => {
-        val supportedVersions = supportedFeatures.get(feature);
+        val supportedVersions = supportedFeatures.get(feature)
         if (supportedVersions == null) {
           (feature, versionLevels, "{feature=%s, reason='Unsupported feature'}".format(feature))
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {

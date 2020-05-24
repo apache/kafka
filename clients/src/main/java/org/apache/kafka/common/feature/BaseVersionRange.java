@@ -37,14 +37,35 @@ class BaseVersionRange {
 
     private final long maxValue;
 
-    protected BaseVersionRange(String minKey, long minValue, String maxKeyLabel, long maxValue) {
+    /**
+     * Raises an exception unless the following condition is met:
+     * minValue >= 1 and maxValue >= 1 and minValue <= maxValue < minValue.
+     *
+     * @param minKeyLabel   Label for the min version key, that's used only for
+     *                      serialization/deserialization purposes.
+     * @param minValue      The minimum version value.
+     * @param maxKeyLabel   Label for the max version key, that's used only for
+     *                      serialization/deserialization purposes.
+     * @param maxValue      The maximum version value.
+     *
+     * @throws IllegalArgumentException   If any of the following conditions are true:
+     *                                     - (minValue < 1) OR (maxValue < 1) OR (maxValue < minValue).
+     *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
+     */
+    protected BaseVersionRange(String minKeyLabel, long minValue, String maxKeyLabel, long maxValue) {
         if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
                     "Expected minValue > 1, maxValue > 1 and maxValue >= minValue, but received" +
                     " minValue: %d, maxValue: %d", minValue, maxValue));
         }
-        this.minKeyLabel = minKey;
+        if (minKeyLabel.isEmpty()) {
+            throw new IllegalArgumentException("Expected minKeyLabel to be non-empty.");
+        }
+        if (maxKeyLabel.isEmpty()) {
+            throw new IllegalArgumentException("Expected maxKeyLabel to be non-empty.");
+        }
+        this.minKeyLabel = minKeyLabel;
         this.minValue = minValue;
         this.maxKeyLabel = maxKeyLabel;
         this.maxValue = maxValue;

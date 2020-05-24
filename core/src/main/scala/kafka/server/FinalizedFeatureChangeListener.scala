@@ -35,16 +35,14 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      * ZK node in featureZkNodePath. If the cache update is not successful, then, a suitable
      * exception is raised.
      *
-     * NOTE: if a notifier was provided in the constructor, then, this method can be invoked
-     * only exactly once successfully.
+     * NOTE: if a notifier was provided in the constructor, then, this method can be invoked exactly
+     * once successfully.
      *
      * @throws   IllegalStateException, if a non-empty notifier was provided in the constructor, and
-     *           this method is called again after a successful previous invocation.
-     *
-     *           FeatureCacheUpdateException, if there was an error in updating the
+     *           this method is called again after a successful previous invocation.     *
+     * @throws   FeatureCacheUpdateException, if there was an error in updating the
      *           FinalizedFeatureCache.
-     *
-     *           RuntimeException, if there was a failure in reading/deserializing the
+     * @throws   RuntimeException, if there was a failure in reading/deserializing the
      *           contents of the feature ZK node.
      */
     def updateLatestOrThrow(): Unit = {
@@ -55,18 +53,8 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         }
       })
 
-      info(s"Reading feature ZK node at path: $featureZkNodePath")
-      var mayBeFeatureZNodeBytes: Option[Array[Byte]] = null
-      var version: Int = ZkVersion.UnknownVersion
-      try {
-        val result = zkClient.getDataAndVersion(featureZkNodePath)
-        mayBeFeatureZNodeBytes = result._1
-        version = result._2
-      } catch {
-        // Convert to RuntimeException, to avoid a confusion that there is no argument passed
-        // to the updateOrThrow() method.
-        case e: IllegalArgumentException => throw new RuntimeException(e)
-      }
+      debug(s"Reading feature ZK node at path: $featureZkNodePath")
+      val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(featureZkNodePath)
 
       // There are 4 cases:
       //
@@ -84,7 +72,14 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
         FinalizedFeatureCache.clear()
       } else {
-        val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+        var featureZNode: FeatureZNode = null
+        try {
+          featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+        } catch {
+          // Convert to RuntimeException, since, there is no argument passed to the updateOrThrow() method.
+          case e @ (_ : IllegalArgumentException | _ : NoSuchElementException) => throw new RuntimeException(e)
+        }
+
         if (featureZNode.status == FeatureZNodeStatus.Disabled) {
           info(s"Feature ZK node at path: $featureZkNodePath is in disabled status")
           FinalizedFeatureCache.clear()
@@ -99,9 +94,8 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     }
 
     /**
-     * Waits until at least a single updateLatestOrThrow completes successfully.
-     * NOTE: The method returns immediately if an updateLatestOrThrow call has already completed
-     * successfully.
+     * Waits until at least a single updateLatestOrThrow completes successfully. This method returns
+     * immediately if an updateLatestOrThrow call had already completed successfully.
      *
      * @param waitTimeMs   the timeout for the wait operation
      *

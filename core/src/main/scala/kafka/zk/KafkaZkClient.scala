@@ -1588,11 +1588,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   def deleteFeatureZNode(): Unit = {
-    val deleteRequest = DeleteRequest(
-      FeatureZNode.path,
-      ZkVersion.MatchAnyVersion)
-    val response = retryRequestUntilConnected(deleteRequest)
-    response.maybeThrow
+    deletePath(FeatureZNode.path, ZkVersion.MatchAnyVersion, false)
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

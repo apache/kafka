@@ -804,10 +804,10 @@ object DelegationTokenInfoZNode {
  *    never be started with an old IBP config that’s less than KAFKA_2_6_IV1. In such a case, the
  *    controller will start up and notice that the FeatureZNode is absent in the new cluster.
  *    To handle the requirement, the controller will create a FeatureZNode (with enabled status)
- *    containing the entire list of supported features as it’s finalized features.
+ *    containing the entire list of supported features as its finalized features.
  *
  * 2. Cluster upgrade:
- *    Imagine that a Kafka cluster exists already and the IBP config is less than KAFKA_2_6_IV1, but
+ *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_6_IV1, but
  *    the Broker binary has been upgraded to a state where it supports the feature versioning
  *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
  *    binary. In this case, we want to start with no finalized features and allow the user to enable
@@ -817,19 +817,19 @@ object DelegationTokenInfoZNode {
  *    In such a case:
  *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_6_IV1), the controller
  *        will start up and check if the FeatureZNode is absent. If true, then it will react by
- *        creating an empty FeatureZNode with disabled status.
+ *        creating a FeatureZNode with disabled status and empty features.
  *      - After the Broker upgrade (i.e. IBP config set to greater than or equal to KAFKA_2_6_IV1),
  *        when the controller starts up it will check if the FeatureZNode exists and whether it is
  *        disabled. In such a case, it won’t upgrade all features immediately. Instead it will just
- *        switch the FeatureZNode status to enabled status with empty features. This lets the user
- *        finalize the features later.
+ *        switch the FeatureZNode status to enabled status. This lets the user finalize the features
+ *        later.
  *
  * 2. Cluster downgrade:
  *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
  *    KAFKA_2_6_IV1. Then, the user decided to downgrade the cluster by setting IBP config to a
  *    value less than KAFKA_2_6_IV1. This means the user is also disabling the feature versioning
  *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
- *    will switch the FeatureZNode status to disabled along with empty features.
+ *    will switch the FeatureZNode status to disabled with empty features.
  */
 object FeatureZNodeStatus extends Enumeration {
   val Disabled, Enabled = Value

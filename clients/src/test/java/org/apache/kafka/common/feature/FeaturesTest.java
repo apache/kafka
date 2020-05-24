@@ -37,13 +37,13 @@ public class FeaturesTest {
         Map<String, Map<String, Long>> emptyMap = new HashMap<>();
 
         Features<FinalizedVersionRange> emptyFinalizedFeatures = Features.emptyFinalizedFeatures();
-        assertEquals(new HashMap<>(), emptyFinalizedFeatures.features());
-        assertEquals(emptyMap, emptyFinalizedFeatures.serialize());
+        assertTrue(emptyFinalizedFeatures.features().isEmpty());
+        assertTrue(emptyFinalizedFeatures.serialize().isEmpty());
         assertEquals(emptyFinalizedFeatures, Features.deserializeFinalizedFeatures(emptyMap));
 
         Features<SupportedVersionRange> emptySupportedFeatures = Features.emptySupportedFeatures();
-        assertEquals(new HashMap<>(), emptySupportedFeatures.features());
-        assertEquals(new HashMap<>(), emptySupportedFeatures.serialize());
+        assertTrue(emptySupportedFeatures.features().isEmpty());
+        assertTrue(emptySupportedFeatures.serialize().isEmpty());
         assertEquals(emptySupportedFeatures, Features.deserializeSupportedFeatures(emptyMap));
     }
 
@@ -83,12 +83,12 @@ public class FeaturesTest {
         SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
         SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
         Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
         Map<String, Map<String, Long>> expected = mkMap(
             mkEntry("feature_1", mkMap(mkEntry("min_version", 1L), mkEntry("max_version", 2L))),
             mkEntry("feature_2", mkMap(mkEntry("min_version", 3L), mkEntry("max_version", 4L))));
-
         assertEquals(expected, features.serialize());
         assertEquals(features, Features.deserializeSupportedFeatures(expected));
     }
@@ -98,6 +98,7 @@ public class FeaturesTest {
         FinalizedVersionRange v1 = new FinalizedVersionRange(1, 2);
         FinalizedVersionRange v2 = new FinalizedVersionRange(3, 4);
         Map<String, FinalizedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+
         Features<FinalizedVersionRange> features = Features.finalizedFeatures(allFeatures);
 
         Map<String, Map<String, Long>> expected = mkMap(
@@ -112,6 +113,7 @@ public class FeaturesTest {
         FinalizedVersionRange v1 = new FinalizedVersionRange(1, 2);
         FinalizedVersionRange v2 = new FinalizedVersionRange(3, 4);
         Map<String, FinalizedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+
         Features<FinalizedVersionRange> features = Features.finalizedFeatures(allFeatures);
 
         assertEquals(
@@ -124,6 +126,7 @@ public class FeaturesTest {
         SupportedVersionRange v1 = new SupportedVersionRange(1, 2);
         SupportedVersionRange v2 = new SupportedVersionRange(3, 4);
         Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
         assertEquals(

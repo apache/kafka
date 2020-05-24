@@ -15,11 +15,12 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
 }
 
 /**
- * A mutable cache containing the latest finalized features and epoch. This cache is populated by a
- * {@link FinalizedFeatureChangeListener}.
- *
- * Currently the main reader of this cache is the read path that serves an ApiVersionsRequest,
+ * A common mutable cache containing the latest finalized features and epoch. By default the contents of
+ * the cache are empty. This cache needs to be populated at least once for it's contents to become
+ * non-empty. Currently the main reader of this cache is the read path that serves an ApiVersionsRequest,
  * returning the features information in the response.
+ *
+ * @see FinalizedFeatureChangeListener
  */
 object FinalizedFeatureCache extends Logging {
   @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
@@ -48,7 +49,8 @@ object FinalizedFeatureCache extends Logging {
 
   /**
    * Updates the cache to the latestFeatures, and updates the existing epoch to latestEpoch.
-   * Raises an exception when the operation is not successful.
+   * Raises an exception when the operation is not successful. Expects that the latestEpoch
+   * should be always greater than the existing epoch (when the existing epoch is defined).
    *
    * @param latestFeatures   the latest finalized features to be set in the cache
    * @param latestEpoch      the latest epoch value to be set in the cache
@@ -59,10 +61,7 @@ object FinalizedFeatureCache extends Logging {
    *                         not modified.
    */
   def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Int): Unit = {
-    updateOrThrow(FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch))
-  }
-
-  private def updateOrThrow(latest: FinalizedFeaturesAndEpoch): Unit = {
+    val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
     val oldFeatureAndEpoch = featuresAndEpoch.map(item => item.toString).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
       val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new finalized %s." +
