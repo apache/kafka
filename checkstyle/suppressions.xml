@@ -144,6 +144,9 @@
     <suppress checks="MethodLength"
               files="Values.java"/>
 
+    <suppress checks="NPathComplexity"
+              files="RestServer.java"/>
+
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(DistributedHerder|KafkaBasedLog)Test.java"/>
