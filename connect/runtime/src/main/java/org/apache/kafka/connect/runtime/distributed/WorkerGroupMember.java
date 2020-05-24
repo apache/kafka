@@ -236,10 +236,7 @@ public class WorkerGroupMember {
             log.debug("The Connect group member has stopped.");
     }
 
-    /**
-     * Method for unit tests
-     * @return
-     */
+    // Visible for testing
     Metrics metrics() {
         return this.metrics;
     }
