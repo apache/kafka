@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -437,24 +438,12 @@ public class WorkerConnectorTest extends EasyMockSupport {
     }
 
     @Test
-    public void testInitializeConnectorThatIsNeitherSourceNorSink() {
+    public void testFailConnectorThatIsNeitherSourceNorSink() {
         connector.version();
         expectLastCall().andReturn(VERSION);
 
-        Capture<ConnectorContext> captureContext = Capture.newInstance();
-        connector.initialize(EasyMock.capture(captureContext));
-        expectLastCall();
-
-        connector.start(CONFIG);
-        expectLastCall();
-
-        listener.onStartup(CONNECTOR);
-        expectLastCall();
-
-        connector.stop();
-        expectLastCall();
-
-        listener.onShutdown(CONNECTOR);
+        Capture<Throwable> exceptionCapture = Capture.newInstance();
+        listener.onFailure(EasyMock.eq(CONNECTOR), EasyMock.capture(exceptionCapture));
         expectLastCall();
 
         replayAll();
@@ -462,18 +451,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
-        assertInitializedMetric(workerConnector, "unknown");
-
-        assertTrue(captureContext.hasCaptured());
-        assertNotNull(captureContext.getValue());
-        assertFalse(captureContext.getValue() instanceof SinkConnectorContext);
-        assertFalse(captureContext.getValue() instanceof SourceConnectorContext);
-        assertTrue(captureContext.getValue() instanceof ConnectorContext);
-
-        workerConnector.transitionTo(TargetState.STARTED);
-        assertRunningMetric(workerConnector);
-        workerConnector.shutdown();
-        assertStoppedMetric(workerConnector);
+        Throwable e = exceptionCapture.getValue();
+        assertTrue(e instanceof ConnectException);
+        assertTrue(e.getMessage().contains("must be a subclass of"));
 
         verifyAll();
     }

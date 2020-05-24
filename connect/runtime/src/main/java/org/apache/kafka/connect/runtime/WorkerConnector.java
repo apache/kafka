@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -63,12 +64,12 @@ public class WorkerConnector {
     private State state;
     private final OffsetStorageReader offsetStorageReader;
 
-    public WorkerConnector(final String connName,
-                           final Connector connector,
-                           final ConnectorContext ctx,
-                           final ConnectMetrics metrics,
-                           final ConnectorStatus.Listener statusListener,
-                           final OffsetStorageReader offsetStorageReader) {
+    public WorkerConnector(String connName,
+                           Connector connector,
+                           ConnectorContext ctx,
+                           ConnectMetrics metrics,
+                           ConnectorStatus.Listener statusListener,
+                           OffsetStorageReader offsetStorageReader) {
         this.connName = connName;
         this.ctx = ctx;
         this.connector = connector;
@@ -80,19 +81,16 @@ public class WorkerConnector {
 
     public void initialize(ConnectorConfig connectorConfig) {
         try {
+            if (!isSourceConnector() && !isSinkConnector()) {
+                throw new ConnectException("Connector implementations must be a subclass of either SourceConnector or SinkConnector");
+            }
             this.config = connectorConfig.originalsStrings();
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
-            }
-
-            if (isSinkConnector()) {
-                SinkConnectorConfig.validate(config);
                 connector.initialize(new WorkerSinkConnectorContext());
-            } else if (isSourceConnector()) {
-                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             } else {
-                connector.initialize(new WorkerConnectorContext());
+                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
@@ -321,7 +319,7 @@ public class WorkerConnector {
         }
     }
 
-    private class WorkerConnectorContext implements ConnectorContext {
+    private abstract class WorkerConnectorContext implements ConnectorContext {
 
         @Override
         public void requestTaskReconfiguration() {
@@ -343,7 +341,7 @@ public class WorkerConnector {
 
         private final OffsetStorageReader offsetStorageReader;
 
-        WorkerSourceConnectorContext(final OffsetStorageReader offsetStorageReader) {
+        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader) {
             this.offsetStorageReader = offsetStorageReader;
         }
 

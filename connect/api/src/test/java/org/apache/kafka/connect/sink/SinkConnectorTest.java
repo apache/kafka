@@ -31,19 +31,31 @@ import static org.junit.Assert.assertTrue;
 public class SinkConnectorTest extends ConnectorTest {
 
     @Override
-    protected ConnectorContext createContext() {
+    protected TestSinkConnectorContext createContext() {
         return new TestSinkConnectorContext();
     }
 
     @Override
-    protected SinkConnector createConnector() {
+    protected TestSinkConnector createConnector() {
         return new TestSinkConnector();
     }
 
-    private static class TestSinkConnectorContext extends TestConnectorContext implements SinkConnectorContext {
+    private static class TestSinkConnectorContext implements SinkConnectorContext {
+
+        @Override
+        public void requestTaskReconfiguration() {
+            // Unexpected in these tests
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            // Unexpected in these tests
+            throw new UnsupportedOperationException();
+        }
     }
 
-    private static class TestSinkConnector extends SinkConnector implements AssertableConnector {
+    protected static class TestSinkConnector extends SinkConnector implements ConnectorTest.AssertableConnector {
 
         public static final String VERSION = "an entirely different version";
 

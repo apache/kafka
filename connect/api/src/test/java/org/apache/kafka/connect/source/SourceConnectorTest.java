@@ -37,11 +37,23 @@ public class SourceConnectorTest extends ConnectorTest {
     }
 
     @Override
-    protected SourceConnector createConnector() {
+    protected TestSourceConnector createConnector() {
         return new TestSourceConnector();
     }
 
-    private static class TestSourceConnectorContext extends TestConnectorContext implements SourceConnectorContext {
+    private static class TestSourceConnectorContext implements SourceConnectorContext {
+
+        @Override
+        public void requestTaskReconfiguration() {
+            // Unexpected in these tests
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            // Unexpected in these tests
+            throw new UnsupportedOperationException();
+        }
 
         @Override
         public OffsetStorageReader offsetStorageReader() {
