@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -34,7 +33,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -156,7 +154,7 @@ public class EmbeddedConnectClusterAssertions {
                 existingTopics.set(actual);
                 return actual.isEmpty();
             }).orElse(false),
-            WORKER_SETUP_DURATION_MS,
+            CONNECTOR_SETUP_DURATION_MS,
             "Unexpectedly found topics " + existingTopics.get());
     }
 
@@ -175,7 +173,7 @@ public class EmbeddedConnectClusterAssertions {
                 missingTopics.set(missing);
                 return missing.isEmpty();
             }).orElse(false),
-            WORKER_SETUP_DURATION_MS,
+            CONNECTOR_SETUP_DURATION_MS,
             "Didn't find the topics " + missingTopics.get());
     }
 
@@ -444,47 +442,6 @@ public class EmbeddedConnectClusterAssertions {
             return Optional.of(result);
         } catch (Exception e) {
             log.error("Could not check connector {} state info.", connectorName, e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Assert that a topic exists with the expected number of partitions
-     *
-     * @param topic the expected topic name
-     * @param partitionNum the expected number of partitions
-     * @param detailMessage the assertion message
-     * @throws InterruptedException
-     */
-    public void assertKafkaTopicExists(String topic, int partitionNum, String detailMessage) throws InterruptedException {
-        try {
-            waitForCondition(
-                () -> describeTopic(topic, partitionNum).orElse(false),
-                VALIDATION_DURATION_MS,
-                "Connector active topics don't match the expected collection");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
-    }
-
-    /**
-     * Create a Kafka topic with the given parameters.
-     *
-     * @param topic The name of the topic.
-     * @param partitionNum the expected number of partitions
-     * @return true if the topic exists in Kafka with the given number of partitions
-     */
-    protected Optional<Boolean> describeTopic(String topic, int partitionNum) {
-        try (Admin adminClient = connect.kafka().createAdminClient()) {
-            TopicDescription desc = adminClient
-                    .describeTopics(Collections.singletonList(topic)).all().get().get(topic);
-            log.debug("Topic description: {}", desc);
-            boolean result = desc != null
-                    && Objects.equals(topic, desc.name())
-                    && partitionNum == desc.partitions().size();
-            return Optional.of(result);
-        } catch (Exception e) {
-            log.error("Failed to get description for topic {}", topic, e);
             return Optional.empty();
         }
     }

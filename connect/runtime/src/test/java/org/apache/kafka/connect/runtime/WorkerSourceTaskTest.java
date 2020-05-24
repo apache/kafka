@@ -162,12 +162,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
-        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         producerCallbacks = EasyMock.newCapture();
         metrics = new MockConnectMetrics();
     }
 
-    private Map<String, String> sourceConnectorPropsWithGroups(String topic) {
+    private Map<String, String> sourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
@@ -194,7 +194,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
-                transformationChain, producer, admin, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig),
+                transformationChain, producer, admin, null,
                 offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
                 RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
     }

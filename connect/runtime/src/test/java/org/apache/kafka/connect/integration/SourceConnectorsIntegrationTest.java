@@ -44,6 +44,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster.DEFAULT_NUM_BROKERS;
 
 /**
  * Integration test for the endpoints that offer topic tracking of a connector's active
@@ -60,6 +61,10 @@ public class SourceConnectorsIntegrationTest {
     private static final String BAR_CONNECTOR = "bar-source";
     private static final String FOO_GROUP = "foo";
     private static final String BAR_GROUP = "bar";
+    private static final int DEFAULT_REPLICATION_FACTOR = DEFAULT_NUM_BROKERS;
+    private static final int DEFAULT_PARTITIONS = 1;
+    private static final int FOO_GROUP_REPLICATION_FACTOR = DEFAULT_NUM_BROKERS;
+    private static final int FOO_GROUP_PARTITIONS = 9;
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
@@ -109,8 +114,8 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertKafkaTopicExists(FOO_TOPIC, 1,
-                "Topic: " + FOO_TOPIC + " does not exist or does not have number of partitions: " + 1);
+        connect.assertions().assertTopicsExist(FOO_TOPIC);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR, FOO_GROUP_PARTITIONS);
     }
 
     @Test
@@ -120,18 +125,18 @@ public class SourceConnectorsIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.kafka().createTopic(FOO_TOPIC, 1);
+        connect.kafka().createTopic(BAR_TOPIC, 1);
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
-        Map<String, String> fooProps = defaultSourceConnectorProps(FOO_TOPIC);
-        // start a source connector without topic creation properties
-        connect.configureConnector(FOO_CONNECTOR, fooProps);
-        fooProps.put(NAME_CONFIG, FOO_CONNECTOR);
-
-        Map<String, String> barProps = sourceConnectorPropsWithGroups(BAR_TOPIC);
+        Map<String, String> barProps = defaultSourceConnectorProps(BAR_TOPIC);
         // start a source connector with topic creation properties
         connect.configureConnector(BAR_CONNECTOR, barProps);
         barProps.put(NAME_CONFIG, BAR_CONNECTOR);
+
+        Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
+        // start a source connector without topic creation properties
+        connect.configureConnector(FOO_CONNECTOR, fooProps);
+        fooProps.put(NAME_CONFIG, FOO_CONNECTOR);
 
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(fooProps.get(CONNECTOR_CLASS_CONFIG), fooProps, 0,
                 "Validating connector configuration produced an unexpected number or errors.");
@@ -142,11 +147,13 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertKafkaTopicExists(FOO_TOPIC, 1,
-                "Topic: " + FOO_TOPIC + " does not exist or does not have number of partitions: " + 1);
-
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(BAR_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
+
+        connect.assertions().assertTopicsExist(BAR_TOPIC);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+
+        connect.assertions().assertTopicsDoNotExist(FOO_TOPIC);
 
         connect.activeWorkers().forEach(w -> connect.removeWorker(w));
 
@@ -161,8 +168,10 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(BAR_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertKafkaTopicExists(BAR_TOPIC, 1,
-                "Topic: " + BAR_TOPIC + " does not exist or does not have number of partitions: " + 1);
+        connect.assertions().assertTopicsExist(FOO_TOPIC);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR, FOO_GROUP_PARTITIONS);
+        connect.assertions().assertTopicsExist(BAR_TOPIC);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
@@ -182,10 +191,12 @@ public class SourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(topic);
         props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", FOO_GROUP, BAR_GROUP));
-        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
-        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(DEFAULT_REPLICATION_FACTOR));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(DEFAULT_PARTITIONS));
         props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + FOO_GROUP + "." + INCLUDE_REGEX_CONFIG, FOO_TOPIC);
         props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + FOO_GROUP + "." + EXCLUDE_REGEX_CONFIG, BAR_TOPIC);
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + FOO_GROUP + "." + PARTITIONS_CONFIG,
+                String.valueOf(FOO_GROUP_PARTITIONS));
         return props;
     }
 }

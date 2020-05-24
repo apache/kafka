@@ -216,15 +216,6 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void shouldCreateTopicWhenItDoesNotExist() {
-        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
-        Cluster cluster = createCluster(1);
-        try (TopicAdmin admin = new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0)))) {
-            assertTrue(admin.createTopic(newTopic));
-        }
-    }
-
-    @Test
     public void shouldCreateOneTopicWhenProvidedMultipleDefinitionsWithSameTopicName() {
         NewTopic newTopic1 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         NewTopic newTopic2 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.util.Collections;
 
@@ -55,31 +56,28 @@ public class TopicCreationConfig {
             + "other group defined in topic.creation.groups this config is optional and if it's "
             + "missing it gets the value the default group";
 
-    private static ConfigDef.LambdaValidator minusOneOrPositiveInt = ConfigDef.LambdaValidator.with(
-        (name, value) -> {
-            if (!(value instanceof Integer)) {
-                throw new ConfigException(name, value, "Value is not of type Integer");
-            }
-            int num = (int) value;
-            if (num != -1 && num < 1) {
-                throw new ConfigException(name, num, "Value must be -1 or at least 1");
-            }
-        },
-        () -> "-1 or [1,...]"
+    public static final ConfigDef.Validator REPLICATION_FACTOR_VALIDATOR = ConfigDef.LambdaValidator.with(
+        (name, value) -> validateReplicationFactor(name, (short) value),
+        () -> "Positive number, or -1 to use the broker's default"
+    );
+    public static final ConfigDef.Validator PARTITIONS_VALIDATOR = ConfigDef.LambdaValidator.with(
+        (name, value) -> validatePartitions(name, (int) value),
+        () -> "Positive number, or -1 to use the broker's default"
     );
 
-    private static ConfigDef.LambdaValidator minusOneOrPositiveShort = ConfigDef.LambdaValidator.with(
-        (name, value) -> {
-            if (!(value instanceof Short)) {
-                throw new ConfigException(name, value, "Value is not of type Integer");
-            }
-            short num = (short) value;
-            if (num != -1 && num < 1) {
-                throw new ConfigException(name, num, "Value must be -1 or at least 1");
-            }
-        },
-        () -> "-1 or [1,...]"
-    );
+    private static void validatePartitions(String configName, int factor) {
+        if (factor != TopicAdmin.NO_PARTITIONS && factor < 1) {
+            throw new ConfigException(configName, factor,
+                    "Number of partitions must be positive, or -1 to use the broker's default");
+        }
+    }
+
+    private static void validateReplicationFactor(String configName, short factor) {
+        if (factor != TopicAdmin.NO_REPLICATION_FACTOR && factor < 1) {
+            throw new ConfigException(configName, factor,
+                    "Replication factor must be positive, or -1 to use the broker's default");
+        }
+    }
 
     public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultParitionCount) {
         int orderInGroup = 0;
@@ -95,11 +93,11 @@ public class TopicCreationConfig {
                         EXCLUDE_REGEX_DOC, group, ++orderInGroup, ConfigDef.Width.LONG,
                         "Exclusion Topic Pattern for " + group)
                 .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT,
-                        defaultReplicationFactor, minusOneOrPositiveShort,
+                        defaultReplicationFactor, REPLICATION_FACTOR_VALIDATOR,
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + group)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        defaultParitionCount, minusOneOrPositiveInt,
+                        defaultParitionCount, PARTITIONS_VALIDATOR,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + group);
         return configDef;
@@ -118,11 +116,11 @@ public class TopicCreationConfig {
                         EXCLUDE_REGEX_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup, ConfigDef.Width.LONG,
                         "Exclusion Topic Pattern for " + DEFAULT_TOPIC_CREATION_GROUP)
                 .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT,
-                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositiveShort,
+                        ConfigDef.NO_DEFAULT_VALUE, REPLICATION_FACTOR_VALIDATOR,
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + DEFAULT_TOPIC_CREATION_GROUP)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        ConfigDef.NO_DEFAULT_VALUE, minusOneOrPositiveInt,
+                        ConfigDef.NO_DEFAULT_VALUE, PARTITIONS_VALIDATOR,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, DEFAULT_TOPIC_CREATION_GROUP, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + DEFAULT_TOPIC_CREATION_GROUP);
         return configDef;

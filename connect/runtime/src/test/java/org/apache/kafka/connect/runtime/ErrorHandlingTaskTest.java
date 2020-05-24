@@ -175,11 +175,11 @@ public class ErrorHandlingTaskTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
-        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
     }
 
-    private Map<String, String> sourceConnectorPropsWithGroups(String topic) {
+    private Map<String, String> sourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
@@ -566,7 +566,7 @@ public class ErrorHandlingTaskTest {
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, admin, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig),
+                producer, admin, null,
                 offsetReader, offsetWriter, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
                 statusBackingStore);
