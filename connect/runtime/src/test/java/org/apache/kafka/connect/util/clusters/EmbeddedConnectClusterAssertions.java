@@ -16,7 +16,15 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -27,10 +35,15 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
@@ -94,6 +107,109 @@ public class EmbeddedConnectClusterAssertions {
         } catch (Exception e) {
             log.error("Could not check active workers.", e);
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Assert that at least the requested number of workers are up and running.
+     *
+     * @param numBrokers the number of online brokers
+     */
+    public void assertExactlyNumBrokersAreUp(int numBrokers, String detailMessage) throws InterruptedException {
+        try {
+            waitForCondition(
+                () -> checkBrokersUp(numBrokers, (actual, expected) -> actual == expected).orElse(false),
+                WORKER_SETUP_DURATION_MS,
+                "Didn't meet the exact requested number of online brokers: " + numBrokers);
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Confirm that the requested number of brokers are up and running.
+     *
+     * @param numBrokers the number of online brokers
+     * @return true if at least {@code numBrokers} are up; false otherwise
+     */
+    protected Optional<Boolean> checkBrokersUp(int numBrokers, BiFunction<Integer, Integer, Boolean> comp) {
+        try {
+            int numRunning = connect.kafka().runningBrokers().size();
+            return Optional.of(comp.apply(numRunning, numBrokers));
+        } catch (Exception e) {
+            log.error("Could not check running brokers.", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Assert that the topics with the specified names do not exist.
+     *
+     * @param topicNames the names of the topics that are expected to not exist
+     */
+    public void assertTopicsDoNotExist(String... topicNames) throws InterruptedException {
+        Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
+        AtomicReference<Set<String>> existingTopics = new AtomicReference<>(topicNameSet);
+        waitForCondition(
+            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                existingTopics.set(actual);
+                return actual.isEmpty();
+            }).orElse(false),
+            WORKER_SETUP_DURATION_MS,
+            "Unexpectedly found topics " + existingTopics.get());
+    }
+
+    /**
+     * Assert that the topics with the specified names do exist.
+     *
+     * @param topicNames the names of the topics that are expected to exist
+     */
+    public void assertTopicsExist(String... topicNames) throws InterruptedException {
+        Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
+        AtomicReference<Set<String>> missingTopics = new AtomicReference<>(topicNameSet);
+        waitForCondition(
+            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                Set<String> missing = new HashSet<>(expected);
+                missing.removeAll(actual);
+                missingTopics.set(missing);
+                return missing.isEmpty();
+            }).orElse(false),
+            WORKER_SETUP_DURATION_MS,
+            "Didn't find the topics " + missingTopics.get());
+    }
+
+    protected Optional<Boolean> checkTopicsExist(Set<String> topicNames, BiFunction<Set<String>, Set<String>, Boolean> comp) {
+        try {
+            Map<String, Optional<TopicDescription>> topics = connect.kafka().describeTopics(topicNames);
+            Set<String> actualExistingTopics = topics.entrySet()
+                                                     .stream()
+                                                     .filter(e -> e.getValue().isPresent())
+                                                     .map(Map.Entry::getKey)
+                                                     .collect(Collectors.toSet());
+            return Optional.of(comp.apply(actualExistingTopics, topicNames));
+        } catch (Exception e) {
+            log.error("Could not check config validation error count.", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Assert that the named topic is configured to have the specified replication factor and
+     * number of partitions.
+     *
+     * @param topicName  the name of the topic that is expected to exist
+     * @param replicas   the replication factor
+     * @param partitions the number of partitions
+     */
+    public void assertTopicSettings(String topicName, int replicas, int partitions) {
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", UUID.randomUUID().toString());
+        try (Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(consumerProps);) {
+            List<PartitionInfo> infos = verifiableConsumer.partitionsFor(topicName);
+            assertEquals(partitions, infos.size());
+            for (PartitionInfo info : infos) {
+                assertEquals(topicName, info.topic());
+                assertEquals(replicas, info.replicas().length);
+            }
         }
     }
 

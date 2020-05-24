@@ -51,6 +51,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -281,8 +282,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public ClusterConfigState snapshot() {
         synchronized (lock) {
-            // Doing a shallow copy of the data is safe here because the complex nested data that is copied should all be
-            // immutable configs
+            // Only a shallow copy is performed here; in order to avoid accidentally corrupting the worker's view
+            // of the config topic, any nested structures should be copied before making modifications
             return new ClusterConfigState(
                     offset,
                     sessionKey,
@@ -459,11 +460,15 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(1).
-                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).configStorageTopicSettings()
+                                            : Collections.emptyMap();
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .config(topicSettings) // first so that we override user-supplied settings as needed
+                .compacted()
+                .partitions(1)
+                .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
     }

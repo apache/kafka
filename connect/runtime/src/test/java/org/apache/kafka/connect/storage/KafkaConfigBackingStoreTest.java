@@ -164,7 +164,10 @@ public class KafkaConfigBackingStoreTest {
         expectStop();
         PowerMock.replayAll();
 
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        settings.put("config.storage.min.insync.replicas", "3");
+        settings.put("config.storage.max.message.bytes", "1001");
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, new DistributedConfig(settings));
 
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
@@ -175,6 +178,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(TOPIC, capturedNewTopic.getValue().name());
         assertEquals(1, capturedNewTopic.getValue().numPartitions());
         assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
+        assertEquals("3", capturedNewTopic.getValue().configs().get("min.insync.replicas"));
+        assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
         configStorage.start();
         configStorage.stop();
 

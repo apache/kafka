@@ -1694,9 +1694,10 @@ class Log(@volatile private var _dir: File,
   private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean, reason: String): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
-      if (deletable.nonEmpty)
+      if (deletable.nonEmpty) {
         info(s"Found deletable segments with base offsets [${deletable.map(_.baseOffset).mkString(",")}] due to $reason")
-      deleteSegments(deletable)
+        deleteSegments(deletable)
+      } else 0
     }
   }
 
@@ -2195,15 +2196,17 @@ class Log(@volatile private var _dir: File,
    * @param asyncDelete Whether the segment files should be deleted asynchronously
    */
   private def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    lock synchronized {
-      // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
-      // removing the deleted segment, we should force materialization of the iterator here, so that results of the
-      // iteration remain valid and deterministic.
-      val toDelete = segments.toList
-      toDelete.foreach { segment =>
-        this.segments.remove(segment.baseOffset)
+    if (segments.nonEmpty) {
+      lock synchronized {
+        // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+        // removing the deleted segment, we should force materialization of the iterator here, so that results of the
+        // iteration remain valid and deterministic.
+        val toDelete = segments.toList
+        toDelete.foreach { segment =>
+          this.segments.remove(segment.baseOffset)
+        }
+        deleteSegmentFiles(toDelete, asyncDelete)
       }
-      deleteSegmentFiles(toDelete, asyncDelete)
     }
   }
 
@@ -2221,14 +2224,14 @@ class Log(@volatile private var _dir: File,
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
-      info(s"Deleting segments $segments")
+      info(s"Deleting segments ${segments.mkString(",")}")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segments.foreach(_.deleteIfExists())
       }
     }
 
     if (asyncDelete) {
-      info(s"Scheduling segments for deletion $segments")
+      info(s"Scheduling segments for deletion ${segments.mkString(",")}")
       scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
     } else {
       deleteSegments()
