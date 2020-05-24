@@ -160,7 +160,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
 
     override def handleDeletion(): Unit = {
       warn(s"Feature ZK node deleted at path: $path")
-      // This event may happen, rarely (ex: operational error).
+      // This event may happen, rarely (ex: ZK corruption or operational error).
       // In such a case, we prefer to just log a warning and treat the case as if the node is absent,
       // and populate the FinalizedFeatureCache with empty finalized features.
       queue.add(new FeatureCacheUpdater(path))
