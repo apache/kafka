@@ -130,6 +130,10 @@ public class ProcessorStateManager implements StateManager {
             return this.stateStore;
         }
 
+        StateRestoreCallback restoreCallback() {
+            return this.restoreCallback;
+        }
+
         @Override
         public String toString() {
             return "StateStoreMetadata (" + stateStore.name() + " : " + changelogPartition + " @ " + offset;
@@ -215,7 +219,7 @@ public class ProcessorStateManager implements StateManager {
                             store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
-                        // and hence we are uncertain the the current local state only contains committed data;
+                        // and hence we are uncertain that the current local state only contains committed data;
                         // in that case we need to treat it as a task-corrupted exception
                         if (eosEnabled && !storeDirIsEmpty) {
                             log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
@@ -341,8 +345,8 @@ public class ProcessorStateManager implements StateManager {
         return sourcePartitions.contains(partition);
     }
 
-    // used by the changelog reader only
-    TaskType taskType() {
+    @Override
+    public TaskType taskType() {
         return taskType;
     }
 
@@ -358,7 +362,7 @@ public class ProcessorStateManager implements StateManager {
 
     // used by the changelog reader only
     void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
-        if (!stores.values().contains(storeMetadata)) {
+        if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
         }

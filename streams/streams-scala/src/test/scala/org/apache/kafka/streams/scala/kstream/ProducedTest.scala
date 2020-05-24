@@ -37,15 +37,15 @@ class ProducedTest extends FlatSpec with Matchers {
     internalProduced.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 
-  "Create a Produced with timestampExtractor and resetPolicy" should "create a Consumed with Serdes, timestampExtractor and resetPolicy" in {
+  "Create a Produced with streamPartitioner" should "create a Produced with Serdes and streamPartitioner" in {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
     }
     val produced: Produced[String, Long] = Produced.`with`(partitioner)
 
-    val internalConsumed = new ProducedInternal(produced)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
-    internalConsumed.streamPartitioner shouldBe partitioner
+    val internalProduced = new ProducedInternal(produced)
+    internalProduced.keySerde.getClass shouldBe Serdes.String.getClass
+    internalProduced.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalProduced.streamPartitioner shouldBe partitioner
   }
 }

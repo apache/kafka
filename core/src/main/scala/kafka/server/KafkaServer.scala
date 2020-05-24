@@ -189,6 +189,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
+  val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
+
+  if (linuxIoMetricsCollector.usable()) {
+    newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
+    newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+  }
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers

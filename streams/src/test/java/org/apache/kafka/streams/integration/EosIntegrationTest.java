@@ -213,7 +213,8 @@ public class EosIntegrationTest {
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
         if (throughTopic != null) {
-            output = input.through(throughTopic);
+            input.to(throughTopic);
+            output = builder.stream(throughTopic);
         }
         output.to(outputTopic);
 

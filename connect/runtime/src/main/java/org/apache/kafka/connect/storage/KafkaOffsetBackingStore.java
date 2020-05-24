@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -78,11 +79,16 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).offsetStorageTopicSettings()
+                                            : Collections.emptyMap();
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .config(topicSettings) // first so that we override user-supplied settings as needed
+                .compacted()
+                .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
+                .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminProps);
     }

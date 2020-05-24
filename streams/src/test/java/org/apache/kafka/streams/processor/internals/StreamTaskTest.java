@@ -784,12 +784,18 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, Arrays.asList(getConsumerRecord(partition1, 0L), getConsumerRecord(partition1, 5L)));
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 0L),
+            getConsumerRecord(partition1, 3L),
+            getConsumerRecord(partition1, 5L)));
+
         task.process(0L);
+        task.process(0L);
+
         task.prepareCommit();
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(5L))))));
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(3L))))));
     }
 
     @Test

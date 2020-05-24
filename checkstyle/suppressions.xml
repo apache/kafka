@@ -139,10 +139,13 @@
               files="Values.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(DistributedHerder|RestClient|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask).java"/>
+              files="(DistributedHerder|RestClient|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|TopicAdmin).java"/>
 
     <suppress checks="MethodLength"
               files="Values.java"/>
+
+    <suppress checks="NPathComplexity"
+              files="RestServer.java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"

@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -62,11 +61,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -144,50 +141,6 @@ public class KStreamRepartitionIntegrationTest {
                              .forEach(KafkaStreams::close);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() throws InterruptedException {
-        final String topicBRepartitionedName = "topic-b-scale-up";
-        final String inputTopicRepartitionedName = "input-topic-scale-up";
-        final int topicBNumberOfPartitions = 2;
-        final int inputTopicNumberOfPartitions = 4;
-        final AtomicReference<Throwable> throwable = new AtomicReference<>();
-
-        CLUSTER.createTopic(topicB, 1, 1);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-            .<Integer, String>as(inputTopicRepartitionedName)
-            .withNumberOfPartitions(inputTopicNumberOfPartitions);
-
-        final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
-            .<Integer, String>as(topicBRepartitionedName)
-            .withNumberOfPartitions(topicBNumberOfPartitions);
-
-        final KStream<Integer, String> topicBStream = builder
-            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(topicBRepartitioned);
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .repartition(inputTopicRepartitioned)
-               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-               .to(outputTopic);
-
-        startStreams(builder, REBALANCING, ERROR, (t, e) -> throwable.set(e));
-
-        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-            Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-            Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
-        );
-
-        final String expectedErrorMessage = String.format("Following topics do not have the same " +
-                                                          "number of partitions: [%s]",
-                                                          new TreeMap<>(repartitionTopicsWithNumOfPartitions));
-
-        assertNotNull(throwable.get());
-        assertTrue(throwable.get().getMessage().contains(expectedErrorMessage));
     }
 
     @Test

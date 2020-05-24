@@ -70,7 +70,7 @@ public class StandbyTask extends AbstractTask implements Task {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        processorContext = new ProcessorContextImpl(id, config, stateMgr, metrics);
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         eosEnabled = StreamThread.eosEnabled(config);
     }

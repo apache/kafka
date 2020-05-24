@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -522,6 +523,13 @@ public class StoreChangelogReader implements ChangelogReader {
             // do not trigger restore listener if we are processing standby tasks
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
+                    // first trigger the store's specific listener if its registered callback is also an lister,
+                    // then trigger the user registered global listener
+                    final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
+                    if (restoreCallback instanceof StateRestoreListener) {
+                        ((StateRestoreListener) restoreCallback).onBatchRestored(partition, storeName, currentOffset, numRecords);
+                    }
+
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
@@ -538,6 +546,13 @@ public class StoreChangelogReader implements ChangelogReader {
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
 
             try {
+                // first trigger the store's specific listener if its registered callback is also an lister,
+                // then trigger the user registered global listener
+                final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
+                if (restoreCallback instanceof StateRestoreListener) {
+                    ((StateRestoreListener) restoreCallback).onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+                }
+
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
             } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
@@ -764,8 +779,9 @@ public class StoreChangelogReader implements ChangelogReader {
         // do not trigger restore listener if we are processing standby tasks
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
-                final TopicPartition partition = changelogMetadata.storeMetadata.changelogPartition();
-                final String storeName = changelogMetadata.storeMetadata.store().name();
+                final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
+                final TopicPartition partition = storeMetadata.changelogPartition();
+                final String storeName = storeMetadata.store().name();
 
                 long startOffset = 0L;
                 try {
@@ -780,6 +796,13 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
 
                 try {
+                    // first trigger the store's specific listener if its registered callback is also an lister,
+                    // then trigger the user registered global listener
+                    final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
+                    if (restoreCallback instanceof StateRestoreListener) {
+                        ((StateRestoreListener) restoreCallback).onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
+                    }
+
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);

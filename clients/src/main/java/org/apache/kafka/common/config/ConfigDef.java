@@ -1166,8 +1166,15 @@ public class ConfigDef {
                     String defaultValueStr = convertToString(key.defaultValue, key.type);
                     if (defaultValueStr.isEmpty())
                         return "\"\"";
-                    else
-                        return defaultValueStr;
+                    else {
+                        String suffix = "";
+                        if (key.name.endsWith(".bytes")) {
+                            suffix = niceMemoryUnits(((Number) key.defaultValue).longValue());
+                        } else if (key.name.endsWith(".ms")) {
+                            suffix = niceTimeUnits(((Number) key.defaultValue).longValue());
+                        }
+                        return defaultValueStr + suffix;
+                    }
                 } else
                     return "";
             case "Valid Values":
@@ -1177,6 +1184,50 @@ public class ConfigDef {
             default:
                 throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
         }
+    }
+
+    static String niceMemoryUnits(long bytes) {
+        long value = bytes;
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % 1024L == 0) {
+                value /= 1024L;
+                i++;
+            } else {
+                break;
+            }
+        }
+        switch (i) {
+            case 1:
+                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
+            case 2:
+                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
+            case 3:
+                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
+            case 4:
+                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
+            default:
+                return "";
+        }
+    }
+
+    static String niceTimeUnits(long millis) {
+        long value = millis;
+        long[] divisors = {1000, 60, 60, 24};
+        String[] units = {"second", "minute", "hour", "day"};
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % divisors[i] == 0) {
+                value /= divisors[i];
+                i++;
+            } else {
+                break;
+            }
+        }
+        if (i > 0) {
+            return " (" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
+        }
+        return "";
     }
 
     public String toHtmlTable() {

@@ -34,10 +34,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -49,6 +52,9 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
+            Arrays.asList("set", "add", "setDate", "addDate")
+    );
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -244,6 +250,10 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
+    public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
+    public static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
+    public static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -324,7 +334,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TOPIC_TRACKING_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ENABLE_DEFAULT,
                         Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
                 .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
-                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC);
+                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
@@ -400,6 +412,48 @@ public class WorkerConfig extends AbstractConfig {
         logInternalConverterDeprecationWarnings(props);
     }
 
+    // Visible for testing
+    static void validateHttpResponseHeaderConfig(String config) {
+        try {
+            // validate format
+            String[] configTokens = config.trim().split("\\s+", 2);
+            if (configTokens.length != 2) {
+                throw new ConfigException(String.format("Invalid format of header config '%s\'. "
+                        + "Expected: '[ation] [header name]:[header value]'", config));
+            }
+
+            // validate action
+            String method = configTokens[0].trim();
+            validateHeaderConfigAction(method);
+
+            // validate header name and header value pair
+            String header = configTokens[1];
+            String[] headerTokens = header.trim().split(":");
+            if (headerTokens.length != 2) {
+                throw new ConfigException(
+                        String.format("Invalid format of header name and header value pair '%s'. "
+                                + "Expected: '[header name]:[header value]'", header));
+            }
+
+            // validate header name
+            String headerName = headerTokens[0].trim();
+            if (headerName.isEmpty() || headerName.matches(".*\\s+.*")) {
+                throw new ConfigException(String.format("Invalid header name '%s'. "
+                        + "The '[header name]' cannot contain whitespace", headerName));
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new ConfigException(String.format("Invalid header config '%s'.", config), e);
+        }
+    }
+
+    // Visible for testing
+    static void validateHeaderConfigAction(String action) {
+        if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
+            throw new ConfigException(String.format("Invalid header config action: '%s'. "
+                    + "Expected one of %s", action, HEADER_ACTIONS));
+        }
+    }
+
     private static class AdminListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -427,4 +481,23 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            String strValue = (String) value;
+            if (strValue == null || strValue.trim().isEmpty()) {
+                return;
+            }
+
+            String[] configs = StringUtil.csvSplit(strValue); // handles and removed surrounding quotes
+            Arrays.stream(configs).forEach(WorkerConfig::validateHttpResponseHeaderConfig);
+        }
+
+        @Override
+        public String toString() {
+            return "Comma-separated header rules, where each header rule is of the form "
+                    + "'[action] [header name]:[header value]' and optionally surrounded by double quotes "
+                    + "if any part of a header rule contains a comma";
+        }
+    }
 }

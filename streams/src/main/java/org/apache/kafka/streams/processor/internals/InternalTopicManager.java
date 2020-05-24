@@ -93,16 +93,20 @@ public class InternalTopicManager {
      * If a topic does not exist creates a new topic.
      * If a topic with the correct number of partitions exists ignores it.
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
+     * @return the set of topics which had to be newly created
      */
-    public void makeReady(final Map<String, InternalTopicConfig> topics) {
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         // we will do the validation / topic-creation in a loop, until we have confirmed all topics
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
+        log.debug("Starting to validate internal topics {} in partition assignor.", topics);
 
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
+        final Set<String> newlyCreatedTopics = new HashSet<>();
 
         while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
+            newlyCreatedTopics.addAll(topicsNotReady);
 
             if (!topicsNotReady.isEmpty()) {
                 final Set<NewTopic> newTopics = new HashSet<>();
@@ -169,6 +173,9 @@ public class InternalTopicManager {
             log.error(timeoutAndRetryError);
             throw new StreamsException(timeoutAndRetryError);
         }
+        log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
+
+        return newlyCreatedTopics;
     }
 
     /**
@@ -227,7 +234,11 @@ public class InternalTopicManager {
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
             final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
-            if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
+            if (!numberOfPartitions.isPresent()) {
+                log.error("Found undefined number of partitions for topic {}", topicName);
+                throw new StreamsException("Topic " + topicName + " number of partitions not defined");
+            }
+            if (existedTopicPartition.containsKey(topicName)) {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +

@@ -1015,8 +1015,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         maybeThrowInvalidGroupIdException();
-        if (pattern == null)
-            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
+        if (pattern == null || pattern.toString().equals(""))
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
 
         acquireAndEnsureOpen();
         try {

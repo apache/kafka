@@ -57,6 +57,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -159,7 +160,10 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        settings.put("config.storage.min.insync.replicas", "3");
+        settings.put("config.storage.max.message.bytes", "1001");
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, new DistributedConfig(settings));
 
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
@@ -170,6 +174,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(TOPIC, capturedNewTopic.getValue().name());
         assertEquals(1, capturedNewTopic.getValue().numPartitions());
         assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
+        assertEquals("3", capturedNewTopic.getValue().configs().get("min.insync.replicas"));
+        assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
         configStorage.start();
         configStorage.stop();
 
@@ -537,7 +543,7 @@ public class KafkaConfigBackingStoreTest {
         LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
         deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(1));
         deserialized.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
         logOffset = 5;
 
@@ -566,8 +572,17 @@ public class KafkaConfigBackingStoreTest {
         // Should see a single connector with initial state paused
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.subList(0, 2), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
+        assertEquals(2, configState.taskCount(CONNECTOR_IDS.get(0)));
 
         configStorage.refresh(0, TimeUnit.SECONDS);
+        configState = configStorage.snapshot();
+        // Connector should now be removed from the snapshot
+        assertFalse(configState.contains(CONNECTOR_IDS.get(0)));
+        // Task configs for the deleted connector should also be removed from the snapshot
+        assertEquals(Collections.emptyList(), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
+        assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
 
         configStorage.stop();
 

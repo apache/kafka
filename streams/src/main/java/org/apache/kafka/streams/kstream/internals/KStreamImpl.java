@@ -532,11 +532,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
+    @Deprecated
     @Override
     public KStream<K, V> through(final String topic) {
         return through(topic, Produced.with(keySerde, valSerde, null));
     }
 
+    @Deprecated
     @Override
     public KStream<K, V> through(final String topic,
                                  final Produced<K, V> produced) {
