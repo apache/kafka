@@ -17,12 +17,16 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -648,6 +652,24 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Whitebox.invokeMethod(workerTask, "sendRecords");
     }
 
+    @Test(expected = ConnectException.class)
+    public void testSendRecordsProducerSendFailsImmediately() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        expectTopicCreation(TOPIC);
+
+        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject()))
+                .andThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
 
     @Test
     public void testSendRecordsTaskCommitRecordFail() throws Exception {
@@ -863,6 +885,27 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     @Test
+    public void testTopicCreateWhenTopicExists() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
+
+    @Test
     public void testSendRecordsTopicDescribeRetries() throws Exception {
         createWorkerTask();
 
@@ -1035,6 +1078,26 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
         EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
                 .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertNotNull(newTopicCapture.getValue());
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsFalse() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
+
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(false);
 
         PowerMock.replayAll();
 

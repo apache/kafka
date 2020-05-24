@@ -128,7 +128,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog)Test.java"/>
+              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
