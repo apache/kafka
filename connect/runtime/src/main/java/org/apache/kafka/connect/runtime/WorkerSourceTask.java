@@ -434,7 +434,9 @@ class WorkerSourceTask extends WorkerTask {
 
         log.info("Creating topic '{}'", topic);
         NewTopicCreationGroup topicGroup = topicGroups.values().stream()
-                .filter(group -> group.matches(topic)).findFirst().orElse(defaultTopicGroup);
+                .filter(group -> group.matches(topic))
+                .findFirst()
+                .orElse(defaultTopicGroup);
         log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
         NewTopic newTopic = topicGroup.newTopic(topic);
 

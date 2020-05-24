@@ -80,7 +80,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
-
 /**
  * <p>
  * Worker runs a (dynamic) set of tasks in a set of threads, doing the work of actually moving
@@ -705,7 +704,7 @@ public class Worker {
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
-            // By leaving default client id empty the admin client will get the default at instantiation time
+            // Leaving default client id empty means that the admin client will set the default at instantiation time
             Map<String, Object> adminProps = adminConfigs(id, "", config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);

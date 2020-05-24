@@ -368,16 +368,22 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     /**
+     * Attempt to fetch the descriptions of the given topics
+     * Apache Kafka added support for describing topics in 0.10.0.0, so this method works as expected with that and later versions.
+     * With brokers older than 0.10.0.0, this method is unable to describe topics and always returns an empty set.
      *
-     * @param topics
-     * @return
+     * @param topics the topics to describe
+     * @return a map of topic names to topic descriptions of the topics that were requested; never null but possibly empty
+     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
+     * thread is interrupted while attempting to perform this operation
+     * @throws ConnectException if a non retriable error occurs
      */
     public Map<String, TopicDescription> describeTopics(String... topics) {
         if (topics == null) {
             return Collections.emptyMap();
         }
         String bootstrapServers = bootstrapServers();
-        String topicNameList = String.join(",", topics);
+        String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
                 admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).values();
@@ -406,15 +412,12 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 if (cause instanceof TimeoutException) {
                     // Timed out waiting for the operation to complete
-                    throw new RetriableException("Timed out while describing topics '"
-                            + topicNameList + "'", cause);
+                    throw new RetriableException("Timed out while describing topics '" + topicNameList + "'", cause);
                 }
-                throw new ConnectException("Error while attempting to describe topics '"
-                        + topicNameList + "'", e);
+                throw new ConnectException("Error while attempting to describe topics '" + topicNameList + "'", e);
             } catch (InterruptedException e) {
                 Thread.interrupted();
-                throw new RetriableException("Interrupted while attempting to describe topics '"
-                        + topicNameList + "'", e);
+                throw new RetriableException("Interrupted while attempting to describe topics '" + topicNameList + "'", e);
             }
         });
         return existingTopics;

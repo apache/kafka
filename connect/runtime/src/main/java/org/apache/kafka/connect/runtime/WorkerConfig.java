@@ -252,8 +252,8 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "If set to true, it allows "
-            + "source connectors to create topics with custom settings. If enabled, connector "
-            + "tasks will use admin clients to create the topics and will not depend on "
+            + "source connectors to create topics with custom settings. If enabled, each connector "
+            + "task will use an admin clients to create its topics and will not depend on "
             + "auto.create.topics.enable being set on Kafka brokers.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
 

@@ -58,8 +58,6 @@ public class SourceConnectorsIntegrationTest {
     private static final String FOO_CONNECTOR = "foo-source";
     private static final String BAR_TOPIC = "bar-topic";
     private static final String BAR_CONNECTOR = "bar-source";
-    private static final String SINK_CONNECTOR = "baz-sink";
-    private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final String FOO_GROUP = "foo";
     private static final String BAR_GROUP = "bar";
 

@@ -212,10 +212,10 @@ public class TopicAdminTest {
             int expectedReplicas = Math.min(3, numBrokers);
             assertTopicCreation(numBrokers, newTopic, null, null, expectedReplicas, 1);
             assertTopicCreation(numBrokers, newTopic, 30, null, expectedReplicas, 30);
-
         }
     }
 
+    @Test
     public void shouldCreateTopicWhenItDoesNotExist() {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
