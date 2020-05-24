@@ -86,8 +86,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
     /**
      * Returns an enriched {@link ConfigDef} building upon the {@code ConfigDef}, using the current configuration specified in {@code props} as an input.
      *
-     * @param baseConfigDef
-     * @param props
+     * @param baseConfigDef the base configuration definition to be enriched
+     * @param props the non parsed configuration properties
      * @return the enriched configuration definition
      */
     public static ConfigDef enrich(ConfigDef baseConfigDef, Map<String, String> props, AbstractConfig defaultGroupConfig) {
@@ -117,7 +117,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     @Override
     public Object get(String key) {
         return enrichedSourceConfig != null ? enrichedSourceConfig.get(key) : super.get(key);
-
     }
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
@@ -132,6 +131,11 @@ public class SourceConnectorConfig extends ConnectorConfig {
         }
     }
 
+    /**
+     * Returns whether this configuration uses topic creation properties.
+     *
+     * @return true if the configuration should be validated and used for topic creation; false otherwise
+     */
     public boolean usesTopicCreation() {
         return enrichedSourceConfig != null;
     }

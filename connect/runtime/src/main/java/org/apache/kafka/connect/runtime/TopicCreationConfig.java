@@ -21,6 +21,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class TopicCreationConfig {
 
@@ -64,6 +67,17 @@ public class TopicCreationConfig {
         (name, value) -> validatePartitions(name, (int) value),
         () -> "Positive number, or -1 to use the broker's default"
     );
+    @SuppressWarnings("unchecked")
+    public static final ConfigDef.Validator REGEX_VALIDATOR = ConfigDef.LambdaValidator.with(
+        (name, value) -> {
+            try {
+                ((List<String>) value).forEach(Pattern::compile);
+            } catch (PatternSyntaxException e) {
+                throw new ConfigException(name, value, "Syntax error in regular expression");
+            }
+        },
+        () -> "Positive number, or -1 to use the broker's default"
+    );
 
     private static void validatePartitions(String configName, int factor) {
         if (factor != TopicAdmin.NO_PARTITIONS && factor < 1) {
@@ -81,15 +95,14 @@ public class TopicCreationConfig {
 
     public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultParitionCount) {
         int orderInGroup = 0;
-        // TODO: add more specific validation
         ConfigDef configDef = new ConfigDef();
         configDef
                 .define(INCLUDE_REGEX_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(),
-                        new ConfigDef.NonNullValidator(), ConfigDef.Importance.LOW,
+                        REGEX_VALIDATOR, ConfigDef.Importance.LOW,
                         INCLUDE_REGEX_DOC, group, ++orderInGroup, ConfigDef.Width.LONG,
                         "Inclusion Topic Pattern for " + group)
                 .define(EXCLUDE_REGEX_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(),
-                        new ConfigDef.NonNullValidator(), ConfigDef.Importance.LOW,
+                        REGEX_VALIDATOR, ConfigDef.Importance.LOW,
                         EXCLUDE_REGEX_DOC, group, ++orderInGroup, ConfigDef.Width.LONG,
                         "Exclusion Topic Pattern for " + group)
                 .define(REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT,
