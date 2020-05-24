@@ -83,7 +83,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         if (featureZNode.status == FeatureZNodeStatus.Disabled) {
           info(s"Feature ZK node at path: $featureZkNodePath is in disabled status")
           FinalizedFeatureCache.clear()
-        } else if(featureZNode.status == FeatureZNodeStatus.Enabled) {
+        } else if (featureZNode.status == FeatureZNodeStatus.Enabled) {
           FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
         } else {
           throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
