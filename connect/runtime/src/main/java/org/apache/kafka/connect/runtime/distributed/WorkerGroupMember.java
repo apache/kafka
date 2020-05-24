@@ -240,7 +240,7 @@ public class WorkerGroupMember {
      * Method for unit tests
      * @return
      */
-    public Metrics getMetrics() {
+    Metrics metrics() {
         return this.metrics;
     }
 }

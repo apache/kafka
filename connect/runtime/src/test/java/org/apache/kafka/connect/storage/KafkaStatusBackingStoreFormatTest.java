@@ -59,7 +59,6 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
     private static final String FOO_TOPIC = "foo-topic";
     private static final String FOO_CONNECTOR = "foo-source";
     private static final String BAR_TOPIC = "bar-topic";
-    private static final String CLUSTER_ID = "cluster-1";
 
     private Time time;
     private KafkaStatusBackingStore store;

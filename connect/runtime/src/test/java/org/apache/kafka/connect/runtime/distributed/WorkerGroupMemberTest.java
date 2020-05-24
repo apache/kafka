@@ -80,7 +80,7 @@ public class WorkerGroupMemberTest {
         member = new WorkerGroupMember(config, "", configBackingStore,
         null, Time.SYSTEM, "client-1", logContext);
 
-        for (MetricsReporter reporter : member.getMetrics().reporters()) {
+        for (MetricsReporter reporter : member.metrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
                 MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
@@ -88,8 +88,8 @@ public class WorkerGroupMemberTest {
             }
         }
 
-        MetricName name = member.getMetrics().metricName("test.avg", "grp1");
-        member.getMetrics().addMetric(name, new Avg());
+        MetricName name = member.metrics().metricName("test.avg", "grp1");
+        member.metrics().addMetric(name, new Avg());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
