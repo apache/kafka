@@ -796,7 +796,7 @@ class KafkaController(val config: KafkaConfig,
   private def updateLeaderAndIsrCache(partitions: Seq[TopicPartition] = controllerContext.allPartitions.toSeq): Unit = {
     val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
     leaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
-      controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+      controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
     }
   }
 
@@ -1024,7 +1024,7 @@ class KafkaController(val config: KafkaConfig,
           finishedUpdates.get(partition) match {
             case Some(Right(leaderAndIsr)) =>
               val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
-              controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+              controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
               finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
               info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
               true
@@ -1254,23 +1254,7 @@ class KafkaController(val config: KafkaConfig,
       if (!isActive) {
         0
       } else {
-        controllerContext.allPartitions.count { topicPartition =>
-          val replicaAssignment: ReplicaAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-          val replicas = replicaAssignment.replicas
-          val preferredReplica = replicas.head
-
-          val isImbalanced = controllerContext.partitionLeadershipInfo.get(topicPartition) match {
-            case Some(leadershipInfo) =>
-              if (replicaAssignment.isBeingReassigned && replicaAssignment.addingReplicas.contains(preferredReplica))
-                // reassigning partitions are not counted as imbalanced until the new replica joins the ISR (completes reassignment)
-                leadershipInfo.leaderAndIsr.isr.contains(preferredReplica)
-              else
-                leadershipInfo.leaderAndIsr.leader != preferredReplica
-            case None => false
-          }
-
-          isImbalanced && !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
-        }
+        controllerContext.preferredReplicaImbalanceCount
       }
 
     globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size

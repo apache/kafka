@@ -364,7 +364,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result) =>
         (partition, result.map { leaderAndIsr =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-          controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+          controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
           leaderIsrAndControllerEpoch
         })
       }

@@ -118,7 +118,7 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
           Left(new StateChangeFailedException(failMsg))
         case Some(leaderAndIsr) =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-          controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+          controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
           Right(leaderAndIsr)
       }
 

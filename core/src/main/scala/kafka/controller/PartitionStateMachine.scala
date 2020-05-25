@@ -309,7 +309,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       val partition = createResponse.ctx.get.asInstanceOf[TopicPartition]
       val leaderIsrAndControllerEpoch = leaderIsrAndControllerEpochs(partition)
       if (code == Code.OK) {
-        controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+        controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(leaderIsrAndControllerEpoch.leaderAndIsr.isr,
           partition, leaderIsrAndControllerEpoch, controllerContext.partitionFullReplicaAssignment(partition), isNew = true)
         successfulInitializations += partition
@@ -437,7 +437,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       result.foreach { leaderAndIsr =>
         val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-        controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+        controllerContext.putLeadershipInfo(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipientsPerPartition(partition), partition,
           leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
       }
