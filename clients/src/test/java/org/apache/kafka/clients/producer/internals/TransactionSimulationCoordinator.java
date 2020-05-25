@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ClientRequest;
@@ -131,7 +147,7 @@ class TransactionSimulationCoordinator {
         if (faultInject) {
             return new InitProducerIdResponse(
                 new InitProducerIdResponseData()
-                .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    .setErrorCode(Errors.NOT_COORDINATOR.code())
             );
         } else if (request.data.producerId() != NO_PRODUCER_ID &&
                     request.data.producerId() != currentProducerId) {
@@ -162,9 +178,18 @@ class TransactionSimulationCoordinator {
     private AddPartitionsToTxnResponse handleAddPartitionToTxn(AddPartitionsToTxnRequest request,
                                                                final boolean faultInject) {
         Map<TopicPartition, Errors> errors = new HashMap<>();
-        request.partitions().forEach(topicPartition ->
-            errors.put(topicPartition, faultInject ? Errors.COORDINATOR_NOT_AVAILABLE : Errors.NONE)
-        );
+        request.partitions().forEach(topicPartition -> {
+            if (faultInject) {
+                errors.put(topicPartition, Errors.COORDINATOR_NOT_AVAILABLE);
+            } else if (request.data.producerId() != currentProducerId) {
+                errors.put(topicPartition, Errors.UNKNOWN_PRODUCER_ID);
+            } else if (request.data.producerEpoch() != currentEpoch) {
+                errors.put(topicPartition, Errors.INVALID_PRODUCER_EPOCH);
+            } else {
+                errors.put(topicPartition, Errors.NONE);
+            }
+        });
+
         return new AddPartitionsToTxnResponse(
             throttleTimeMs,
             errors
@@ -209,7 +234,7 @@ class TransactionSimulationCoordinator {
             if (faultInject) {
                 errors.put(key, Errors.COORDINATOR_LOAD_IN_PROGRESS);
             } else if (request.data.producerId() != currentProducerId) {
-               errors.put(key, Errors.UNKNOWN_PRODUCER_ID);
+                errors.put(key, Errors.UNKNOWN_PRODUCER_ID);
             } else if (request.data.producerEpoch() != currentEpoch) {
                 errors.put(key, Errors.INVALID_PRODUCER_EPOCH);
             } else if (offsetsAddedToTxn) {
@@ -250,8 +275,8 @@ class TransactionSimulationCoordinator {
         if (faultInject) {
             return new EndTxnResponse(
                 new EndTxnResponseData()
-                .setErrorCode(Errors.NOT_COORDINATOR.code())
-                .setThrottleTimeMs(throttleTimeMs)
+                    .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    .setThrottleTimeMs(throttleTimeMs)
             );
         } else if (request.data.producerId() != currentProducerId) {
             return new EndTxnResponse(
@@ -281,7 +306,8 @@ class TransactionSimulationCoordinator {
 
         return new EndTxnResponse(
             new EndTxnResponseData()
-            .setErrorCode(Errors.NONE.code())
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(throttleTimeMs)
         );
     }
 }
