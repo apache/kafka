@@ -61,6 +61,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,8 +77,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
 /**
  * <p>
@@ -534,12 +533,12 @@ public class Worker {
                                                                 connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             TopicAdmin admin;
-            Map<String, NewTopicCreationGroup> topicCreationGroups;
+            Map<String, TopicCreationGroup> topicCreationGroups;
             if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
                 Map<String, Object> adminProps = adminConfigs(id, "connector-adminclient-" + id, config,
                         sourceConfig, connectorClass, connectorClientConfigOverridePolicy);
                 admin = new TopicAdmin(adminProps);
-                topicCreationGroups = NewTopicCreationGroup.configuredGroups(sourceConfig);
+                topicCreationGroups = TopicCreationGroup.configuredGroups(sourceConfig);
             } else {
                 admin = null;
                 topicCreationGroups = null;

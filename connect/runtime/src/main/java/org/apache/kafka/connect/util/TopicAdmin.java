@@ -34,7 +34,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,17 +42,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
-
-import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 
 /**
  * Utility to simplify creating and managing topics via the {@link Admin}.
@@ -189,76 +181,6 @@ public class TopicAdmin implements AutoCloseable {
                     Optional.of(numPartitions),
                     Optional.of(replicationFactor)
             ).configs(configs);
-        }
-    }
-
-    public static class NewTopicCreationGroup {
-        private final String name;
-        private final Pattern inclusionPattern;
-        private final Pattern exclusionPattern;
-        private final int numPartitions;
-        private final short replicationFactor;
-        private final Map<String, Object> otherConfigs;
-
-        protected NewTopicCreationGroup(String group, SourceConnectorConfig config) {
-            this.name = group;
-            this.inclusionPattern = Pattern.compile(String.join("|", config.topicCreationInclude(group)));
-            this.exclusionPattern = Pattern.compile(String.join("|", config.topicCreationExclude(group)));
-            this.numPartitions = config.topicCreationPartitions(group);
-            this.replicationFactor = config.topicCreationReplicationFactor(group);
-            this.otherConfigs = config.topicCreationOtherConfigs(group);
-        }
-
-        public String name() {
-            return name;
-        }
-
-        public boolean matches(String topic) {
-            return !exclusionPattern.matcher(topic).matches() && inclusionPattern.matcher(topic).matches();
-        }
-
-        public NewTopic newTopic(String topic) {
-            NewTopicBuilder builder = new NewTopicBuilder(topic);
-            return builder.partitions(numPartitions)
-                    .replicationFactor(replicationFactor)
-                    .config(otherConfigs)
-                    .build();
-        }
-
-        public static Map<String, NewTopicCreationGroup> configuredGroups(SourceConnectorConfig config) {
-            List<String> groupNames = config.getList(TOPIC_CREATION_GROUPS_CONFIG);
-            Map<String, NewTopicCreationGroup> groups = new LinkedHashMap<>();
-            for (String group : groupNames) {
-                groups.put(group, new NewTopicCreationGroup(group, config));
-            }
-            // Even if there was a group called 'default' in the config, it will be overriden here.
-            // Order matters for all the topic groups besides the default, since it will be
-            // removed from this collection by the Worker
-            groups.put(DEFAULT_TOPIC_CREATION_GROUP, new NewTopicCreationGroup(DEFAULT_TOPIC_CREATION_GROUP, config));
-            return groups;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof NewTopicCreationGroup)) {
-                return false;
-            }
-            NewTopicCreationGroup that = (NewTopicCreationGroup) o;
-            return Objects.equals(name, that.name)
-                    && numPartitions == that.numPartitions
-                    && replicationFactor == that.replicationFactor
-                    && Objects.equals(inclusionPattern.pattern(), that.inclusionPattern.pattern())
-                    && Objects.equals(exclusionPattern.pattern(), that.exclusionPattern.pattern())
-                    && Objects.equals(otherConfigs, that.otherConfigs);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(name, numPartitions, replicationFactor, inclusionPattern.pattern(),
-                    exclusionPattern.pattern(), otherConfigs);
         }
     }
 

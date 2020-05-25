@@ -61,6 +61,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -1283,7 +1284,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(new TransformationChain<>(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(TopicAdmin.class),
-                EasyMock.<Map<String, TopicAdmin.NewTopicCreationGroup>>anyObject(),
+                EasyMock.<Map<String, TopicCreationGroup>>anyObject(),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
                 EasyMock.eq(config),

@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
-import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
 /**
  * Utility to be used by worker source tasks in order to create topics, if topic creation is enabled for source connectors
@@ -39,13 +38,13 @@ public class TopicCreation {
             new TopicCreation(false, null, Collections.emptyMap(), Collections.emptySet());
 
     private final boolean isTopicCreationEnabled;
-    private final NewTopicCreationGroup defaultTopicGroup;
-    private final Map<String, NewTopicCreationGroup> topicGroups;
+    private final TopicCreationGroup defaultTopicGroup;
+    private final Map<String, TopicCreationGroup> topicGroups;
     private final Set<String> topicCache;
 
     protected TopicCreation(boolean isTopicCreationEnabled,
-                            NewTopicCreationGroup defaultTopicGroup,
-                            Map<String, NewTopicCreationGroup> topicGroups,
+                            TopicCreationGroup defaultTopicGroup,
+                            Map<String, TopicCreationGroup> topicGroups,
                             Set<String> topicCache) {
         this.isTopicCreationEnabled = isTopicCreationEnabled;
         this.defaultTopicGroup = defaultTopicGroup;
@@ -54,11 +53,11 @@ public class TopicCreation {
     }
 
     public static TopicCreation newTopicCreation(WorkerConfig workerConfig,
-            Map<String, NewTopicCreationGroup> topicGroups) {
+            Map<String, TopicCreationGroup> topicGroups) {
         if (!workerConfig.topicCreationEnable() || topicGroups == null) {
             return EMPTY;
         }
-        Map<String, NewTopicCreationGroup> groups = new LinkedHashMap<>(topicGroups);
+        Map<String, TopicCreationGroup> groups = new LinkedHashMap<>(topicGroups);
         groups.remove(DEFAULT_TOPIC_CREATION_GROUP);
         return new TopicCreation(true, topicGroups.get(DEFAULT_TOPIC_CREATION_GROUP), groups, new HashSet<>());
     }
@@ -71,11 +70,11 @@ public class TopicCreation {
         return isTopicCreationEnabled;
     }
 
-    public NewTopicCreationGroup defaultTopicGroup() {
+    public TopicCreationGroup defaultTopicGroup() {
         return defaultTopicGroup;
     }
 
-    public Map<String, NewTopicCreationGroup> topicGroups() {
+    public Map<String, TopicCreationGroup> topicGroups() {
         return topicGroups;
     }
 

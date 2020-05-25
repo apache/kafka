@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -168,12 +168,12 @@ public class SourceConnectorConfigTest {
         assertThat(config.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
         assertThat(config.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyMap()));
 
-        Map<String, TopicAdmin.NewTopicCreationGroup> groups =
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(config);
+        Map<String, TopicCreationGroup> groups =
+                TopicCreationGroup.configuredGroups(config);
         assertEquals(1, groups.size());
         assertThat(groups.keySet(), hasItem(DEFAULT_TOPIC_CREATION_GROUP));
 
-        TopicAdmin.NewTopicCreationGroup group = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
+        TopicCreationGroup group = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
         // Default group will match all topics besides empty string
         assertTrue(group.matches(" "));
         assertTrue(group.matches(FOO_TOPIC));
@@ -212,11 +212,11 @@ public class SourceConnectorConfigTest {
         assertThat(config.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
         assertThat(config.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(topicProps));
 
-        Map<String, TopicAdmin.NewTopicCreationGroup> groups =
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(config);
+        Map<String, TopicCreationGroup> groups =
+                TopicCreationGroup.configuredGroups(config);
         assertEquals(1, groups.size());
         assertThat(groups.keySet(), hasItem(DEFAULT_TOPIC_CREATION_GROUP));
-        TopicAdmin.NewTopicCreationGroup group = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
+        TopicCreationGroup group = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
         // Default group will match all topics besides empty string
         assertTrue(group.matches(" "));
         assertTrue(group.matches(FOO_TOPIC));
@@ -253,13 +253,13 @@ public class SourceConnectorConfigTest {
         assertThat(config.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
         assertThat(config.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyMap()));
 
-        Map<String, TopicAdmin.NewTopicCreationGroup> groups =
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(config);
+        Map<String, TopicCreationGroup> groups =
+                TopicCreationGroup.configuredGroups(config);
         assertEquals(2, groups.size());
         assertThat(groups.keySet(), hasItems(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP));
 
-        TopicAdmin.NewTopicCreationGroup fooGroup = groups.get(FOO_GROUP);
-        TopicAdmin.NewTopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
+        TopicCreationGroup fooGroup = groups.get(FOO_GROUP);
+        TopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
         assertFalse(fooGroup.matches(" "));
         assertTrue(fooGroup.matches(FOO_TOPIC));
         assertFalse(fooGroup.matches(BAR_TOPIC));
@@ -306,13 +306,13 @@ public class SourceConnectorConfigTest {
         assertThat(config.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
         assertThat(config.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyMap()));
 
-        Map<String, TopicAdmin.NewTopicCreationGroup> groups =
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(config);
+        Map<String, TopicCreationGroup> groups =
+                TopicCreationGroup.configuredGroups(config);
         assertEquals(2, groups.size());
         assertThat(groups.keySet(), hasItems(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP));
 
-        TopicAdmin.NewTopicCreationGroup fooGroup = groups.get(FOO_GROUP);
-        TopicAdmin.NewTopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
+        TopicCreationGroup fooGroup = groups.get(FOO_GROUP);
+        TopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
         assertFalse(fooGroup.matches(" "));
         assertTrue(fooGroup.matches(FOO_TOPIC));
         assertTrue(fooGroup.matches(BAR_TOPIC));

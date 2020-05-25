@@ -58,6 +58,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreation;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -223,7 +224,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
-                transformationChain, producer, admin, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig),
+                transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
                 RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
     }
@@ -1121,11 +1122,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
     @Test
     public void testTopicCreationClassWhenTopicCreationIsEnabled() {
-        TopicAdmin.NewTopicCreationGroup expectedDefaultGroup =
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig).get(DEFAULT_TOPIC_CREATION_GROUP);
+        TopicCreationGroup expectedDefaultGroup =
+                TopicCreationGroup.configuredGroups(sourceConfig).get(DEFAULT_TOPIC_CREATION_GROUP);
 
         TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+                TopicCreationGroup.configuredGroups(sourceConfig));
 
         assertTrue(topicCreation.isTopicCreationEnabled());
         assertThat(topicCreation.defaultTopicGroup(), is(expectedDefaultGroup));
@@ -1141,7 +1142,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         config = new StandaloneConfig(workerProps);
 
         TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
-                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+                TopicCreationGroup.configuredGroups(sourceConfig));
 
         assertFalse(topicCreation.isTopicCreationEnabled());
         assertNull(topicCreation.defaultTopicGroup());

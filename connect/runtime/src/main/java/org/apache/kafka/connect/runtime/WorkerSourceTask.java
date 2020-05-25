@@ -50,6 +50,7 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreation;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +66,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
-import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
@@ -116,7 +116,7 @@ class WorkerSourceTask extends WorkerTask {
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
                             TopicAdmin admin,
-                            Map<String, NewTopicCreationGroup> topicGroups,
+                            Map<String, TopicCreationGroup> topicGroups,
                             CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
@@ -414,7 +414,7 @@ class WorkerSourceTask extends WorkerTask {
         }
 
         log.info("Creating topic '{}'", topic);
-        NewTopicCreationGroup topicGroup = topicCreation.topicGroups().values().stream()
+        TopicCreationGroup topicGroup = topicCreation.topicGroups().values().stream()
                 .filter(group -> group.matches(topic))
                 .findFirst()
                 .orElse(topicCreation.defaultTopicGroup());
