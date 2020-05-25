@@ -54,6 +54,7 @@ import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -252,7 +253,21 @@ public class Worker {
                 final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
                 log.info("Creating connector {} of type {}", connName, connClass);
                 final Connector connector = plugins.newConnector(connClass);
-                workerConnector = new WorkerConnector(connName, connector, ctx, metrics, statusListener);
+
+                final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
+                    offsetBackingStore,
+                    connName,
+                    internalKeyConverter,
+                    internalValueConverter
+                );
+                workerConnector = new WorkerConnector(
+                    connName,
+                    connector,
+                    ctx,
+                    metrics,
+                    statusListener,
+                    offsetReader
+                );
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 savedLoader = plugins.compareAndSwapLoaders(connector);
                 workerConnector.initialize(connConfig);
