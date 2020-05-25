@@ -254,20 +254,23 @@ class TransactionSimulationCoordinator {
     private AbstractResponse handleProduce(ProduceRequest request,
                                            final boolean faultInject) {
         Map<TopicPartition, PartitionResponse> errors = new HashMap<>();
-        Map<TopicPartition, MemoryRecords> records = request.partitionRecordsOrFail();
+        Map<TopicPartition, MemoryRecords> partitionRecords = request.partitionRecordsOrFail();
 
-        if (faultInject) {
-            records.forEach((topicPartition, record) -> errors.put(topicPartition, new PartitionResponse(Errors.UNKNOWN_PRODUCER_ID)));
-        } else {
-            for (Map.Entry<TopicPartition, MemoryRecords> entry : records.entrySet()) {
-                List<Record> sentRecords = pendingPartitionData.getOrDefault(entry.getKey(), new ArrayList<>());
-                for (Record record : entry.getValue().records()) {
-                    sentRecords.add(record);
+        partitionRecords.forEach((topicPartition, records) -> {
+            if (faultInject) {
+                // Trigger KIP-360 path.
+                errors.put(topicPartition, new PartitionResponse(Errors.UNKNOWN_PRODUCER_ID));
+            } else {
+                List<Record> sentRecords = pendingPartitionData.getOrDefault(topicPartition, new ArrayList<>());
+                for (Record partitionRecord  : records.records()) {
+                    sentRecords.add(partitionRecord);
                 }
-                pendingPartitionData.put(entry.getKey(), sentRecords);
-                errors.put(entry.getKey(), new PartitionResponse(Errors.NONE));
+
+                pendingPartitionData.put(topicPartition, sentRecords);
+                errors.put(topicPartition, new PartitionResponse(Errors.NONE));
             }
-        }
+        });
+
         return new ProduceResponse(errors, throttleTimeMs);
     }
 

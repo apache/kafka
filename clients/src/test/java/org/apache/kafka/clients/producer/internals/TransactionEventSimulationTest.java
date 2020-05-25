@@ -40,13 +40,14 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * This test tries to test out the EOS robustness on the client side. It features a {@link TransactionSimulationCoordinator}
- * which handles the incoming transactional produce/metadata requests and gives feedback through an underlying client.
+ * which handles the incoming transactional produce/metadata requests and gives basic feedback through {@link MockClient}.
  *
- * Each iteration the transaction manager will append one record through accumulator and commit offset at the same time.
+ * Each iteration the transaction manager will append one record through accumulator and commit offset at the same time. By the
+ * end we will check whether all the committed transactions are successfully materializing data on the coordinator side.
  *
  * Features supported:
  * 
- * 1. Random transaction abort
+ * 1. Randomly abort transaction
  * 2. Fault injection on response
  * 3. Random message drop
  */
