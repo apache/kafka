@@ -57,10 +57,10 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
 /**
  * A reduced functionality of a combination of transaction coordinator and group coordinator.
- * It provides basic event handling from KafkaProducer.Sender with transaction turned on.
+ * It provides basic event handling from {@link Sender} with transaction turned on.
  *
- * TODO: add log truncation support
- * TODO: add log tail deletion support
+ * Random fault injection is supported as well, which will return a retriable error to
+ * the client.
  */
 class TransactionSimulationCoordinator {
 
