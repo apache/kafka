@@ -266,6 +266,7 @@ public class StandaloneHerderTest {
 
         EasyMock.expect(statusBackingStore.getAll(CONNECTOR_NAME)).andReturn(Collections.<TaskStatus>emptyList());
         statusBackingStore.put(new ConnectorStatus(CONNECTOR_NAME, AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
 
         expectDestroy();
 
@@ -431,6 +432,8 @@ public class StandaloneHerderTest {
 
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
+
+        statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
 
         statusBackingStore.stop();
         EasyMock.expectLastCall();

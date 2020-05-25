@@ -45,6 +45,7 @@ import org.apache.kafka.connect.runtime.HerderRequest;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
@@ -1378,6 +1379,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    private void updateDeletedTaskStatus() {
+        ClusterConfigState snapshot = configBackingStore.snapshot();
+        for (String connector : statusBackingStore.connectors()) {
+            Set<ConnectorTaskId> remainingTasks = new HashSet<>(snapshot.tasks(connector));
+            
+            statusBackingStore.getAll(connector).stream()
+                .map(TaskStatus::id)
+                .filter(task -> !remainingTasks.contains(task))
+                .forEach(this::onDeletion);
+        }
+    }
+
     protected HerderMetrics herderMetrics() {
         return herderMetrics;
     }
@@ -1414,11 +1427,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }
 
-            // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
-            // be done after the rebalance completes to avoid race conditions as the previous generation attempts
-            // to change the state to UNASSIGNED after tasks have been stopped.
-            if (isLeader())
+            // Delete the statuses of all connectors and tasks removed prior to the start of this rebalance. This
+            // has to be done after the rebalance completes to avoid race conditions as the previous generation
+            // attempts to change the state to UNASSIGNED after tasks have been stopped.
+            if (isLeader()) {
                 updateDeletedConnectorStatus();
+                updateDeletedTaskStatus();
+            }
 
             // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
             // sleep in the poll() for a long time. Forcing a wakeup ensures we'll get to process this event in the

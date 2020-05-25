@@ -101,7 +101,7 @@ public class ConnectWorkerIntegrationTest {
         // create test topic
         connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
 
-        // setup up props for the sink connector
+        // set up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(numTasks));
@@ -192,7 +192,7 @@ public class ConnectWorkerIntegrationTest {
         // create test topic
         connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
 
-        // setup up props for the sink connector
+        // set up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(numTasks));
@@ -233,5 +233,41 @@ public class ConnectWorkerIntegrationTest {
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not start in time.");
+    }
+
+    /**
+     * Verify that the number of tasks listed in the REST API is updated correctly after changes to
+     * the "tasks.max" connector configuration.
+     */
+    @Test
+    public void testTaskStatuses() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        // base connector props
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+
+        // start the connector with only one task
+        final int initialNumTasks = 1;
+        connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(initialNumTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, initialNumTasks, "Connector tasks did not start in time");
+
+        // then reconfigure it to use more tasks
+        final int increasedNumTasks = 5;
+        connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(increasedNumTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, increasedNumTasks, "Connector task statuses did not update in time.");
+
+        // then reconfigure it to use fewer tasks
+        final int decreasedNumTasks = 3;
+        connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(decreasedNumTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, decreasedNumTasks, "Connector task statuses did not update in time.");
     }
 }
