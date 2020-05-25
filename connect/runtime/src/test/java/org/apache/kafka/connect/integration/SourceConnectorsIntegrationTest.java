@@ -25,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -47,8 +48,8 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster.DEFAULT_NUM_BROKERS;
 
 /**
- * Integration test for the endpoints that offer topic tracking of a connector's active
- * topics.
+ * Integration test for source connectors with a focus on topic creation with custom properties by
+ * the connector tasks.
  */
 @Category(IntegrationTest.class)
 public class SourceConnectorsIntegrationTest {
@@ -95,7 +96,33 @@ public class SourceConnectorsIntegrationTest {
     }
 
     @Test
-    public void testCreateTopic() throws InterruptedException {
+    public void testTopicsAreCreatedWhenAutoCreateTopicsIsEnabledAtTheBroker() throws InterruptedException {
+        brokerProps.put("auto.create.topics.enable", String.valueOf(true));
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
+        connect = connectBuilder.brokerProps(brokerProps).workerProps(workerProps).build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+
+        Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
+
+        // start a source connector
+        connect.configureConnector(FOO_CONNECTOR, fooProps);
+        fooProps.put(NAME_CONFIG, FOO_CONNECTOR);
+
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(fooProps.get(CONNECTOR_CLASS_CONFIG), fooProps, 0,
+                "Validating connector configuration produced an unexpected number or errors.");
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        connect.assertions().assertTopicsExist(FOO_TOPIC);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+    }
+
+    @Test
+    public void testTopicsAreCreatedWhenTopicCreationIsEnabled() throws InterruptedException {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
@@ -125,7 +152,11 @@ public class SourceConnectorsIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.kafka().createTopic(BAR_TOPIC, 1);
+        connect.kafka().createTopic(BAR_TOPIC, DEFAULT_PARTITIONS, DEFAULT_REPLICATION_FACTOR, Collections.emptyMap());
+
+        connect.assertions().assertTopicsExist(BAR_TOPIC);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> barProps = defaultSourceConnectorProps(BAR_TOPIC);

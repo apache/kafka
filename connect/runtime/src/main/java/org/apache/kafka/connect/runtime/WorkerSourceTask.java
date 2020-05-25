@@ -68,7 +68,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
@@ -94,10 +93,7 @@ class WorkerSourceTask extends WorkerTask {
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
     private final boolean isTopicTrackingEnabled;
-    private final boolean isTopicCreationEnabled;
-    private final NewTopicCreationGroup defaultTopicGroup;
-    private final Map<String, NewTopicCreationGroup> topicGroups;
-    private final Set<String> topicCache;
+    private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -159,17 +155,56 @@ class WorkerSourceTask extends WorkerTask {
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
-        this.isTopicCreationEnabled =
-                workerConfig.getBoolean(TOPIC_CREATION_ENABLE_CONFIG) && topicGroups != null;
-        if (isTopicCreationEnabled) {
-            this.defaultTopicGroup = topicGroups.get(DEFAULT_TOPIC_CREATION_GROUP);
-            this.topicGroups = new LinkedHashMap<>(topicGroups);
-            this.topicGroups.remove(DEFAULT_TOPIC_CREATION_GROUP);
-            this.topicCache = new HashSet<>();
-        } else {
-            this.defaultTopicGroup = null;
-            this.topicGroups = Collections.emptyMap();
-            this.topicCache = Collections.emptySet();
+        this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
+    }
+
+    public static class TopicCreation {
+        private static final TopicCreation EMPTY =
+                new TopicCreation(false, null, Collections.emptyMap(), Collections.emptySet());
+
+        private final boolean isTopicCreationEnabled;
+        private final NewTopicCreationGroup defaultTopicGroup;
+        private final Map<String, NewTopicCreationGroup> topicGroups;
+        private final Set<String> topicCache;
+
+        protected TopicCreation(boolean isTopicCreationEnabled,
+                                NewTopicCreationGroup defaultTopicGroup,
+                                Map<String, NewTopicCreationGroup> topicGroups,
+                                Set<String> topicCache) {
+            this.isTopicCreationEnabled = isTopicCreationEnabled;
+            this.defaultTopicGroup = defaultTopicGroup;
+            this.topicGroups = topicGroups;
+            this.topicCache = topicCache;
+        }
+
+        public static TopicCreation newTopicCreation(WorkerConfig workerConfig,
+                                                     Map<String, NewTopicCreationGroup> topicGroups) {
+            if (!workerConfig.topicCreationEnable() || topicGroups == null) {
+                return EMPTY;
+            }
+            Map<String, NewTopicCreationGroup> groups = new LinkedHashMap<>(topicGroups);
+            groups.remove(DEFAULT_TOPIC_CREATION_GROUP);
+            return new TopicCreation(true, topicGroups.get(DEFAULT_TOPIC_CREATION_GROUP), groups, new HashSet<>());
+        }
+
+        public static TopicCreation empty() {
+            return EMPTY;
+        }
+
+        public boolean isTopicCreationEnabled() {
+            return isTopicCreationEnabled;
+        }
+
+        public NewTopicCreationGroup defaultTopicGroup() {
+            return defaultTopicGroup;
+        }
+
+        public Map<String, NewTopicCreationGroup> topicGroups() {
+            return topicGroups;
+        }
+
+        public Set<String> topicCache() {
+            return topicCache;
         }
     }
 
@@ -420,7 +455,7 @@ class WorkerSourceTask extends WorkerTask {
     // Due to transformations that may change the destination topic of a record (such as
     // RegexRouter) topic creation can not be batched for multiple topics
     private void maybeCreateTopic(String topic) {
-        if (!isTopicCreationEnabled || topicCache.contains(topic)) {
+        if (!topicCreation.isTopicCreationEnabled() || topicCreation.topicCache().contains(topic)) {
             return;
         }
         log.info("The task will send records to topic '{}' for the first time. Checking "
@@ -428,21 +463,21 @@ class WorkerSourceTask extends WorkerTask {
         Map<String, TopicDescription> existing = admin.describeTopics(topic);
         if (!existing.isEmpty()) {
             log.info("Topic '{}' already exists.", topic);
-            topicCache.add(topic);
+            topicCreation.topicCache().add(topic);
             return;
         }
 
         log.info("Creating topic '{}'", topic);
-        NewTopicCreationGroup topicGroup = topicGroups.values().stream()
+        NewTopicCreationGroup topicGroup = topicCreation.topicGroups().values().stream()
                 .filter(group -> group.matches(topic))
                 .findFirst()
-                .orElse(defaultTopicGroup);
+                .orElse(topicCreation.defaultTopicGroup());
         log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
         NewTopic newTopic = topicGroup.newTopic(topic);
 
         if (admin.createTopic(newTopic)) {
-            topicCache.add(topic);
-            log.info("Created topic '{}'", newTopic);
+            topicCreation.topicCache().add(topic);
+            log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
         } else {
             log.warn("Request to create new topic '{}' failed", topic);
             throw new ConnectException("Task failed to create new topic " + topic + ". Ensure "

@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -192,6 +193,7 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     public static class NewTopicCreationGroup {
+        private final String name;
         private final Pattern inclusionPattern;
         private final Pattern exclusionPattern;
         private final int numPartitions;
@@ -199,11 +201,16 @@ public class TopicAdmin implements AutoCloseable {
         private final Map<String, Object> otherConfigs;
 
         protected NewTopicCreationGroup(String group, SourceConnectorConfig config) {
-            inclusionPattern = Pattern.compile(String.join("|", config.topicCreationInclude(group)));
-            exclusionPattern = Pattern.compile(String.join("|", config.topicCreationExclude(group)));
-            numPartitions = config.topicCreationPartitions(group);
-            replicationFactor = config.topicCreationReplicationFactor(group);
-            otherConfigs = config.topicCreationOtherConfigs(group);
+            this.name = group;
+            this.inclusionPattern = Pattern.compile(String.join("|", config.topicCreationInclude(group)));
+            this.exclusionPattern = Pattern.compile(String.join("|", config.topicCreationExclude(group)));
+            this.numPartitions = config.topicCreationPartitions(group);
+            this.replicationFactor = config.topicCreationReplicationFactor(group);
+            this.otherConfigs = config.topicCreationOtherConfigs(group);
+        }
+
+        public String name() {
+            return name;
         }
 
         public boolean matches(String topic) {
@@ -229,6 +236,29 @@ public class TopicAdmin implements AutoCloseable {
             // removed from this collection by the Worker
             groups.put(DEFAULT_TOPIC_CREATION_GROUP, new NewTopicCreationGroup(DEFAULT_TOPIC_CREATION_GROUP, config));
             return groups;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof NewTopicCreationGroup)) {
+                return false;
+            }
+            NewTopicCreationGroup that = (NewTopicCreationGroup) o;
+            return Objects.equals(name, that.name)
+                    && numPartitions == that.numPartitions
+                    && replicationFactor == that.replicationFactor
+                    && Objects.equals(inclusionPattern.pattern(), that.inclusionPattern.pattern())
+                    && Objects.equals(exclusionPattern.pattern(), that.exclusionPattern.pattern())
+                    && Objects.equals(otherConfigs, that.otherConfigs);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, numPartitions, replicationFactor, inclusionPattern.pattern(),
+                    exclusionPattern.pattern(), otherConfigs);
         }
     }
 

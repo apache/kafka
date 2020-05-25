@@ -34,15 +34,13 @@ public class TopicCreationConfig {
     private static final String INCLUDE_REGEX_DOC = "A list of strings that represent regular "
             + "expressions that may match topic names. This list is used to include topics that "
             + "match their values and apply this group's specific configuration to the topics "
-            + "that match this inclusion list. $alias applies to any group defined in topic"
-            + ".creation.groups but not the default";
+            + "that match this inclusion list.";
 
     public static final String EXCLUDE_REGEX_CONFIG = "exclude";
     private static final String EXCLUDE_REGEX_DOC = "A list of strings that represent regular "
             + "expressions that may match topic names. This list is used to exclude topics that "
             + "match their values and refrain from applying this group's specific configuration "
-            + "to the topics that match this exclusion list. $alias applies to any group defined "
-            + "in topic.creation.groups but not the default. Note that exclusion rules have "
+            + "to the topics that match this exclusion list. Note that exclusion rules have "
             + "precedent and override any inclusion rules for topics. ";
 
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";

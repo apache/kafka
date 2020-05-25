@@ -77,7 +77,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
 /**
@@ -836,7 +835,7 @@ public class Worker {
      * @return true if topic creation by source connectors is allowed; false otherwise
      */
     public boolean isTopicCreationEnabled() {
-        return config.getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
+        return config.topicCreationEnable();
     }
 
     /**

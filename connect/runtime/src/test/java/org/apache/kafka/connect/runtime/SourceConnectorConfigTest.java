@@ -177,6 +177,7 @@ public class SourceConnectorConfigTest {
         // Default group will match all topics besides empty string
         assertTrue(group.matches(" "));
         assertTrue(group.matches(FOO_TOPIC));
+        assertTrue(DEFAULT_TOPIC_CREATION_GROUP.equals(group.name()));
 
         NewTopic topicSpec = group.newTopic(FOO_TOPIC);
         assertEquals(FOO_TOPIC, topicSpec.name());
@@ -219,6 +220,7 @@ public class SourceConnectorConfigTest {
         // Default group will match all topics besides empty string
         assertTrue(group.matches(" "));
         assertTrue(group.matches(FOO_TOPIC));
+        assertTrue(DEFAULT_TOPIC_CREATION_GROUP.equals(group.name()));
 
         NewTopic topicSpec = group.newTopic(FOO_TOPIC);
         assertEquals(FOO_TOPIC, topicSpec.name());
@@ -258,13 +260,68 @@ public class SourceConnectorConfigTest {
 
         TopicAdmin.NewTopicCreationGroup fooGroup = groups.get(FOO_GROUP);
         TopicAdmin.NewTopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
-        // Default group will match all topics besides empty string
         assertFalse(fooGroup.matches(" "));
         assertTrue(fooGroup.matches(FOO_TOPIC));
         assertFalse(fooGroup.matches(BAR_TOPIC));
+        assertTrue(FOO_GROUP.equals(fooGroup.name()));
+        // Default group will match all topics besides empty string
         assertTrue(defaultGroup.matches(" "));
         assertTrue(defaultGroup.matches(FOO_TOPIC));
         assertTrue(defaultGroup.matches(BAR_TOPIC));
+        assertTrue(DEFAULT_TOPIC_CREATION_GROUP.equals(defaultGroup.name()));
+
+        NewTopic defaultTopicSpec = defaultGroup.newTopic(BAR_TOPIC);
+        assertEquals(BAR_TOPIC, defaultTopicSpec.name());
+        assertEquals(DEFAULT_REPLICATION_FACTOR, defaultTopicSpec.replicationFactor());
+        assertEquals(partitions, defaultTopicSpec.numPartitions());
+        assertThat(defaultTopicSpec.configs(), is(Collections.emptyMap()));
+
+        NewTopic fooTopicSpec = fooGroup.newTopic(FOO_TOPIC);
+        assertEquals(FOO_TOPIC, fooTopicSpec.name());
+        assertEquals(fooReplicas, fooTopicSpec.replicationFactor());
+        assertEquals(partitions, fooTopicSpec.numPartitions());
+        assertThat(fooTopicSpec.configs(), is(topicProps));
+    }
+
+    @Test
+    public void topicCreationWithOneGroupAndCombinedRegex() {
+        short fooReplicas = 3;
+        int partitions = 5;
+        Map<String, String> props = defaultConnectorPropsWithTopicCreation();
+        props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", FOO_GROUP));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(partitions));
+        // Setting here but they should be ignored for the default group
+        props.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + INCLUDE_REGEX_CONFIG, String.join("|", FOO_REGEX, BAR_REGEX));
+        props.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + REPLICATION_FACTOR_CONFIG, String.valueOf(fooReplicas));
+
+        Map<String, String> topicProps = new HashMap<>();
+        topicProps.put(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT);
+        topicProps.forEach((k, v) -> props.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + k, v));
+
+        SourceConnectorConfig config = new SourceConnectorConfig(MOCK_PLUGINS, props, true);
+        assertTrue(config.usesTopicCreation());
+        assertEquals(DEFAULT_REPLICATION_FACTOR, (short) config.topicCreationReplicationFactor(DEFAULT_TOPIC_CREATION_GROUP));
+        assertEquals(partitions, (int) config.topicCreationPartitions(DEFAULT_TOPIC_CREATION_GROUP));
+        assertThat(config.topicCreationInclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.singletonList(".*")));
+        assertThat(config.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
+        assertThat(config.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyMap()));
+
+        Map<String, TopicAdmin.NewTopicCreationGroup> groups =
+                TopicAdmin.NewTopicCreationGroup.configuredGroups(config);
+        assertEquals(2, groups.size());
+        assertThat(groups.keySet(), hasItems(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP));
+
+        TopicAdmin.NewTopicCreationGroup fooGroup = groups.get(FOO_GROUP);
+        TopicAdmin.NewTopicCreationGroup defaultGroup = groups.get(DEFAULT_TOPIC_CREATION_GROUP);
+        assertFalse(fooGroup.matches(" "));
+        assertTrue(fooGroup.matches(FOO_TOPIC));
+        assertTrue(fooGroup.matches(BAR_TOPIC));
+        assertTrue(FOO_GROUP.equals(fooGroup.name()));
+        // Default group will match all topics besides empty string
+        assertTrue(defaultGroup.matches(" "));
+        assertTrue(defaultGroup.matches(FOO_TOPIC));
+        assertTrue(defaultGroup.matches(BAR_TOPIC));
+        assertTrue(DEFAULT_TOPIC_CREATION_GROUP.equals(defaultGroup.name()));
 
         NewTopic defaultTopicSpec = defaultGroup.newTopic(BAR_TOPIC);
         assertEquals(BAR_TOPIC, defaultTopicSpec.name());

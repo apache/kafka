@@ -44,6 +44,7 @@ import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -252,8 +253,9 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "If set to true, it allows "
-            + "source connectors to create topics with custom settings. If enabled, each connector "
-            + "task will use an admin clients to create its topics and will not depend on "
+            + "source connectors to create topics with custom settings. If enabled, in "
+            + "connectors that specify topic creation properties with the prefix `" + TOPIC_CREATION_PREFIX
+            + "` each task will use an admin client to create its topics and will not depend on "
             + "auto.create.topics.enable being set on Kafka brokers.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
 

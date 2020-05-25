@@ -93,11 +93,16 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.EXCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -163,20 +168,25 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     @Override
     public void setup() {
         super.setup();
-        Map<String, String> workerProps = new HashMap<>();
-        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
-        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
-        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
+        Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
         producerCallbacks = EasyMock.newCapture();
         metrics = new MockConnectMetrics();
+    }
+
+    private Map<String, String> workerProps() {
+        Map<String, String> props = new HashMap<>();
+        props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
+        props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        props.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
+        props.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        props.put("internal.key.converter.schemas.enable", "false");
+        props.put("internal.value.converter.schemas.enable", "false");
+        props.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        props.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
+        return props;
     }
 
     private Map<String, String> sourceConnectorPropsWithGroups(String topic) {
@@ -192,6 +202,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, topic);
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "bar" + "." + INCLUDE_REGEX_CONFIG, ".*");
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "bar" + "." + EXCLUDE_REGEX_CONFIG, topic);
         return props;
     }
 
@@ -1104,6 +1116,49 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
         assertNotNull(newTopicCapture.getValue());
+    }
+
+    @Test
+    public void testTopicCreationClassWhenTopicCreationIsEnabled() {
+        TopicAdmin.NewTopicCreationGroup expectedDefaultGroup =
+                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig).get(DEFAULT_TOPIC_CREATION_GROUP);
+
+        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
+                .newTopicCreation(config, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+
+        assertTrue(topicCreation.isTopicCreationEnabled());
+        assertThat(topicCreation.defaultTopicGroup(), is(expectedDefaultGroup));
+        assertEquals(2, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups().keySet(), hasItems("foo", "bar"));
+        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
+    }
+
+    @Test
+    public void testTopicCreationClassWhenTopicCreationIsDisabled() {
+        Map<String, String> workerProps = workerProps();
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
+        config = new StandaloneConfig(workerProps);
+
+        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
+                .newTopicCreation(config, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+
+        assertFalse(topicCreation.isTopicCreationEnabled());
+        assertNull(topicCreation.defaultTopicGroup());
+        assertEquals(0, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
+        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
+    }
+
+    @Test
+    public void testEmptyTopicCreationClass() {
+        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
+                .newTopicCreation(config, null);
+
+        assertFalse(topicCreation.isTopicCreationEnabled());
+        assertNull(topicCreation.defaultTopicGroup());
+        assertEquals(0, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
+        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
     }
 
     private void expectPreliminaryCalls() {
