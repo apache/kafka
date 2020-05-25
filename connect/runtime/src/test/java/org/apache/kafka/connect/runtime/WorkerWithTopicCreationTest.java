@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
@@ -49,6 +48,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -129,7 +129,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
 
     @Mock private Herder herder;
     @Mock private StatusBackingStore statusBackingStore;
-    @Mock private Connector connector;
+    @Mock private SourceConnector connector;
     @Mock private ConnectorContext ctx;
     @Mock private TestSourceTask task;
     @Mock private WorkerSourceTask workerTask;
@@ -1299,7 +1299,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
                 .andReturn(workerTask);
     }
     /* Name here needs to be unique as we are testing the aliasing mechanism */
-    public static class WorkerTestConnector extends Connector {
+    public static class WorkerTestConnector extends SourceConnector {
 
         private static final ConfigDef CONFIG_DEF  = new ConfigDef()
             .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
