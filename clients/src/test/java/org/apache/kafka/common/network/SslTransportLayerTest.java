@@ -1322,7 +1322,7 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    private static class TestSslChannelBuilder extends SslChannelBuilder {
+    public static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
@@ -1365,7 +1365,7 @@ public class SslTransportLayerTest {
          * <li>Delayed writes to test handshake failure notifications to peer</li>
          * </ul>
          */
-        class TestSslTransportLayer extends SslTransportLayer {
+        public class TestSslTransportLayer extends SslTransportLayer {
 
             private final ResizeableBufferSize netReadBufSize;
             private final ResizeableBufferSize netWriteBufSize;
@@ -1433,7 +1433,7 @@ public class SslTransportLayerTest {
             }
         }
 
-        private static class ResizeableBufferSize {
+        public static class ResizeableBufferSize {
             private Integer bufSizeOverride;
             ResizeableBufferSize(Integer bufSizeOverride) {
                 this.bufSizeOverride = bufSizeOverride;
