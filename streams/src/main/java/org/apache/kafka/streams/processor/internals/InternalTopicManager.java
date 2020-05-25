@@ -39,7 +39,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.HashSet;
 
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
@@ -62,7 +61,7 @@ public class InternalTopicManager {
     private final long retryBackOffMs;
     private int remainingRetries;
 
-    private HashSet<String> needRetryTopics = new HashSet<>();
+    private HashSet<String> leaderNotAvailableTopics = new HashSet<>();
 
     public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
@@ -108,7 +107,7 @@ public class InternalTopicManager {
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
 
-        while (isNeedRetry(topicsNotReady) && remainingRetries >= 0) {
+        while (shouldRetry(topicsNotReady) && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
             newlyCreatedTopics.addAll(topicsNotReady);
 
@@ -161,7 +160,7 @@ public class InternalTopicManager {
             }
 
 
-            if (isNeedRetry(topicsNotReady)) {
+            if (shouldRetry(topicsNotReady)) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
 
                 Utils.sleep(retryBackOffMs);
@@ -170,7 +169,7 @@ public class InternalTopicManager {
             }
         }
 
-        if (isNeedRetry(topicsNotReady)) {
+        if (shouldRetry(topicsNotReady)) {
             final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
@@ -200,8 +199,8 @@ public class InternalTopicManager {
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
-                if (needRetryTopics.contains(topicName)) {
-                    needRetryTopics.remove(topicName);
+                if (leaderNotAvailableTopics.contains(topicName)) {
+                    leaderNotAvailableTopics.remove(topicName);
                 }
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
@@ -215,7 +214,7 @@ public class InternalTopicManager {
                     log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
                         "Error message was: {}", topicName, cause.toString());
                 } else if (cause instanceof LeaderNotAvailableException) {
-                    needRetryTopics.add(topicName);
+                    leaderNotAvailableTopics.add(topicName);
                     if (remainingRetries > 0) {
                         log.debug("The leader of the Topic {} is not available, with {} retries left.\n" +
                             "Error message was: {}", topicName, remainingRetries, cause.toString());
@@ -261,7 +260,7 @@ public class InternalTopicManager {
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
-            } else if (!needRetryTopics.contains(topicName)) {
+            } else if (!leaderNotAvailableTopics.contains(topicName)) {
                 topicsToCreate.add(topicName);
             }
         }
@@ -269,11 +268,8 @@ public class InternalTopicManager {
         return topicsToCreate;
     }
 
-    private boolean isNeedRetry(final Set<String> topicsNotReady) {
-        return !topicsNotReady.isEmpty() || hasNeedRetryTopic();
-    }
-
-    private boolean hasNeedRetryTopic() {
-        return needRetryTopics.size() > 0;
+    private boolean shouldRetry(final Set<String> topicsNotReady) {
+        // If there's topic with LeaderNotAvailableException, we still need retry
+        return !topicsNotReady.isEmpty() || leaderNotAvailableTopics.size() > 0;
     }
 }
