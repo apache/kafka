@@ -94,7 +94,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         }
 
         if (processorSupplier.stores() != null) {
-            for (StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
+            for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
                 topologyBuilder.addStateStore(storeBuilder, processorName);
             }
         }

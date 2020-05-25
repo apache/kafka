@@ -66,8 +66,6 @@ public class KStreamTransformIntegrationTest {
     @Before
     public void before() {
         builder = new StreamsBuilder();
-        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder = storeBuilder();
-        builder.addStateStore(keyValueStoreBuilder);
         stream = builder.stream(topic, Consumed.with(Serdes.Integer(), Serdes.Integer()));
     }
 

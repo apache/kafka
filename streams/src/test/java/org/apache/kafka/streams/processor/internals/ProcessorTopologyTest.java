@@ -268,6 +268,8 @@ public class ProcessorTopologyTest {
             .addProcessor("processor2", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
 
+        driver = new TopologyTestDriver(topology, props);
+
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
             driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
