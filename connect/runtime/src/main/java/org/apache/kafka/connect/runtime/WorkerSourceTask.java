@@ -49,17 +49,14 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -67,7 +64,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.util.TopicAdmin.NewTopicCreationGroup;
 
@@ -156,56 +152,6 @@ class WorkerSourceTask extends WorkerTask {
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
-    }
-
-    public static class TopicCreation {
-        private static final TopicCreation EMPTY =
-                new TopicCreation(false, null, Collections.emptyMap(), Collections.emptySet());
-
-        private final boolean isTopicCreationEnabled;
-        private final NewTopicCreationGroup defaultTopicGroup;
-        private final Map<String, NewTopicCreationGroup> topicGroups;
-        private final Set<String> topicCache;
-
-        protected TopicCreation(boolean isTopicCreationEnabled,
-                                NewTopicCreationGroup defaultTopicGroup,
-                                Map<String, NewTopicCreationGroup> topicGroups,
-                                Set<String> topicCache) {
-            this.isTopicCreationEnabled = isTopicCreationEnabled;
-            this.defaultTopicGroup = defaultTopicGroup;
-            this.topicGroups = topicGroups;
-            this.topicCache = topicCache;
-        }
-
-        public static TopicCreation newTopicCreation(WorkerConfig workerConfig,
-                                                     Map<String, NewTopicCreationGroup> topicGroups) {
-            if (!workerConfig.topicCreationEnable() || topicGroups == null) {
-                return EMPTY;
-            }
-            Map<String, NewTopicCreationGroup> groups = new LinkedHashMap<>(topicGroups);
-            groups.remove(DEFAULT_TOPIC_CREATION_GROUP);
-            return new TopicCreation(true, topicGroups.get(DEFAULT_TOPIC_CREATION_GROUP), groups, new HashSet<>());
-        }
-
-        public static TopicCreation empty() {
-            return EMPTY;
-        }
-
-        public boolean isTopicCreationEnabled() {
-            return isTopicCreationEnabled;
-        }
-
-        public NewTopicCreationGroup defaultTopicGroup() {
-            return defaultTopicGroup;
-        }
-
-        public Map<String, NewTopicCreationGroup> topicGroups() {
-            return topicGroups;
-        }
-
-        public Set<String> topicCache() {
-            return topicCache;
-        }
     }
 
     @Override

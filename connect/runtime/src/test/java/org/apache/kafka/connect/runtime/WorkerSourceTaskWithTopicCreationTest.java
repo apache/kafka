@@ -57,6 +57,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreation;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -1123,8 +1124,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         TopicAdmin.NewTopicCreationGroup expectedDefaultGroup =
                 TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig).get(DEFAULT_TOPIC_CREATION_GROUP);
 
-        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
-                .newTopicCreation(config, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
+                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
 
         assertTrue(topicCreation.isTopicCreationEnabled());
         assertThat(topicCreation.defaultTopicGroup(), is(expectedDefaultGroup));
@@ -1139,8 +1140,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
         config = new StandaloneConfig(workerProps);
 
-        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
-                .newTopicCreation(config, TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
+                TopicAdmin.NewTopicCreationGroup.configuredGroups(sourceConfig));
 
         assertFalse(topicCreation.isTopicCreationEnabled());
         assertNull(topicCreation.defaultTopicGroup());
@@ -1151,8 +1152,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
     @Test
     public void testEmptyTopicCreationClass() {
-        WorkerSourceTask.TopicCreation topicCreation = WorkerSourceTask.TopicCreation
-                .newTopicCreation(config, null);
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(config, null);
 
         assertFalse(topicCreation.isTopicCreationEnabled());
         assertNull(topicCreation.defaultTopicGroup());
