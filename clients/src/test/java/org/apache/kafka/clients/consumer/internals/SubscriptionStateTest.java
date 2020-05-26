@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -521,7 +520,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testMaybeValidatePositionForCurrentLeader() {
-        NodeApiVersions oldApis = NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short)0, (short)2);
+        NodeApiVersions oldApis = NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update("1", oldApis);
 
