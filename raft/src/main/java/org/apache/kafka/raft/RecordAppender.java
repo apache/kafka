@@ -18,24 +18,19 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.record.Records;
 
-import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
-public interface RaftClient {
-
-    /**
-     * Initialize the state machine that will be used by this client. This should
-     * only be called once after creation and calls to {@link RecordAppender#append(Records)} should
-     * be made until this method returns.
-     *
-     * @param stateMachine The state machine implementation
-     * @throws IOException For any IO errors during initialization
-     */
-    void initialize(ReplicatedStateMachine stateMachine) throws IOException;
+public interface RecordAppender {
 
     /**
-     * Shutdown the client.
+     * Append a new entry to the log. The client must be in the leader state to
+     * accept an append: it is up to the {@link ReplicatedStateMachine} implementation
+     * to ensure this using {@link ReplicatedStateMachine#becomeLeader(int, RecordAppender)}.
      *
-     * @param timeoutMs How long to wait for graceful completion of pending operations.
+     * This method must be thread-safe.
+     *
+     * @param records The records to append to the log
+     * @return A future containing the base offset and epoch of the appended records (if successful)
      */
-    void shutdown(int timeoutMs);
+    CompletableFuture<OffsetAndEpoch> append(Records records);
 }
