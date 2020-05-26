@@ -130,7 +130,7 @@ public class KafkaRaftClient implements RaftClient {
     private final FuturePurgatory<Void> purgatory;
     private final BlockingQueue<PendingAppendRequest> unsentAppends;
 
-    private DistributedStateMachine stateMachine;
+    private ReplicatedStateMachine stateMachine;
 
     public KafkaRaftClient(NetworkChannel channel,
                            ReplicatedLog log,
@@ -227,9 +227,10 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     @Override
-    public void initialize(DistributedStateMachine stateMachine) throws IOException {
+    public void initialize(ReplicatedStateMachine stateMachine) throws IOException {
         this.stateMachine = stateMachine;
         quorum.initialize(new OffsetAndEpoch(log.endOffset(), log.lastFetchedEpoch()));
+        stateMachine.initialize(this::append);
 
         if (quorum.isLeader()) {
             onBecomeLeader(quorum.leaderStateOrThrow());
@@ -902,7 +903,7 @@ public class KafkaRaftClient implements RaftClient {
             GracefulShutdown gracefulShutdown = shutdown.get();
             if (gracefulShutdown != null) {
                 gracefulShutdown.onEpochUpdate(epoch);
-            } else {
+            } else if (leaderId.isPresent()) {
                 becomeFollower(leaderId, epoch);
             }
         } else if (leaderId.isPresent() && !quorum.hasLeader()) {
@@ -1259,8 +1260,7 @@ public class KafkaRaftClient implements RaftClient {
      * @param records The records to write to the log
      * @return The uncommitted base offset and epoch of the appended records
      */
-    @Override
-    public CompletableFuture<OffsetAndEpoch> append(Records records) {
+    private CompletableFuture<OffsetAndEpoch> append(Records records) {
         if (shutdown.get() != null)
             throw new IllegalStateException("Cannot append records while we are shutting down");
 
