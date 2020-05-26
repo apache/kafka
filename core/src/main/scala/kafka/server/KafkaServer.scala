@@ -402,7 +402,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     val contextLabels = new util.HashMap[String, Object]
     contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
     contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
-    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false))
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, true))
     val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
     metricsContext
   }
