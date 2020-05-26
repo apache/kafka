@@ -31,17 +31,15 @@ public class TopicCreationConfig {
     public static final String DEFAULT_TOPIC_CREATION_GROUP = "default";
 
     public static final String INCLUDE_REGEX_CONFIG = "include";
-    private static final String INCLUDE_REGEX_DOC = "A list of strings that represent regular "
-            + "expressions that may match topic names. This list is used to include topics that "
-            + "match their values and apply this group's specific configuration to the topics "
-            + "that match this inclusion list.";
+    private static final String INCLUDE_REGEX_DOC = "A list of regular expression literals "
+            + "used to match the names topics used by the source connector. This list is used "
+            + "to include topics that should be created using the topic settings defined by this group.";
 
     public static final String EXCLUDE_REGEX_CONFIG = "exclude";
-    private static final String EXCLUDE_REGEX_DOC = "A list of strings that represent regular "
-            + "expressions that may match topic names. This list is used to exclude topics that "
-            + "match their values and refrain from applying this group's specific configuration "
-            + "to the topics that match this exclusion list. Note that exclusion rules have "
-            + "precedent and override any inclusion rules for topics. ";
+    private static final String INCLUDE_REGEX_DOC = "A list of regular expression literals "
+            + "used to match the names topics used by the source connector. This list is used "
+            + "to exclude topics from being created with the topic settings defined by this group. "
+            + "Note that exclusion rules have precedent and override any inclusion rules for the topics.";
 
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "The replication factor for new topics "
@@ -53,14 +51,16 @@ public class TopicCreationConfig {
             + "optional and if it's missing it gets the value of the default group";
 
     public static final String PARTITIONS_CONFIG = "partitions";
-    private static final String PARTITIONS_DOC = "The number of partitions new topics created for"
-            + " this connector. For the default group this configuration is required. For any "
+    private static final String PARTITIONS_DOC = "The number of partitions new topics created for "
+            + "this connector. This value may be -1 to use the broker's default number of partitions, "
+            + "or a positive number representing the desired number of partitions. "
+            + "For the default group this configuration is required. For any "
             + "other group defined in topic.creation.groups this config is optional and if it's "
-            + "missing it gets the value the default group";
+            + "missing it gets the value of the default group";
 
     public static final ConfigDef.Validator REPLICATION_FACTOR_VALIDATOR = ConfigDef.LambdaValidator.with(
         (name, value) -> validateReplicationFactor(name, (short) value),
-        () -> "Positive number, or -1 to use the broker's default"
+        () -> "Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default"
     );
     public static final ConfigDef.Validator PARTITIONS_VALIDATOR = ConfigDef.LambdaValidator.with(
         (name, value) -> validatePartitions(name, (int) value),
@@ -88,7 +88,7 @@ public class TopicCreationConfig {
     private static void validateReplicationFactor(String configName, short factor) {
         if (factor != TopicAdmin.NO_REPLICATION_FACTOR && factor < 1) {
             throw new ConfigException(configName, factor,
-                    "Replication factor must be positive, or -1 to use the broker's default");
+                    "Replication factor must be positive and not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default");
         }
     }
 

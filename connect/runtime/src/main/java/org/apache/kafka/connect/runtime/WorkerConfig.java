@@ -252,9 +252,9 @@ public class WorkerConfig extends AbstractConfig {
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
-    protected static final String TOPIC_CREATION_ENABLE_DOC = "If set to true, it allows "
-            + "source connectors to create topics by specifying topic creation properties "
-            + "with the prefix `" + TOPIC_CREATION_PREFIX + "`. Each task will use an "
+    protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
+            + "automatic creation of topics used by source connectors, when source connector "
+            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
             + "admin client to create its topics and will not depend on the Kafka brokers "
             + "to create topics automatically.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
