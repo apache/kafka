@@ -115,11 +115,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
         return newDef;
     }
 
-    @Override
-    public Object get(String key) {
-        return enrichedSourceConfig != null ? enrichedSourceConfig.get(key) : super.get(key);
-    }
-
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
         super(plugins, config, props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {
@@ -139,6 +134,11 @@ public class SourceConnectorConfig extends ConnectorConfig {
         } else {
             enrichedSourceConfig = null;
         }
+    }
+
+    @Override
+    public Object get(String key) {
+        return enrichedSourceConfig != null ? enrichedSourceConfig.get(key) : super.get(key);
     }
 
     /**

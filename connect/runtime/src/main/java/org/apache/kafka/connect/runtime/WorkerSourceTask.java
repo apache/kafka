@@ -381,12 +381,15 @@ class WorkerSourceTask extends WorkerTask {
                     });
                 lastSendFailed = false;
             } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
-                log.warn("{} Failed to send {}, backing off before retrying: ", this, producerRecord, e);
+                log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
                 counter.retryRemaining();
                 return false;
             } catch (ConnectException e) {
+                log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
                 log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {

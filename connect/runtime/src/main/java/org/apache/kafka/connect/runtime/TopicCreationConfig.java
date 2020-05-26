@@ -72,7 +72,8 @@ public class TopicCreationConfig {
             try {
                 ((List<String>) value).forEach(Pattern::compile);
             } catch (PatternSyntaxException e) {
-                throw new ConfigException(name, value, "Syntax error in regular expression");
+                throw new ConfigException(name, value,
+                        "Syntax error in regular expression: " + e.getMessage());
             }
         },
         () -> "Positive number, or -1 to use the broker's default"
