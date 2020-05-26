@@ -93,11 +93,11 @@ public class KafkaRaftClientTest {
         return new InetSocketAddress("localhost", 9990 + id);
     }
 
-    private KafkaRaftClient buildClient(Set<Integer> voters) throws IOException {
+    private KafkaRaftClient buildClient(Set<Integer> voters) {
         return buildClient(voters, new MockStateMachine());
     }
 
-    private KafkaRaftClient buildClient(Set<Integer> voters, ReplicatedStateMachine stateMachine) throws IOException {
+    private KafkaRaftClient buildClient(Set<Integer> voters, ReplicatedStateMachine stateMachine) {
         LogContext logContext = new LogContext();
         QuorumState quorum = new QuorumState(localId, voters, quorumStateStore, logContext);
 

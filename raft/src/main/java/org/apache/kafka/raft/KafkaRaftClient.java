@@ -234,7 +234,7 @@ public class KafkaRaftClient implements RaftClient {
      * Initialize the state machine.
      *
      * @param stateMachine The state machine implementation
-     * @throws KafkaRaftException
+     * @throws KafkaRaftException fatal exception during Raft client initialization
      */
     @Override
     public void initialize(ReplicatedStateMachine stateMachine) throws KafkaRaftException {
@@ -667,8 +667,7 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private FetchQuorumRecordsResponseData tryCompleteFetchQuorumRecordsRequest(
-        FetchQuorumRecordsRequestData request
-    ) throws IOException {
+        FetchQuorumRecordsRequestData request) {
         Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.leaderEpoch());
         if (errorOpt.isPresent()) {
             return buildFetchQuorumRecordsResponse(
