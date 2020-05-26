@@ -115,7 +115,7 @@ public class PartitionGroup {
             partitionQueues.put(newInputPartition, recordQueueCreator.apply(newInputPartition));
         }
         nonEmptyQueuesByTime.removeIf(q -> removedPartitions.contains(q.partition()));
-        allBuffered &= newInputPartitions.isEmpty();
+        allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
 
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {
