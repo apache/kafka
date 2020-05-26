@@ -19,6 +19,8 @@ import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
+
+from kafkatest.services.kafka.util import java_version
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 import itertools
@@ -140,7 +142,7 @@ class SecurityConfig(TemplateRenderer):
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
-                 listener_security_config=ListenerSecurityConfig()):
+                 listener_security_config=ListenerSecurityConfig(), tls_version=None):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -176,6 +178,7 @@ class SecurityConfig(TemplateRenderer):
         self.listener_security_config = listener_security_config
         self.properties = {
             'security.protocol' : security_protocol,
+            'tls.version' : tls_version,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
             'ssl.keystore.password' : SecurityConfig.ssl_stores.keystore_passwd,
             'ssl.key.password' : SecurityConfig.ssl_stores.key_passwd,
@@ -201,13 +204,15 @@ class SecurityConfig(TemplateRenderer):
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
                               jaas_override_variables=jaas_override_variables,
-                              listener_security_config=self.listener_security_config)
+                              listener_security_config=self.listener_security_config,
+                              tls_version=self.tls_version)
 
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
         self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
 
     def setup_ssl(self, node):
+
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
         node.account.copy_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
         SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
@@ -259,6 +264,9 @@ class SecurityConfig(TemplateRenderer):
         if self.has_sasl:
             self.setup_sasl(node)
 
+        if java_version(node) <= 9 and self.properties['tls.version'] == 'TLSv1.3':
+            self.properties.update({'tls.version': 'TLSv1.2'})
+
     def setup_credentials(self, node, path, zk_connect, broker):
         if broker:
             self.maybe_create_scram_credentials(node, zk_connect, path, self.interbroker_sasl_mechanism,
@@ -302,6 +310,10 @@ class SecurityConfig(TemplateRenderer):
     @property
     def security_protocol(self):
         return self.properties['security.protocol']
+
+    @property
+    def tls_version(self):
+        return self.properties['tls.version']
 
     @property
     def client_sasl_mechanism(self):

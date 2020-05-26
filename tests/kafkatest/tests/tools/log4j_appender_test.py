@@ -16,7 +16,7 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from ducktape.mark import matrix
+from ducktape.mark import matrix, parametrize
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -47,16 +47,16 @@ class Log4jAppenderTest(Test):
     def setUp(self):
         self.zk.start()
 
-    def start_kafka(self, security_protocol, interbroker_security_protocol):
+    def start_kafka(self, security_protocol, interbroker_security_protocol, tls_version=None):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
-            self.zk, security_protocol=security_protocol,
+            self.zk, security_protocol=security_protocol, tls_version=tls_version,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 
-    def start_appender(self, security_protocol):
+    def start_appender(self, security_protocol, tls_version=None):
         self.appender = KafkaLog4jAppender(self.test_context, self.num_brokers, self.kafka, TOPIC, MAX_MESSAGES,
-                                           security_protocol=security_protocol)
+                                           security_protocol=security_protocol, tls_version=tls_version)
         self.appender.start()
 
     def custom_message_validator(self, msg):
@@ -71,16 +71,17 @@ class Log4jAppenderTest(Test):
         self.consumer.start()
 
     @cluster(num_nodes=4)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
+    @parametrize(security_protocol='PLAINTEXT')
     @cluster(num_nodes=5)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_log4j_appender(self, security_protocol='PLAINTEXT'):
+    def test_log4j_appender(self, security_protocol='PLAINTEXT', tls_version=None):
         """
         Tests if KafkaLog4jAppender is producing to Kafka topic
         :return: None
         """
-        self.start_kafka(security_protocol, security_protocol)
-        self.start_appender(security_protocol)
+        self.start_kafka(security_protocol, security_protocol, tls_version)
+        self.start_appender(security_protocol, tls_version)
         self.appender.wait()
 
         self.start_consumer()

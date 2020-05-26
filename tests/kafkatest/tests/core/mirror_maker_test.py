@@ -58,10 +58,12 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         # Target cluster
         self.target_zk.start()
 
-    def start_kafka(self, security_protocol):
+    def start_kafka(self, security_protocol, tls_version=None):
         self.source_kafka.security_protocol = security_protocol
+        self.source_kafka.tls_version = tls_version
         self.source_kafka.interbroker_security_protocol = security_protocol
         self.target_kafka.security_protocol = security_protocol
+        self.target_kafka.tls_version = tls_version
         self.target_kafka.interbroker_security_protocol = security_protocol
         if self.source_kafka.security_config.has_sasl_kerberos:
             minikdc = MiniKdc(self.source_kafka.context, self.source_kafka.nodes + self.target_kafka.nodes)
@@ -111,10 +113,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                      err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
     @cluster(num_nodes=7)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
+    @parametrize(security_protocol='PLAINTEXT')
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_simple_end_to_end(self, security_protocol):
+    def test_simple_end_to_end(self, security_protocol, tls_version=None):
         """
         Test end-to-end behavior under non-failure conditions.
 
@@ -126,7 +129,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Consume messages from target.
         - Verify that number of consumed messages matches the number produced.
         """
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, tls_version)
         self.mirror_maker.start()
 
         mm_node = self.mirror_maker.nodes[0]
@@ -136,10 +139,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.mirror_maker.stop()
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(clean_shutdown=[True, False], security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
+    @matrix(clean_shutdown=[True, False], security_protocol='PLAINTEXT')
     @cluster(num_nodes=8)
     @matrix(clean_shutdown=[True, False], security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_bounce(self, offsets_storage="kafka", clean_shutdown=True, security_protocol='PLAINTEXT'):
+    def test_bounce(self, offsets_storage="kafka", clean_shutdown=True, security_protocol='PLAINTEXT', tls_version=None):
         """
         Test end-to-end behavior under failure conditions.
 
@@ -157,7 +161,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
             # the group until the previous session times out
             self.consumer.consumer_timeout_ms = 60000
 
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, tls_version)
 
         self.mirror_maker.offsets_storage = offsets_storage
         self.mirror_maker.start()

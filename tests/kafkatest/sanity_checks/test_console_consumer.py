@@ -15,7 +15,7 @@
 
 import time
 
-from ducktape.mark import matrix
+from ducktape.mark import matrix, defaults
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
@@ -44,19 +44,22 @@ class ConsoleConsumerTest(Test):
         self.zk.start()
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
+    @parametrize(security_protocol='PLAINTEXT')
     @cluster(num_nodes=4)
     @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'])
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI'):
+    def test_lifecycle(self, security_protocol, tls_version=None, sasl_mechanism='GSSAPI'):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol
+        self.kafka.tls_version = tls_version
         self.kafka.client_sasl_mechanism = sasl_mechanism
         self.kafka.interbroker_sasl_mechanism = sasl_mechanism
         self.kafka.start()
 
         self.consumer.security_protocol = security_protocol
+        self.consumer.tls_version = tls_version
 
         t0 = time.time()
         self.consumer.start()
