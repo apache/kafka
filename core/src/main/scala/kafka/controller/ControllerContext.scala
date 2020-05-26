@@ -419,14 +419,14 @@ class ControllerContext {
     if (!isTopicQueuedUpForDeletion(partition.topic)) {
       oldReplicaAssignment.foreach { replicaAssignment =>
         oldLeadershipInfo.foreach { leadershipInfo =>
-          if (leadershipInfo.leaderAndIsr.leader != replicaAssignment.replicas.head)
+          if (isReplicaImbalance(replicaAssignment, leadershipInfo))
             preferredReplicaImbalanceCount -= 1
         }
       }
 
       newReplicaAssignment.foreach { replicaAssignment =>
         newLeadershipInfo.foreach { leadershipInfo =>
-          if (leadershipInfo.leaderAndIsr.leader != replicaAssignment.replicas.head)
+          if (isReplicaImbalance(replicaAssignment, leadershipInfo))
             preferredReplicaImbalanceCount += 1
         }
       }
@@ -436,10 +436,20 @@ class ControllerContext {
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).foreach { case (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
-        if (leadershipInfo.leaderAndIsr.leader != replicaAssignment.replicas.head)
+        if (isReplicaImbalance(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1
       }
     }
+  }
+
+  private def isReplicaImbalance(replicaAssignment: ReplicaAssignment,
+                                 leadershipInfo: LeaderIsrAndControllerEpoch): Boolean = {
+    val preferredReplica = replicaAssignment.replicas.head
+    if (replicaAssignment.isBeingReassigned && replicaAssignment.addingReplicas.contains(preferredReplica))
+      // reassigning partitions are not counted as imbalanced until the new replica joins the ISR (completes reassignment)
+      leadershipInfo.leaderAndIsr.isr.contains(preferredReplica)
+    else
+      leadershipInfo.leaderAndIsr.leader != preferredReplica
   }
 
   private def isValidReplicaStateTransition(replica: PartitionAndReplica, targetState: ReplicaState): Boolean =
