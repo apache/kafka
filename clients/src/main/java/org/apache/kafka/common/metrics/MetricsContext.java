@@ -21,10 +21,10 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
 
 /**
- * MetricsContext encapsulates additional metadata about metrics exposed via a
+ * MetricsContext encapsulates additional contextLabels about metrics exposed via a
  * {@link org.apache.kafka.common.metrics.MetricsReporter}
  *
- * The metadata map provides following information:
+ * The contextLabels map provides following information:
  * - a <code>_namespace</node> field indicating the component exposing metrics
  *   e.g. kafka.server, kafka.consumer
  *   {@link JmxReporter} uses this as prefix for mbean names
@@ -41,7 +41,7 @@ public interface MetricsContext {
     String NAMESPACE = "_namespace"; // metrics namespace, formerly jmx prefix
 
     /**
-     * Returns metadata fields
+     * Returns contextLabels fields
      */
-    Map<String, String> metadata();
+    Map<String, String> contextLabels();
 }

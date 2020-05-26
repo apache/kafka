@@ -83,6 +83,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).offsetStorageTopicSettings()
                                             : Collections.emptyMap();

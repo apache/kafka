@@ -43,9 +43,9 @@ object KafkaMetricsReporterTest {
     override def contextChange(metricsContext: MetricsContext): Unit = {
       //read jmxPrefix
 
-      MockMetricsReporter.JMXPREFIX.set(metricsContext.metadata().get("_namespace").toString)
-      MockMetricsReporter.CLUSTERID.set(metricsContext.metadata().get("kafka.cluster.id").toString)
-      MockMetricsReporter.BROKERID.set(metricsContext.metadata().get("kafka.broker.id").toString)
+      MockMetricsReporter.JMXPREFIX.set(metricsContext.contextLabels().get("_namespace").toString)
+      MockMetricsReporter.CLUSTERID.set(metricsContext.contextLabels().get("kafka.cluster.id").toString)
+      MockMetricsReporter.BROKERID.set(metricsContext.contextLabels().get("kafka.broker.id").toString)
     }
 
     override def configure(configs: util.Map[String, _]): Unit = {}

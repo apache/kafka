@@ -44,6 +44,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({ConnectUtils.class})
@@ -60,10 +61,6 @@ public class WorkerGroupMemberTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put("group.id", "group-1");
         workerProps.put("offset.storage.topic", "topic-1");
@@ -80,13 +77,16 @@ public class WorkerGroupMemberTest {
         member = new WorkerGroupMember(config, "", configBackingStore,
         null, Time.SYSTEM, "client-1", logContext);
 
+        boolean entered = false;
         for (MetricsReporter reporter : member.metrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
+                entered = true;
                 MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
-                assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
-                assertEquals("group-1", mockMetricsReporter.getMetricsContext().metadata().get(WorkerConfig.CONNECT_GROUP_ID));
+                assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
+                assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }
         }
+        assertTrue("Failed to verify MetricsReporter", entered);
 
         MetricName name = member.metrics().metricName("test.avg", "grp1");
         member.metrics().addMetric(name, new Avg());

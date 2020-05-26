@@ -67,7 +67,7 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
     }
 
     /**
-     * Provides context metadata for the service or library exposing metrics
+     * Provides context labels for the service or library exposing metrics
      *
      * @param metricsContext the metric context
      */

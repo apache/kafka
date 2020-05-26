@@ -25,9 +25,9 @@ import java.util.Map;
  */
 public class KafkaMetricsContext implements MetricsContext {
     /**
-     * Client or Service's metadata map.
+     * Client or Service's contextLabels map.
      */
-    private final Map<String, String> metadata = new HashMap<>();
+    private final Map<String, String> contextLabels = new HashMap<>();
 
     /**
      * Create a MetricsContext with namespace, no service or client properties
@@ -40,17 +40,16 @@ public class KafkaMetricsContext implements MetricsContext {
     /**
      * Create a MetricsContext with namespace, service or client properties
      * @param namespace value for _namespace key
-     * @param metadata  metadata additional entries to add to the context.
+     * @param contextLabels  contextLabels additional entries to add to the context.
      *                  values will be converted to string using Object.toString()
      */
-    public KafkaMetricsContext(String namespace, Map<String, ?> metadata) {
-        this.metadata.put(MetricsContext.NAMESPACE, namespace);
-        metadata.forEach((key, value) -> this.metadata.put(key, value.toString()));
-
+    public KafkaMetricsContext(String namespace, Map<String, ?> contextLabels) {
+        this.contextLabels.put(MetricsContext.NAMESPACE, namespace);
+        contextLabels.forEach((key, value) -> this.contextLabels.put(key, value.toString()));
     }
 
-    public Map<String, String> metadata() {
-        return Collections.unmodifiableMap(metadata);
+    public Map<String, String> contextLabels() {
+        return Collections.unmodifiableMap(contextLabels);
     }
 
 }

@@ -326,7 +326,7 @@ public class JmxReporter implements MetricsReporter {
 
     @Override
     public void contextChange(MetricsContext metricsContext) {
-        String namespace = metricsContext.metadata().get(MetricsContext.NAMESPACE);
+        String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
         Objects.requireNonNull(namespace);
         synchronized (LOCK) {
             if (!mbeans.isEmpty()) {
