@@ -45,11 +45,12 @@ public class TopicCreationConfig {
 
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "The replication factor for new topics "
-            + "created for this connector. This value must not be larger than the number of "
-            + "brokers in the Kafka cluster, or otherwise an error will be thrown when the "
-            + "connector will attempt to create a topic. For the default group this configuration"
-            + " is required. For any other group defined in topic.creation.groups this config is "
-            + "optional and if it's missing it gets the value the default group";
+            + "created for this connector using this group. This value may be -1 to use the broker's"
+            + "default replication factor, or may be a positive number not larger than the number of "
+            + "brokers in the Kafka cluster. A value larger than the number of brokers in the Kafka cluster "
+            + "will result in an error when the new topic is created. For the default group this configuration "
+            + "is required. For any other group defined in topic.creation.groups this config is "
+            + "optional and if it's missing it gets the value of the default group";
 
     public static final String PARTITIONS_CONFIG = "partitions";
     private static final String PARTITIONS_DOC = "The number of partitions new topics created for"
