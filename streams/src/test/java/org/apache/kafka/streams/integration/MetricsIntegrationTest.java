@@ -204,6 +204,10 @@ public class MetricsIntegrationTest {
     private static final String SUPPRESSION_BUFFER_COUNT_MAX = "suppression-buffer-count-max";
     private static final String EXPIRED_WINDOW_RECORD_DROP_RATE = "expired-window-record-drop-rate";
     private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL = "expired-window-record-drop-total";
+    private static final String E2E_LATENCY_MIN = "record-e2e-latency-min";
+    private static final String E2E_LATENCY_MAX = "record-e2e-latency-max";
+    private static final String E2E_LATENCY_P99 = "record-e2e-latency-p99";
+    private static final String E2E_LATENCY_P90 = "record-e2e-latency-p90";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -582,6 +586,8 @@ public class MetricsIntegrationTest {
         final int numberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 0;
         final int numberOfModifiedProcessMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 4;
         final int numberOfModifiedForwardMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 8 : 0;
+        final int numberOfSourceNodes = 4;
+        final int numberOfTerminalNodes = 4;
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, numberOfRemovedMetrics);
@@ -600,6 +606,10 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfModifiedForwardMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
+        checkMetricByName(listMetricProcessor, E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, E2E_LATENCY_P99, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, E2E_LATENCY_P90, numberOfSourceNodes + numberOfTerminalNodes);
     }
 
     private void checkKeyValueStoreMetrics(final String group0100To24,
