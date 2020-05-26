@@ -32,12 +32,12 @@ public class TopicCreationConfig {
 
     public static final String INCLUDE_REGEX_CONFIG = "include";
     private static final String INCLUDE_REGEX_DOC = "A list of regular expression literals "
-            + "used to match the names topics used by the source connector. This list is used "
+            + "used to match the topic names used by the source connector. This list is used "
             + "to include topics that should be created using the topic settings defined by this group.";
 
     public static final String EXCLUDE_REGEX_CONFIG = "exclude";
-    private static final String INCLUDE_REGEX_DOC = "A list of regular expression literals "
-            + "used to match the names topics used by the source connector. This list is used "
+    private static final String EXCLUDE_REGEX_DOC = "A list of regular expression literals "
+            + "used to match the topic names used by the source connector. This list is used "
             + "to exclude topics from being created with the topic settings defined by this group. "
             + "Note that exclusion rules have precedent and override any inclusion rules for the topics.";
 
