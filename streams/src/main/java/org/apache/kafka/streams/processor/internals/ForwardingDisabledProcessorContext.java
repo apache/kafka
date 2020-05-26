@@ -40,6 +40,10 @@ import java.util.Objects;
 public final class ForwardingDisabledProcessorContext implements ProcessorContext {
     private final ProcessorContext delegate;
 
+    private String explanation = "ProcessorContext#forward() is not supported from this context, "
+        + "as the framework must ensure the key is not changed (#forward allows changing the key on "
+        + "messages which are sent). Try plain other functions which don't allow the key to be changed.";
+
     public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
@@ -102,24 +106,24 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public <K, V> void forward(final K key, final V value) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+        throw new StreamsException(explanation);
     }
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+        throw new StreamsException(explanation);
     }
 
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+        throw new StreamsException(explanation);
     }
 
     @Override
     @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+        throw new StreamsException(explanation);
     }
 
     @Override
