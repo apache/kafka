@@ -29,10 +29,12 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.BufferedOutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -48,6 +50,10 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
     private FileStreamSourceTask task;
 
     private boolean verifyMocks = false;
+
+    private static final String KAFKAMSG = "Kafka® is used for building real-time data pipelines and streaming apps. " +
+            "It is horizontally scalable, fault-tolerant, wicked fast, " +
+            "and runs in production in thousands of companies.";
 
     @Before
     public void setup() throws IOException {
@@ -168,6 +174,43 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         assertEquals("line", records.get(0).value());
 
         task.stop();
+    }
+
+    private void tryFileSize(int batchSize, int numLines, int numPolls) throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
+        replay();
+
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
+        task.start(config);
+
+        OutputStream os = new BufferedOutputStream(Files.newOutputStream(tempFile.toPath()));
+
+        for (int i = 0; i < numLines; i++) {
+            os.write((KAFKAMSG + "\n").getBytes());
+        }
+        os.flush();
+        List<SourceRecord> records = new ArrayList<>();
+        for (int i = 0; i < numPolls; i++) {
+            List<SourceRecord>  srs = task.poll();
+            if (srs != null) {
+                records.addAll(srs);
+            }
+        }
+
+        assertEquals(numPolls * batchSize, records.size());
+
+        os.close();
+        task.stop();
+    }
+
+    @Test
+    public void testLargeFile() throws IOException, InterruptedException {
+        tryFileSize(10, 10_000_000, 20);
+    }
+
+    @Test
+    public void testSmallFile() throws IOException, InterruptedException {
+        tryFileSize(1, 10, 10);
     }
 
     public void testInvalidFile() throws InterruptedException {
