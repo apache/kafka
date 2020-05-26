@@ -1129,10 +1129,12 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
                 TopicCreationGroup.configuredGroups(sourceConfig));
 
         assertTrue(topicCreation.isTopicCreationEnabled());
+        assertTrue(topicCreation.isTopicCreationRequired(TOPIC));
         assertThat(topicCreation.defaultTopicGroup(), is(expectedDefaultGroup));
         assertEquals(2, topicCreation.topicGroups().size());
         assertThat(topicCreation.topicGroups().keySet(), hasItems("foo", "bar"));
-        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
+        topicCreation.addTopic(TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
     }
 
     @Test
@@ -1145,10 +1147,12 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
                 TopicCreationGroup.configuredGroups(sourceConfig));
 
         assertFalse(topicCreation.isTopicCreationEnabled());
+        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
         assertNull(topicCreation.defaultTopicGroup());
         assertEquals(0, topicCreation.topicGroups().size());
         assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
-        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
+        topicCreation.addTopic(TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
     }
 
     @Test
@@ -1156,10 +1160,12 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         TopicCreation topicCreation = TopicCreation.newTopicCreation(config, null);
 
         assertFalse(topicCreation.isTopicCreationEnabled());
+        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
         assertNull(topicCreation.defaultTopicGroup());
         assertEquals(0, topicCreation.topicGroups().size());
         assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
-        assertThat(topicCreation.topicCache(), is(Collections.emptySet()));
+        topicCreation.addTopic(TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
     }
 
     private void expectPreliminaryCalls() {

@@ -401,7 +401,7 @@ class WorkerSourceTask extends WorkerTask {
     // Due to transformations that may change the destination topic of a record (such as
     // RegexRouter) topic creation can not be batched for multiple topics
     private void maybeCreateTopic(String topic) {
-        if (!topicCreation.isTopicCreationEnabled() || topicCreation.topicCache().contains(topic)) {
+        if (!topicCreation.isTopicCreationRequired(topic)) {
             return;
         }
         log.info("The task will send records to topic '{}' for the first time. Checking "
@@ -409,20 +409,17 @@ class WorkerSourceTask extends WorkerTask {
         Map<String, TopicDescription> existing = admin.describeTopics(topic);
         if (!existing.isEmpty()) {
             log.info("Topic '{}' already exists.", topic);
-            topicCreation.topicCache().add(topic);
+            topicCreation.addTopic(topic);
             return;
         }
 
         log.info("Creating topic '{}'", topic);
-        TopicCreationGroup topicGroup = topicCreation.topicGroups().values().stream()
-                .filter(group -> group.matches(topic))
-                .findFirst()
-                .orElse(topicCreation.defaultTopicGroup());
+        TopicCreationGroup topicGroup = topicCreation.findFirstGroup(topic);
         log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
         NewTopic newTopic = topicGroup.newTopic(topic);
 
         if (admin.createTopic(newTopic)) {
-            topicCreation.topicCache().add(topic);
+            topicCreation.addTopic(topic);
             log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
         } else {
             log.warn("Request to create new topic '{}' failed", topic);
