@@ -156,7 +156,6 @@ class DelayedFetchTest extends EasyMockSupport {
       leaderLogEndOffset = -1L,
       followerLogStartOffset = -1L,
       fetchTimeMs = -1L,
-      readSize = -1,
       lastStableOffset = None)
   }
 
