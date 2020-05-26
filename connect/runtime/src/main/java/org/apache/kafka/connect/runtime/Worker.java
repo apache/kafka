@@ -94,7 +94,7 @@ public class Worker {
     private final Time time;
     private final String workerId;
     //kafka cluster id
-    private final String clusterId;
+    private final String kafkaClusterId;
     private final Plugins plugins;
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
@@ -130,8 +130,8 @@ public class Worker {
             ExecutorService executorService,
             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
-        this.clusterId = ConnectUtils.lookupKafkaClusterId(config);
-        this.metrics = new ConnectMetrics(workerId, config, time, clusterId);
+        this.kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        this.metrics = new ConnectMetrics(workerId, config, time, kafkaClusterId);
         this.executor = executorService;
         this.workerId = workerId;
         this.time = time;
@@ -523,7 +523,7 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
-                                                                connectorClientConfigOverridePolicy, clusterId);
+                                                                connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -536,7 +536,7 @@ public class Worker {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
 
-            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
+            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -691,8 +691,8 @@ public class Worker {
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
-                    connectorClientConfigOverridePolicy, clusterId);
-            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
+            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }

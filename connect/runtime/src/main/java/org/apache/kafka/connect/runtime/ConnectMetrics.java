@@ -66,6 +66,7 @@ public class ConnectMetrics {
      * @param workerId the worker identifier; may not be null
      * @param config   the worker configuration; may not be null
      * @param time     the time; may not be null
+     * @param clusterId the Kafka cluster ID
      */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time, String clusterId) {
         this.workerId = workerId;
@@ -83,14 +84,14 @@ public class ConnectMetrics {
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
 
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        metadata.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        Map<String, Object> contextLabels = new HashMap<>();
+        contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
-            metadata.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
+            contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
         }
-        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, metadata);
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
         this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
