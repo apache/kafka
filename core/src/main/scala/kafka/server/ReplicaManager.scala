@@ -87,7 +87,7 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
  * @param leaderLogEndOffset The log end offset of the leader at the time of the read
  * @param followerLogStartOffset The log start offset of the follower taken from the Fetch request
  * @param fetchTimeMs The time the fetch was received
- * @param lastStableOffset Current LSO or if an error is defined
+ * @param lastStableOffset Current LSO or None if the result has an exception
  * @param preferredReadReplica the preferred read replica to be used for future fetches
  * @param exception Exception if error encountered while reading from the log
  */
