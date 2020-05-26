@@ -562,8 +562,8 @@ public class MetricsTest {
 
             Collections.sort(values);
 
-            int p90Index = (int)Math.ceil(((double)(90 * numberOfValues)) / 100);
-            int p99Index = (int)Math.ceil(((double)(99 * numberOfValues)) / 100);
+            int p90Index = (int) Math.ceil(((double) (90 * numberOfValues)) / 100);
+            int p99Index = (int) Math.ceil(((double) (99 * numberOfValues)) / 100);
 
             double expectedP90 = values.get(p90Index - 1);
             double expectedP99 = values.get(p99Index - 1);
