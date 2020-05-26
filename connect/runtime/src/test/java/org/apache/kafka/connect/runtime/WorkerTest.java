@@ -110,7 +110,6 @@ public class WorkerTest extends ThreadedTest {
     private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
     private static final String WORKER_ID = "localhost:8083";
     private static final String CLUSTER_ID = "test-cluster";
-    private static final String GROUP_ID = "group-1";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
     private final ConnectorClientConfigOverridePolicy allConnectorClientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
 
