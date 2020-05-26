@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -123,9 +124,18 @@ public class SourceConnectorConfig extends ConnectorConfig {
         super(plugins, config, props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {
             ConfigDef defaultConfigDef = embedDefaultGroup(config);
+            // This config is only used to set default values for partitions and replication
+            // factor from the default group and otherwise it remains unused
             AbstractConfig defaultGroup = new AbstractConfig(defaultConfigDef, props, false);
+
+            // If the user has added regex of include or exclude patterns in the default group,
+            // they should be ignored.
+            Map<String, String> propsWithoutRegexForDefaultGroup = new HashMap<>(props);
+            propsWithoutRegexForDefaultGroup.entrySet()
+                    .removeIf(e -> e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + INCLUDE_REGEX_CONFIG)
+                            || e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + EXCLUDE_REGEX_CONFIG));
             enrichedSourceConfig = new EnrichedSourceConnectorConfig(enrich(defaultConfigDef, props,
-                    defaultGroup), props);
+                    defaultGroup), propsWithoutRegexForDefaultGroup);
         } else {
             enrichedSourceConfig = null;
         }

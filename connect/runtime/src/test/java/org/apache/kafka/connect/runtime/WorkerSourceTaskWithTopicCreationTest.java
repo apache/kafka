@@ -57,7 +57,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.apache.kafka.connect.util.TopicCreation;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -95,16 +94,12 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.EXCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1118,54 +1113,6 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
         assertNotNull(newTopicCapture.getValue());
-    }
-
-    @Test
-    public void testTopicCreationClassWhenTopicCreationIsEnabled() {
-        TopicCreationGroup expectedDefaultGroup =
-                TopicCreationGroup.configuredGroups(sourceConfig).get(DEFAULT_TOPIC_CREATION_GROUP);
-
-        TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
-                TopicCreationGroup.configuredGroups(sourceConfig));
-
-        assertTrue(topicCreation.isTopicCreationEnabled());
-        assertTrue(topicCreation.isTopicCreationRequired(TOPIC));
-        assertThat(topicCreation.defaultTopicGroup(), is(expectedDefaultGroup));
-        assertEquals(2, topicCreation.topicGroups().size());
-        assertThat(topicCreation.topicGroups().keySet(), hasItems("foo", "bar"));
-        topicCreation.addTopic(TOPIC);
-        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
-    }
-
-    @Test
-    public void testTopicCreationClassWhenTopicCreationIsDisabled() {
-        Map<String, String> workerProps = workerProps();
-        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(false));
-        config = new StandaloneConfig(workerProps);
-
-        TopicCreation topicCreation = TopicCreation.newTopicCreation(config,
-                TopicCreationGroup.configuredGroups(sourceConfig));
-
-        assertFalse(topicCreation.isTopicCreationEnabled());
-        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
-        assertNull(topicCreation.defaultTopicGroup());
-        assertEquals(0, topicCreation.topicGroups().size());
-        assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
-        topicCreation.addTopic(TOPIC);
-        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
-    }
-
-    @Test
-    public void testEmptyTopicCreationClass() {
-        TopicCreation topicCreation = TopicCreation.newTopicCreation(config, null);
-
-        assertFalse(topicCreation.isTopicCreationEnabled());
-        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
-        assertNull(topicCreation.defaultTopicGroup());
-        assertEquals(0, topicCreation.topicGroups().size());
-        assertThat(topicCreation.topicGroups(), is(Collections.emptyMap()));
-        topicCreation.addTopic(TOPIC);
-        assertFalse(topicCreation.isTopicCreationRequired(TOPIC));
     }
 
     private void expectPreliminaryCalls() {

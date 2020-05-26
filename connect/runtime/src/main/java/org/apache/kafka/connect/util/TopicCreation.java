@@ -29,8 +29,8 @@ import java.util.Set;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 
 /**
- * Utility to be used by worker source tasks in order to create topics, if topic creation is enabled for source connectors
- * at the worker and the connector configurations.
+ * Utility to be used by worker source tasks in order to create topics, if topic creation is
+ * enabled for source connectors at the worker and the connector configurations.
  */
 public class TopicCreation {
     private static final Logger log = LoggerFactory.getLogger(TopicCreation.class);
