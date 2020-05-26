@@ -54,6 +54,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
+import static org.apache.kafka.connect.runtime.errors.ToleranceType.CONTINUE;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -269,6 +270,18 @@ public class RetryWithToleranceOperatorTest {
     }
 
     @Test
+    public void testContinueOnError() {
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, CONTINUE, SYSTEM);
+        assertTrue("should continue on errors", retryWithToleranceOperator.continueOnError());
+
+        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM);
+        assertFalse("should not continue on errors", retryWithToleranceOperator.continueOnError());
+
+        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+        assertFalse("should not continue on errors", retryWithToleranceOperator.continueOnError());
+    }
+
+    @Test
     public void testToleranceLimit() {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -279,6 +292,9 @@ public class RetryWithToleranceOperatorTest {
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         retryWithToleranceOperator.markAsFailed();
+        assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
+
+        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, CONTINUE, SYSTEM);
         assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
 
         retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);

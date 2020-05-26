@@ -111,6 +111,15 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
+     * Check whether error tolerance type is CONTINUE
+     *
+     * @return if the execution requires continue when error occurs
+     */
+    public boolean continueOnError() {
+        return errorToleranceType == ToleranceType.CONTINUE;
+    }
+
+    /**
      * Attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
      *
      * @param operation the operation to be executed.
@@ -162,7 +171,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
             V result = execAndRetry(operation);
             if (context.failed()) {
                 markAsFailed();
-                errorHandlingMetrics.recordSkipped();
+                if (!continueOnError()) {
+                    errorHandlingMetrics.recordSkipped();
+                }
             }
             return result;
         } catch (Exception e) {
@@ -178,7 +189,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
                 throw new ConnectException("Tolerance exceeded in error handler", e);
             }
 
-            errorHandlingMetrics.recordSkipped();
+            if (!continueOnError()) {
+                errorHandlingMetrics.recordSkipped();
+            }
             return null;
         }
     }
@@ -196,6 +209,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
             case NONE:
                 if (totalFailures > 0) return false;
             case ALL:
+            case CONTINUE:
                 return true;
             default:
                 throw new ConfigException("Unknown tolerance type: {}", errorToleranceType);

@@ -486,6 +486,16 @@ class WorkerSinkTask extends WorkerTask {
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
     }
 
+    private SinkRecord generateSinkRecordWithRawData(final ConsumerRecord<byte[], byte[]> msg) {
+        return new SinkRecord(msg.topic(), msg.partition(),
+          null, msg.key(),
+          null, msg.value(),
+          msg.offset(),
+          ConnectUtils.checkAndConvertTimestamp(msg.timestamp()),
+          msg.timestampType(),
+          new ConnectHeaders());
+    }
+
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
         SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
@@ -496,6 +506,9 @@ class WorkerSinkTask extends WorkerTask {
         Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
         if (retryWithToleranceOperator.failed()) {
+            if (retryWithToleranceOperator.continueOnError()) {
+                return generateSinkRecordWithRawData(msg);
+            }
             return null;
         }
 
@@ -512,7 +525,11 @@ class WorkerSinkTask extends WorkerTask {
         if (isTopicTrackingEnabled) {
             recordActiveTopic(origRecord.topic());
         }
-        return transformationChain.apply(origRecord);
+        SinkRecord transformedRecord = transformationChain.apply(origRecord);
+        if (transformedRecord == null && retryWithToleranceOperator.continueOnError()) {
+            return generateSinkRecordWithRawData(msg);
+        }
+        return transformedRecord;
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

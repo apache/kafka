@@ -31,7 +31,13 @@ public enum ToleranceType {
     /**
      * Tolerate all errors.
      */
-    ALL;
+    ALL,
+
+    /**
+     * Tolerate all errors and forward raw bytes to sink connector
+     * Behave like ALL for source connector
+     */
+    CONTINUE;
 
     public String value() {
         return name().toLowerCase(Locale.ROOT);
