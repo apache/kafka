@@ -61,8 +61,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAXIMUM_E2E_LATENCY;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MINIMUM_E2E_LATENCY;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -929,16 +927,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (e2eLatencySensor == null) {
             throw new IllegalStateException("Requested to record e2e latency but could not find sensor for node " + nodeName);
         } else if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
-            final long e2eLatency = now - recordTimestamp;
-            if (e2eLatency >  MAXIMUM_E2E_LATENCY) {
-                log.warn("Skipped recording e2e latency for node {} because {} is higher than maximum allowed latency {}",
-                         nodeName, e2eLatency, MAXIMUM_E2E_LATENCY);
-            } else if (e2eLatency < MINIMUM_E2E_LATENCY) {
-                log.warn("Skipped recording e2e latency for node {} because {} is smaller than minimum allowed latency {}",
-                         nodeName, e2eLatency, MINIMUM_E2E_LATENCY);
-            } else {
-                e2eLatencySensor.record(e2eLatency, now);
-            }
+            e2eLatencySensor.record(now - recordTimestamp, now);
         }
     }
 

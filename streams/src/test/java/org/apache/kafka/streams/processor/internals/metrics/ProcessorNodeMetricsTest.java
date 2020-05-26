@@ -290,12 +290,7 @@ public class ProcessorNodeMetricsTest {
             recordE2ELatencyP90Description
         );
 
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ProcessorNodeMetrics.recordE2ELatencySensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, RecordingLevel.INFO, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
+        verifySensor(() -> ProcessorNodeMetrics.recordE2ELatencySensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, RecordingLevel.INFO, streamsMetrics));
     }
 
     private void shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(final String metricNamePrefix,

@@ -494,6 +494,44 @@ public class MetricsTest {
     }
 
     @Test
+    public void shouldPinSmallerValuesToMin() {
+        final double min = 0.0d;
+        final double max = 100d;
+        Percentiles percs = new Percentiles(1000,
+                                            min,
+                                            max,
+                                            BucketSizing.LINEAR,
+                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+        MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(percs);
+        Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
+
+        sensor.record(min - 100);
+        sensor.record(min - 100);
+        assertEquals(min, (double) p50.metricValue(), 0d);
+    }
+
+    @Test
+    public void shouldPinLargerValuesToMax() {
+        final double min = 0.0d;
+        final double max = 100d;
+        Percentiles percs = new Percentiles(1000,
+                                            min,
+                                            max,
+                                            BucketSizing.LINEAR,
+                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+        MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(percs);
+        Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
+
+        sensor.record(max + 100);
+        sensor.record(max + 100);
+        assertEquals(max, (double) p50.metricValue(), 0d);
+    }
+
+    @Test
     public void testPercentilesWithRandomNumbersAndLinearBucketing() {
         long seed = new Random().nextLong();
         int sizeInBytes = 1000 * 1000;   // 1MB
@@ -517,7 +555,7 @@ public class MetricsTest {
             final List<Long> values = new ArrayList<>(numberOfValues);
             // record two windows worth of sequential values
             for (int i = 0; i < numberOfValues; ++i) {
-                long value = Math.abs(prng.nextLong()) % maximumValue;
+                long value = (Math.abs(prng.nextLong()) - 1) % maximumValue;
                 values.add(value);
                 sensor.record(value);
             }
@@ -532,9 +570,7 @@ public class MetricsTest {
 
             assertEquals(expectedP90, (Double) p90.metricValue(), expectedP90 / 10);
             assertEquals(expectedP99, (Double) p99.metricValue(), expectedP99 / 10);
-
         } catch (AssertionError e) {
-
             throw new AssertionError("Assertion failed in randomized test. Reproduce with seed = " + seed + " .", e);
         }
     }

@@ -24,11 +24,15 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A compound stat that reports one or more percentiles
  */
 public class Percentiles extends SampledStat implements CompoundStat {
+
+    private final Logger log = LoggerFactory.getLogger(Percentiles.class);
 
     public enum BucketSizing {
         CONSTANT, LINEAR
@@ -37,6 +41,8 @@ public class Percentiles extends SampledStat implements CompoundStat {
     private final int buckets;
     private final Percentile[] percentiles;
     private final BinScheme binScheme;
+    private final double min;
+    private final double max;
 
     public Percentiles(int sizeInBytes, double max, BucketSizing bucketing, Percentile... percentiles) {
         this(sizeInBytes, 0.0, max, bucketing, percentiles);
@@ -46,6 +52,8 @@ public class Percentiles extends SampledStat implements CompoundStat {
         super(0.0);
         this.percentiles = percentiles;
         this.buckets = sizeInBytes / 4;
+        this.min = min;
+        this.max = max;
         if (bucketing == BucketSizing.CONSTANT) {
             this.binScheme = new ConstantBinScheme(buckets, min, max);
         } else if (bucketing == BucketSizing.LINEAR) {
@@ -103,8 +111,21 @@ public class Percentiles extends SampledStat implements CompoundStat {
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
+        final double boundedValue;
+        if (value > max) {
+            log.warn("Received value {} which is greater than max recordable value {}, will be pinned to the max value",
+                     value, max);
+            boundedValue = max;
+        } else if (value < min) {
+            log.warn("Received value {} which is less than min recordable value {}, will be pinned to the min value",
+                     value, min);
+            boundedValue = min;
+        } else {
+            boundedValue = value;
+        }
+
         HistogramSample hist = (HistogramSample) sample;
-        hist.histogram.record(value);
+        hist.histogram.record(boundedValue);
     }
 
     private static class HistogramSample extends SampledStat.Sample {

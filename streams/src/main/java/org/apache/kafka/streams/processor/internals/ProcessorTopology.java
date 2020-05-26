@@ -54,7 +54,7 @@ public class ProcessorTopology {
 
         this.terminalNodes = new HashSet<>();
         for (final ProcessorNode<?, ?> node : processorNodes) {
-            if (node.children().isEmpty()) {
+            if (node.isTerminalNode()) {
                 terminalNodes.add(node.name());
             }
         }
