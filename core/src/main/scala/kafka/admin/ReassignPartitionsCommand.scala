@@ -1608,14 +1608,12 @@ object ReassignPartitionsCommand extends Logging {
 
   def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     Json.tryParseFull(jsonData) match {
-      case Right(Some(js)) =>
+      case Right(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parsePartitionReassignmentData(version, js)
-      case Right(None) =>
-        throw new AdminCommandFailedException("Couldn't parse JSON content for unknown reason")
       case Left(f) =>
         throw f
     }

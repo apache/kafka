@@ -43,21 +43,21 @@ class JsonTest {
     val jnf = JsonNodeFactory.instance
 
     assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
-    assertEquals(Json.tryParseFull("{}"), Right(Some(JsonValue(new ObjectNode(jnf)))))
+    assertEquals(Json.tryParseFull("{}"), Right(JsonValue(new ObjectNode(jnf))))
 
     assertEquals(Json.parseFull(""), Option(MissingNode.getInstance()).map(JsonValue(_)))
-    assertEquals(Json.tryParseFull(""), Right(Option(MissingNode.getInstance()).map(JsonValue(_))))
+    assertEquals(Json.tryParseFull(""), Right(MissingNode.getInstance()).map(JsonValue(_)))
 
     assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
     val tryRes = Json.tryParseFull("""{"foo":"bar"s}""")
-    tryRes shouldBe a [Left[_, Option[JsonValue]]]
+    tryRes shouldBe a [Left[_, JsonValue]]
 
     val objectNode = new ObjectNode(
       jnf,
       Map[String, JsonNode]("foo" -> new TextNode("bar"), "is_enabled" -> BooleanNode.TRUE).asJava
     )
     assertEquals(Json.parseFull("""{"foo":"bar", "is_enabled":true}"""), Some(JsonValue(objectNode)))
-    assertEquals(Json.tryParseFull("""{"foo":"bar", "is_enabled":true}"""), Right(Some(JsonValue(objectNode))))
+    assertEquals(Json.tryParseFull("""{"foo":"bar", "is_enabled":true}"""), Right(JsonValue(objectNode)))
 
     val arrayNode = new ArrayNode(jnf)
     Vector(1, 2, 3).map(new IntNode(_)).foreach(arrayNode.add)
