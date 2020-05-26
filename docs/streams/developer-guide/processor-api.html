@@ -422,7 +422,7 @@
                         public Set&ltStoreBuilder&lt?&gt&gt stores() {
                             return countStoreBuilder;
                         }
-                    })
+                    }, "Source")
                     // add the sink processor node that takes Kafka topic "sink-topic" as output
                     // and the WordCountProcessor node as its upstream processor
                     .addSink("Sink", "sink-topic", "Process");
