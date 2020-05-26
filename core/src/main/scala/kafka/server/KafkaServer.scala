@@ -131,8 +131,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   //properties for MetricsContext
   private val metricsPrefix: String = "kafka.server"
-  val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
-  val KAFKA_BROKER_ID: String = "kafka.broker.id"
+  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
 
 
   private var logContext: LogContext = null
@@ -225,7 +225,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         _clusterId = getOrGenerateClusterId(zkClient)
         info(s"Cluster ID = $clusterId")
 
-        /* load contextLabels */
+        /* load metadata */
         val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) = getBrokerMetadataAndOfflineDirs
 
         /* check cluster id */
@@ -402,7 +402,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     val contextLabels = new util.HashMap[String, Object]
     contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
     contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
-    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, true))
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
     val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
     metricsContext
   }
