@@ -214,7 +214,7 @@ class MetadataCache(brokerId: Int) extends Logging {
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataPartitionState): Unit = {
-    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
+    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap.empty)
     infos(partitionId) = stateInfo
   }
 
@@ -316,10 +316,10 @@ class MetadataCache(brokerId: Int) extends Logging {
       } else {
         //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](metadataSnapshot.partitionStates.size)
-        metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
+        metadataSnapshot.partitionStates.foreachEntry { (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
-          partitionStates += (topic -> copy)
+          partitionStates(topic) = copy
         }
 
         val traceEnabled = stateChangeLogger.isTraceEnabled
