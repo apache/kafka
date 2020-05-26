@@ -17,19 +17,23 @@
 
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.concurrent.CompletableFuture;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
@@ -37,17 +41,22 @@ public class WorkerErrantRecordReporterTest {
 
     private WorkerErrantRecordReporter reporter;
 
-    private KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
-    private SinkConnectorConfig sinkConnectorConfig = mock(SinkConnectorConfig.class);
-    private Converter converter = mock(Converter.class);
-    private HeaderConverter headerConverter = mock(HeaderConverter.class);
-    private SinkRecord record = mock(SinkRecord.class);
+    @Mock
+    private RetryWithToleranceOperator retryWithToleranceOperator;
+
+    @Mock
+    private Converter converter;
+
+    @Mock
+    private HeaderConverter headerConverter;
+
+    @Mock
+    private SinkRecord record;
 
     @Before
     public void setup() {
-      reporter = new WorkerErrantRecordReporter(
-            producer,
-            sinkConnectorConfig,
+        reporter = new WorkerErrantRecordReporter(
+            retryWithToleranceOperator,
             converter,
             converter,
             headerConverter
@@ -55,9 +64,13 @@ public class WorkerErrantRecordReporterTest {
     }
 
     @Test
-    public void testReport() {
-      when(sinkConnectorConfig.dlqTopicName()).thenReturn("dlq-topic");
-      when(sinkConnectorConfig.enableErrorLog()).thenReturn(false);
-      reporter.report(record, new Throwable());
+    public void testGetAllFutures() {
+        assertTrue(reporter.futures.isEmpty());
+        for (int i = 0; i < 4; i++) {
+            reporter.futures.add(CompletableFuture.completedFuture(null));
+        }
+        assertFalse(reporter.futures.isEmpty());
+        reporter.getAllFutures();
+        assertTrue(reporter.futures.isEmpty());
     }
 }

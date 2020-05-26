@@ -43,7 +43,9 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkRecord.InternalSinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -364,7 +366,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private void commitOffsets(long now, boolean closing) {
         if (workerErrantRecordReporter != null) {
-            workerErrantRecordReporter.waitForAllFutures();
+            workerErrantRecordReporter.getAllFutures();
         }
 
         if (currentOffsets.isEmpty())
@@ -504,12 +506,18 @@ class WorkerSinkTask extends WorkerTask {
                 timestamp,
                 msg.timestampType(),
                 headers);
+
+        InternalSinkRecord internalSinkRecord = origRecord.newRecord(origRecord.topic(),
+            origRecord.kafkaPartition(), origRecord.keySchema(), origRecord.key(),
+            origRecord.valueSchema(), origRecord.value(), origRecord.kafkaOffset(),
+            origRecord.timestamp(), origRecord.timestampType(), origRecord.headers(), msg);
+
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
         if (isTopicTrackingEnabled) {
-            recordActiveTopic(origRecord.topic());
+            recordActiveTopic(internalSinkRecord.topic());
         }
-        return transformationChain.apply(origRecord);
+        return transformationChain.apply(internalSinkRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

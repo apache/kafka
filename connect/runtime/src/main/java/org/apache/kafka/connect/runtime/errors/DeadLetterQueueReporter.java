@@ -19,13 +19,16 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +39,9 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import static java.util.Collections.singleton;
 
@@ -67,6 +72,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
     private final ErrorHandlingMetrics errorHandlingMetrics;
+    private final String dlqTopicName;
 
     private KafkaProducer<byte[], byte[]> kafkaProducer;
 
@@ -102,6 +108,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         this.connConfig = connConfig;
         this.connectorTaskId = id;
         this.errorHandlingMetrics = errorHandlingMetrics;
+        this.dlqTopicName = connConfig.dlqTopicName();
     }
 
     /**
@@ -110,38 +117,46 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      */
     public void report(ProcessingContext context) {
-        final String dlqTopicName = connConfig.dlqTopicName();
-        if (dlqTopicName.isEmpty()) {
-            return;
-        }
+        Callback callback = (metadata, exception) -> {
+            if (exception != null) {
+                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
+                errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
+            }
+        };
+        report(context, callback);
+    }
 
+    /**
+     * Write the raw records into a Kafka topic. This methods allows for a custom callback to be
+     * passed to the producer.
+     *
+     * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
+     * @param callback callback to be invoked by the producer when the record is sent to Kafka.
+     * @return
+     */
+    public Future<RecordMetadata> report(ProcessingContext context, Callback callback) {
+        if (dlqTopicName.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
         errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
         ConsumerRecord<byte[], byte[]> originalMessage = context.consumerRecord();
         if (originalMessage == null) {
             errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
-        ProducerRecord<byte[], byte[]> producerRecord;
-        if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
-            producerRecord = new ProducerRecord<>(dlqTopicName, null,
-                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
-        } else {
-            producerRecord = new ProducerRecord<>(dlqTopicName, null, originalMessage.timestamp(),
-                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
-        }
+        ProducerRecord<byte[], byte[]> producerRecord =
+            new ProducerRecord<>(dlqTopicName, null,
+                originalMessage.timestamp() != RecordBatch.NO_TIMESTAMP ?
+                    originalMessage.timestamp() : null,
+                originalMessage.key(), originalMessage.value(), originalMessage.headers());
 
         if (connConfig.isDlqContextHeadersEnabled()) {
             populateContextHeaders(producerRecord, context);
         }
 
-        this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
-            if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
-                errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
-            }
-        });
+        return this.kafkaProducer.send(producerRecord, callback);
     }
 
     // Visible for testing

@@ -18,8 +18,13 @@ package org.apache.kafka.connect.sink;
 
 import java.util.concurrent.Future;
 
+/**
+ * Component that the sink task can use as it {@link SinkTask#put(Collection<SinkRecord>)}.
+ * Reporter of problematic records and the corresponding problems.
+ *
+ * @since 2.6
+ */
 public interface ErrantRecordReporter {
-
 
   /**
    * Report a problematic record and the corresponding error to be written to the sink
@@ -31,10 +36,16 @@ public interface ErrantRecordReporter {
    * If you want to simulate a simple blocking call you can call the <code>get()</code> method
    * immediately.
    *
+   * Connect guarantees that sink records reported through this reporter will be written to the error topic
+   * before the framework calls the {@link SinkTask#preCommit(Map)} method and therefore before
+   * committing the consumer offsets. SinkTask implementations can use the Future when stronger guarantees
+   * are required.
+   *
    * @param record the problematic record; may not be null
    * @param error  the error capturing the problem with the record; may not be null
    * @return a future that can be used to block until the record and error are reported
    *         to the DLQ
+   * @throws ConnectException if the error reporter and DLQ fails to write a reported record
    * @since 2.6
    */
   Future<Void> report(SinkRecord record, Throwable error);

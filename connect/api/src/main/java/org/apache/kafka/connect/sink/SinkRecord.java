@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.sink;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -68,6 +70,14 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
         return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
     }
 
+    public InternalSinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
+                                        long kafkaOffset, Long timestamp,
+                                        TimestampType timestampType, Iterable<Header> headers,
+                                        ConsumerRecord<byte[], byte[]> originalRecord) {
+        return new InternalSinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value,
+            kafkaOffset, timestamp, timestampType, headers, originalRecord);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o)
@@ -99,5 +109,30 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
                 "kafkaOffset=" + kafkaOffset +
                 ", timestampType=" + timestampType +
                 "} " + super.toString();
+    }
+
+    public class InternalSinkRecord extends SinkRecord {
+
+        ConsumerRecord<byte[], byte[]> originalRecord;
+
+        public InternalSinkRecord(String topic, int partition, Schema keySchema, Object key,
+                                  Schema valueSchema, Object value, long kafkaOffset,
+                                  Long timestamp, TimestampType timestampType,
+                                  Iterable<Header> headers,
+                                  ConsumerRecord<byte[], byte[]> originalRecord) {
+            super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp,
+                timestampType, headers);
+            this.originalRecord = originalRecord;
+
+        }
+
+        /**
+         *
+         * @return the original consumer record that was converted to this sink record.
+         */
+        public ConsumerRecord<byte[], byte[]> originalRecord() {
+            return originalRecord;
+        }
+
     }
 }

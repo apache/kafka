@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -28,6 +29,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
@@ -42,6 +44,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -54,6 +57,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -88,10 +92,31 @@ public class RetryWithToleranceOperatorTest {
     private Operation<String> mockOperation;
 
     @Mock
+    private Function<SinkRecord, ConsumerRecord<byte[], byte[]>> function;
+
+    @Mock
+    private ConsumerRecord<byte[], byte[]> consumerRecord;
+
+    @Mock
+    private SinkRecord sinkRecord;
+
+    @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
 
     @Mock
     Plugins plugins;
+
+    @Test
+    public void testExecuteFailed() {
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
+            ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+
+        EasyMock.expect(function.apply(anyObject())).andReturn(consumerRecord);
+
+        retryWithToleranceOperator.executeFailed(function, Stage.TASK_PUT,
+            SinkTask.class, sinkRecord, new Throwable(), (record, error) -> { });
+    }
 
     @Test
     public void testHandleExceptionInTransformations() {

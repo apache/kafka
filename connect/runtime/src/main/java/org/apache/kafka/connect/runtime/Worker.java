@@ -44,6 +44,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -552,16 +553,11 @@ public class Worker {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
-            WorkerErrantRecordReporter workerErrantRecordReporter =
-                createWorkerErrantRecordReporter(
-                    id,
-                    sinkConfig,
-                    connectorClass,
-                    keyConverter,
-                    valueConverter,
-                    headerConverter
-                );
+            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig,
+                errorHandlingMetrics, connectorClass));
+            WorkerErrantRecordReporter workerErrantRecordReporter
+                = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
+                    keyConverter, valueConverter, headerConverter);
 
             Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
@@ -730,9 +726,8 @@ public class Worker {
     }
 
     private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
-        ConnectorTaskId id,
         SinkConnectorConfig connConfig,
-        Class<? extends Connector> connectorClass,
+        RetryWithToleranceOperator retryWithToleranceOperator,
         Converter keyConverter,
         Converter valueConverter,
         HeaderConverter headerConverter
@@ -740,17 +735,8 @@ public class Worker {
         // check if errant record reporter topic is configured
         String topic = connConfig.dlqTopicName();
         if ((topic != null && !topic.isEmpty()) || connConfig.enableErrorLog()) {
-            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
-                connectorClientConfigOverridePolicy);
-            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
-            return WorkerErrantRecordReporter.createAndSetup(
-                adminProps,
-                producerProps,
-                connConfig,
-                keyConverter,
-                valueConverter,
-                headerConverter
-            );
+            return new WorkerErrantRecordReporter(retryWithToleranceOperator,
+                keyConverter, valueConverter, headerConverter);
         }
         return null;
     }
