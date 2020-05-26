@@ -825,7 +825,7 @@ private[kafka] class Processor(val id: Int,
           // be either associated with a specific socket channel or a bad request. These exceptions are caught and
           // processed by the individual methods above which close the failing channel and continue processing other
           // channels. So this catch block should only ever see ControlThrowables.
-          case e: Throwable => processException("Processor got uncaught exception.", e, isUncaught = true)
+          case e: Throwable => processException("Processor got uncaught exception.", e)
         }
       }
     } finally {
@@ -835,7 +835,7 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  private[network] def processException(errorMessage: String, throwable: Throwable, isUncaught: Boolean = false): Unit = {
+  private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
     throwable match {
       case e: ControlThrowable => throw e
       case e => error(errorMessage, e)

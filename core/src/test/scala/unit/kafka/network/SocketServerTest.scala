@@ -1747,10 +1747,10 @@ class SocketServerTest {
            testableSelector
         }
 
-        override private[network] def processException(errorMessage: String, throwable: Throwable, isUncaught: Boolean): Unit = {
-          if (isUncaught)
+        override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
+          if (errorMessage.contains("uncaught exception"))
             uncaughtExceptions += 1
-          super.processException(errorMessage, throwable, isUncaught)
+          super.processException(errorMessage, throwable)
         }
       }
     }
@@ -1887,10 +1887,10 @@ class SocketServerTest {
         cachedCompletedSends.update(super.completedSends.asScala)
         cachedDisconnected.update(super.disconnected.asScala.toBuffer)
 
-        val map: util.Map[KafkaChannel, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
+        val map: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
         cachedCompletedReceives.currentPollValues.foreach { receive =>
-          val channel = Option(super.channel(receive.source)).orElse(Option(super.closingChannel(receive.source)))
-          channel.foreach(map.put(_, receive))
+          val channelOpt = Option(super.channel(receive.source)).orElse(Option(super.closingChannel(receive.source)))
+          channelOpt.foreach { channel => map.put(channel.id, receive) }
         }
         cachedCompletedSends.currentPollValues.foreach(super.completedSends.add)
         cachedDisconnected.currentPollValues.foreach { case (id, state) => super.disconnected.put(id, state) }

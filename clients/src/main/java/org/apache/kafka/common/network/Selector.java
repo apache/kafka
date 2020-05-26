@@ -107,7 +107,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
     private final List<Send> completedSends;
-    private final LinkedHashMap<KafkaChannel, NetworkReceive> completedReceives;
+    private final LinkedHashMap<String, NetworkReceive> completedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
@@ -1014,7 +1014,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Check if given channel has a completed receive
      */
     private boolean hasCompletedReceive(KafkaChannel channel) {
-        return completedReceives.containsKey(channel);
+        return completedReceives.containsKey(channel.id());
     }
 
     /**
@@ -1024,7 +1024,7 @@ public class Selector implements Selectable, AutoCloseable {
         if (hasCompletedReceive(channel))
             throw new IllegalStateException("Attempting to add second completed receive to channel " + channel.id());
 
-        this.completedReceives.put(channel, networkReceive);
+        this.completedReceives.put(channel.id(), networkReceive);
         sensors.recordCompletedReceive(channel.id(), networkReceive.size(), currentTimeMs);
     }
 
