@@ -26,7 +26,6 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,20 +34,24 @@ import java.util.concurrent.atomic.AtomicInteger;
  * This is the simplest interesting state machine. It maintains a simple counter which can only
  * be incremented by one.
  */
-public class DistributedCounter implements DistributedStateMachine {
+public class ReplicatedCounter implements ReplicatedStateMachine {
     private final Logger log;
-    private final KafkaRaftClient client;
+    private final int nodeId;
     private final AtomicInteger committed = new AtomicInteger(0);
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
     private AtomicInteger uncommitted;
 
-    public DistributedCounter(KafkaRaftClient client, LogContext logContext) {
-        this.client = client;
-        this.log = logContext.logger(DistributedCounter.class);
+    private RecordAppender appender = null;
+
+    public ReplicatedCounter(int nodeId,
+                             LogContext logContext) {
+        this.nodeId = nodeId;
+        this.log = logContext.logger(ReplicatedCounter.class);
     }
 
-    public synchronized void initialize() throws IOException {
-        client.initialize(this);
+    @Override
+    public void initialize(RecordAppender recordAppender) {
+        appender = recordAppender;
     }
 
     @Override
@@ -72,8 +75,9 @@ public class DistributedCounter implements DistributedStateMachine {
             if (!batch.isControlBatch()) {
                 for (Record record : batch) {
                     int value = deserialize(record);
+
                     if (value != committed.get() + 1) {
-                        throw new IllegalStateException("Detected invalid increment in record at offset " + record.offset() +
+                        throw new IllegalStateException("Node " + nodeId + " detected invalid increment in record at offset " + record.offset() +
                                                             ", epoch " + batch.partitionLeaderEpoch() + ": " + committed.get() + " -> " + value);
                     }
                     log.trace("Applied counter update at offset {}: {} -> {}", record.offset(), committed.get(), value);
@@ -83,8 +87,9 @@ public class DistributedCounter implements DistributedStateMachine {
             this.position = new OffsetAndEpoch(batch.lastOffset() + 1, batch.partitionLeaderEpoch());
         }
 
-        if (uncommitted != null && committed.get() > uncommitted.get())
+        if (uncommitted != null && committed.get() > uncommitted.get()) {
             uncommitted.set(committed.get());
+        }
     }
 
     @Override
@@ -109,11 +114,15 @@ public class DistributedCounter implements DistributedStateMachine {
     }
 
     public synchronized CompletableFuture<Integer> increment() {
+        if (appender == null) {
+            throw new IllegalStateException("The record appender is not initialized");
+        }
+
         int incremented = uncommitted != null ?
             uncommitted.get() + 1 :
             value() + 1;
         Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
-        CompletableFuture<OffsetAndEpoch> future = client.append(records);
+        CompletableFuture<OffsetAndEpoch> future = appender.append(records);
         return future.thenApply(offsetAndEpoch -> incremented);
     }
 
@@ -128,4 +137,10 @@ public class DistributedCounter implements DistributedStateMachine {
         return (Integer) Type.INT32.read(record.value());
     }
 
+    @Override
+    public void close() {
+        committed.set(0);
+        uncommitted = null;
+        appender = null;
+    }
 }

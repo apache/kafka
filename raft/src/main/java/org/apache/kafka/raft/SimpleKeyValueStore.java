@@ -25,7 +25,6 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -39,8 +38,8 @@ import java.util.function.BiConsumer;
  * This is an experimental key-value store built on top of Raft consensus. Really
  * just trying to figure out what a useful API looks like.
  */
-public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
-    private final KafkaRaftClient client;
+public class SimpleKeyValueStore<K, V> implements ReplicatedStateMachine {
+    private RecordAppender appender = null;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Map<K, V> committed = new HashMap<>();
@@ -48,16 +47,10 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
     private OffsetAndEpoch currentPosition = new OffsetAndEpoch(0L, 0);
     private SortedMap<OffsetAndEpoch, CompletableFuture<OffsetAndEpoch>> pendingCommit = new TreeMap<>();
 
-    public SimpleKeyValueStore(KafkaRaftClient client,
-                               Serde<K> keySerde,
+    public SimpleKeyValueStore(Serde<K> keySerde,
                                Serde<V> valueSerde) {
-        this.client = client;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-    }
-
-    public synchronized void initialize() throws IOException {
-        client.initialize(this);
     }
 
     public synchronized V get(K key) {
@@ -71,7 +64,11 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
     public synchronized CompletableFuture<OffsetAndEpoch> putAll(Map<K, V> map) {
         // Append returns after the data was accepted by the leader, but we need to wait
         // for it to be committed.
-        CompletableFuture<OffsetAndEpoch> appendFuture = client.append(buildRecords(map));
+        if (appender == null) {
+            throw new IllegalStateException("The record appender is not initialized");
+        }
+
+        CompletableFuture<OffsetAndEpoch> appendFuture = appender.append(buildRecords(map));
         return appendFuture.thenCompose(offsetAndEpoch -> {
             synchronized (this) {
                 // It is possible when this is invoked that the operation has already been applied to
@@ -88,8 +85,12 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
     }
 
     @Override
-    public synchronized void becomeLeader(int epoch) {
+    public void initialize(RecordAppender recordAppender) {
+        this.appender = recordAppender;
+    }
 
+    @Override
+    public synchronized void becomeLeader(int epoch) {
     }
 
     @Override
@@ -175,4 +176,10 @@ public class SimpleKeyValueStore<K, V> implements DistributedStateMachine {
         }
     }
 
+    @Override
+    public void close() {
+        uncommitted.clear();
+        committed.clear();
+        pendingCommit.clear();
+    }
 }

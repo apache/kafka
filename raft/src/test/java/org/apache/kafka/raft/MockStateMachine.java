@@ -19,37 +19,39 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 
-public class NoOpStateMachine implements DistributedStateMachine {
+import java.util.concurrent.CompletableFuture;
+
+public class MockStateMachine implements ReplicatedStateMachine {
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
 
-    enum STATE {
-        INITIALIZING,
-        LEADER,
-        FOLLOWER
-    }
-
-    private STATE state = STATE.INITIALIZING;
+    private RecordAppender recordAppender = null;
 
     private int epoch = -1;
+    private boolean isLeader = false;
+
+    boolean isLeader() {
+        return isLeader;
+    }
+
+    boolean isFollower() {
+        return !isLeader;
+    }
+
+    @Override
+    public void initialize(RecordAppender recordAppender) {
+        this.recordAppender = recordAppender;
+    }
 
     @Override
     public void becomeLeader(int epoch) {
         this.epoch = epoch;
-        state = STATE.LEADER;
+        this.isLeader = true;
     }
 
     @Override
     public void becomeFollower(int epoch) {
         this.epoch = epoch;
-        state = STATE.FOLLOWER;
-    }
-
-    boolean isLeader() {
-        return state == STATE.LEADER;
-    }
-
-    boolean isFollower() {
-        return state == STATE.FOLLOWER;
+        this.isLeader = false;
     }
 
     @Override
@@ -69,8 +71,23 @@ public class NoOpStateMachine implements DistributedStateMachine {
         return true;
     }
 
+    CompletableFuture<OffsetAndEpoch> append(Records records) {
+        if (recordAppender == null) {
+            throw new IllegalStateException("Record appender is not set");
+        }
+        if (!isLeader) {
+            throw new IllegalStateException("The raft client is not leader yet");
+        }
+        return recordAppender.append(records);
+    }
+
+    @Override
+    public void close() {
+        clear();
+    }
+
     void clear() {
-        state = STATE.INITIALIZING;
+        isLeader = false;
         epoch = -1;
     }
 

@@ -24,7 +24,15 @@ import org.apache.kafka.common.record.Records;
  * record appends will be routed to the leader, which will have an opportunity to either
  * accept or reject the append attempt.
  */
-public interface DistributedStateMachine {
+public interface ReplicatedStateMachine extends AutoCloseable {
+
+
+    /**
+     * Initialize the state machine.
+     *
+     * @param recordAppender handler for appending records.
+     */
+    void initialize(RecordAppender recordAppender);
 
     /**
      * Become a leader. This is invoked after a new election in the quorum if this
@@ -70,4 +78,11 @@ public interface DistributedStateMachine {
      * @return true if the records should be appended to the log
      */
     boolean accept(Records records);
+
+    /**
+     * Close the state machine.
+     */
+    @Override
+    default void close() {
+    }
 }

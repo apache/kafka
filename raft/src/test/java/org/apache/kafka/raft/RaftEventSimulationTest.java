@@ -652,7 +652,7 @@ public class RaftEventSimulationTest {
         final MockQuorumStateStore store;
         final QuorumState quorum;
         final LogContext logContext;
-        DistributedCounter counter;
+        ReplicatedCounter counter;
 
         private RaftNode(int nodeId,
                          KafkaRaftClient client,
@@ -671,9 +671,9 @@ public class RaftEventSimulationTest {
         }
 
         void initialize() {
-            this.counter = new DistributedCounter(client, logContext);
+            this.counter = new ReplicatedCounter(nodeId, logContext);
             try {
-                counter.initialize();
+                client.initialize(counter);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
