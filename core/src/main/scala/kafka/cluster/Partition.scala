@@ -1128,7 +1128,7 @@ class Partition(val topicPartition: TopicPartition,
         if (convertedOffset < 0)
           throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
-        leaderLog.maybeIncrementLogStartOffset(convertedOffset)
+        leaderLog.maybeIncrementLogStartOffset(convertedOffset, ClientRecordDeletion)
         LogDeleteRecordsResult(
           requestedOffset = convertedOffset,
           lowWatermark = lowWatermarkIfLeader)
