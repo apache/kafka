@@ -199,16 +199,38 @@ public class EmbeddedConnectClusterAssertions {
      * @param topicName  the name of the topic that is expected to exist
      * @param replicas   the replication factor
      * @param partitions the number of partitions
+     * @param detailMessage the assertion message
      */
-    public void assertTopicSettings(String topicName, int replicas, int partitions) {
-        Map<String, Object> consumerProps = Collections.singletonMap("group.id", UUID.randomUUID().toString());
-        try (Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(consumerProps);) {
-            List<PartitionInfo> infos = verifiableConsumer.partitionsFor(topicName);
-            assertEquals(partitions, infos.size());
-            for (PartitionInfo info : infos) {
-                assertEquals(topicName, info.topic());
-                assertEquals(replicas, info.replicas().length);
-            }
+    public void assertTopicSettings(String topicName, int replicas, int partitions, String detailMessage)
+            throws InterruptedException{
+        try {
+            waitForCondition(
+                () -> checkTopicSettings(
+                    topicName,
+                    replicas,
+                    partitions
+                ).orElse(false),
+                VALIDATION_DURATION_MS,
+                "Topic " + topicName + " does not exist or does not have exactly "
+                        + partitions + " partitions or at least "
+                        + replicas + " per partition");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    protected Optional<Boolean> checkTopicSettings(String topicName, int replicas, int partitions) {
+        try {
+            Map<String, Optional<TopicDescription>> topics = connect.kafka().describeTopics(topicName);
+            TopicDescription topicDesc = topics.get(topicName).orElse(null);
+            boolean result = topicDesc != null
+                    && topicDesc.name().equals(topicName)
+                    && topicDesc.partitions().size() == partitions
+                    && topicDesc.partitions().stream().allMatch(p -> p.replicas().size() >= replicas);
+            return Optional.of(result);
+        } catch (Exception e) {
+            log.error("Could not check config validation error count.", e);
+            return Optional.empty();
         }
     }
 
