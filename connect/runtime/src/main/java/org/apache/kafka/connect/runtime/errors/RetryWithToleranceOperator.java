@@ -17,13 +17,11 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Function;
 
 /**
  * Attempt to recover a failed operation with retries and tolerance limits.
@@ -87,15 +84,14 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.time = time;
     }
 
-    public Future<Void> executeFailed(Function<SinkRecord, ConsumerRecord<byte[], byte[]>> function,
-                                      Stage stage, Class<?> executingClass, SinkRecord record,
-                                      Throwable error, Callback callback) {
-
-        context.consumerRecord(function.apply(record));
+    public Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                      ConsumerRecord<byte[], byte[]> consumerRecord,
+                                      Throwable error) {
+        context.consumerRecord(consumerRecord);
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordError();
-        return context.report(callback);
+        return context.reportAndReturnFuture();
     }
 
     /**

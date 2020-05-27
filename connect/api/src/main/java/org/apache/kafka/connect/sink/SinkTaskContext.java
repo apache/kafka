@@ -97,8 +97,8 @@ public interface SinkTaskContext {
 
     /**
      * Get the reporter to which the sink task can report problematic or failed {@link SinkRecord records}
-     * passed to the {@link SinkTask#put(Collection)} method. When reporting a failed record,
-     * the sink task will receive a {@link Future} that the task can optionally use to wait until
+     * passed to the {@link SinkTask#put(java.util.Collection)} method. When reporting a failed record,
+     * the sink task will receive a {@link java.util.concurrent.Future} that the task can optionally use to wait until
      * the failed record and exception have been written to Kafka. Note that the result of
      * this method may be null if this connector has not been configured to use a reporter.
      *

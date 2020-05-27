@@ -17,14 +17,13 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.runtime.InternalSinkRecord;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.sink.SinkRecord.InternalSinkRecord;
 
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -38,18 +37,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 
 public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerErrantRecordReporter.class);
-
-    private final Callback callback = (metadata, exception) -> {
-        if (exception != null) {
-            throw new ConnectException("Failed to send the errant record to Kafka",
-                exception.getCause());
-        }
-    };
 
     private RetryWithToleranceOperator retryWithToleranceOperator;
     private Converter keyConverter;
@@ -74,39 +65,37 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     @Override
     public Future<Void> report(SinkRecord record, Throwable error) {
-        Function<SinkRecord, ConsumerRecord<byte[], byte[]>> function;
+        ConsumerRecord<byte[], byte[]> consumerRecord;
 
         if (record instanceof InternalSinkRecord) {
-            function = sinkRecord -> ((InternalSinkRecord) sinkRecord).originalRecord();
+            consumerRecord = ((InternalSinkRecord) record).originalRecord();
         } else {
-            function = sinkRecord -> {
+            String topic = record.topic();
+            byte[] key = keyConverter.fromConnectData(topic, record.keySchema(), record.key());
+            byte[] value = valueConverter.fromConnectData(topic, record.valueSchema(),
+                record.value());
 
-                String topic = record.topic();
-                byte[] key = keyConverter.fromConnectData(topic, record.keySchema(), record.key());
-                byte[] value = valueConverter.fromConnectData(topic, record.valueSchema(),
-                    record.value());
-
-                RecordHeaders headers = new RecordHeaders();
-                if (record.headers() != null) {
-                    for (Header header : record.headers()) {
-                        String headerKey = header.key();
-                        byte[] rawHeader = headerConverter.fromConnectHeader(topic, headerKey,
-                            header.schema(), header.value());
-                        headers.add(headerKey, rawHeader);
-                    }
+            RecordHeaders headers = new RecordHeaders();
+            if (record.headers() != null) {
+                for (Header header : record.headers()) {
+                    String headerKey = header.key();
+                    byte[] rawHeader = headerConverter.fromConnectHeader(topic, headerKey,
+                        header.schema(), header.value());
+                    headers.add(headerKey, rawHeader);
                 }
+            }
 
-                return new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
-                    record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, -1,
-                    -1, key, value, headers);
-
-            };
+            consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
+                record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, -1,
+                -1, key, value, headers);
         }
 
-        Future<Void> future = retryWithToleranceOperator.executeFailed(function, Stage.TASK_PUT,
-            SinkTask.class, record, error, callback);
+        Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+            SinkTask.class, consumerRecord, error);
 
-        futures.add(future);
+        if (!future.isDone()) {
+            futures.add(future);
+        }
         return future;
     }
 
@@ -134,7 +123,6 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     public static class ErrantRecordFuture implements Future<Void> {
 
         private final List<Future<RecordMetadata>> futures;
-
 
         public ErrantRecordFuture(List<Future<RecordMetadata>> producerFutures) {
             futures = producerFutures;

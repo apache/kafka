@@ -17,18 +17,18 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter.ErrantRecordFuture;
 import org.apache.kafka.connect.source.SourceRecord;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
 /**
@@ -145,13 +145,20 @@ class ProcessingContext implements AutoCloseable {
         }
     }
 
-    public Future<Void> report(Callback callback) {
-        List<Future<RecordMetadata>> futures = new ArrayList<>();
+    public Future<Void> reportAndReturnFuture() {
+        if (reporters.size() == 1) {
+            return new ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().reportAndReturnFuture(this)));
+        }
+
+        List<Future<RecordMetadata>> futures = new LinkedList<>();
         for (ErrorReporter reporter: reporters) {
-            Future<RecordMetadata> future = reporter.report(this, callback);
+            Future<RecordMetadata> future = reporter.reportAndReturnFuture(this);
             if (!future.isDone()) {
                 futures.add(future);
             }
+        }
+        if (futures.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
         }
         return new ErrantRecordFuture(futures);
     }

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -149,18 +148,16 @@ public class ErrorReporterTest {
     }
 
     @Test
-    public void testDLQReportWithCallback() {
+    public void testDLQReportAndReturnFuture() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
             producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
-
-        Callback callback = (metadata, error) -> { };
 
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
         replay(producer);
 
-        deadLetterQueueReporter.report(context, callback);
+        deadLetterQueueReporter.reportAndReturnFuture(context);
 
         PowerMock.verifyAll();
     }
@@ -231,14 +228,12 @@ public class ErrorReporterTest {
     }
 
     @Test
-    public void testLogReportWithCallback() {
+    public void testLogReportAndReturnFuture() {
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
         LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
-
-        Callback callback = (metadata, error) -> { };
 
         ProcessingContext context = processingContext();
 
@@ -247,7 +242,7 @@ public class ErrorReporterTest {
             "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
             "partition=5, offset=100}.", msg);
 
-        Future<RecordMetadata> future = logReporter.report(context, callback);
+        Future<RecordMetadata> future = logReporter.reportAndReturnFuture(context);
         assertTrue(future instanceof CompletableFuture);
     }
 

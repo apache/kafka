@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
 import java.util.concurrent.CompletableFuture;
@@ -35,13 +34,12 @@ public interface ErrorReporter extends AutoCloseable {
     void report(ProcessingContext context);
 
     /**
-     * Report an error with a specified callback.
+     * Report an error and return the producer future.
      *
      * @param context the processing context (cannot be null).
-     * @param callback callback to be invoked by a producer when sending a record to Kafka.
      * @return future result from the producer sending a record to Kafka
      */
-    default Future<RecordMetadata> report(ProcessingContext context, Callback callback) {
+    default Future<RecordMetadata> reportAndReturnFuture(ProcessingContext context) {
         report(context);
         return CompletableFuture.completedFuture(null);
     }

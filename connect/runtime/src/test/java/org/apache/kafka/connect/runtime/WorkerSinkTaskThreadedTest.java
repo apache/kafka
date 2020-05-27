@@ -35,7 +35,6 @@ import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.sink.SinkRecord.InternalSinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -189,8 +188,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 SinkRecord referenceSinkRecord
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
                 InternalSinkRecord referenceInternalSinkRecord =
-                    referenceSinkRecord.newRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA,
-                        VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE, null, null);
+                    new InternalSinkRecord(null, referenceSinkRecord);
                 assertEquals(referenceInternalSinkRecord, rec);
                 offset++;
             }

@@ -29,7 +29,6 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
-import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
@@ -44,7 +43,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -57,7 +55,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -92,13 +89,7 @@ public class RetryWithToleranceOperatorTest {
     private Operation<String> mockOperation;
 
     @Mock
-    private Function<SinkRecord, ConsumerRecord<byte[], byte[]>> function;
-
-    @Mock
     private ConsumerRecord<byte[], byte[]> consumerRecord;
-
-    @Mock
-    private SinkRecord sinkRecord;
 
     @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
@@ -112,10 +103,8 @@ public class RetryWithToleranceOperatorTest {
             ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
-        EasyMock.expect(function.apply(anyObject())).andReturn(consumerRecord);
-
-        retryWithToleranceOperator.executeFailed(function, Stage.TASK_PUT,
-            SinkTask.class, sinkRecord, new Throwable(), (record, error) -> { });
+        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+            SinkTask.class, consumerRecord, new Throwable());
     }
 
     @Test

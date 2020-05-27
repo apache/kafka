@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -80,14 +79,23 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                                                          ConnectorTaskId id,
                                                          SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
                                                          ErrorHandlingMetrics errorHandlingMetrics) {
+        String topic = sinkConfig.dlqTopicName();
 
+        try (Admin admin = Admin.create(adminProps)) {
+            if (!admin.listTopics().names().get().contains(topic)) {
+                log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
+                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
+                admin.createTopics(singleton(schemaTopicRequest)).all().get();
+            }
+        } catch (InterruptedException e) {
+            throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
+            }
+        }
 
-        KafkaProducer<byte[], byte[]> dlqProducer = setUpTopicAndProducer(
-            adminProps,
-            producerProps,
-            sinkConfig,
-            DLQ_NUM_DESIRED_PARTITIONS
-        );
+        KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
         return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
     }
 
@@ -117,24 +125,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      */
     public void report(ProcessingContext context) {
-        Callback callback = (metadata, exception) -> {
-            if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
-                errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
-            }
-        };
-        report(context, callback);
+        reportAndReturnFuture(context);
     }
 
     /**
-     * Write the raw records into a Kafka topic. This methods allows for a custom callback to be
-     * passed to the producer.
+     * Write the raw records into a Kafka topic and return the producer future.
      *
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
-     * @param callback callback to be invoked by the producer when the record is sent to Kafka.
-     * @return
+     * @return the future associated with the writing of this record; never null
      */
-    public Future<RecordMetadata> report(ProcessingContext context, Callback callback) {
+    public Future<RecordMetadata> reportAndReturnFuture(ProcessingContext context) {
         if (dlqTopicName.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -146,17 +146,25 @@ public class DeadLetterQueueReporter implements ErrorReporter {
             return CompletableFuture.completedFuture(null);
         }
 
-        ProducerRecord<byte[], byte[]> producerRecord =
-            new ProducerRecord<>(dlqTopicName, null,
-                originalMessage.timestamp() != RecordBatch.NO_TIMESTAMP ?
-                    originalMessage.timestamp() : null,
+        ProducerRecord<byte[], byte[]> producerRecord;
+        if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
+            producerRecord = new ProducerRecord<>(dlqTopicName, null,
                 originalMessage.key(), originalMessage.value(), originalMessage.headers());
+        } else {
+            producerRecord = new ProducerRecord<>(dlqTopicName, null, originalMessage.timestamp(),
+                originalMessage.key(), originalMessage.value(), originalMessage.headers());
+        }
 
         if (connConfig.isDlqContextHeadersEnabled()) {
             populateContextHeaders(producerRecord, context);
         }
 
-        return this.kafkaProducer.send(producerRecord, callback);
+        return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
+            if (exception != null) {
+                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
+                errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
+            }
+        });
     }
 
     // Visible for testing
@@ -180,43 +188,6 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                 headers.add(ERROR_HEADER_EXCEPTION_STACK_TRACE, trace);
             }
         }
-    }
-
-    public static KafkaProducer<byte[], byte[]> setUpTopicAndProducer(
-        Map<String, Object> adminProps,
-        Map<String, Object> producerProps,
-        SinkConnectorConfig sinkConnectorConfig,
-        int dlqTopicNumPartitions
-    ) {
-        String dlqTopic = sinkConnectorConfig.dlqTopicName();
-
-        if (dlqTopic != null && !dlqTopic.isEmpty()) {
-            try (Admin admin = Admin.create(adminProps)) {
-                if (!admin.listTopics().names().get().contains(dlqTopic)) {
-                    log.error("Topic {} doesn't exist. Will attempt to create topic.", dlqTopic);
-                    NewTopic schemaTopicRequest = new NewTopic(
-                        dlqTopic,
-                        dlqTopicNumPartitions,
-                        sinkConnectorConfig.dlqTopicReplicationFactor()
-                    );
-                    admin.createTopics(singleton(schemaTopicRequest)).all().get();
-                }
-            } catch (InterruptedException e) {
-                throw new ConnectException(
-                    "Could not initialize errant record reporter with topic = " + dlqTopic,
-                    e
-                );
-            } catch (ExecutionException e) {
-                if (!(e.getCause() instanceof TopicExistsException)) {
-                    throw new ConnectException(
-                        "Could not initialize errant record reporter with topic = " + dlqTopic,
-                        e
-                    );
-                }
-            }
-            return new KafkaProducer<>(producerProps);
-        }
-        return null;
     }
 
     private byte[] stacktrace(Throwable error) {

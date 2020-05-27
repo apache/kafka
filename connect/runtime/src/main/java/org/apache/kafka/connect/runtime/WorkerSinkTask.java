@@ -45,7 +45,6 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.sink.SinkRecord.InternalSinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -507,17 +506,20 @@ class WorkerSinkTask extends WorkerTask {
                 msg.timestampType(),
                 headers);
 
-        InternalSinkRecord internalSinkRecord = origRecord.newRecord(origRecord.topic(),
-            origRecord.kafkaPartition(), origRecord.keySchema(), origRecord.key(),
-            origRecord.valueSchema(), origRecord.value(), origRecord.kafkaOffset(),
-            origRecord.timestamp(), origRecord.timestampType(), origRecord.headers(), msg);
-
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
         if (isTopicTrackingEnabled) {
-            recordActiveTopic(internalSinkRecord.topic());
+            recordActiveTopic(origRecord.topic());
         }
-        return transformationChain.apply(internalSinkRecord);
+
+        // Apply the transformations
+        SinkRecord transformedRecord = transformationChain.apply(origRecord);
+
+        if (transformedRecord == null) {
+            return null;
+        }
+        // Error reporting will need to correlate each sink record with the original consumer record
+        return new InternalSinkRecord(msg, transformedRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

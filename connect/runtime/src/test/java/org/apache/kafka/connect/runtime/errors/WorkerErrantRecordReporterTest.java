@@ -15,10 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.runtime;
+package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
