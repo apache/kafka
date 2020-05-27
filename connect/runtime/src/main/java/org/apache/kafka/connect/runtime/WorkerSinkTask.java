@@ -365,7 +365,9 @@ class WorkerSinkTask extends WorkerTask {
 
     private void commitOffsets(long now, boolean closing) {
         if (workerErrantRecordReporter != null) {
+            log.trace("Awaiting all reported errors to be completed");
             workerErrantRecordReporter.awaitAllFutures();
+            log.trace("Completed all reported errors");
         }
 
         if (currentOffsets.isEmpty())
