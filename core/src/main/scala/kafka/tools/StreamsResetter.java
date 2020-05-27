@@ -203,7 +203,7 @@ public class StreamsResetter {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
                         + "Make sure to stop all running application instances before running the reset tool." +
-                        "Try set '--force' in the cmdline to force delete active members.");
+                        + " You can use option '--force' to remove active members from the group.");
             }
         }
     }
