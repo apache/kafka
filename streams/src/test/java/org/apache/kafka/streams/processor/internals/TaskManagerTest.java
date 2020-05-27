@@ -101,6 +101,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -661,6 +662,31 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
 
         verify(activeTaskCreator);
+    }
+
+    @Test
+    public void shouldUpdateInputPartitionsAfterRebalance() {
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
+        expectRestoreToBeCompleted(consumer, changeLogReader, false);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        final Set<TopicPartition> newPartitionsSet = mkSet(t1p1);
+        final Map<TaskId, Set<TopicPartition>> taskIdSetMap = singletonMap(taskId00, newPartitionsSet);
+        taskManager.handleAssignment(taskIdSetMap, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertEquals(newPartitionsSet, task00.inputPartitions());
+        assertEquals(task00, taskManager.taskForInputPartition(t1p1));
+        verify(activeTaskCreator, consumer, changeLogReader);
     }
 
     @Test
@@ -2555,11 +2581,16 @@ public class TaskManagerTest {
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
+        expectRestoreToBeCompleted(consumer, changeLogReader, true);
+    }
+
+    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
+                                                   final ChangelogReader changeLogReader, final boolean changeLogUpdateRequired) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.resume(assignment);
         expectLastCall();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet()).times(changeLogUpdateRequired ? 1 : 0, 1);
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
