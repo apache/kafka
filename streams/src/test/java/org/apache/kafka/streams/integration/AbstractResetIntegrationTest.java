@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -283,6 +284,8 @@ public abstract class AbstractResetIntegrationTest {
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null);
+        assertThat("Group is not empty after cleanGlobal", isEmptyConsumerGroup(adminClient, appID));
+
         assertInternalTopicsGotDeleted(null);
 
         // RE-RUN

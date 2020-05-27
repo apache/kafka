@@ -858,16 +858,7 @@ public class IntegrationTestUtils {
 
         @Override
         public boolean conditionMet() {
-            try {
-                final ConsumerGroupDescription groupDescription =
-                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
-                        .describedGroups()
-                        .get(applicationId)
-                        .get();
-                return groupDescription.members().isEmpty();
-            } catch (final ExecutionException | InterruptedException e) {
-                return false;
-            }
+            return isEmptyConsumerGroup(adminClient, applicationId);
         }
     }
 
@@ -876,6 +867,20 @@ public class IntegrationTestUtils {
                                                  final long timeoutMs) throws Exception {
         TestUtils.waitForCondition(new IntegrationTestUtils.ConsumerGroupInactiveCondition(adminClient, applicationId), timeoutMs,
             "Test consumer group " + applicationId + " still active even after waiting " + timeoutMs + " ms.");
+    }
+
+    public static boolean isEmptyConsumerGroup(final Admin adminClient,
+                                               final String applicationId) {
+        try {
+            final ConsumerGroupDescription groupDescription =
+                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
+                            .describedGroups()
+                            .get(applicationId)
+                            .get();
+            return groupDescription.members().isEmpty();
+        } catch (final ExecutionException | InterruptedException e) {
+            return false;
+        }
     }
 
     private static StateListener getStateListener(final KafkaStreams streams) {
