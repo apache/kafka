@@ -773,7 +773,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient, Duration.ofMillis(adminClientTimeout));
+                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient, adminClientTimeout);
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;

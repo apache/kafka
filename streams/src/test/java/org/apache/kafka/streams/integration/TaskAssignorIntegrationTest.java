@@ -89,7 +89,7 @@ public class TaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
                 mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
-                mkEntry(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 9)
+                mkEntry(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 9)
             )
         );
 

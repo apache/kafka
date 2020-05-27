@@ -1795,7 +1795,7 @@ public class StreamsPartitionAssignorTest {
         createDefaultMockTaskManager();
 
         final Map<String, Object> props = configProps();
-        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 2 * 60 * 1000);
+        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 2 * 60 * 1000);
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
         assertThat(assignorConfiguration.adminClientTimeout(), is(2 * 60 * 1000));
