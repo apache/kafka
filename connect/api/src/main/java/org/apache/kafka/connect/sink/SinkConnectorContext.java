@@ -14,18 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.source;
+package org.apache.kafka.connect.sink;
 
-import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.ConnectorContext;
 
 /**
- * SourceConnectors implement the connector interface to pull data from another system and send
- * it to Kafka.
+ * A context to allow a {@link SinkConnector} to interact with the Kafka Connect runtime.
  */
-public abstract class SourceConnector extends Connector {
-
-    @Override
-    protected SourceConnectorContext context() {
-        return (SourceConnectorContext) context;
-    }
+public interface SinkConnectorContext extends ConnectorContext {
 }

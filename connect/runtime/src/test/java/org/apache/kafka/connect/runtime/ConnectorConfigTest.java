@@ -37,7 +37,7 @@ import static org.junit.Assert.fail;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
-    private static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<String, String>()) {
+    public static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<String, String>()) {
         @Override
         public Set<PluginDesc<Transformation>> transformations() {
             return Collections.emptySet();

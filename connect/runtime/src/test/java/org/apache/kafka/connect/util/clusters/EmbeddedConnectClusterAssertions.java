@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -33,7 +27,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.Response;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -155,7 +154,7 @@ public class EmbeddedConnectClusterAssertions {
                 existingTopics.set(actual);
                 return actual.isEmpty();
             }).orElse(false),
-            WORKER_SETUP_DURATION_MS,
+            CONNECTOR_SETUP_DURATION_MS,
             "Unexpectedly found topics " + existingTopics.get());
     }
 
@@ -174,7 +173,7 @@ public class EmbeddedConnectClusterAssertions {
                 missingTopics.set(missing);
                 return missing.isEmpty();
             }).orElse(false),
-            WORKER_SETUP_DURATION_MS,
+            CONNECTOR_SETUP_DURATION_MS,
             "Didn't find the topics " + missingTopics.get());
     }
 

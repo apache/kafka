@@ -57,6 +57,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IExpectationSetters;
@@ -86,13 +87,18 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({WorkerSinkTask.class, WorkerSourceTask.class})
 @PowerMockIgnore("javax.management.*")
-public class ErrorHandlingTaskTest {
+public class ErrorHandlingTaskWithTopicCreationTest {
 
     private static final String TOPIC = "test";
     private static final int PARTITION1 = 12;
@@ -158,7 +164,7 @@ public class ErrorHandlingTaskTest {
     private ErrorHandlingMetrics errorHandlingMetrics;
 
     // when this test becomes parameterized, this variable will be a test parameter
-    public boolean enableTopicCreation = false;
+    public boolean enableTopicCreation = true;
 
     @Before
     public void setup() {
@@ -175,11 +181,11 @@ public class ErrorHandlingTaskTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
-        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
     }
 
-    private Map<String, String> sourceConnectorProps(String topic) {
+    private Map<String, String> sourceConnectorPropsWithGroups(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
@@ -188,6 +194,10 @@ public class ErrorHandlingTaskTest {
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", "foo", "bar"));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, topic);
         return props;
     }
 
@@ -370,7 +380,7 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
-        expectTopicCreation(TOPIC);
+        expectTopicDoesNotExist(TOPIC);
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
 
         PowerMock.replayAll();
@@ -435,7 +445,7 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
-        expectTopicCreation(TOPIC);
+        expectTopicDoesNotExist(TOPIC);
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
 
         PowerMock.replayAll();
@@ -516,7 +526,7 @@ public class ErrorHandlingTaskTest {
         EasyMock.expectLastCall();
     }
 
-    private void expectTopicCreation(String topic) {
+    private void expectTopicDoesNotExist(String topic) {
         if (workerConfig.topicCreationEnable()) {
             EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
 
@@ -566,7 +576,7 @@ public class ErrorHandlingTaskTest {
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, admin, null,
+                producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
                 statusBackingStore);

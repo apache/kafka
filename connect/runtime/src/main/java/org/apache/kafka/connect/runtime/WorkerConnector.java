@@ -18,9 +18,13 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.sink.SinkConnectorContext;
+import org.apache.kafka.connect.source.SourceConnectorContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,41 +62,36 @@ public class WorkerConnector {
 
     private Map<String, String> config;
     private State state;
+    private final OffsetStorageReader offsetStorageReader;
 
     public WorkerConnector(String connName,
                            Connector connector,
                            ConnectorContext ctx,
                            ConnectMetrics metrics,
-                           ConnectorStatus.Listener statusListener) {
+                           ConnectorStatus.Listener statusListener,
+                           OffsetStorageReader offsetStorageReader) {
         this.connName = connName;
         this.ctx = ctx;
         this.connector = connector;
         this.state = State.INIT;
         this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
+        this.offsetStorageReader = offsetStorageReader;
     }
 
     public void initialize(ConnectorConfig connectorConfig) {
         try {
+            if (!isSourceConnector() && !isSinkConnector()) {
+                throw new ConnectException("Connector implementations must be a subclass of either SourceConnector or SinkConnector");
+            }
             this.config = connectorConfig.originalsStrings();
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
+                connector.initialize(new WorkerSinkConnectorContext());
+            } else {
+                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
-
-            connector.initialize(new ConnectorContext() {
-                @Override
-                public void requestTaskReconfiguration() {
-                    ctx.requestTaskReconfiguration();
-                }
-
-                @Override
-                public void raiseError(Exception e) {
-                    log.error("{} Connector raised an error", WorkerConnector.this, e);
-                    onFailure(e);
-                    ctx.raiseError(e);
-                }
-            });
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
             onFailure(t);
@@ -317,6 +316,38 @@ public class WorkerConnector {
 
         protected MetricGroup metricGroup() {
             return metricGroup;
+        }
+    }
+
+    private abstract class WorkerConnectorContext implements ConnectorContext {
+
+        @Override
+        public void requestTaskReconfiguration() {
+            WorkerConnector.this.ctx.requestTaskReconfiguration();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            log.error("{} Connector raised an error", WorkerConnector.this, e);
+            onFailure(e);
+            WorkerConnector.this.ctx.raiseError(e);
+        }
+    }
+
+    private class WorkerSinkConnectorContext extends WorkerConnectorContext implements SinkConnectorContext {
+    }
+
+    private class WorkerSourceConnectorContext extends WorkerConnectorContext implements SourceConnectorContext {
+
+        private final OffsetStorageReader offsetStorageReader;
+
+        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader) {
+            this.offsetStorageReader = offsetStorageReader;
+        }
+
+        @Override
+        public OffsetStorageReader offsetStorageReader() {
+            return offsetStorageReader;
         }
     }
 }

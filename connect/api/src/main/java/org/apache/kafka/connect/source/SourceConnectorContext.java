@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 /**
- * SourceConnectors implement the connector interface to pull data from another system and send
- * it to Kafka.
+ * A context to allow a {@link SourceConnector} to interact with the Kafka Connect runtime.
  */
-public abstract class SourceConnector extends Connector {
+public interface SourceConnectorContext extends ConnectorContext {
 
-    @Override
-    protected SourceConnectorContext context() {
-        return (SourceConnectorContext) context;
-    }
+    /**
+     * Returns the {@link OffsetStorageReader} for this SourceConnectorContext.
+     * @return the OffsetStorageReader for this connector.
+     */
+    OffsetStorageReader offsetStorageReader();
 }
