@@ -33,6 +33,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -53,11 +55,13 @@ import static org.junit.Assert.assertNotNull;
 @Category(IntegrationTest.class)
 public class TransformationIntegrationTest {
 
+    private static final Logger log = LoggerFactory.getLogger(TransformationIntegrationTest.class);
+
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long OBSERVED_RECORDS_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
-    private static final int NUM_TASKS = 3;
+    private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
     private static final String SINK_CONNECTOR_CLASS_NAME = MonitorableSinkConnector.class.getSimpleName();
@@ -107,6 +111,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTopicNameWithSinkConnector() throws Exception {
+        assertConnectReady();
+
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -140,6 +146,7 @@ public class TransformationIntegrationTest {
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
+        assertConnectorRunning();
 
         // produce some messages into source topic partitions
         for (int i = 0; i < numBarRecords; i++) {
@@ -169,6 +176,17 @@ public class TransformationIntegrationTest {
         connect.deleteConnector(CONNECTOR_NAME);
     }
 
+    private void assertConnectReady() throws InterruptedException {
+        connect.assertions().assertExactlyNumBrokersAreUp(1, "Brokers did not start in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS, "Worker did not start in time.");
+        log.info("Completed startup of {} Kafka brokers and {} Connect workers", 1, NUM_WORKERS);
+    }
+
+    private void assertConnectorRunning() throws InterruptedException {
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+    }
+
     private void assertObservedRecords(Map<String, Long> observedRecords, Map<String, Long> expectedRecordCounts) throws InterruptedException {
         waitForCondition(() -> expectedRecordCounts.equals(observedRecords),
             OBSERVED_RECORDS_DURATION_MS,
@@ -190,6 +208,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTombstonesWithSinkConnector() throws Exception {
+        assertConnectReady();
+
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -217,6 +237,7 @@ public class TransformationIntegrationTest {
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
+        assertConnectorRunning();
 
         // produce some messages into source topic partitions
         for (int i = 0; i < numRecords; i++) {
@@ -246,6 +267,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnHasHeaderKeyWithSourceConnector() throws Exception {
+        assertConnectReady();
+
         // create test topic
         connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
 
@@ -278,6 +301,7 @@ public class TransformationIntegrationTest {
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
+        assertConnectorRunning();
 
         // wait for the connector tasks to produce enough records
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);

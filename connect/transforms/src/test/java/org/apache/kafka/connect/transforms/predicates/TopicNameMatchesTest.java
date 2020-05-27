@@ -36,12 +36,9 @@ public class TopicNameMatchesTest {
         predicate.config().validate(Collections.singletonMap("pattern", "my-prefix-.*"));
 
         List<ConfigValue> configs = predicate.config().validate(Collections.singletonMap("pattern", "*"));
-        assertEquals(singletonList("Invalid value * for configuration pattern: " +
-                        "entry must be a Java-compatible regular expression: " +
-                        "Dangling meta character '*' near index 0" + System.lineSeparator() +
-                        "*" + System.lineSeparator() +
-                        "^"),
-                configs.get(0).errorMessages());
+        List<String> errorMsgs = configs.get(0).errorMessages();
+        assertEquals(1, errorMsgs.size());
+        assertTrue(errorMsgs.get(0).contains("Invalid regex"));
     }
 
     @Test
