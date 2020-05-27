@@ -35,11 +35,16 @@ public interface Predicate<R extends ConnectRecord<R>> extends Configurable, Aut
 
     /**
      * Configuration specification for this predicate.
+     *
+     * @return the configuration definition for this predicate; never null
      */
     ConfigDef config();
 
     /**
      * Returns whether the given record satisfies this predicate.
+     *
+     * @param record the record to evaluate; may not be null
+     * @return true if the predicate matches, or false otherwise
      */
     boolean test(R record);
 
