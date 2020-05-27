@@ -48,6 +48,7 @@ public class KafkaMetricsContext implements MetricsContext {
         contextLabels.forEach((key, value) -> this.contextLabels.put(key, value.toString()));
     }
 
+    @Override
     public Map<String, String> contextLabels() {
         return Collections.unmodifiableMap(contextLabels);
     }

@@ -41,7 +41,9 @@ public interface MetricsContext {
     String NAMESPACE = "_namespace"; // metrics namespace, formerly jmx prefix
 
     /**
-     * Returns contextLabels fields
+     * Returns the labels for this metrics context.
+     *
+     * @return the map of label keys and values; never null but possibly empty
      */
     Map<String, String> contextLabels();
 }
