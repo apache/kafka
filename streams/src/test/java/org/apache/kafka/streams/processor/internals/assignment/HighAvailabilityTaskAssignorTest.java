@@ -81,35 +81,6 @@ public class HighAvailabilityTaskAssignorTest {
     );
 
     @Test
-    public void shouldBeStickyForActiveAndStandbyTasksEvenIfNoWarmups() {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
-        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), 1);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
-
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, clientState1),
-            mkEntry(UUID_2, clientState2),
-            mkEntry(UUID_3, clientState3)
-        );
-
-        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
-            clientStates,
-            allTaskIds,
-            allTaskIds,
-            new AssignmentConfigs(11L, 0, 1, 0L)
-        );
-
-        assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
-
-        assertThat(clientState2, hasAssignedTasks(allTaskIds.size()));
-
-        assertThat(clientState3, hasAssignedTasks(0));
-
-        assertThat(unstable, is(false));
-    }
-
-    @Test
     public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
@@ -126,7 +97,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(11L, 2, 1, 0L)
+            new AssignmentConfigs(11L, 2, 1, 60_000L)
         );
 
         assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
@@ -136,6 +107,32 @@ public class HighAvailabilityTaskAssignorTest {
         assertThat(clientState3, hasAssignedTasks(2));
 
         assertThat(unstable, is(true));
+    }
+
+    @Test
+    public void shouldSkipWarmupsWhenAcceptableLagIsMax() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, clientState1),
+            mkEntry(UUID_2, clientState2),
+            mkEntry(UUID_3, clientState3)
+        );
+
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(Long.MAX_VALUE, 1, 1, 60_000L)
+        );
+
+        assertThat(clientState1, hasAssignedTasks(6));
+        assertThat(clientState2, hasAssignedTasks(6));
+        assertThat(clientState3, hasAssignedTasks(6));
+        assertThat(unstable, is(false));
     }
 
     @Test
@@ -150,7 +147,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -171,7 +168,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -191,7 +188,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -213,7 +210,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -242,7 +239,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -264,7 +261,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -289,7 +286,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(true));
@@ -319,7 +316,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -340,7 +337,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -700,7 +697,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -731,7 +728,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -762,7 +759,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -793,7 +790,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
