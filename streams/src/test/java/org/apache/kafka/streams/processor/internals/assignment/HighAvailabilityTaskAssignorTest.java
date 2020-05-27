@@ -697,7 +697,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -728,7 +728,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -759,7 +759,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
@@ -790,7 +790,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertValidAssignment(
