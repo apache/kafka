@@ -665,8 +665,6 @@ public class Topology {
             for (final StoreBuilder storeBuilder : stores) {
                 internalTopologyBuilder.addStateStore(storeBuilder, name);
             }
-            final String[] storeNames = stores.stream().map(StoreBuilder::name).toArray(String[]::new);
-            internalTopologyBuilder.connectProcessorAndStateStores(name, storeNames);
         }
         return this;
     }
