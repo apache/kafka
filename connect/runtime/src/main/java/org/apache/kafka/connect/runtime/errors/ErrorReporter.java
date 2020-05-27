@@ -27,20 +27,12 @@ import java.util.concurrent.Future;
 public interface ErrorReporter extends AutoCloseable {
 
     /**
-     * Report an error.
-     *
-     * @param context the processing context (cannot be null).
-     */
-    void report(ProcessingContext context);
-
-    /**
      * Report an error and return the producer future.
      *
      * @param context the processing context (cannot be null).
-     * @return future result from the producer sending a record to Kafka
+     * @return future result from the producer sending a record to Kafka.
      */
-    default Future<RecordMetadata> reportAndReturnFuture(ProcessingContext context) {
-        report(context);
+    default Future<RecordMetadata> report(ProcessingContext context) {
         return CompletableFuture.completedFuture(null);
     }
 

@@ -138,21 +138,17 @@ class ProcessingContext implements AutoCloseable {
 
     /**
      * Report errors. Should be called only if an error was encountered while executing the operation.
+     *
+     * @return a errant record future that potentially aggregates the producer futures
      */
-    public void report() {
-        for (ErrorReporter reporter: reporters) {
-            reporter.report(this);
-        }
-    }
-
-    public Future<Void> reportAndReturnFuture() {
+    public Future<Void> report() {
         if (reporters.size() == 1) {
-            return new ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().reportAndReturnFuture(this)));
+            return new ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(this)));
         }
 
         List<Future<RecordMetadata>> futures = new LinkedList<>();
         for (ErrorReporter reporter: reporters) {
-            Future<RecordMetadata> future = reporter.reportAndReturnFuture(this);
+            Future<RecordMetadata> future = reporter.report(this);
             if (!future.isDone()) {
                 futures.add(future);
             }
@@ -162,7 +158,6 @@ class ProcessingContext implements AutoCloseable {
         }
         return new ErrantRecordFuture(futures);
     }
-
 
     @Override
     public String toString() {

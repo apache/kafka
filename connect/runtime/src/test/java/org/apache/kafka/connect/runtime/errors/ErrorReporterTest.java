@@ -157,7 +157,7 @@ public class ErrorReporterTest {
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
         replay(producer);
 
-        deadLetterQueueReporter.reportAndReturnFuture(context);
+        deadLetterQueueReporter.report(context);
 
         PowerMock.verifyAll();
     }
@@ -242,7 +242,7 @@ public class ErrorReporterTest {
             "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
             "partition=5, offset=100}.", msg);
 
-        Future<RecordMetadata> future = logReporter.reportAndReturnFuture(context);
+        Future<RecordMetadata> future = logReporter.report(context);
         assertTrue(future instanceof CompletableFuture);
     }
 

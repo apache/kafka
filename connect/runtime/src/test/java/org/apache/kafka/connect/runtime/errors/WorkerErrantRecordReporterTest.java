@@ -68,7 +68,7 @@ public class WorkerErrantRecordReporterTest {
             reporter.futures.add(CompletableFuture.completedFuture(null));
         }
         assertFalse(reporter.futures.isEmpty());
-        reporter.getAllFutures();
+        reporter.awaitAllFutures();
         assertTrue(reporter.futures.isEmpty());
     }
 }

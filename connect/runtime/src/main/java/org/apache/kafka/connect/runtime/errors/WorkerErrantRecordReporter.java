@@ -48,7 +48,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private HeaderConverter headerConverter;
 
     // Visible for testing
-    public LinkedList<Future<Void>> futures;
+    final LinkedList<Future<Void>> futures;
 
     public WorkerErrantRecordReporter(
         RetryWithToleranceOperator retryWithToleranceOperator,
@@ -67,13 +67,15 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     public Future<Void> report(SinkRecord record, Throwable error) {
         ConsumerRecord<byte[], byte[]> consumerRecord;
 
+        // Most of the records will be an internal sink record, but the task could potentially
+        // report modified or new records, so handle both cases
         if (record instanceof InternalSinkRecord) {
             consumerRecord = ((InternalSinkRecord) record).originalRecord();
         } else {
             String topic = record.topic();
             byte[] key = keyConverter.fromConnectData(topic, record.keySchema(), record.key());
-            byte[] value = valueConverter.fromConnectData(topic, record.valueSchema(),
-                record.value());
+            byte[] value = valueConverter.fromConnectData(topic,
+                record.valueSchema(), record.value());
 
             RecordHeaders headers = new RecordHeaders();
             if (record.headers() != null) {
@@ -104,16 +106,17 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
      * record reporter. This function is intended to be used to block on all the errant record
      * futures.
      */
-    public void getAllFutures() {
-        for (Future<Void> future : futures) {
+    public void awaitAllFutures() {
+        Future<?> future = null;
+        while ((future = futures.poll()) != null) {
             try {
                 future.get();
             } catch (InterruptedException | ExecutionException e) {
-                log.error("Encountered an error while calling ");
+                log.error("Encountered an error while awaiting an errant record future's " +
+                    "completition.");
                 throw new ConnectException(e);
             }
         }
-        futures.clear();
     }
 
     /**

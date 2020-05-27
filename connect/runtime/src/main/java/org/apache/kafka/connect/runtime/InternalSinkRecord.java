@@ -18,6 +18,9 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class InternalSinkRecord extends SinkRecord {
@@ -29,6 +32,22 @@ public class InternalSinkRecord extends SinkRecord {
             record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
             record.timestampType(), record.headers());
         this.originalRecord = originalRecord;
+    }
+
+    public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
+                              int partition, Schema keySchema, Object key, Schema valueSchema,
+                              Object value, long kafkaOffset, Long timestamp,
+                              TimestampType timestampType, Iterable<Header> headers) {
+        super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
+        this.originalRecord = originalRecord;
+    }
+
+    @Override
+    public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key,
+                                Schema valueSchema, Object value, Long timestamp,
+                                Iterable<Header> headers) {
+        return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
+            valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers());
     }
 
     /**

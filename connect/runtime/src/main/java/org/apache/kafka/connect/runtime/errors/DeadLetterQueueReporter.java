@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -116,16 +115,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         this.connConfig = connConfig;
         this.connectorTaskId = id;
         this.errorHandlingMetrics = errorHandlingMetrics;
-        this.dlqTopicName = connConfig.dlqTopicName();
-    }
-
-    /**
-     * Write the raw records into a Kafka topic.
-     *
-     * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
-     */
-    public void report(ProcessingContext context) {
-        reportAndReturnFuture(context);
+        this.dlqTopicName = connConfig.dlqTopicName().trim();
     }
 
     /**
@@ -134,7 +124,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      * @return the future associated with the writing of this record; never null
      */
-    public Future<RecordMetadata> reportAndReturnFuture(ProcessingContext context) {
+    public Future<RecordMetadata> report(ProcessingContext context) {
         if (dlqTopicName.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }

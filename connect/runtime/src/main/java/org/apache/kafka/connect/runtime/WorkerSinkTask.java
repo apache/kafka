@@ -365,7 +365,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private void commitOffsets(long now, boolean closing) {
         if (workerErrantRecordReporter != null) {
-            workerErrantRecordReporter.getAllFutures();
+            workerErrantRecordReporter.awaitAllFutures();
         }
 
         if (currentOffsets.isEmpty())
@@ -505,7 +505,6 @@ class WorkerSinkTask extends WorkerTask {
                 timestamp,
                 msg.timestampType(),
                 headers);
-
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
         if (isTopicTrackingEnabled) {
@@ -514,7 +513,6 @@ class WorkerSinkTask extends WorkerTask {
 
         // Apply the transformations
         SinkRecord transformedRecord = transformationChain.apply(origRecord);
-
         if (transformedRecord == null) {
             return null;
         }

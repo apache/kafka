@@ -43,12 +43,7 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             super.start(props);
-            try {
-                reporter = context.errantRecordReporter(); // may be null if DLQ not enabled
-            } catch (NoClassDefFoundError e) {
-                // Will occur in Connect runtimes earlier than 2.6
-                reporter = null;
-            }
+            reporter = context.errantRecordReporter();
         }
 
         @Override

@@ -91,7 +91,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordError();
-        return context.reportAndReturnFuture();
+        return context.report();
     }
 
     /**
