@@ -124,7 +124,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
 /**
  * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
  * of these offsets atomically without the possibility of a leader change affecting their consistency relative
- * to each other. See [[kafka.cluster.Partition.fetchOffsetSnapshot()]].
+ * to each other. See [[Log.fetchOffsetSnapshot()]].
  */
 case class LogOffsetSnapshot(logStartOffset: Long,
                              logEndOffset: LogOffsetMetadata,
