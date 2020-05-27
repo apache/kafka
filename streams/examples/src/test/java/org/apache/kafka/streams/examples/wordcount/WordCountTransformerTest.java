@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
 import java.util.Iterator;
@@ -31,29 +30,27 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
+ * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
  */
-public class WordCountProcessorTest {
+public class WordCountTransformerTest {
     @Test
     public void test() {
         final MockProcessorContext context = new MockProcessorContext();
 
-        // Create, initialize, and register the state store.
-        final KeyValueStore<String, Integer> store =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("Counts"), Serdes.String(), Serdes.Integer())
-                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
-                .build();
-        store.init(context, store);
-        context.register(store, null);
+        // Create and initialize the transformer under test; including its provided store
+        final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
+        for (final StoreBuilder<?> storeBuilder : supplier.stores()) {
+            final StateStore store = storeBuilder.withLoggingDisabled().build(); // Changelog is not supported by MockProcessorContext.
+            store.init(context, store);
+            context.register(store, null);
+        }
+        final Transformer<String, String, KeyValue<String, String>> transformer = supplier.get();
+        transformer.init(context);
 
-        // Create and initialize the processor under test
-        final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
-        processor.init(context);
+        // send a record to the transformer
+        transformer.transform("key", "alpha beta gamma alpha");
 
-        // send a record to the processor
-        processor.process("key", "alpha beta gamma alpha");
-
-        // note that the processor does not forward during process()
+        // note that the transformer does not forward during transform()
         assertTrue(context.forwarded().isEmpty());
 
         // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
