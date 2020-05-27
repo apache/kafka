@@ -380,7 +380,8 @@ public class KafkaAdminClientTest {
             MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
-    private static DescribeGroupsResponseData prepareDescribeGroupsResponseData(String groupId, List<String> groupInstances,
+    private static DescribeGroupsResponseData prepareDescribeGroupsResponseData(String groupId,
+                                                                                List<String> groupInstances,
                                                                                 List<TopicPartition> topicPartitions) {
         final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
         List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember(JoinGroupRequest.UNKNOWN_MEMBER_ID,

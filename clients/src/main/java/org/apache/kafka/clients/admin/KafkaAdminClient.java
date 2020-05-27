@@ -3653,11 +3653,9 @@ public class KafkaAdminClient extends AdminClient {
         return new RemoveMembersFromConsumerGroupResult(future, options.members());
     }
 
-    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>,
-            RemoveMembersFromConsumerGroupOptions> context, List<MemberIdentity> members) {
-        return new Call("leaveGroup",
-                        context.deadline(),
-                        new ConstantNodeIdProvider(context.node().get().id())) {
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context,
+                                               List<MemberIdentity> members) {
+        return new Call("leaveGroup", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(), members);

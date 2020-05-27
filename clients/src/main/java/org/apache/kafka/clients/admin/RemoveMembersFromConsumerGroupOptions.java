@@ -35,6 +35,9 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     private Set<MemberToRemove> members;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
+        if (members.isEmpty()) {
+            throw new IllegalArgumentException("Invalid empty members has been provided");
+        }
         this.members = new HashSet<>(members);
     }
 

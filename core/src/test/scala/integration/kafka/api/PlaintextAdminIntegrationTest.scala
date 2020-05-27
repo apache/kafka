@@ -1021,7 +1021,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val testTopicName2 = testTopicName + "2"
       val testNumPartitions = 2
 
-      client.createTopics(util.Arrays.asList(new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+      client.createTopics(util.Arrays.asList(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort),
         new NewTopic(testTopicName1, testNumPartitions, 1.toShort),
         new NewTopic(testTopicName2, testNumPartitions, 1.toShort)
       )).all().get()

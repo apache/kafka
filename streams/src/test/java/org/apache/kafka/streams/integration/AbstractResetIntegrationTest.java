@@ -283,9 +283,6 @@ public abstract class AbstractResetIntegrationTest {
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null);
-
-        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
-
         assertInternalTopicsGotDeleted(null);
 
         // RE-RUN
