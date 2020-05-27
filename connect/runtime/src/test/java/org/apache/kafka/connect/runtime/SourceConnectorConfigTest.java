@@ -82,7 +82,9 @@ public class SourceConnectorConfigTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(0));
 
         e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-        assertThat(e.getMessage(), containsString("Replication factor must be positive, or -1"));
+        assertThat(e.getMessage(), containsString("Replication factor must be positive and not "
+                + "larger than the number of brokers in the Kafka cluster, or -1 to use the "
+                + "broker's default"));
     }
 
     @Test
@@ -97,7 +99,9 @@ public class SourceConnectorConfigTest {
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(DEFAULT_PARTITIONS));
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(i));
             e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-            assertThat(e.getMessage(), containsString("Replication factor must be positive, or -1"));
+            assertThat(e.getMessage(), containsString("Replication factor must be positive and not "
+                    + "larger than the number of brokers in the Kafka cluster, or -1 to use the "
+                    + "broker's default"));
         }
     }
 
