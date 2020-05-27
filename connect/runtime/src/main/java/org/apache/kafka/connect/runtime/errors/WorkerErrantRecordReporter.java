@@ -42,10 +42,10 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerErrantRecordReporter.class);
 
-    private RetryWithToleranceOperator retryWithToleranceOperator;
-    private Converter keyConverter;
-    private Converter valueConverter;
-    private HeaderConverter headerConverter;
+    private final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
+    private final HeaderConverter headerConverter;
 
     // Visible for testing
     final LinkedList<Future<Void>> futures;
@@ -119,8 +119,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             try {
                 future.get();
             } catch (InterruptedException | ExecutionException e) {
-                log.error("Encountered an error while awaiting an errant record future's " +
-                    "completition.");
+                log.error("Encountered an error while awaiting an errant record future's completion.");
                 throw new ConnectException(e);
             }
         }

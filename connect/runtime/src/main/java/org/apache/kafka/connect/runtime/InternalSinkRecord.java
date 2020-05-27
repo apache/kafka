@@ -34,7 +34,7 @@ public class InternalSinkRecord extends SinkRecord {
         this.originalRecord = originalRecord;
     }
 
-    public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
+    protected InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
                               int partition, Schema keySchema, Object key, Schema valueSchema,
                               Object value, long kafkaOffset, Long timestamp,
                               TimestampType timestampType, Iterable<Header> headers) {
@@ -62,9 +62,7 @@ public class InternalSinkRecord extends SinkRecord {
 
     @Override
     public String toString() {
-        return "InternalSinkRecord{" +
-                "consumerRecord=" + originalRecord.toString() +
-                "} " + super.toString();
+        return super.toString();
     }
 
     /**
