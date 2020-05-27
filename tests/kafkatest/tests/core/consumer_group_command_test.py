@@ -63,7 +63,7 @@ class ConsumerGroupCommandTest(Test):
                                         consumer_timeout_ms=None)
         self.consumer.start()
 
-    def setup_and_verify(self, security_protocol, tls_version=None, group=None):
+    def setup_and_verify(self, security_protocol, group=None, tls_version=None):
         self.start_kafka(security_protocol, security_protocol, tls_version)
         self.start_consumer()
         consumer_node = self.consumer.nodes[0]
@@ -96,7 +96,7 @@ class ConsumerGroupCommandTest(Test):
         Tests if ConsumerGroupCommand is listing correct consumer groups
         :return: None
         """
-        self.setup_and_verify(security_protocol, tls_version)
+        self.setup_and_verify(security_protocol, tls_version=tls_version)
 
     @cluster(num_nodes=3)
     @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
@@ -106,4 +106,4 @@ class ConsumerGroupCommandTest(Test):
         Tests if ConsumerGroupCommand is describing a consumer group correctly
         :return: None
         """
-        self.setup_and_verify(security_protocol, tls_version, group="test-consumer-group")
+        self.setup_and_verify(security_protocol, tls_version=tls_version, group="test-consumer-group")

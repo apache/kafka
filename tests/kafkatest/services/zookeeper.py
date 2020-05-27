@@ -16,7 +16,6 @@
 
 import os
 import re
-import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until

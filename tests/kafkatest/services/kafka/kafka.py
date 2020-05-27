@@ -51,6 +51,7 @@ class KafkaListener:
     def listener_security_protocol(self):
         return "%s:%s" % (self.name, self.security_protocol)
 
+
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     PERSISTENT_ROOT = "/mnt/kafka"
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")

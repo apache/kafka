@@ -33,7 +33,7 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
             "collect_default": True}
     }
 
-    def __init__(self, context, kafka, security_protocol="PLAINTEXT", tls_version=None, stop_timeout_sec=30):
+    def __init__(self, context, kafka, security_protocol="PLAINTEXT", stop_timeout_sec=30, tls_version=None):
         super(LogCompactionTester, self).__init__(context, 1)
 
         self.kafka = kafka
