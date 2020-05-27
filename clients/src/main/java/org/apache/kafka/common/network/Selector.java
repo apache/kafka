@@ -804,7 +804,33 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
-     * Clear the results from the prior poll
+     * Clears completed receives. This is used by SocketServer to remove references to
+     * receive buffers after processing completed receives, without waiting for the next
+     * poll() after all results have been processed.
+     */
+    public void clearCompletedReceives() {
+        this.completedReceives.clear();
+    }
+
+    /**
+     * Clears completed sends. This is used by SocketServer to remove references to
+     * send buffers after processing completed sends, without waiting for the next
+     * poll() after all results have been processed.
+     */
+    public void clearCompletedSends() {
+        this.completedSends.clear();
+    }
+
+    /**
+     * Clears all the results from the previous poll. This is invoked by Selector at the start of
+     * a poll() when all the results from the previous poll are expected to have been handled.
+     * <p>
+     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedSends()} to
+     * clear `completedSends` and `completedReceives` as soon as they are processed to avoid
+     * holding onto large request/response buffers from multiple connections longer than necessary.
+     * Clients rely on Selector invoking {@link #clear()} at the start of each poll() since memory usage
+     * is less critical and clearing once-per-poll provides the flexibility to process these results in
+     * any order before the next poll.
      */
     private void clear() {
         this.completedSends.clear();

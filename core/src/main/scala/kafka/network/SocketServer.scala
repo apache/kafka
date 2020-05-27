@@ -968,6 +968,7 @@ private[kafka] class Processor(val id: Int,
           processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
       }
     }
+    selector.clearCompletedReceives()
   }
 
   private def processCompletedSends(): Unit = {
@@ -991,6 +992,7 @@ private[kafka] class Processor(val id: Int,
           s"Exception while processing completed send to ${send.destination}", e)
       }
     }
+    selector.clearCompletedSends()
   }
 
   private def updateRequestMetrics(response: RequestChannel.Response): Unit = {

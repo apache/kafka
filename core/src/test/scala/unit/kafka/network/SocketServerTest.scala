@@ -1872,6 +1872,9 @@ class SocketServerTest {
 
     override def poll(timeout: Long): Unit = {
       try {
+        assertEquals(0, super.completedReceives().size)
+        assertEquals(0, super.completedSends().size)
+
         pollCallback.apply()
         while (!pendingClosingChannels.isEmpty) {
           makeClosing(pendingClosingChannels.poll())

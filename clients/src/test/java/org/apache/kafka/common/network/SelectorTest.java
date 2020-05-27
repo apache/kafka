@@ -342,6 +342,36 @@ public class SelectorTest {
         assertEquals("", blockingRequest(node, ""));
     }
 
+    @Test
+    public void testClearCompletedSendsAndReceives() throws Exception {
+        int bufferSize = 1024;
+        String node = "0";
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        connect(node, addr);
+        String request = TestUtils.randomString(bufferSize);
+        selector.send(createSend(node, request));
+        boolean sent = false;
+        boolean received = false;
+        while (!sent || !received) {
+            selector.poll(1000L);
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+            if (!selector.completedSends().isEmpty()) {
+                assertEquals(1, selector.completedSends().size());
+                selector.clearCompletedSends();
+                assertEquals(0, selector.completedSends().size());
+                sent = true;
+            }
+
+            if (!selector.completedReceives().isEmpty()) {
+                assertEquals(1, selector.completedReceives().size());
+                assertEquals(request, asString(selector.completedReceives().iterator().next()));
+                selector.clearCompletedReceives();
+                assertEquals(0, selector.completedReceives().size());
+                received = true;
+            }
+        }
+    }
+
     @Test(expected = IllegalStateException.class)
     public void testExistingConnectionId() throws IOException {
         blockingConnect("0");
