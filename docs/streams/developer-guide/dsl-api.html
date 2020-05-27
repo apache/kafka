@@ -3539,7 +3539,7 @@ grouped
                     <ul class="simple">
                         <li>By passing the name of a store that has already been added via <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code> to the corresponding <code class="docutils literal"><span class="pre">KStream#process()</span></code> method call.</li>
                         <li>Implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
-                            passed to <code class="docutils literal"><span class="pre">KStream#process()</span></code>.  In this case there is no need to call <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code>
+                            passed to <code class="docutils literal"><span class="pre">KStream#process()</span></code>.  In this case there is no need to call <code class="docutils literal"><span class="pre">StreamsBuilder#addStateStore()</span></code>
                             beforehand; the store will be automatically added for you.
                         </li>
                     </ul>
