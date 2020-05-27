@@ -52,12 +52,16 @@ public class TaskHandle {
         this.consumer = consumer;
     }
 
+    public void record() {
+        record(null);
+    }
+
     /**
      * Record a message arrival at the task and the connector overall.
      */
-    public void record(SinkRecord rec) {
-        if (consumer != null) {
-            consumer.accept(rec);
+    public void record(SinkRecord record) {
+        if (consumer != null && record != null) {
+            consumer.accept(record);
         }
         if (recordsRemainingLatch != null) {
             recordsRemainingLatch.countDown();
