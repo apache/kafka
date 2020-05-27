@@ -24,7 +24,6 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -34,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -83,41 +83,45 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void danglingTransformAlias() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "dangler");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Not a Transformation"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void emptyConnectorName() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "");
         props.put("connector.class", TestConnector.class.getName());
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("String may not be empty"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void wrongTransformationType() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", "uninstantiable");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Class uninstantiable could not be found"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void unconfiguredTransform() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Missing required configuration \"transforms.a.magic.number\" which"));
     }
 
     @Test
@@ -128,12 +132,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms", "a");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "40");
-        try {
-            new ConnectorConfig(MOCK_PLUGINS, props);
-            fail();
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("Value must be at least 42"));
-        }
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Value must be at least 42"));
     }
 
     @Test
@@ -216,7 +216,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void wrongPredicateType() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -227,7 +227,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.predicate", "my-pred");
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestConnector.class.getName());
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Not a Predicate"));
     }
 
     @Test
@@ -261,7 +262,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertPredicatedTransform(props, false);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void abstractPredicate() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -273,7 +274,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", AbstractTestPredicate.class.getName());
         props.put("predicates.my-pred.int", "84");
-        assertPredicatedTransform(props, false);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Predicate is abstract and cannot be created"));
     }
 
     private void assertPredicatedTransform(Map<String, String> props, boolean expectedNegated) {
@@ -318,9 +320,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    @Ignore("Is this really an error. There's no actual need for the predicates config (unlike transforms where it defines the order).")
-    @Test(expected = ConfigException.class)
-    public void missingPredicates() {
+    @Test
+    public void missingPredicateAliasProperty() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
@@ -328,13 +329,14 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         props.put("transforms.a.predicate", "my-pred");
+        // technically not needed
         //props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestPredicate.class.getName());
         props.put("predicates.my-pred.int", "84");
         new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void missingPredicateConfig() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -346,10 +348,11 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         //props.put("predicates.my-pred.type", TestPredicate.class.getName());
         //props.put("predicates.my-pred.int", "84");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("Not a Predicate"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void negatedButNoPredicate() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -358,7 +361,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         props.put("transforms.a.negate", "true");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(e.getMessage().contains("there is no config 'transforms.a.predicate' defining a predicate to be negated"));
     }
 
     public static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {

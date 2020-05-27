@@ -31,7 +31,8 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R> {
 
     private static final String NAME_CONFIG = "name";
-    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
             new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
             "The header name.");
     private String name;

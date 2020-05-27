@@ -18,21 +18,41 @@ package org.apache.kafka.connect.transforms.predicates;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.junit.Test;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class HasHeaderKeyTest {
+
+    @Test
+    public void testNameRequiredInConfig() {
+        Map<String, String> props = new HashMap<>();
+        ConfigException e = assertThrows(ConfigException.class, () -> config(props));
+        assertTrue(e.getMessage().contains("Missing required configuration \"name\""));
+    }
+
+    @Test
+    public void testNameMayNotBeEmptyInConfig() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "");
+        ConfigException e = assertThrows(ConfigException.class, () -> config(props));
+        assertTrue(e.getMessage().contains("String must be non-empty"));
+    }
 
     @Test
     public void testConfig() {
@@ -56,6 +76,10 @@ public class HasHeaderKeyTest {
         assertFalse(predicate.test(recordWithHeaders()));
         assertFalse(predicate.test(new SourceRecord(null, null, null, null, null)));
 
+    }
+
+    private SimpleConfig config(Map<String, String> props) {
+        return new SimpleConfig(new HasHeaderKey().config(), props);
     }
 
     private SourceRecord recordWithHeaders(String... headers) {

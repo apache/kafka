@@ -33,8 +33,10 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 public class TopicNameMatches<R extends ConnectRecord<R>> implements Predicate<R> {
 
     private static final String PATTERN_CONFIG = "pattern";
-    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(PATTERN_CONFIG, ConfigDef.Type.STRING, ".*",
-            new RegexValidator(), ConfigDef.Importance.MEDIUM,
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(PATTERN_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+            ConfigDef.CompositeValidator.of(new ConfigDef.NonEmptyString(), new RegexValidator()),
+            ConfigDef.Importance.MEDIUM,
             "A Java regular expression for matching against the name of a record's topic.");
     private Pattern pattern;
 
