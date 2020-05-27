@@ -20,10 +20,11 @@ from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
 
-from kafkatest.services.kafka.util import java_version
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 import itertools
+
+from kafkatest.utils.remote_account import java_version
 
 
 class SslStores(object):
@@ -178,7 +179,6 @@ class SecurityConfig(TemplateRenderer):
         self.listener_security_config = listener_security_config
         self.properties = {
             'security.protocol' : security_protocol,
-            'tls.version' : tls_version,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
             'ssl.keystore.password' : SecurityConfig.ssl_stores.keystore_passwd,
             'ssl.key.password' : SecurityConfig.ssl_stores.key_passwd,
@@ -189,6 +189,10 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+
+        if tls_version is not None:
+            self.properties.update({'tls.version' : tls_version})
+
         self.properties.update(self.listener_security_config.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
 
@@ -212,7 +216,6 @@ class SecurityConfig(TemplateRenderer):
         self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
 
     def setup_ssl(self, node):
-
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
         node.account.copy_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
         SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
@@ -313,7 +316,7 @@ class SecurityConfig(TemplateRenderer):
 
     @property
     def tls_version(self):
-        return self.properties['tls.version']
+        return self.properties.get('tls.version')
 
     @property
     def client_sasl_mechanism(self):
