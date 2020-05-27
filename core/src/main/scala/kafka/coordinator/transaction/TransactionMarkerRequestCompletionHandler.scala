@@ -17,7 +17,7 @@
 
 package kafka.coordinator.transaction
 
-import kafka.utils.Logging
+import kafka.utils.{Logging, ToolsUtils}
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -42,6 +42,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
       for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
+        val responseCallbackOpt = txnIdAndMarker.responseCallbackOpt
 
         txnStateManager.getTransactionState(transactionalId) match {
 
@@ -49,17 +50,21 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
             info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.NOT_COORDINATOR)
 
           case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
             info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
               s"cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.COORDINATOR_LOAD_IN_PROGRESS)
 
           case Left(unexpectedError) =>
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.UNKNOWN_SERVER_ERROR)
             throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
           case Right(None) =>
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.UNKNOWN_SERVER_ERROR)
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
               s"no metadata in the cache; this is not expected")
 
@@ -70,6 +75,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+              ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.NOT_COORDINATOR)
             } else {
               // re-enqueue the markers with possibly new destination brokers
               trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
@@ -93,6 +99,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+        val responseCallbackOpt = txnIdAndMarker.responseCallbackOpt
 
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
@@ -102,17 +109,21 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
             info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.NOT_COORDINATOR)
 
           case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
             info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
               s"cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.COORDINATOR_LOAD_IN_PROGRESS)
 
           case Left(unexpectedError) =>
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.UNKNOWN_SERVER_ERROR)
             throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
           case Right(None) =>
+            ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.UNKNOWN_SERVER_ERROR)
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
               s"no metadata in the cache; this is not expected")
 
@@ -140,6 +151,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                          Errors.RECORD_LIST_TOO_LARGE |
                          Errors.INVALID_REQUIRED_ACKS => // these are all unexpected and fatal errors
 
+                      ToolsUtils.maybeResonseCallback(responseCallbackOpt, Errors.UNKNOWN_SERVER_ERROR)
                       throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
 
                     case Errors.UNKNOWN_TOPIC_OR_PARTITION |
@@ -173,6 +185,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       txnMetadata.removePartition(topicPartition)
 
                     case other =>
+                      ToolsUtils.maybeResonseCallback(responseCallbackOpt, other)
                       throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
                   }
                 }

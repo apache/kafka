@@ -77,7 +77,9 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
+  type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata, Option[Errors =>
+    Unit]) =>
+    Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -424,7 +426,7 @@ class TransactionStateManager(brokerId: Int,
 
           transactionsPendingForCompletion.foreach { txnTransitMetadata =>
             sendTxnMarkers(txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result,
-              txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
+              txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata, None)
           }
         }
       }
