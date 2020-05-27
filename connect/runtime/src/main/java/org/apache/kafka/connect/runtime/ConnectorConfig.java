@@ -159,6 +159,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX = "producer.override.";
     public static final String CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX = "consumer.override.";
     public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.override.";
+    public static final String PREDICATES_PREFIX = "predicates.";
 
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
@@ -283,7 +284,7 @@ public class ConnectorConfig extends AbstractConfig {
                 Object negate = configs.remove(PredicatedTransformation.NEGATE_CONFIG);
                 transformation.configure(configs);
                 if (predicateAlias != null) {
-                    String predicatePrefix = "predicates." + predicateAlias + ".";
+                    String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
@@ -422,13 +423,12 @@ public class ConnectorConfig extends AbstractConfig {
                 int orderInGroup = 0;
 
                 final String typeConfig = prefix + "type";
-                final ConfigDef.Validator typeValidator = new ConfigDef.Validator() {
-                    @Override
-                    public void ensureValid(String name, Object value) {
+                final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
+                    (String name, Object value) -> {
                         validateProps(prefix);
                         getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
-                    }
-                };
+                    },
+                    () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
                         "Class for the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " type for " + alias,

@@ -34,9 +34,9 @@ class PredicatedTransformation<R extends ConnectRecord<R>> implements Transforma
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
-    /*test*/ Predicate<R> predicate;
-    /*test*/ Transformation<R> delegate;
-    /*test*/ boolean negate;
+    Predicate<R> predicate;
+    Transformation<R> delegate;
+    boolean negate;
 
     PredicatedTransformation(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
         this.predicate = predicate;

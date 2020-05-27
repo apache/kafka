@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -32,6 +26,12 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Ignore;
 import org.junit.Test;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -215,8 +215,6 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
             );
         }
     }
-
-
 
     @Test(expected = ConfigException.class)
     public void wrongPredicateType() {
