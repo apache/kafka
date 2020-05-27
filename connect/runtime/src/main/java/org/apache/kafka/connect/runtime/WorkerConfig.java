@@ -44,6 +44,7 @@ import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -250,9 +251,17 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
+    public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
+    protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
+            + "automatic creation of topics used by source connectors, when source connectors "
+            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "admin client to create its topics and will not depend on the Kafka brokers "
+            + "to create topics automatically.";
+    protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
+
     public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
-    public static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
-    public static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
+    protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
+    protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -335,6 +344,8 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
                 .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
                         Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT, Importance.LOW,
+                        TOPIC_CREATION_ENABLE_DOC)
                 .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
                         new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
     }
@@ -393,6 +404,10 @@ public class WorkerConfig extends AbstractConfig {
 
     public Integer getRebalanceTimeout() {
         return null;
+    }
+
+    public boolean topicCreationEnable() {
+        return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
 
     @Override

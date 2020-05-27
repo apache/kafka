@@ -19,20 +19,26 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,10 +64,10 @@ public class TopicAdmin implements AutoCloseable {
      * A builder of {@link NewTopic} instances.
      */
     public static class NewTopicBuilder {
-        private String name;
+        private final String name;
         private int numPartitions = NO_PARTITIONS;
         private short replicationFactor = NO_REPLICATION_FACTOR;
-        private Map<String, String> configs = new HashMap<>();
+        private final Map<String, String> configs = new HashMap<>();
 
         NewTopicBuilder(String name) {
             this.name = name;
@@ -313,9 +319,69 @@ public class TopicAdmin implements AutoCloseable {
         return newlyCreatedTopicNames;
     }
 
+    /**
+     * Attempt to fetch the descriptions of the given topics
+     * Apache Kafka added support for describing topics in 0.10.0.0, so this method works as expected with that and later versions.
+     * With brokers older than 0.10.0.0, this method is unable to describe topics and always returns an empty set.
+     *
+     * @param topics the topics to describe
+     * @return a map of topic names to topic descriptions of the topics that were requested; never null but possibly empty
+     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
+     * thread is interrupted while attempting to perform this operation
+     * @throws ConnectException if a non retriable error occurs
+     */
+    public Map<String, TopicDescription> describeTopics(String... topics) {
+        if (topics == null) {
+            return Collections.emptyMap();
+        }
+        String bootstrapServers = bootstrapServers();
+        String topicNameList = String.join(", ", topics);
+
+        Map<String, KafkaFuture<TopicDescription>> newResults =
+                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).values();
+
+        // Iterate over each future so that we can handle individual failures like when some topics don't exist
+        Map<String, TopicDescription> existingTopics = new HashMap<>();
+        newResults.forEach((topic, desc) -> {
+            try {
+                existingTopics.put(topic, desc.get());
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException) {
+                    log.debug("Topic '{}' does not exist on the brokers at {}", topic, bootstrapServers);
+                    return;
+                }
+                if (cause instanceof ClusterAuthorizationException || cause instanceof TopicAuthorizationException) {
+                    String msg = String.format("Not authorized to describe topic(s) '%s' on the brokers %s",
+                            topicNameList, bootstrapServers);
+                    throw new ConnectException(msg, cause);
+                }
+                if (cause instanceof UnsupportedVersionException) {
+                    String msg = String.format("Unable to describe topic(s) '%s' since the brokers "
+                                    + "at %s do not support the DescribeTopics API.",
+                            topicNameList, bootstrapServers);
+                    throw new ConnectException(msg, cause);
+                }
+                if (cause instanceof TimeoutException) {
+                    // Timed out waiting for the operation to complete
+                    throw new RetriableException("Timed out while describing topics '" + topicNameList + "'", cause);
+                }
+                throw new ConnectException("Error while attempting to describe topics '" + topicNameList + "'", e);
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                throw new RetriableException("Interrupted while attempting to describe topics '" + topicNameList + "'", e);
+            }
+        });
+        return existingTopics;
+    }
+
     @Override
     public void close() {
         admin.close();
+    }
+
+    public void close(Duration timeout) {
+        admin.close(timeout);
     }
 
     private String bootstrapServers() {

@@ -60,6 +60,8 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
+import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +77,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-
 
 /**
  * <p>
@@ -249,25 +250,18 @@ public class Worker {
             final WorkerConnector workerConnector;
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-                final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                log.info("Creating connector {} of type {}", connName, connClass);
-                final Connector connector = plugins.newConnector(connClass);
-
+                // By the time we arrive here, CONNECTOR_CLASS_CONFIG has been validated already
+                // Getting this value from the unparsed map will allow us to instantiate the
+                // right config (source or sink)
+                final String connClassProp = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                log.info("Creating connector {} of type {}", connName, connClassProp);
+                final Connector connector = plugins.newConnector(connClassProp);
                 final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
-                    offsetBackingStore,
-                    connName,
-                    internalKeyConverter,
-                    internalValueConverter
-                );
-                workerConnector = new WorkerConnector(
-                    connName,
-                    connector,
-                    ctx,
-                    metrics,
-                    statusListener,
-                    offsetReader
-                );
+                        offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
+                workerConnector = new WorkerConnector(connName, connector, ctx, metrics, statusListener, offsetReader);
+                final ConnectorConfig connConfig = workerConnector.isSinkConnector()
+                        ? new SinkConnectorConfig(plugins, connProps)
+                        : new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 savedLoader = plugins.compareAndSwapLoaders(connector);
                 workerConnector.initialize(connConfig);
@@ -526,21 +520,34 @@ public class Worker {
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
+            SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
+                    connConfig.originalsStrings(), config.topicCreationEnable());
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
+            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, sourceConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+            TopicAdmin admin;
+            Map<String, TopicCreationGroup> topicCreationGroups;
+            if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
+                Map<String, Object> adminProps = adminConfigs(id, "connector-adminclient-" + id, config,
+                        sourceConfig, connectorClass, connectorClientConfigOverridePolicy);
+                admin = new TopicAdmin(adminProps);
+                topicCreationGroups = TopicCreationGroup.configuredGroups(sourceConfig);
+            } else {
+                admin = null;
+                topicCreationGroups = null;
+            }
 
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, configState, metrics, loader,
-                    time, retryWithToleranceOperator, herder.statusBackingStore());
+                    headerConverter, transformationChain, producer, admin, topicCreationGroups,
+                    offsetReader, offsetWriter, config, configState, metrics, loader, time, retryWithToleranceOperator, herder.statusBackingStore());
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -620,6 +627,7 @@ public class Worker {
     }
 
     static Map<String, Object> adminConfigs(ConnectorTaskId id,
+                                            String defaultClientId,
                                             WorkerConfig config,
                                             ConnectorConfig connConfig,
                                             Class<? extends Connector> connectorClass,
@@ -637,6 +645,7 @@ public class Worker {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
             Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
         adminProps.putAll(nonPrefixedWorkerConfigs);
 
         // Admin client-specific overrides in the worker config
@@ -693,7 +702,7 @@ public class Worker {
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
-            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            Map<String, Object> adminProps = adminConfigs(id, "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
@@ -815,6 +824,16 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    /**
+     * Returns whether this worker is configured to allow source connectors to create the topics
+     * that they use with custom configurations, if these topics don't already exist.
+     *
+     * @return true if topic creation by source connectors is allowed; false otherwise
+     */
+    public boolean isTopicCreationEnabled() {
+        return config.topicCreationEnable();
     }
 
     /**

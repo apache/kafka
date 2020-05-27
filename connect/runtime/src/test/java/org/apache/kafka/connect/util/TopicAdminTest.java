@@ -17,22 +17,28 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -41,8 +47,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -54,7 +62,7 @@ public class TopicAdminTest {
      * create no topics, and return false.
      */
     @Test
-    public void returnNullWithApiVersionMismatch() {
+    public void returnNullWithApiVersionMismatchOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -66,8 +74,26 @@ public class TopicAdminTest {
         }
     }
 
+    /**
+     * 0.11.0.0 clients can talk with older brokers, but the DESCRIBE_TOPIC API was added in 0.10.0.0. That means,
+     * if our TopicAdmin talks to a pre 0.10.0 broker, it should receive an UnsupportedVersionException, should
+     * create no topics, and return false.
+     */
     @Test
-    public void returnNullWithClusterAuthorizationFailure() {
+    public void throwsWithApiVersionMismatchOnDescribe() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(describeTopicResponseWithUnsupportedVersion(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
+            assertTrue(e.getCause() instanceof UnsupportedVersionException);
+        }
+    }
+
+    @Test
+    public void returnNullWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -79,7 +105,19 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void returnNullWithTopicAuthorizationFailure() {
+    public void throwsWithClusterAuthorizationFailureOnDescribe() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeTopicResponseWithClusterAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
+            assertTrue(e.getCause() instanceof ClusterAuthorizationException);
+        }
+    }
+
+    @Test
+    public void returnNullWithTopicAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -87,6 +125,18 @@ public class TopicAdminTest {
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             boolean created = admin.createTopic(newTopic);
             assertFalse(created);
+        }
+    }
+
+    @Test
+    public void throwsWithTopicAuthorizationFailureOnDescribe() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeTopicResponseWithTopicAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
+            assertTrue(e.getCause() instanceof TopicAuthorizationException);
         }
     }
 
@@ -170,8 +220,7 @@ public class TopicAdminTest {
         NewTopic newTopic1 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         NewTopic newTopic2 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
-        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+        try (TopicAdmin admin = new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0)))) {
             Set<String> newTopicNames = admin.createTopics(newTopic1, newTopic2);
             assertEquals(1, newTopicNames.size());
             assertEquals(newTopic2.name(), newTopicNames.iterator().next());
@@ -179,12 +228,36 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void shouldReturnFalseWhenSuppliedNullTopicDescription() {
+    public void createShouldReturnFalseWhenSuppliedNullTopicDescription() {
         Cluster cluster = createCluster(1);
-        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+        try (TopicAdmin admin = new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0)))) {
             boolean created = admin.createTopic(null);
             assertFalse(created);
+        }
+    }
+
+    @Test
+    public void describeShouldReturnEmptyWhenTopicDoesNotExist() {
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (TopicAdmin admin = new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0)))) {
+            assertTrue(admin.describeTopics(newTopic.name()).isEmpty());
+        }
+    }
+
+    @Test
+    public void describeShouldReturnTopicDescriptionWhenTopicExists() {
+        String topicName = "myTopic";
+        NewTopic newTopic = TopicAdmin.defineTopic(topicName).partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            Map<String, TopicDescription> desc = admin.describeTopics(newTopic.name());
+            assertFalse(desc.isEmpty());
+            TopicDescription topicDesc = new TopicDescription(topicName, false, Collections.singletonList(topicPartitionInfo));
+            assertEquals(desc.get("myTopic"), topicDesc);
         }
     }
 
@@ -266,5 +339,28 @@ public class TopicAdminTest {
         DescribeTopicsResult result = admin.describeTopics(Collections.singleton(topicName));
         Map<String, KafkaFuture<TopicDescription>> byName = result.values();
         return byName.get(topicName).get();
+    }
+
+    private MetadataResponse describeTopicResponseWithUnsupportedVersion(NewTopic... topics) {
+        return describeTopicResponse(new ApiError(Errors.UNSUPPORTED_VERSION, "This version of the API is not supported"), topics);
+    }
+
+    private MetadataResponse describeTopicResponseWithClusterAuthorizationException(NewTopic... topics) {
+        return describeTopicResponse(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
+    private MetadataResponse describeTopicResponseWithTopicAuthorizationException(NewTopic... topics) {
+        return describeTopicResponse(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
+    private MetadataResponse describeTopicResponse(ApiError error, NewTopic... topics) {
+        if (error == null) error = new ApiError(Errors.NONE, "");
+        MetadataResponseData response = new MetadataResponseData();
+        for (NewTopic topic : topics) {
+            response.topics().add(new MetadataResponseTopic()
+                    .setName(topic.name())
+                    .setErrorCode(error.error().code()));
+        }
+        return new MetadataResponse(response);
     }
 }

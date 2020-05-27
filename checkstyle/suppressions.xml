@@ -99,16 +99,13 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerder(|Test).java"/>
-    <suppress checks="ClassFanOutComplexity"
-              files="Worker.java"/>
+              files="(DistributedHerder|Worker).java"/>
+
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
+              files="(KafkaConfigBackingStore|Values).java"/>
 
     <suppress checks="ParameterNumber"
-              files="(WorkerSinkTask|WorkerSourceTask).java"/>
-    <suppress checks="ParameterNumber"
-              files="WorkerCoordinator.java"/>
+              files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
               files="ConfigKeyInfo.java"/>
 
@@ -119,40 +116,27 @@
               files="JsonConverter.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="ConnectRecord.java"/>
+              files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="JsonConverter.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="FileStreamSourceTask.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="DistributedHerder.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="KafkaConfigBackingStore.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="(Values|ConnectHeader|ConnectHeaders).java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
+              files="(ConnectRecord|JsonConverter|Values|ConnectHeader|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KafkaConfigBackingStore.java"/>
-    <suppress checks="JavaNCSS"
-              files="Values.java"/>
+              files="(KafkaConfigBackingStore|Values).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(DistributedHerder|RestClient|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|TopicAdmin).java"/>
-
-    <suppress checks="MethodLength"
-              files="Values.java"/>
-
-    <suppress checks="NPathComplexity"
-              files="RestServer.java"/>
+              files="(DistributedHerder|RestClient|RestServer|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|TopicAdmin).java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog)Test.java"/>
+              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(WorkerSinkTask|WorkerSourceTask)Test.java"/>
+              files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="DistributedHerderTest.java"/>
+
+    <suppress checks="MethodLength"
+              files="(RequestResponse|WorkerSinkTask)Test.java"/>
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
@@ -225,6 +209,8 @@
               files="KStreamKStreamJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
     <suppress checks="CyclomaticComplexity"
               files="RelationalSmokeTest.java|SmokeTestDriver.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="KStreamKStreamJoinTest.java"/>
