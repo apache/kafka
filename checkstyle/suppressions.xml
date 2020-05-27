@@ -170,6 +170,8 @@
               files="StreamsPartitionAssignor.java"/>
     <suppress checks="JavaNCSS"
               files="EosBetaUpgradeIntegrationTest.java"/>
+    <suppress checks="StaticVariableName"
+              files="StreamsMetricsImpl.java"/>
 
     <suppress checks="NPathComplexity"
               files="(AssignorConfiguration|EosBetaUpgradeIntegrationTest|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
