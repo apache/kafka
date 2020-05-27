@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
 /**
@@ -32,9 +31,7 @@ public interface ErrorReporter extends AutoCloseable {
      * @param context the processing context (cannot be null).
      * @return future result from the producer sending a record to Kafka.
      */
-    default Future<RecordMetadata> report(ProcessingContext context) {
-        return CompletableFuture.completedFuture(null);
-    }
+    Future<RecordMetadata> report(ProcessingContext context);
 
     @Override
     default void close() { }

@@ -32,6 +32,7 @@ import java.util.concurrent.Future;
 public class LogReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
+    private static final Future<RecordMetadata> COMPLETED = CompletableFuture.completedFuture(null);
 
     private final ConnectorTaskId id;
     private final ConnectorConfig connConfig;
@@ -55,16 +56,16 @@ public class LogReporter implements ErrorReporter {
     @Override
     public Future<RecordMetadata> report(ProcessingContext context) {
         if (!connConfig.enableErrorLog()) {
-            return CompletableFuture.completedFuture(null);
+            return COMPLETED;
         }
 
         if (!context.failed()) {
-            return CompletableFuture.completedFuture(null);
+            return COMPLETED;
         }
 
         log.error(message(context), context.error());
         errorHandlingMetrics.recordErrorLogged();
-        return CompletableFuture.completedFuture(null);
+        return COMPLETED;
     }
 
     // Visible for testing

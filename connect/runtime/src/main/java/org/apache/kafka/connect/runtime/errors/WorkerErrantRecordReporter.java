@@ -72,6 +72,10 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         if (record instanceof InternalSinkRecord) {
             consumerRecord = ((InternalSinkRecord) record).originalRecord();
         } else {
+            // Generate a new consumer record from the modified sink record. We prefer
+            // to send the original consumer record (pre-transformed) to the DLQ,
+            // but in this case we don't have one and send the potentially transformed
+            // record instead
             String topic = record.topic();
             byte[] key = keyConverter.fromConnectData(topic, record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(topic,
@@ -87,9 +91,12 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
                 }
             }
 
+            int keyLength = key != null ? key.length : -1;
+            int valLength = value != null ? value.length : -1;
+
             consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
-                record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, -1,
-                -1, key, value, headers);
+                record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, keyLength,
+                valLength, key, value, headers);
         }
 
         Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
