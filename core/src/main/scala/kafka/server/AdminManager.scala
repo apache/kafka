@@ -360,7 +360,7 @@ class AdminManager(val config: KafkaConfig,
         }.toBuffer
 
         val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
-        new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(ApiError.NONE.error().code())
+        new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.NONE.code)
           .setConfigs(configEntries.asJava)
       }
 
@@ -724,7 +724,7 @@ class AdminManager(val config: KafkaConfig,
       case _ => ConfigDef.convertToString(value, configEntryType.orNull)
     }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
-        .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id())
+        .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id)
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
     val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)

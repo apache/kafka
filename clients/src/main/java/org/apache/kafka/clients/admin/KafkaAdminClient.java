@@ -1928,7 +1928,7 @@ public class KafkaAdminClient extends AdminClient {
 
         // The non-BROKER resources which we want to describe.  These resources can be described by a
         // single, unified DescribeConfigs request.
-        final DescribeConfigsRequestData unifiedRequestResources = new DescribeConfigsRequestData();
+        final List<DescribeConfigsResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configResources) {
             if (dependsOnSpecificNode(resource)) {
@@ -1936,22 +1936,23 @@ public class KafkaAdminClient extends AdminClient {
                 brokerResources.add(resource);
             } else {
                 unifiedRequestFutures.put(resource, new KafkaFutureImpl<>());
-                unifiedRequestResources.resources().add(new DescribeConfigsResource()
+                unifiedRequestResources.add(new DescribeConfigsResource()
                         .setResourceName(resource.name())
                         .setResourceType(resource.type().id()));
             }
         }
 
         final long now = time.milliseconds();
-        if (!unifiedRequestResources.resources().isEmpty()) {
+        if (!unifiedRequestResources.isEmpty()) {
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(unifiedRequestResources
-                            .setIncludeSynonyms(options.includeSynonyms())
-                            .setIncludeDocumentation(options.includeDocumentation()));
+                    return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+                        .setResources(unifiedRequestResources)
+                        .setIncludeSynonyms(options.includeSynonyms())
+                        .setIncludeDocumentation(options.includeDocumentation()));
                 }
 
                 @Override
@@ -1961,18 +1962,16 @@ public class KafkaAdminClient extends AdminClient {
                     for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : unifiedRequestFutures.entrySet()) {
                         ConfigResource configResource = entry.getKey();
                         KafkaFutureImpl<Config> future = entry.getValue();
-                        for (DescribeConfigsResponseData.DescribeConfigsResult resultData : response.data().results()) {
-                            DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult = configResponseMap.get(configResource);
-                            if (describeConfigsResult == null) {
-                                future.completeExceptionally(new UnknownServerException(
-                                        "Malformed broker response: missing config for " + configResource));
-                                continue;
-                            } else if (describeConfigsResult.errorCode() != Errors.NONE.code()) {
-                                future.completeExceptionally(Errors.forCode(describeConfigsResult.errorCode())
-                                        .exception(describeConfigsResult.errorMessage()));
-                            } else {
-                                future.complete(describeConfigResult(describeConfigsResult));
-                            }
+                        DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult = configResponseMap.get(configResource);
+                        if (describeConfigsResult == null) {
+                            future.completeExceptionally(new UnknownServerException(
+                                    "Malformed broker response: missing config for " + configResource));
+                            continue;
+                        } else if (describeConfigsResult.errorCode() != Errors.NONE.code()) {
+                            future.completeExceptionally(Errors.forCode(describeConfigsResult.errorCode())
+                                    .exception(describeConfigsResult.errorMessage()));
+                        } else {
+                            future.complete(describeConfigResult(describeConfigsResult));
                         }
                     }
                 }
@@ -1997,7 +1996,7 @@ public class KafkaAdminClient extends AdminClient {
                             .setIncludeSynonyms(options.includeSynonyms())
                             .setIncludeDocumentation(options.includeDocumentation())
                             .setResources(Collections.singletonList(
-                                new DescribeConfigsRequestData.DescribeConfigsResource()
+                                new DescribeConfigsResource()
                                         .setResourceName(resource.name())
                                         .setResourceType(resource.type().id()))));
                 }

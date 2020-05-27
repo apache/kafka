@@ -115,7 +115,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
     }
 
     public enum ConfigSource {
-        UNKNOWN_CONFIG((byte) 0, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.UNKNOWN),
+        UNKNOWN((byte) 0, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.UNKNOWN),
         TOPIC_CONFIG((byte) 1, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG),
         DYNAMIC_BROKER_CONFIG((byte) 2, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG),
         DYNAMIC_DEFAULT_BROKER_CONFIG((byte) 3, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
@@ -140,7 +140,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
             if (id < 0)
                 throw new IllegalArgumentException("id should be positive, id: " + id);
             if (id >= VALUES.length)
-                return UNKNOWN_CONFIG;
+                return UNKNOWN;
             return VALUES[id];
         }
 
@@ -227,16 +227,16 @@ public class DescribeConfigsResponse extends AbstractResponse {
         this.data = new DescribeConfigsResponseData(struct, version);
         if (version == 0) {
             for (DescribeConfigsResult result : data.results()) {
-                for (DescribeConfigsResponseData.DescribeConfigsResourceResult x : result.configs()) {
-                    if (x.isDefault()) {
-                        x.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
+                for (DescribeConfigsResponseData.DescribeConfigsResourceResult config : result.configs()) {
+                    if (config.isDefault()) {
+                        config.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
                     } else {
                         if (result.resourceType() == ConfigResource.Type.BROKER.id()) {
-                            x.setConfigSource(ConfigSource.STATIC_BROKER_CONFIG.id);
+                            config.setConfigSource(ConfigSource.STATIC_BROKER_CONFIG.id);
                         } else if (result.resourceType() == ConfigResource.Type.TOPIC.id()) {
-                            x.setConfigSource(ConfigSource.TOPIC_CONFIG.id);
+                            config.setConfigSource(ConfigSource.TOPIC_CONFIG.id);
                         } else {
-                            x.setConfigSource(ConfigSource.UNKNOWN_CONFIG.id);
+                            config.setConfigSource(ConfigSource.UNKNOWN.id);
                         }
                     }
                 }

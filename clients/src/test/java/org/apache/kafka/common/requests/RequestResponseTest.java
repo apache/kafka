@@ -1920,12 +1920,12 @@ public class RequestResponseTest {
                 new DescribeConfigsResult()
                         .setResourceType(ConfigResource.Type.BROKER.id())
                         .setResourceName("0")
-                        .setErrorCode(ApiError.NONE.error().code())
+                        .setErrorCode(Errors.NONE.code())
                         .setConfigs(configEntries),
                 new DescribeConfigsResult()
                         .setResourceType(ConfigResource.Type.TOPIC.id())
                         .setResourceName("topic")
-                        .setErrorCode(ApiError.NONE.error().code())
+                        .setErrorCode(Errors.NONE.code())
                         .setConfigs(configEntries)
                         );
         return new DescribeConfigsResponse(new DescribeConfigsResponseData()
