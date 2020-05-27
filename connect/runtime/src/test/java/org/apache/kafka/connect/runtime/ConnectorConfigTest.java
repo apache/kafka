@@ -47,7 +47,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     public static abstract class TestConnector extends Connector {
     }
 
-    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
         int magicNumber = 0;
 
@@ -143,9 +143,9 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<Transformation<R>> transformations = config.transformations();
+        final List<ApplicableTransformation<R>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        final SimpleTransformation xform = (SimpleTransformation) transformations.get(0);
+        final SimpleTransformation xform = (SimpleTransformation) transformations.get(0).getTransformation();
         assertEquals(42, xform.magicNumber);
     }
 
@@ -171,10 +171,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<Transformation<R>> transformations = config.transformations();
+        final List<ApplicableTransformation<R>> transformations = config.transformations();
         assertEquals(2, transformations.size());
-        assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);
-        assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);
+        assertEquals(42, ((SimpleTransformation) transformations.get(0).getTransformation()).magicNumber);
+        assertEquals(84, ((SimpleTransformation) transformations.get(1).getTransformation()).magicNumber);
     }
 
     @Test

@@ -101,12 +101,12 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
     private static final String CONFIG_RELOAD_ACTION_DOC =
             "The action that Connect should take on the connector when changes in external " +
-            "configuration providers result in a change in the connector's configuration properties. " +
-            "A value of 'none' indicates that Connect will do nothing. " +
-            "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
-            "updated configuration properties." +
-            "The restart may actually be scheduled in the future if the external configuration provider " +
-            "indicates that a configuration value will expire in the future.";
+                    "configuration providers result in a change in the connector's configuration properties. " +
+                    "A value of 'none' indicates that Connect will do nothing. " +
+                    "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
+                    "updated configuration properties." +
+                    "The restart may actually be scheduled in the future if the external configuration provider " +
+                    "indicates that a configuration value will expire in the future.";
 
     private static final String CONFIG_RELOAD_ACTION_DISPLAY = "Reload Action";
     public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.name().toLowerCase(Locale.ROOT);
@@ -149,6 +149,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.override.";
 
     private final EnrichedConnectorConfig enrichedConfig;
+
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
             super(configDef, props);
@@ -232,7 +233,7 @@ public class ConnectorConfig extends AbstractConfig {
 
     public ToleranceType errorToleranceType() {
         String tolerance = getString(ERRORS_TOLERANCE_CONFIG);
-        for (ToleranceType type: ToleranceType.values()) {
+        for (ToleranceType type : ToleranceType.values()) {
             if (type.name().equalsIgnoreCase(tolerance)) {
                 return type;
             }
@@ -250,19 +251,23 @@ public class ConnectorConfig extends AbstractConfig {
 
     /**
      * Returns the initialized list of {@link Transformation} which are specified in {@link #TRANSFORMS_CONFIG}.
+     *
+     * @return
      */
-    public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
+    public <R extends ConnectRecord<R>> List<ApplicableTransformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
-        final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
+        final List<ApplicableTransformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
             try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = getClass(prefix + "type").asSubclass(Transformation.class)
+                @SuppressWarnings("unchecked") final Transformation<R> transformation = getClass(prefix + "type").asSubclass(Transformation.class)
                         .getDeclaredConstructor().newInstance();
-                transformation.configure(originalsWithPrefix(prefix));
-                transformations.add(transformation);
+                final Map<String, Object> config = originalsWithPrefix(prefix);
+                transformation.configure(config);
+                final ApplicableTransformation<R> applicableTransformation = new ApplicableTransformation<>(
+                        transformation, config);
+                transformations.add(applicableTransformation);
             } catch (Exception e) {
                 throw new ConnectException(e);
             }
@@ -355,10 +360,10 @@ public class ConnectorConfig extends AbstractConfig {
         ConfigDef configDef = transformation.config();
         if (null == configDef) {
             throw new ConnectException(
-                String.format(
-                    "%s.config() must return a ConfigDef that is not null.",
-                    transformationCls.getName()
-                )
+                    String.format(
+                            "%s.config() must return a ConfigDef that is not null.",
+                            transformationCls.getName()
+                    )
             );
         }
         return configDef;
