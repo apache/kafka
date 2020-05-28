@@ -3324,7 +3324,7 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #repartition() should be performed before
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before
      * {@code transformValues()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
