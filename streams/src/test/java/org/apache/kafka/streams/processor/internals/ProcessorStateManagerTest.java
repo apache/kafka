@@ -276,6 +276,36 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldUnregisterChangelogsDuringClose() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        reset(storeMetadata);
+        final StateStore store = EasyMock.createMock(StateStore.class);
+        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
+        expect(storeMetadata.store()).andStubReturn(store);
+        expect(store.name()).andStubReturn(persistentStoreName);
+
+        context.uninitialize();
+        store.init(context, store);
+        replay(storeMetadata, context, store);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+        verify(context, store);
+
+        stateMgr.registerStore(store, noopStateRestoreCallback);
+        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+
+        reset(store);
+        expect(store.name()).andStubReturn(persistentStoreName);
+        store.close();
+        replay(store);
+
+        stateMgr.close();
+        verify(store);
+
+        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
+    }
+
+    @Test
     public void shouldRecycleStoreAndReregisterChangelog() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         reset(storeMetadata);
@@ -306,14 +336,7 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStateStores(singletonList(store), context);
 
         verify(context, store);
-
-        reset(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-        store.close();
-        replay(store);
-
-        stateMgr.close();
-        verify(store);
+        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
     }
 
     @Test
