@@ -16,7 +16,7 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from ducktape.mark import matrix, parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -50,11 +50,10 @@ class ConsumerGroupCommandTest(Test):
     def setUp(self):
         self.zk.start()
 
-    def start_kafka(self, security_protocol, interbroker_security_protocol, tls_version=None):
+    def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
-            tls_version=tls_version,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 
@@ -63,8 +62,8 @@ class ConsumerGroupCommandTest(Test):
                                         consumer_timeout_ms=None)
         self.consumer.start()
 
-    def setup_and_verify(self, security_protocol, group=None, tls_version=None):
-        self.start_kafka(security_protocol, security_protocol, tls_version)
+    def setup_and_verify(self, security_protocol, group=None):
+        self.start_kafka(security_protocol, security_protocol)
         self.start_consumer()
         consumer_node = self.consumer.nodes[0]
         wait_until(lambda: self.consumer.alive(consumer_node),
@@ -89,21 +88,19 @@ class ConsumerGroupCommandTest(Test):
         self.consumer.stop()
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
-    @parametrize(security_protocol='PLAINTEXT')
-    def test_list_consumer_groups(self, security_protocol='PLAINTEXT', tls_version=None):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    def test_list_consumer_groups(self, security_protocol='PLAINTEXT'):
         """
         Tests if ConsumerGroupCommand is listing correct consumer groups
         :return: None
         """
-        self.setup_and_verify(security_protocol, tls_version=tls_version)
+        self.setup_and_verify(security_protocol)
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
-    @parametrize(security_protocol='PLAINTEXT')
-    def test_describe_consumer_group(self, security_protocol='PLAINTEXT', tls_version=None):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    def test_describe_consumer_group(self, security_protocol='PLAINTEXT'):
         """
         Tests if ConsumerGroupCommand is describing a consumer group correctly
         :return: None
         """
-        self.setup_and_verify(security_protocol, tls_version=tls_version, group="test-consumer-group")
+        self.setup_and_verify(security_protocol, group="test-consumer-group")

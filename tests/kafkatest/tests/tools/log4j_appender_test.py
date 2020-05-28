@@ -16,13 +16,14 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from ducktape.mark import matrix, parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka_log4j_appender import KafkaLog4jAppender
+from kafkatest.services.security.security_config import SecurityConfig
 
 TOPIC = "topic-log4j-appender"
 MAX_MESSAGES = 100
@@ -46,16 +47,16 @@ class Log4jAppenderTest(Test):
     def setUp(self):
         self.zk.start()
 
-    def start_kafka(self, security_protocol, interbroker_security_protocol, tls_version=None):
+    def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
-            self.zk, security_protocol=security_protocol, tls_version=tls_version,
+            self.zk, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 
-    def start_appender(self, security_protocol, tls_version=None):
+    def start_appender(self, security_protocol):
         self.appender = KafkaLog4jAppender(self.test_context, self.num_brokers, self.kafka, TOPIC, MAX_MESSAGES,
-                                           security_protocol=security_protocol, tls_version=tls_version)
+                                           security_protocol=security_protocol)
         self.appender.start()
 
     def custom_message_validator(self, msg):
@@ -70,24 +71,23 @@ class Log4jAppenderTest(Test):
         self.consumer.start()
 
     @cluster(num_nodes=4)
-    @matrix(security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
-    @parametrize(security_protocol='PLAINTEXT')
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=5)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_log4j_appender(self, security_protocol='PLAINTEXT', tls_version=None):
+    def test_log4j_appender(self, security_protocol='PLAINTEXT'):
         """
         Tests if KafkaLog4jAppender is producing to Kafka topic
         :return: None
         """
-        self.start_kafka(security_protocol, security_protocol, tls_version)
-        self.start_appender(security_protocol, tls_version)
+        self.start_kafka(security_protocol, security_protocol)
+        self.start_appender(security_protocol)
         self.appender.wait()
 
         self.start_consumer()
         node = self.consumer.nodes[0]
 
         wait_until(lambda: self.consumer.alive(node),
-            timeout_sec=120, backoff_sec=.2, err_msg="Consumer was too slow to start")
+            timeout_sec=20, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Verify consumed messages count
         wait_until(lambda: self.messages_received_count == MAX_MESSAGES, timeout_sec=10,
