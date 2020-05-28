@@ -44,14 +44,6 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
-     * All groups with their states will be returned by listConsumerGroups()
-     */
-    public ListConsumerGroupsOptions inAnyState() {
-        this.states = Collections.emptySet();
-        return this;
-    }
-
-    /**
      * Returns the list of States that are requested or empty if no states have been specified
      */
     public Set<ConsumerGroupState> states() {

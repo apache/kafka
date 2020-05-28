@@ -3052,7 +3052,7 @@ public class KafkaAdminClient extends AdminClient {
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         ListGroupsRequest.Builder createRequest(int timeoutMs) {
-                            List<String> states = (options.states().isEmpty())
+                            List<String> states = options.states().isEmpty()
                                     ? null
                                     : options.states()
                                         .stream()

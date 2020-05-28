@@ -797,7 +797,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleListGroups(states: List[String]): (Errors, List[GroupOverview]) = {
+  def handleListGroups(states: Set[String]): (Errors, List[GroupOverview]) = {
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {

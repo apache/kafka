@@ -1401,9 +1401,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val listGroupsRequest = request.body[ListGroupsRequest]
     val states = if (listGroupsRequest.data.statesFilter == null)
       // Handle a null array the same as empty
-      List()
+      immutable.Set[String]()
     else 
-      listGroupsRequest.data.statesFilter.asScala.toList
+      listGroupsRequest.data.statesFilter.asScala.toSet
 
     def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
        new ListGroupsResponse(new ListGroupsResponseData()

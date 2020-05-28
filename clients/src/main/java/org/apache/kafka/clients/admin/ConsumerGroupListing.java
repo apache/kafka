@@ -35,9 +35,20 @@ public class ConsumerGroupListing {
      *
      * @param groupId Group Id
      * @param isSimpleConsumerGroup If consumer group is simple or not.
+     */
+    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
+        this(groupId, isSimpleConsumerGroup, Optional.empty());
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId Group Id
+     * @param isSimpleConsumerGroup If consumer group is simple or not.
      * @param state The state of the consumer group
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
+        Objects.requireNonNull(state);
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = state;

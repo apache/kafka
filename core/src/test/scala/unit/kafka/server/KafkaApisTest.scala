@@ -1757,7 +1757,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(listGroupsRequest)
 
     val capturedResponse = expectNoThrottling()
-    val expectedStates = if (state.isDefined) List(state.get) else List()
+    val expectedStates: Set[String] = if (state.isDefined) Set(state.get) else Set()
     EasyMock.expect(groupCoordinator.handleListGroups(expectedStates))
       .andReturn((Errors.NONE, overviews))
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)

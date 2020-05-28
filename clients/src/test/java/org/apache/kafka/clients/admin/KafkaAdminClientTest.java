@@ -1344,7 +1344,7 @@ public class KafkaAdminClientTest {
                                 .setGroupState("Empty")))),
                 env.cluster().nodeById(0));
 
-            final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inAnyState();
+            final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions();
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);
             Collection<ConsumerGroupListing> listings = result.valid().get();
 
@@ -1374,7 +1374,7 @@ public class KafkaAdminClientTest {
                                     .setGroupId("group-1")
                                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)))),
                     env.cluster().nodeById(0));
-            ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inAnyState();
+            ListConsumerGroupsOptions options = new ListConsumerGroupsOptions();
             ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);
             Collection<ConsumerGroupListing> listing = result.all().get();
             assertEquals(1, listing.size());
@@ -1388,12 +1388,7 @@ public class KafkaAdminClientTest {
 
             options = new ListConsumerGroupsOptions().inStates(Collections.singleton(ConsumerGroupState.STABLE));
             result = env.adminClient().listConsumerGroups(options);
-            try {
-                result.all().get();
-                fail("Should have thrown");
-            } catch (ExecutionException ee) {
-                assertTrue(ee.getCause() instanceof UnsupportedVersionException);
-            }
+            TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
         }
     }
 
