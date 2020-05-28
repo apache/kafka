@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -88,10 +89,23 @@ public class RetryWithToleranceOperatorTest {
     private Operation<String> mockOperation;
 
     @Mock
+    private ConsumerRecord<byte[], byte[]> consumerRecord;
+
+    @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
 
     @Mock
     Plugins plugins;
+
+    @Test
+    public void testExecuteFailed() {
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
+            ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+
+        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+            SinkTask.class, consumerRecord, new Throwable());
+    }
 
     @Test
     public void testHandleExceptionInTransformations() {

@@ -143,22 +143,25 @@ public class InternalTopicsIntegrationTest {
         connect.assertions().assertTopicsDoNotExist(configTopic(), offsetTopic());
     }
 
-    protected void assertInternalTopicSettings() {
+    protected void assertInternalTopicSettings() throws InterruptedException {
         DistributedConfig config = new DistributedConfig(workerProps);
         connect.assertions().assertTopicSettings(
                 configTopic(),
                 config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG),
-                1
+                1,
+                "Config topic does not have the expected settings"
         );
         connect.assertions().assertTopicSettings(
                 statusTopic(),
                 config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG),
-                config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)
+                config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG),
+                "Status topic does not have the expected settings"
         );
         connect.assertions().assertTopicSettings(
                 offsetTopic(),
                 config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG),
-                config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)
+                config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG),
+                "Offset topic does not have the expected settings"
         );
     }
 
