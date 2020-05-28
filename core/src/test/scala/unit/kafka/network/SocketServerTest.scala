@@ -1886,10 +1886,10 @@ class SocketServerTest {
         super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
 
-        val map: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
+        val completedReceivesMap: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
         def addToCompletedReceives(receive: NetworkReceive): Unit = {
           val channelOpt = Option(super.channel(receive.source)).orElse(Option(super.closingChannel(receive.source)))
-          channelOpt.foreach { channel => map.put(channel.id, receive) }
+          channelOpt.foreach { channel => completedReceivesMap.put(channel.id, receive) }
         }
 
         // For each result type (completedReceives/completedSends/disconnected), defer the result to a subsequent poll()
