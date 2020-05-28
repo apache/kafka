@@ -117,6 +117,9 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.rest.ConnectRestExtension")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.sink.ErrantRecordReporter"
+        ));
     }
 
     @Test
