@@ -26,6 +26,8 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -37,12 +39,14 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 
@@ -53,6 +57,10 @@ public class TaskAssignorIntegrationTest {
 
     @Rule
     public TestName testName = new TestName();
+
+    // Just a dummy implementation so we can check the config
+    public static final class MyTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor {
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -87,7 +95,8 @@ public class TaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
-                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener)
+                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
+                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, MyTaskAssignor.class.getName())
             )
         );
 
@@ -121,11 +130,18 @@ public class TaskAssignorIntegrationTest {
                 (AssignorConfiguration.AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
 
 
+            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("taskAssignorSupplier");
+            taskAssignorSupplierField.setAccessible(true);
+            final Supplier<TaskAssignor> taskAssignorSupplier =
+                (Supplier<TaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
+            final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+
             assertThat(configs.numStandbyReplicas, is(5));
             assertThat(configs.acceptableRecoveryLag, is(6L));
             assertThat(configs.maxWarmupReplicas, is(7));
             assertThat(configs.probingRebalanceIntervalMs, is(480000L));
             assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
+            assertThat(taskAssignor, instanceOf(MyTaskAssignor.class));
         }
     }
 }
