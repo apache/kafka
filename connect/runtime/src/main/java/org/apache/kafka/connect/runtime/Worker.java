@@ -554,8 +554,7 @@ public class Worker {
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
-            WorkerErrantRecordReporter workerErrantRecordReporter
-                = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
+            WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverter, valueConverter, headerConverter);
 
             Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
@@ -732,10 +731,8 @@ public class Worker {
         HeaderConverter headerConverter
     ) {
         // check if errant record reporter topic is configured
-        String topic = connConfig.dlqTopicName();
-        if ((topic != null && !topic.isEmpty()) || connConfig.enableErrorLog()) {
-            return new WorkerErrantRecordReporter(retryWithToleranceOperator,
-                keyConverter, valueConverter, headerConverter);
+        if (connConfig.enableErrantRecordReporter()) {
+            return new WorkerErrantRecordReporter(retryWithToleranceOperator, keyConverter, valueConverter, headerConverter);
         }
         return null;
     }

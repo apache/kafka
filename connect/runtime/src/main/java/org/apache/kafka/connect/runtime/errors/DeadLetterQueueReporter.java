@@ -139,10 +139,10 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
             producerRecord = new ProducerRecord<>(dlqTopicName, null,
-                originalMessage.key(), originalMessage.value(), originalMessage.headers());
+                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
         } else {
             producerRecord = new ProducerRecord<>(dlqTopicName, null, originalMessage.timestamp(),
-                originalMessage.key(), originalMessage.value(), originalMessage.headers());
+                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
         }
 
         if (connConfig.isDlqContextHeadersEnabled()) {

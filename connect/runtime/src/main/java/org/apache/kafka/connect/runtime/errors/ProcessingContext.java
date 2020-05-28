@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 /**
  * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
@@ -146,13 +147,10 @@ class ProcessingContext implements AutoCloseable {
             return new ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(this)));
         }
 
-        List<Future<RecordMetadata>> futures = new LinkedList<>();
-        for (ErrorReporter reporter: reporters) {
-            Future<RecordMetadata> future = reporter.report(this);
-            if (!future.isDone()) {
-                futures.add(future);
-            }
-        }
+        List<Future<RecordMetadata>> futures = reporters.stream()
+                .map(r -> r.report(this))
+                .filter(Future::isDone)
+                .collect(Collectors.toCollection(LinkedList::new));
         if (futures.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }

@@ -23,6 +23,11 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+/**
+ * A specialization of {@link SinkRecord} that allows a {@link WorkerSinkTask} to track the
+ * original {@link ConsumerRecord} for each {@link SinkRecord}. It is used internally and not
+ * exposed to connectors.
+ */
 public class InternalSinkRecord extends SinkRecord {
 
     private final ConsumerRecord<byte[], byte[]> originalRecord;
@@ -35,9 +40,9 @@ public class InternalSinkRecord extends SinkRecord {
     }
 
     protected InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
-                              int partition, Schema keySchema, Object key, Schema valueSchema,
-                              Object value, long kafkaOffset, Long timestamp,
-                              TimestampType timestampType, Iterable<Header> headers) {
+                                 int partition, Schema keySchema, Object key, Schema valueSchema,
+                                 Object value, long kafkaOffset, Long timestamp,
+                                 TimestampType timestampType, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
         this.originalRecord = originalRecord;
     }

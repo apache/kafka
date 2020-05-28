@@ -286,7 +286,6 @@ public class ExampleConnectIntegrationTest {
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
-
     }
 
     /**

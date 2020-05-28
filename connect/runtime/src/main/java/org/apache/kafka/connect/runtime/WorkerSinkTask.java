@@ -95,7 +95,7 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
-    private WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final WorkerErrantRecordReporter workerErrantRecordReporter;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -535,7 +535,7 @@ class WorkerSinkTask extends WorkerTask {
         return result;
     }
 
-    WorkerErrantRecordReporter workerErrantRecordReporter() {
+    protected WorkerErrantRecordReporter workerErrantRecordReporter() {
         return workerErrantRecordReporter;
     }
 

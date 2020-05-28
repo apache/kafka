@@ -48,7 +48,6 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
 
         @Override
         public void put(Collection<SinkRecord> records) {
-
             for (SinkRecord rec : records) {
                 taskHandle.record();
                 TopicPartition tp = cachedTopicPartitions

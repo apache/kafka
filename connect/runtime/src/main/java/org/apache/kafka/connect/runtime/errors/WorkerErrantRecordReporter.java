@@ -48,7 +48,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private final HeaderConverter headerConverter;
 
     // Visible for testing
-    final LinkedList<Future<Void>> futures;
+    protected final LinkedList<Future<Void>> futures;
 
     public WorkerErrantRecordReporter(
         RetryWithToleranceOperator retryWithToleranceOperator,
@@ -114,7 +114,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
      * futures.
      */
     public void awaitAllFutures() {
-        Future<?> future = null;
+        Future<?> future;
         while ((future = futures.poll()) != null) {
             try {
                 future.get();
@@ -146,12 +146,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         }
 
         public boolean isDone() {
-            for (Future<RecordMetadata> future: futures) {
-                if (!future.isDone()) {
-                    return false;
-                }
-            }
-            return true;
+            return futures.stream().allMatch(Future::isDone);
         }
 
         public Void get() throws InterruptedException, ExecutionException {
