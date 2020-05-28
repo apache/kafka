@@ -69,7 +69,7 @@ public class SslVersionsTransportLayerTest {
      * Tests that connection success with the default TLS version.
      */
     @Test
-    public void testTLSDefaults() throws Exception {
+    public void testTlsDefaults() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
         CertStores serverCertStores = new CertStores(true, "server",  "localhost");
         CertStores clientCertStores = new CertStores(false, "client", "localhost");
@@ -108,10 +108,8 @@ public class SslVersionsTransportLayerTest {
 
     public static Map<String, Object> sslConfig(String tlsServerProtocol) {
         Map<String, Object> sslConfig = new HashMap<>();
-
         sslConfig.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsServerProtocol);
         sslConfig.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsServerProtocol));
-
         return sslConfig;
     }
 

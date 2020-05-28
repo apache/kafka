@@ -64,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
@@ -591,7 +592,10 @@ public class SslTransportLayerTest {
             createSelector(sslClientConfigs);
 
             checkAuthentiationFailed("1", "TLSv1.1");
+            server.verifyAuthenticationMetrics(0, 1);
+
             checkAuthentiationFailed("2", "TLSv1");
+            server.verifyAuthenticationMetrics(0, 2);
         }
     }
 
@@ -624,8 +628,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testCiphersSuiteForTLSv1_2_FailsForTLSv1_3() throws Exception {
-        if (!Java.IS_JAVA11_COMPATIBLE)
-            return;
+        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
@@ -650,8 +653,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testCiphersSuiteFailForServerTLSv1_2_ClientTLSv1_3() throws Exception {
-        if (!Java.IS_JAVA11_COMPATIBLE)
-            return;
+        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
@@ -1322,7 +1324,7 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    public static class TestSslChannelBuilder extends SslChannelBuilder {
+    static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
@@ -1365,7 +1367,7 @@ public class SslTransportLayerTest {
          * <li>Delayed writes to test handshake failure notifications to peer</li>
          * </ul>
          */
-        public class TestSslTransportLayer extends SslTransportLayer {
+        class TestSslTransportLayer extends SslTransportLayer {
 
             private final ResizeableBufferSize netReadBufSize;
             private final ResizeableBufferSize netWriteBufSize;
@@ -1433,7 +1435,7 @@ public class SslTransportLayerTest {
             }
         }
 
-        public static class ResizeableBufferSize {
+        static class ResizeableBufferSize {
             private Integer bufSizeOverride;
             ResizeableBufferSize(Integer bufSizeOverride) {
                 this.bufSizeOverride = bufSizeOverride;
