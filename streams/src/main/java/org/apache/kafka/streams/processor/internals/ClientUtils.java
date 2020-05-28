@@ -29,7 +29,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,8 +41,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
-
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
+
+    static final class InternalAdminClientConfig extends AdminClientConfig {
+        InternalAdminClientConfig(final Map<?, ?> props) {
+            super(props, false);
+        }
+    }
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -92,8 +96,9 @@ public class ClientUtils {
         return result;
     }
 
-    public static int getAdminClientDefaultAPITimeout(final StreamsConfig streamsConfig) {
-        return streamsConfig.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+    public static int getAdminDefaultApiTimeoutMs(final StreamsConfig streamsConfig) {
+        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
+        return dummyAdmin.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
     }
 
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,

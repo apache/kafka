@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
@@ -41,7 +40,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminClientDefaultAPITimeout;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminDefaultApiTimeoutMs;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
@@ -298,7 +297,7 @@ public final class AssignorConfiguration {
     }
 
     public int adminClientTimeout() {
-        return getAdminClientDefaultAPITimeout(streamsConfig);
+        return getAdminDefaultApiTimeoutMs(streamsConfig);
     }
 
     public InternalTopicManager internalTopicManager() {

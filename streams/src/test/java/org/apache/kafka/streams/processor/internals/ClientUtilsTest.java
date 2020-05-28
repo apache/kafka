@@ -20,7 +20,7 @@ import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminClientDefaultAPITimeout;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminDefaultApiTimeoutMs;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -106,7 +106,7 @@ public class ClientUtilsTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "9092"),
             mkEntry(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 42)
         ));
-        assertThat(getAdminClientDefaultAPITimeout(config), equalTo(42));
+        assertThat(getAdminDefaultApiTimeoutMs(config), equalTo(42));
     }
 
 }
