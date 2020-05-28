@@ -52,8 +52,7 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
             throw new InvalidStateStoreException("store is unavailable");
         }
         if (storeQueryParameters.partition() != null) {
-            final int storePartition = storeQueryParameters.partition() != null ? storeQueryParameters.partition() : defaultStorePartition;
-            final Entry<String, Integer> stateStoreKey = new SimpleEntry<>(storeName, storePartition);
+            final Entry<String, Integer> stateStoreKey = new SimpleEntry<>(storeName, storeQueryParameters.partition());
             if (stores.containsKey(stateStoreKey) && queryableStoreType.accepts(stores.get(stateStoreKey))) {
                 return (List<T>) Collections.singletonList(stores.get(stateStoreKey));
             }
