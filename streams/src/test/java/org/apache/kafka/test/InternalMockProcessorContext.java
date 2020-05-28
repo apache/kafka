@@ -390,7 +390,7 @@ public class InternalMockProcessorContext
 
     @Override
     public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
-        cache.addDirtyEntryFlushListener(namespace, listener);
+        cache().addDirtyEntryFlushListener(namespace, listener);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {
