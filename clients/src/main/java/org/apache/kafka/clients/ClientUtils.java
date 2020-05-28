@@ -108,7 +108,7 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
-        if (ClientDnsLookup.USE_FIRST_DNS_IPS == clientDnsLookup) {
+        if (ClientDnsLookup.USE_FIRST_DNS_IP == clientDnsLookup) {
             return Collections.singletonList(addresses[0]);
         } else {
             // ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup || ClientDnsLookup.DEFAULT == clientDnsLookup
