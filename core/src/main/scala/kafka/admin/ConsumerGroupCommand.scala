@@ -97,8 +97,8 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  def consumerGroupStatesFromString(input: String): List[ConsumerGroupState] = {
-    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet.toList
+  def consumerGroupStatesFromString(input: String): Set[ConsumerGroupState] = {
+    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet
     if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
       val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
@@ -202,15 +202,15 @@ object ConsumerGroupCommand extends Logging {
 
     def listGroups(): Unit = {
       if (opts.options.has(opts.stateOpt)) {
-           val stateValue = opts.options.valueOf(opts.stateOpt)
-           val states = if (stateValue == null || stateValue.isEmpty)
-             allStates
-           else
-             consumerGroupStatesFromString(stateValue)
-           val listings = listConsumerGroupsWithState(states)
-           printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
-        } else
-         listConsumerGroups().foreach(println(_))
+        val stateValue = opts.options.valueOf(opts.stateOpt)
+        val states = if (stateValue == null || stateValue.isEmpty)
+          Set[ConsumerGroupState]()
+        else
+          consumerGroupStatesFromString(stateValue)
+        val listings = listConsumerGroupsWithState(states)
+        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+      } else
+        listConsumerGroups().foreach(println(_))
     }
 
     def listConsumerGroups(): List[String] = {
@@ -219,9 +219,9 @@ object ConsumerGroupCommand extends Logging {
       listings.map(_.groupId).toList
     }
 
-    def listConsumerGroupsWithState(states: List[ConsumerGroupState]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
-      listConsumerGroupsOptions.inStates(new java.util.HashSet(states.asJava))
+      listConsumerGroupsOptions.inStates(states.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
     }
@@ -1086,6 +1086,9 @@ object ConsumerGroupCommand extends Logging {
           CommandLineUtils.printUsageAndDie(parser,
             s"Option $describeOpt takes at most one of these options: ${mutuallyExclusiveOpts.mkString(", ")}")
         }
+        if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt does not take a value for $stateOpt")
       } else {
         if (options.has(timeoutMsOpt))
           debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")

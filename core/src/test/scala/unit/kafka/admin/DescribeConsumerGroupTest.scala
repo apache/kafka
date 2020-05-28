@@ -73,6 +73,27 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
+  def testDescribeWithStateValue(): Unit = {
+    var exitStatus: Option[Int] = None
+    var exitMessage: Option[String] = None
+    Exit.setExitProcedure { (status, err) =>
+      exitStatus = Some(status)
+      exitMessage = err
+      throw new RuntimeException
+    }
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--all-groups", "--state", "Stable")
+    try {
+      ConsumerGroupCommand.main(cgcArgs)
+    } catch {
+      case e: RuntimeException => //expected
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    assertEquals(Some(1), exitStatus)
+    assertTrue(exitMessage.get.contains("Option [describe] does not take a value for [state]"))
+  }
+
+  @Test
   def testDescribeOffsetsOfNonExistingGroup(): Unit = {
     val group = "missing.group"
     TestUtils.createOffsetsTopic(zkClient, servers)

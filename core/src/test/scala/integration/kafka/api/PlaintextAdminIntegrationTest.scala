@@ -1068,7 +1068,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           }, s"Expected to be able to list $testGroupId")
 
           TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inAnyState
+            val options = new ListConsumerGroupsOptions()
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
                 group.groupId == testGroupId &&
                 group.state.get == ConsumerGroupState.STABLE)

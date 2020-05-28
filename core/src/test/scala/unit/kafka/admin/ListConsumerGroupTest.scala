@@ -64,7 +64,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     var foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithState(ConsumerGroupState.values.toList).toSet
+      foundListing = service.listConsumerGroupsWithState(ConsumerGroupState.values.toSet).toSet
       expectedListing == foundListing
     }, s"Expected to show groups $expectedListing, but found $foundListing")
 
@@ -73,7 +73,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithState(List(ConsumerGroupState.STABLE)).toSet
+      foundListing = service.listConsumerGroupsWithState(Set(ConsumerGroupState.STABLE)).toSet
       expectedListingStable == foundListing
     }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
@@ -81,34 +81,38 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testConsumerGroupStatesFromString(): Unit = {
     var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
-    assertEquals(List(ConsumerGroupState.STABLE), result)
+    assertEquals(Set(ConsumerGroupState.STABLE), result)
 
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable, PreparingRebalance")
-    assertEquals(List(ConsumerGroupState.STABLE, ConsumerGroupState.PREPARING_REBALANCE), result)
+    assertEquals(Set(ConsumerGroupState.STABLE, ConsumerGroupState.PREPARING_REBALANCE), result)
 
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
-    assertEquals(List(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
+    assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
     try {
       ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
+      fail("Should have thrown")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
 
     try {
       ConsumerGroupCommand.consumerGroupStatesFromString("stable")
+      fail("Should have thrown")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
 
     try {
       ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable")
+      fail("Should have thrown")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
 
     try {
       ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
+      fail("Should have thrown")
     } catch {
       case e: IllegalArgumentException => //Expected
     }
