@@ -89,7 +89,7 @@ public class TaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
                 mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
-                mkEntry(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 9)
+                mkEntry(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 90_000)
             )
         );
 
@@ -132,7 +132,7 @@ public class TaskAssignorIntegrationTest {
             assertThat(configs.maxWarmupReplicas, is(7));
             assertThat(configs.probingRebalanceIntervalMs, is(480000L));
             assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
-            assertThat(adminClientTimeout, is(9));
+            assertThat(adminClientTimeout, is(90_000));
         }
     }
 }
