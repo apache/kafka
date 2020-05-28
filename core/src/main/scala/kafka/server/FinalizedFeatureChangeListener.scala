@@ -36,10 +36,10 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      * exception is raised.
      *
      * NOTE: if a notifier was provided in the constructor, then, this method can be invoked exactly
-     * once successfully.
+     * once successfully. A subsequent invocation will raise an exception.
      *
      * @throws   IllegalStateException, if a non-empty notifier was provided in the constructor, and
-     *           this method is called again after a successful previous invocation.     *
+     *           this method is called again after a successful previous invocation.
      * @throws   FeatureCacheUpdateException, if there was an error in updating the
      *           FinalizedFeatureCache.
      * @throws   RuntimeException, if there was a failure in reading/deserializing the
@@ -72,16 +72,9 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
         FinalizedFeatureCache.clear()
       } else {
-        var featureZNode: FeatureZNode = null
-        try {
-          featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-        } catch {
-          // Convert to RuntimeException, since, there is no argument passed to the updateOrThrow() method.
-          case e @ (_ : IllegalArgumentException | _ : NoSuchElementException) => throw new RuntimeException(e)
-        }
-
+        val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
         if (featureZNode.status == FeatureZNodeStatus.Disabled) {
-          info(s"Feature ZK node at path: $featureZkNodePath is in disabled status")
+          info(s"Feature ZK node at path: $featureZkNodePath is in disabled status, clearing feature cache.")
           FinalizedFeatureCache.clear()
         } else if (featureZNode.status == FeatureZNodeStatus.Enabled) {
           FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
@@ -177,7 +170,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
    * (if the node exists). This step helps ensure that feature incompatibilities (if any) in brokers
    * are conveniently detected before the initOrThrow() method returns to the caller. If feature
    * incompatibilities are detected, this method will throw an Exception to the caller, and the Broker
-   * would exit eventually.
+   * will exit eventually.
    *
    * @param waitOnceForCacheUpdateMs   # of milli seconds to wait for feature cache to be updated once.
    *                                   If this parameter <= 0, no wait operation happens.

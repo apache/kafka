@@ -21,25 +21,31 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Represents an immutable basic version range using 2 attributes: min and max of type long.
- * The min and max attributes are expected to be >= 1, and with max >= min.
+ * Represents an immutable basic version range using 2 attributes: min and max, each of type long.
+ * The min and max attributes need to satisfy 2 rules:
+ *  - they are each expected to be >= 1, as we only consider positive version values to be valid.
+ *  - max should be >= min.
  *
  * The class also provides API to serialize/deserialize the version range to/from a map.
  * The class allows for configurable labels for the min/max attributes, which can be specialized by
  * sub-classes (if needed).
  */
 class BaseVersionRange {
+    // Non-empty label for the min version key, that's used only for serialization/deserialization purposes.
     private final String minKeyLabel;
 
+    // The value of the minimum version.
     private final long minValue;
 
+    // Non-empty label for the max version key, that's used only for serialization/deserialization purposes.
     private final String maxKeyLabel;
 
+    // The value of the maximum version.
     private final long maxValue;
 
     /**
      * Raises an exception unless the following condition is met:
-     * minValue >= 1 and maxValue >= 1 and minValue <= maxValue < minValue.
+     * minValue >= 1 and maxValue >= 1 and maxValue >= minValue.
      *
      * @param minKeyLabel   Label for the min version key, that's used only for
      *                      serialization/deserialization purposes.

@@ -29,12 +29,12 @@ object SupportedFeatures extends Logging {
     supportedFeatures
   }
 
-  // Should be used only for testing.
+  // For testing only.
   def update(newFeatures: Features[SupportedVersionRange]): Unit = {
     supportedFeatures = newFeatures
   }
 
-  // Should be used only for testing.
+  // For testing only.
   def clear(): Unit = {
     supportedFeatures = emptySupportedFeatures
   }
@@ -42,15 +42,15 @@ object SupportedFeatures extends Logging {
   /**
    * Returns the set of feature names found to be 'incompatible'.
    * A feature incompatibility is a version mismatch between the latest feature supported by the
-   * Broker, and the provided cluster-wide finalized feature. This can happen because a provided
-   * cluster-wide finalized feature:
+   * Broker, and the provided finalized feature. This can happen because a provided finalized
+   * feature:
    *  1) Does not exist in the Broker (i.e. it is unknown to the Broker).
    *           [OR]
    *  2) Exists but the FinalizedVersionRange does not match with the supported feature's SupportedVersionRange.
    *
    * @param finalized   The finalized features against which incompatibilities need to be checked for.
    *
-   * @return            The sub-set of input features which are incompatible. If the returned object
+   * @return            The subset of input features which are incompatible. If the returned object
    *                    is empty, it means there were no feature incompatibilities found.
    */
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
@@ -66,10 +66,10 @@ object SupportedFeatures extends Logging {
           (feature, versionLevels, null)
         }
       }
-    }.filter(entry => entry._3 != null).toList
+    }.filter{ case(_, _, errorReason) => errorReason != null}.toList
 
     if (incompatibilities.nonEmpty) {
-      warn("Feature incompatibilities seen: " + incompatibilities.map(item => item._3))
+      warn("Feature incompatibilities seen: " + incompatibilities.map{ case(_, _, errorReason) => errorReason })
     }
     Features.finalizedFeatures(incompatibilities.map(item => (item._1, item._2)).toMap.asJava)
   }

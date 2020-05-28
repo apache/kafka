@@ -41,8 +41,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      * Constructor is made private, as for readability it is preferred the caller uses one of the
      * static factory functions for instantiation (see below).
      *
-     * @param features   Map of feature name to type of VersionRange, as the backing data structure
-     *                   for the Features object.
+     * @param features   Map of feature name to a type of VersionRange.
      */
     private Features(Map<String, VersionRangeType> features) {
         Objects.requireNonNull(features,"Provided features can not be null.");
@@ -87,7 +86,8 @@ public class Features<VersionRangeType extends BaseVersionRange> {
     /**
      * @param  feature   name of the feature
      *
-     * @return           the VersionRangeType corresponding to the feature name, or null if absent
+     * @return           the VersionRangeType corresponding to the feature name, or null if the
+     *                   feature is absent
      */
     public VersionRangeType get(String feature) {
         return features.get(feature);
@@ -106,7 +106,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
 
     /**
      * @return   A map with underlying features serialized. The returned value can be deserialized
-     *           using one of the provided deserialize() APIs of this class.
+     *           using one of the deserialize() APIs of this class.
      */
     public Map<String, Map<String, Long>> serialize() {
         return features.entrySet().stream().collect(
