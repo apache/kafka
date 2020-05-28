@@ -166,16 +166,11 @@
     <suppress checks="CyclomaticComplexity"
               files="EosBetaUpgradeIntegrationTest.java"/>
 
-    <suppress checks="JavaNCSS"
-<<<<<<< HEAD
-              files="StreamsPartitionAssignor.java"/>
-    <suppress checks="JavaNCSS"
-              files="EosBetaUpgradeIntegrationTest.java"/>
     <suppress checks="StaticVariableName"
               files="StreamsMetricsImpl.java"/>
-=======
+    
+    <suppress checks="JavaNCSS"
               files="(EosBetaUpgradeIntegrationTest|StreamsPartitionAssignor|TaskManager).java"/>
->>>>>>> 23057e6ff... Squashed for rebase
 
     <suppress checks="NPathComplexity"
               files="(AssignorConfiguration|EosBetaUpgradeIntegrationTest|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
