@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 import java.util.List;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -49,6 +50,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final static To SEND_TO_ALL = To.all();
 
     final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     public ProcessorContextImpl(final TaskId id,
                                 final StreamsConfig config,
@@ -60,23 +62,37 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
-        this.cache = newCache;
-        this.streamTask = streamTask;
-        this.collector = recordCollector;
         if (stateManager.taskType() != TaskType.ACTIVE) {
             throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
                                                 "type was " + stateManager.taskType());
         }
+        this.streamTask = streamTask;
+        this.collector = recordCollector;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
     }
 
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
-        this.cache = newCache;
-        this.streamTask = null;
-        this.collector = null;
         if (stateManager.taskType() != TaskType.STANDBY) {
             throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
                                                 "type was " + stateManager.taskType());
+        }
+        this.streamTask = null;
+        this.collector = null;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cacheNameToFlushListener.put(namespace, listener);
+        cache.addDirtyEntryFlushListener(namespace, listener);
+    }
+
+    private void addAllFlushListenersToNewCache() {
+        for (final Map.Entry<String, DirtyEntryFlushListener> cacheEntry : cacheNameToFlushListener.entrySet()) {
+            cache.addDirtyEntryFlushListener(cacheEntry.getKey(), cacheEntry.getValue());
         }
     }
 

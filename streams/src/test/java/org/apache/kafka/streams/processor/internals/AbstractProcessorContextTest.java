@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
@@ -248,6 +249,10 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void transitionToStandby(final ThreadCache newCache) {
+        }
+
+        @Override
+        public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         }
     }
 }

@@ -69,7 +69,7 @@ public class CachingKeyValueStore
         this.context = (InternalProcessorContext) context;
 
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
-        this.context.cache().addDirtyEntryFlushListener(cacheName, entries -> {
+        this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, (InternalProcessorContext) context);
             }

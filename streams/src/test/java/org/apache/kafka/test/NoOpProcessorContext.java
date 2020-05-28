@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
@@ -127,5 +128,10 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
     }
 }

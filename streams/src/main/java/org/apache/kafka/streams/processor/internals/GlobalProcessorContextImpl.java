@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
@@ -51,7 +52,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     public <K, V> void forward(final K key, final V value) {
         final ProcessorNode<?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode<?, ?> child :  currentNode().children()) {
+            for (final ProcessorNode<?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
                 ((ProcessorNode<K, V>) child).process(key, value);
             }
@@ -126,5 +127,10 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
         throw new UnsupportedOperationException("this should not happen: transitionToStandby() not supported in global processor context.");
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
     }
 }

@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
@@ -385,6 +386,11 @@ public class InternalMockProcessorContext
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
         taskType = TaskType.STANDBY;
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {

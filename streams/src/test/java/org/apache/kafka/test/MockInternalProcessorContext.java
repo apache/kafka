@@ -34,6 +34,7 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
@@ -139,5 +140,9 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
     }
 }

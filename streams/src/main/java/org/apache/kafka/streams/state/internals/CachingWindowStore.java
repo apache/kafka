@@ -84,7 +84,7 @@ class CachingWindowStore
             Serdes.ByteArray());
         name = context.taskId() + "-" + name();
 
-        context.cache().addDirtyEntryFlushListener(name, entries -> {
+        context.registerCacheFlushListener(name, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);
             }
