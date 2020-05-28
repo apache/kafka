@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
 
@@ -46,16 +47,23 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
     @Override
     public <T> List<T> stores(final StoreQueryParameters storeQueryParameters) {
         final String storeName = storeQueryParameters.storeName();
-        final int storePartition = storeQueryParameters.partition() != null ? storeQueryParameters.partition() : defaultStorePartition;
-        final Entry<String, Integer> stateStoreKey = new SimpleEntry<>(storeName, storePartition);
         final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
         if (throwException) {
             throw new InvalidStateStoreException("store is unavailable");
         }
-        if (stores.containsKey(stateStoreKey) && queryableStoreType.accepts(stores.get(stateStoreKey))) {
-            return (List<T>) Collections.singletonList(stores.get(stateStoreKey));
+        if (storeQueryParameters.partition() != null) {
+            final int storePartition = storeQueryParameters.partition() != null ? storeQueryParameters.partition() : defaultStorePartition;
+            final Entry<String, Integer> stateStoreKey = new SimpleEntry<>(storeName, storePartition);
+            if (stores.containsKey(stateStoreKey) && queryableStoreType.accepts(stores.get(stateStoreKey))) {
+                return (List<T>) Collections.singletonList(stores.get(stateStoreKey));
+            }
+            return Collections.emptyList();
         }
-        return Collections.emptyList();
+        return (List<T>) Collections.unmodifiableList(
+                stores.entrySet().stream().
+                        filter(entry -> entry.getKey().getKey().equals(storeName) && queryableStoreType.accepts(entry.getValue())).
+                        map(Entry::getValue).
+                        collect(Collectors.toList()));
     }
 
     public void addStore(final String storeName,
