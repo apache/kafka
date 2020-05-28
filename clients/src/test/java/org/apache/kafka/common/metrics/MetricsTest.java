@@ -568,8 +568,8 @@ public class MetricsTest {
             double expectedP90 = values.get(p90Index - 1);
             double expectedP99 = values.get(p99Index - 1);
 
-            assertEquals(expectedP90, (Double) p90.metricValue(), expectedP90 / 10);
-            assertEquals(expectedP99, (Double) p99.metricValue(), expectedP99 / 10);
+            assertEquals(expectedP90, (Double) p90.metricValue(), expectedP90 / 5);
+            assertEquals(expectedP99, (Double) p99.metricValue(), expectedP99 / 5);
         } catch (AssertionError e) {
             throw new AssertionError("Assertion failed in randomized test. Reproduce with seed = " + seed + " .", e);
         }
