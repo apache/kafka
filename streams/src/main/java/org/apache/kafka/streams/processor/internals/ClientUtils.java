@@ -43,9 +43,10 @@ import org.slf4j.LoggerFactory;
 public class ClientUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
 
-    static final class InternalAdminClientConfig extends AdminClientConfig {
-        InternalAdminClientConfig(final Map<?, ?> props) {
-            super(props, false);
+    public static final class QuietAdminClientConfig extends AdminClientConfig {
+        QuietAdminClientConfig(final StreamsConfig streamsConfig) {
+            // If you just want to look up admin configs, you don't care about the clientId
+            super(streamsConfig.getAdminConfigs("dummy"), false);
         }
     }
 
@@ -97,7 +98,7 @@ public class ClientUtils {
     }
 
     public static int getAdminDefaultApiTimeoutMs(final StreamsConfig streamsConfig) {
-        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
+        final QuietAdminClientConfig dummyAdmin = new QuietAdminClientConfig(streamsConfig);
         return dummyAdmin.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
     }
 

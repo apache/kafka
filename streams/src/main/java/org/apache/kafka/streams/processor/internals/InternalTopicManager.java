@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.ClientUtils.InternalAdminClientConfig;
+import org.apache.kafka.streams.processor.internals.ClientUtils.QuietAdminClientConfig;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -63,9 +63,9 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
-        retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
-        retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        final QuietAdminClientConfig adminConfigs = new QuietAdminClientConfig(streamsConfig);
+        retries = adminConfigs.getInt(AdminClientConfig.RETRIES_CONFIG);
+        retryBackOffMs = adminConfigs.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
         log.debug("Configs:" + Utils.NL +
             "\t{} = {}" + Utils.NL +
