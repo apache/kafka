@@ -355,7 +355,7 @@ public class RestoreIntegrationTest {
         waitForStandbyCompletion(client2, 1, 30 * 1000L);
 
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(0));
-        assertThat(restoreListener.totalNumRestored, CoreMatchers.equalTo(0L));
+        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
 
         client2.close();
         waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -365,7 +365,7 @@ public class RestoreIntegrationTest {
         waitForCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored, CoreMatchers.equalTo(0L));
+        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
 
         // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2

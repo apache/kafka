@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -1276,18 +1279,24 @@ public class IntegrationTestUtils {
         }
     }
 
+    /**
+     * Tracks the offsets and number of restored records on a per-partition basis.
+     * Currently assumes only one store in the topology; you will need to update this
+     * if it's important to track across multiple stores in a topology
+     */
     public static class TrackingStateRestoreListener implements StateRestoreListener {
-        public long startOffset = -1L;
-        public long endOffset = -1L;
-        public long totalNumRestored = 0L;
+        public final Map<TopicPartition, AtomicLong> changelogToStartOffset = new ConcurrentHashMap<>();
+        public final Map<TopicPartition, AtomicLong> changelogToEndOffset = new ConcurrentHashMap<>();
+        public final Map<TopicPartition, AtomicLong> changelogToTotalNumRestored = new ConcurrentHashMap<>();
 
         @Override
         public void onRestoreStart(final TopicPartition topicPartition,
                                    final String storeName,
                                    final long startingOffset,
                                    final long endingOffset) {
-            startOffset = startingOffset;
-            endOffset = endingOffset;
+            changelogToStartOffset.put(topicPartition, new AtomicLong(startingOffset));
+            changelogToEndOffset.put(topicPartition, new AtomicLong(endingOffset));
+            changelogToTotalNumRestored.put(topicPartition, new AtomicLong(0L));
         }
 
         @Override
@@ -1295,12 +1304,30 @@ public class IntegrationTestUtils {
                                     final String storeName,
                                     final long batchEndOffset,
                                     final long numRestored) {
-            totalNumRestored += numRestored;
+            changelogToTotalNumRestored.get(topicPartition).addAndGet(numRestored);
         }
 
         @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+        }
 
+        public boolean allStartOffsetsAtZero() {
+            for (final AtomicLong startOffset : changelogToStartOffset.values()) {
+                if (startOffset.get() != 0L) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public long totalNumRestored() {
+            long totalNumRestored = 0L;
+            for (final AtomicLong numRestored : changelogToTotalNumRestored.values()) {
+                totalNumRestored += numRestored.get();
+            }
+            return totalNumRestored;
         }
     }
 
