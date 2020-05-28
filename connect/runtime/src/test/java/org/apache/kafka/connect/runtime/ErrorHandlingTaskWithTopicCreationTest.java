@@ -39,6 +39,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -160,6 +161,9 @@ public class ErrorHandlingTaskWithTopicCreationTest {
     private TaskStatus.Listener statusListener;
     @SuppressWarnings("unused")
     @Mock private StatusBackingStore statusBackingStore;
+
+    @Mock
+    private WorkerErrantRecordReporter workerErrantRecordReporter;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
 
@@ -548,7 +552,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
-                retryWithToleranceOperator, statusBackingStore);
+                retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {

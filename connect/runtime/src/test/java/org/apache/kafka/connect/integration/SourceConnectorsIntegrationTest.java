@@ -118,7 +118,8 @@ public class SourceConnectorsIntegrationTest {
                 "Connector tasks did not start in time.");
 
         connect.assertions().assertTopicsExist(FOO_TOPIC);
-        connect.assertions().assertTopicSettings(FOO_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + FOO_TOPIC + " does not have the expected settings");
     }
 
     @Test
@@ -142,7 +143,8 @@ public class SourceConnectorsIntegrationTest {
                 "Connector tasks did not start in time.");
 
         connect.assertions().assertTopicsExist(FOO_TOPIC);
-        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR, FOO_GROUP_PARTITIONS);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR,
+                FOO_GROUP_PARTITIONS, "Topic " + FOO_TOPIC + " does not have the expected settings");
     }
 
     @Test
@@ -155,7 +157,8 @@ public class SourceConnectorsIntegrationTest {
         connect.kafka().createTopic(BAR_TOPIC, DEFAULT_PARTITIONS, DEFAULT_REPLICATION_FACTOR, Collections.emptyMap());
 
         connect.assertions().assertTopicsExist(BAR_TOPIC);
-        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
 
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
@@ -182,7 +185,8 @@ public class SourceConnectorsIntegrationTest {
                 "Connector tasks did not start in time.");
 
         connect.assertions().assertTopicsExist(BAR_TOPIC);
-        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
 
         connect.assertions().assertTopicsDoNotExist(FOO_TOPIC);
 
@@ -200,9 +204,11 @@ public class SourceConnectorsIntegrationTest {
                 "Connector tasks did not start in time.");
 
         connect.assertions().assertTopicsExist(FOO_TOPIC);
-        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR, FOO_GROUP_PARTITIONS);
+        connect.assertions().assertTopicSettings(FOO_TOPIC, FOO_GROUP_REPLICATION_FACTOR,
+                FOO_GROUP_PARTITIONS, "Topic " + FOO_TOPIC + " does not have the expected settings");
         connect.assertions().assertTopicsExist(BAR_TOPIC);
-        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR, DEFAULT_PARTITIONS);
+        connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
+                DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
