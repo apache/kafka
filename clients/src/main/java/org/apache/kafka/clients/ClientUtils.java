@@ -108,11 +108,15 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
-        if (ClientDnsLookup.USE_FIRST_DNS_IPS == clientDnsLookup) {
-            return Collections.singletonList(addresses[0]);
-        } else {
-            // ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup || ClientDnsLookup.DEFAULT == clientDnsLookup
-            return filterPreferredAddresses(addresses);
+        switch (clientDnsLookup) {
+            case USE_FIRST_DNS_IP:
+                return Collections.singletonList(addresses[0]);
+            case DEFAULT:
+            case USE_ALL_DNS_IPS:
+            case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
+                return filterPreferredAddresses(addresses);
+            default:
+                throw new ConfigException("Invalid client.dns.lookup value " + clientDnsLookup.toString());
         }
     }
 

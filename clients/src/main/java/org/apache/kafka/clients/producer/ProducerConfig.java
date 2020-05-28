@@ -260,7 +260,8 @@ public class ProducerConfig extends AbstractConfig {
                                         ClientDnsLookup.DEFAULT.toString(),
                                         in(ClientDnsLookup.DEFAULT.toString(),
                                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString(),
+                                           ClientDnsLookup.USE_FIRST_DNS_IP.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
