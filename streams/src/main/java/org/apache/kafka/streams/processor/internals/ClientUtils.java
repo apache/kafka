@@ -33,8 +33,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -97,22 +95,16 @@ public class ClientUtils {
         return result;
     }
 
-    public static int getAdminDefaultApiTimeoutMs(final StreamsConfig streamsConfig) {
-        final QuietAdminClientConfig dummyAdmin = new QuietAdminClientConfig(streamsConfig);
-        return dummyAdmin.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-    }
-
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
-                                                                             final Admin adminClient,
-                                                                             final long timeoutMs) {
+                                                                             final Admin adminClient) {
         final Map<TopicPartition, ListOffsetsResultInfo> endOffsets;
         try {
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> future =  adminClient.listOffsets(
                 partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
                                                                                         .all();
-            endOffsets = future.get(timeoutMs, TimeUnit.MILLISECONDS);
+            endOffsets = future.get();
 
-        } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
             LOG.warn("listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }

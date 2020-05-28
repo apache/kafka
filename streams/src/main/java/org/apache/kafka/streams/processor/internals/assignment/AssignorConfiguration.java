@@ -40,7 +40,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminDefaultApiTimeoutMs;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
@@ -294,10 +293,6 @@ public final class AssignorConfiguration {
 
     public Admin adminClient() {
         return adminClient;
-    }
-
-    public int adminClientTimeout() {
-        return getAdminDefaultApiTimeoutMs(streamsConfig);
     }
 
     public InternalTopicManager internalTopicManager() {

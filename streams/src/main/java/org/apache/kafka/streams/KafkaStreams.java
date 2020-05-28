@@ -93,7 +93,6 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getAdminDefaultApiTimeoutMs;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -1247,12 +1246,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets =
-            fetchEndOffsets(
-                allPartitions,
-                adminClient,
-                getAdminDefaultApiTimeoutMs(config)
-            );
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
 
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {

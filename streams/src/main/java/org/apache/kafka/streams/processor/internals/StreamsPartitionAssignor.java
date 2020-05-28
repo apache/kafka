@@ -167,7 +167,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private Admin adminClient;
-    private int adminClientTimeout;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
@@ -199,7 +198,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         adminClient = assignorConfiguration.adminClient();
-        adminClientTimeout = assignorConfiguration.adminClientTimeout();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
@@ -772,7 +770,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient, adminClientTimeout);
+                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient);
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
