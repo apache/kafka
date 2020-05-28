@@ -22,7 +22,12 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -53,7 +58,10 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertTrue;
 
 
@@ -315,7 +323,6 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertTrue(numStreamThreads > 1);
         assertTrue(kafkaStreams1.localThreadsMetadata().size() > 1);
         assertTrue(kafkaStreams2.localThreadsMetadata().size() > 1);
 
