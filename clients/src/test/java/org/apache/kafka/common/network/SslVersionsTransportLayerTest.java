@@ -19,8 +19,8 @@ package org.apache.kafka.common.network;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,24 +45,29 @@ public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     private static final Time TIME = Time.SYSTEM;
 
-    private final String tlsServerProtocol;
-    private final String tlsClientProtocol;
+    private final List<String> tlsServerProtocols;
+    private final List<String> tlsClientProtocols;
 
     @Parameterized.Parameters(name = "tlsServerProtocol={0},tlsClientProtocol={1}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
-        values.add(new Object[] {"TLSv1.2", "TLSv1.2"});
+        values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.2")});
         if (Java.IS_JAVA11_COMPATIBLE) {
-            values.add(new Object[] {"TLSv1.2", "TLSv1.3"});
-            values.add(new Object[] {"TLSv1.3", "TLSv1.2"});
-            values.add(new Object[] {"TLSv1.3", "TLSv1.3"});
+            values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.2")});
+            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2")});
+            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
         }
         return values;
     }
 
-    public SslVersionsTransportLayerTest(String tlsServerProtocol, String tlsClientProtocol) {
-        this.tlsServerProtocol = tlsServerProtocol;
-        this.tlsClientProtocol = tlsClientProtocol;
+    public SslVersionsTransportLayerTest(List<String> tlsServerProtocols, List<String> tlsClientProtocols) {
+        this.tlsServerProtocols = tlsServerProtocols;
+        this.tlsClientProtocols = tlsClientProtocols;
     }
 
     /**
@@ -74,8 +79,8 @@ public class SslVersionsTransportLayerTest {
         CertStores serverCertStores = new CertStores(true, "server",  "localhost");
         CertStores clientCertStores = new CertStores(false, "client", "localhost");
 
-        Map<String, Object> sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores, tlsClientProtocol);
-        Map<String, Object> sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores, tlsServerProtocol);
+        Map<String, Object> sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores, tlsClientProtocols);
+        Map<String, Object> sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores, tlsServerProtocols);
 
         NioEchoServer server = NetworkTestUtils.createEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
              SecurityProtocol.SSL,
@@ -87,7 +92,7 @@ public class SslVersionsTransportLayerTest {
         String node = "0";
         selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
 
-        if (tlsServerProtocol.equals(tlsClientProtocol)) {
+        if (tlsServerProtocols.contains(tlsClientProtocols.get(0))) {
             NetworkTestUtils.waitForChannelReady(selector, node);
 
             int msgSz = 1024 * 1024;
@@ -106,17 +111,17 @@ public class SslVersionsTransportLayerTest {
         }
     }
 
-    public static Map<String, Object> sslConfig(String tlsServerProtocol) {
-        Map<String, Object> sslConfig = new HashMap<>();
-        sslConfig.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsServerProtocol);
-        sslConfig.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsServerProtocol));
-        return sslConfig;
+    private static Map<String, Object> getTrustingConfig(CertStores certStores, CertStores peerCertStores, List<String> tlsProtocols) {
+        Map<String, Object> configs = certStores.getTrustingConfig(peerCertStores);
+        configs.putAll(sslConfig(tlsProtocols));
+        return configs;
     }
 
-    public static Map<String, Object> getTrustingConfig(CertStores certStores, CertStores peerCertStores, String tlsProtocol) {
-        Map<String, Object> configs = certStores.getTrustingConfig(peerCertStores);
-        configs.putAll(sslConfig(tlsProtocol));
-        return configs;
+    private static Map<String, Object> sslConfig(List<String> tlsServerProtocols) {
+        Map<String, Object> sslConfig = new HashMap<>();
+        sslConfig.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsServerProtocols.get(0));
+        sslConfig.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, tlsServerProtocols);
+        return sslConfig;
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs) {
