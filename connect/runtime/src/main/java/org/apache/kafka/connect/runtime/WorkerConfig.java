@@ -251,6 +251,9 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
+
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
             + "automatic creation of topics used by source connectors, when source connectors "
