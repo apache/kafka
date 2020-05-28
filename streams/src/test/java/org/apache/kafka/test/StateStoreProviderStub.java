@@ -46,7 +46,7 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
     @Override
     public <T> List<T> stores(final StoreQueryParameters storeQueryParameters) {
         final String storeName = storeQueryParameters.storeName();
-        final int storePartition = storeQueryParameters.partition() != null ? storeQueryParameters.partition() : 0;
+        final int storePartition = storeQueryParameters.partition() != null ? storeQueryParameters.partition() : defaultStorePartition;
         final Entry<String, Integer> stateStoreKey = new SimpleEntry<>(storeName, storePartition);
         final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
         if (throwException) {
