@@ -173,27 +173,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         recordQueueCreator = new RecordQueueCreator(logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
 
-        // create queues for each assigned partition and associate them
-        // to corresponding source nodes in the processor topology
-        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
-
-        final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
-        final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
-        for (final TopicPartition partition : partitions) {
-            final SourceNode<?, ?> source = topology.source(partition.topic());
-            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
-            final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
-            final RecordQueue queue = new RecordQueue(
-                partition,
-                source,
-                timestampExtractor,
-                defaultDeserializationExceptionHandler,
-                processorContext,
-                logContext
-            );
-            partitionQueues.put(partition, queue);
-        }
-
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(createPartitionQueues(),
                 TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics));
