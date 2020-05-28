@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.io.IOException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -58,6 +57,8 @@ import org.apache.kafka.test.TestUtils;
 import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -70,10 +71,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.rules.TestName;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
@@ -86,31 +89,30 @@ import static org.junit.Assert.assertTrue;
 public class RestoreIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
-    private static final String APPID = "restore-test";
+    @ClassRule
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private static final String INPUT_STREAM = "input-stream";
-    private static final String INPUT_STREAM_2 = "input-stream-2";
-    private static final String CHANGELOG = APPID + "-store-changelog";
+    @Rule
+    public final TestName testName = new TestName();
+    private String appId;
+    private String inputStream;
 
     private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
 
     @Before
-    public void createTopics() throws InterruptedException, IOException {
-        cluster.start();
-        cluster.deleteTopicsAndWait(INPUT_STREAM, INPUT_STREAM_2, CHANGELOG);
-        cluster.createTopic(INPUT_STREAM, 2, 1);
-        cluster.createTopic(INPUT_STREAM_2, 2, 1);
-        cluster.createTopic(CHANGELOG, 2, 1);
+    public void createTopics() throws InterruptedException {
+        appId = safeUniqueTestName(RestoreIntegrationTest.class, testName);
+        inputStream = appId + "-input-stream";
+        CLUSTER.createTopic(inputStream, 2, 1);
     }
 
-    private Properties props(final String applicationId) {
+    private Properties props() {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
@@ -132,26 +134,26 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(APPID);
+        final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
-        createStateForRestoration(INPUT_STREAM, 0);
-        setCommittedOffset(INPUT_STREAM, offsetLimitDelta);
+        createStateForRestoration(inputStream, 0);
+        setCommittedOffset(inputStream, offsetLimitDelta);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 0), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 1), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
+        builder.table(inputStream, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
                     if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
@@ -194,27 +196,30 @@ public class RestoreIntegrationTest {
 
     @Test
     public void shouldRestoreStateFromChangelogTopic() throws Exception {
+        final String changelog = appId + "-store-changelog";
+        CLUSTER.createTopic(changelog, 2, 1);
+
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(APPID);
+        final Properties props = props();
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
-        createStateForRestoration(CHANGELOG, 0);
-        createStateForRestoration(INPUT_STREAM, 10000);
+        createStateForRestoration(changelog, 0);
+        createStateForRestoration(inputStream, 10000);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(CHANGELOG, 0), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(CHANGELOG, 1), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(changelog, 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
+        builder.table(inputStream, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
                 .toStream()
                 .foreach((key, value) -> {
                     if (numReceived.incrementAndGet() == numberOfKeys) {
@@ -259,14 +264,14 @@ public class RestoreIntegrationTest {
     public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<Integer, Integer> stream = builder.stream(INPUT_STREAM);
+        final KStream<Integer, Integer> stream = builder.stream(inputStream);
         stream.groupByKey()
                 .reduce(
                     (value1, value2) -> value1 + value2,
                     Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(APPID));
+        kafkaStreams = new KafkaStreams(builder.build(), props());
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -281,34 +286,34 @@ public class RestoreIntegrationTest {
     @Test
     public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_STREAM_2,
+        IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                                                            asList(KeyValue.pair(1, 1),
                                                                          KeyValue.pair(2, 2),
                                                                          KeyValue.pair(3, 3)),
-                                                           TestUtils.producerConfig(cluster.bootstrapServers(),
+                                                           TestUtils.producerConfig(CLUSTER.bootstrapServers(),
                                                                                     IntegerSerializer.class,
                                                                                     IntegerSerializer.class),
-                                                           cluster.time);
+                                                           CLUSTER.time);
 
-        final KeyValueBytesStoreSupplier lruMapSupplier = Stores.lruMap(INPUT_STREAM_2, 10);
+        final KeyValueBytesStoreSupplier lruMapSupplier = Stores.lruMap(inputStream, 10);
 
         final StoreBuilder<KeyValueStore<Integer, Integer>> storeBuilder = new KeyValueStoreBuilder<>(lruMapSupplier,
                                                                                                       Serdes.Integer(),
                                                                                                       Serdes.Integer(),
-                                                                                                      cluster.time)
+                                                                                                      CLUSTER.time)
                 .withLoggingDisabled();
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(storeBuilder);
 
-        final KStream<Integer, Integer> stream = streamsBuilder.stream(INPUT_STREAM_2);
+        final KStream<Integer, Integer> stream = streamsBuilder.stream(inputStream);
         final CountDownLatch processorLatch = new CountDownLatch(3);
-        stream.process(() -> new KeyValueStoreProcessor(INPUT_STREAM_2, processorLatch), INPUT_STREAM_2);
+        stream.process(() -> new KeyValueStoreProcessor(inputStream, processorLatch), inputStream);
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props(APPID + "-logging-disabled"));
+        kafkaStreams = new KafkaStreams(topology, props());
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -327,20 +332,20 @@ public class RestoreIntegrationTest {
     public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
-            INPUT_STREAM,
+                inputStream,
             Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
         );
-        createStateForRestoration(INPUT_STREAM, 0);
+        createStateForRestoration(inputStream, 0);
 
-        final Properties props1 = props(APPID);
+        final Properties props1 = props();
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPID + "-1").getPath());
+        props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
         final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props(APPID);
+        final Properties props2 = props();
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPID + "-2").getPath());
+        props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);
         final KafkaStreams client2 = new KafkaStreams(builder.build(), props2);
 
@@ -446,7 +451,7 @@ public class RestoreIntegrationTest {
 
     private void createStateForRestoration(final String changelogTopic, final int startingOffset) {
         final Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         try (final KafkaProducer<Integer, Integer> producer =
                      new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
@@ -460,8 +465,8 @@ public class RestoreIntegrationTest {
 
     private void setCommittedOffset(final String topic, final int limitDelta) {
         final Properties consumerConfig = new Properties();
-        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, APPID);
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appId);
         consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, "commit-consumer");
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
