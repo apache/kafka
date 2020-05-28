@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -29,20 +27,16 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
@@ -202,7 +196,7 @@ public class EmbeddedConnectClusterAssertions {
      * @param detailMessage the assertion message
      */
     public void assertTopicSettings(String topicName, int replicas, int partitions, String detailMessage)
-            throws InterruptedException{
+            throws InterruptedException {
         try {
             waitForCondition(
                 () -> checkTopicSettings(
