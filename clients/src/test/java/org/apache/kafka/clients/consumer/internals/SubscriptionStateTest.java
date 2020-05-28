@@ -122,6 +122,12 @@ public class SubscriptionStateTest {
         // `groupSubscribe` does not accumulate
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
+
+        state.subscribe(singleton("anotherTopic"), rebalanceListener);
+        assertEquals(Utils.mkSet(topic1, "anotherTopic"), state.metadataTopics());
+
+        assertFalse(state.groupSubscribe(singleton("anotherTopic")));
+        assertEquals(singleton("anotherTopic"), state.metadataTopics());
     }
 
     @Test
