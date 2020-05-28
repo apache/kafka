@@ -806,7 +806,7 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Clears completed receives. This is used by SocketServer to remove references to
      * receive buffers after processing completed receives, without waiting for the next
-     * poll() after all results have been processed.
+     * poll().
      */
     public void clearCompletedReceives() {
         this.completedReceives.clear();
@@ -815,7 +815,7 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Clears completed sends. This is used by SocketServer to remove references to
      * send buffers after processing completed sends, without waiting for the next
-     * poll() after all results have been processed.
+     * poll().
      */
     public void clearCompletedSends() {
         this.completedSends.clear();

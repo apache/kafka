@@ -1807,9 +1807,9 @@ class SocketServerTest {
     class PollData[T] {
       var minPerPoll = 1
       val deferredValues = mutable.Buffer[T]()
-      val currentPollValues = mutable.Buffer[T]()
-      def update(newValues: mutable.Buffer[T]): Unit = {
-        if (currentPollValues.nonEmpty || deferredValues.size + newValues.size >= minPerPoll) {
+      def update(newValues: mutable.Buffer[T], addToCurrentResult: T => Unit): Unit = {
+        val currentPollValues = mutable.Buffer[T]()
+        if (deferredValues.size + newValues.size >= minPerPoll) {
           if (deferredValues.nonEmpty) {
             currentPollValues ++= deferredValues
             deferredValues.clear()
@@ -1817,10 +1817,10 @@ class SocketServerTest {
           currentPollValues ++= newValues
         } else
           deferredValues ++= newValues
+
+        // Update results for the current poll
         newValues.clear()
-      }
-      def reset(): Unit = {
-        currentPollValues.clear()
+        currentPollValues.foreach(addToCurrentResult)
       }
     }
     val cachedCompletedReceives = new PollData[NetworkReceive]()
@@ -1879,24 +1879,26 @@ class SocketServerTest {
         while (!pendingClosingChannels.isEmpty) {
           makeClosing(pendingClosingChannels.poll())
         }
-        allCachedPollData.foreach(_.reset)
         runOp(SelectorOperation.Poll, None) {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
         }
       } finally {
         super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
-        cachedCompletedReceives.update(super.completedReceives.asScala.toBuffer)
-        cachedCompletedSends.update(super.completedSends.asScala)
-        cachedDisconnected.update(super.disconnected.asScala.toBuffer)
 
         val map: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(this, classOf[Selector], "completedReceives")
-        cachedCompletedReceives.currentPollValues.foreach { receive =>
+        def addToCompletedReceives(receive: NetworkReceive): Unit = {
           val channelOpt = Option(super.channel(receive.source)).orElse(Option(super.closingChannel(receive.source)))
           channelOpt.foreach { channel => map.put(channel.id, receive) }
         }
-        cachedCompletedSends.currentPollValues.foreach(super.completedSends.add)
-        cachedDisconnected.currentPollValues.foreach { case (id, state) => super.disconnected.put(id, state) }
+
+        // For each result type (completedReceives/completedSends/disconnected), defer the result to a subsequent poll()
+        // if `minPerPoll` results are not yet available. When sufficient results are available, all available results
+        // including previously deferred results are returned. This allows tests to process `minPerPoll` elements as the
+        // results of a single poll iteration.
+        cachedCompletedReceives.update(super.completedReceives.asScala.toBuffer, addToCompletedReceives)
+        cachedCompletedSends.update(super.completedSends.asScala, s => super.completedSends.add(s))
+        cachedDisconnected.update(super.disconnected.asScala.toBuffer, d => super.disconnected.put(d._1, d._2))
       }
     }
 
