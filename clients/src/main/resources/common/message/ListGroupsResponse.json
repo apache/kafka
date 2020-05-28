@@ -37,7 +37,7 @@
         "about": "The group ID." },
       { "name": "ProtocolType", "type": "string", "versions": "0+",
         "about": "The group protocol type." },
-      { "name": "GroupState", "type": "string", "versions": "4+", "nullableVersions": "0+", "ignorable": true, "default": "null",
+      { "name": "GroupState", "type": "string", "versions": "4+", "ignorable": true,
         "about": "The group state name." }
     ]}
   ]
