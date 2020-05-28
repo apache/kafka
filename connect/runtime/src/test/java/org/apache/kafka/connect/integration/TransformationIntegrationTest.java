@@ -159,7 +159,7 @@ public class TransformationIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals("Unexpected number of records consumed", numFooRecords,
                 connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
-        assertEquals("Unexpected number of records consumed", numFooRecords,
+        assertEquals("Unexpected number of records consumed", numBarRecords,
                 connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
 
         // wait for the connector tasks to consume all records.
