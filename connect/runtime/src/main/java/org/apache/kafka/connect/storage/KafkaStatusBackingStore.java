@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.Table;
@@ -152,22 +153,31 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (this.statusTopic == null || this.statusTopic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector status.");
 
+        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
+        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic).
-                compacted().
-                partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).statusStorageTopicSettings()
+                                            : Collections.emptyMap();
+        NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
+                .config(topicSettings) // first so that we override user-supplied settings as needed
+                .compacted()
+                .partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG))
+                .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
             @Override

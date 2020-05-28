@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -97,7 +99,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Sensor enforcedProcessingSensor;
+    private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
     private final InternalProcessorContext processorContext;
+
+    private final RecordQueueCreator recordQueueCreator;
 
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
@@ -140,6 +145,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
 
+        for (final String terminalNode : topology.terminalNodes()) {
+            e2eLatencySensors.put(
+                terminalNode,
+                ProcessorNodeMetrics.recordE2ELatencySensor(threadId, taskId, terminalNode, RecordingLevel.INFO, streamsMetrics)
+            );
+        }
+
+        for (final ProcessorNode<?, ?> sourceNode : topology.sources()) {
+            final String processorId = sourceNode.name();
+            e2eLatencySensors.put(
+                processorId,
+                ProcessorNodeMetrics.recordE2ELatencySensor(threadId, taskId, processorId, RecordingLevel.INFO, streamsMetrics)
+            );
+        }
+
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
@@ -148,35 +168,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
 
-        // create queues for each assigned partition and associate them
-        // to corresponding source nodes in the processor topology
-        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
-
+        recordQueueCreator = new RecordQueueCreator(logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
 
-        final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
-        final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
-        for (final TopicPartition partition : partitions) {
-            final SourceNode<?, ?> source = topology.source(partition.topic());
-            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
-            final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
-            final RecordQueue queue = new RecordQueue(
-                partition,
-                source,
-                timestampExtractor,
-                defaultDeserializationExceptionHandler,
-                processorContext,
-                logContext
-            );
-            partitionQueues.put(partition, queue);
-        }
-
         recordInfo = new PartitionGroup.RecordInfo();
-        partitionGroup = new PartitionGroup(partitionQueues,
-                                            TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics));
+        partitionGroup = new PartitionGroup(createPartitionQueues(),
+                TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics));
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
+    }
+
+    // create queues for each assigned partition and associate them
+    // to corresponding source nodes in the processor topology
+    private Map<TopicPartition, RecordQueue> createPartitionQueues() {
+        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
+        for (final TopicPartition partition : inputPartitions()) {
+            partitionQueues.put(partition, recordQueueCreator.createQueue(partition));
+        }
+        return partitionQueues;
     }
 
     @Override
@@ -185,7 +195,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     /**
-     * @throws LockException could happen when multi-threads within the single instance, could retry
+     * @throws LockException    could happen when multi-threads within the single instance, could retry
      * @throws TimeoutException if initializing record collector timed out
      * @throws StreamsException fatal error, should close the thread
      */
@@ -431,6 +441,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed dirty");
     }
 
+    @Override
+    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
+        super.update(topicPartitions, processorTopology);
+        partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
+        if (state() != State.RESTORING) { // if task is RESTORING then topology will be initialized in completeRestoration
+            initializeTopology();
+        }
+    }
+
     /**
      * <pre>
      * the following order must be followed:
@@ -586,6 +605,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode, wallClockTime);
+            maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
             maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
@@ -699,19 +719,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void initializeMetadata() {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(partitions).entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions()).entrySet().stream()
+                    .filter(e -> e.getValue() != null)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
         } catch (final TimeoutException e) {
             log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
-                "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                e.toString(),
-                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+                            "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
+                    e.toString(),
+                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             throw e;
         } catch (final KafkaException e) {
-            throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+            throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, inputPartitions()), e);
         }
     }
 
@@ -730,7 +750,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-        final Set<TopicPartition> nonCommitted = new HashSet<>(partitions);
+        final Set<TopicPartition> nonCommitted = new HashSet<>(inputPartitions());
         nonCommitted.removeAll(offsetsAndMetadata.keySet());
         for (final TopicPartition partition : nonCommitted) {
             log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
@@ -899,6 +919,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return punctuated;
     }
 
+    void maybeRecordE2ELatency(final long recordTimestamp, final String nodeName) {
+        maybeRecordE2ELatency(recordTimestamp, time.milliseconds(), nodeName);
+    }
+
+    private void maybeRecordE2ELatency(final long recordTimestamp, final long now, final String nodeName) {
+        final Sensor e2eLatencySensor = e2eLatencySensors.get(nodeName);
+        if (e2eLatencySensor == null) {
+            throw new IllegalStateException("Requested to record e2e latency but could not find sensor for node " + nodeName);
+        } else if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
+            e2eLatencySensor.record(now - recordTimestamp, now);
+        }
+    }
+
     /**
      * Request committing the current task's state
      */
@@ -971,6 +1004,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         // print assigned partitions
+        final Set<TopicPartition> partitions = inputPartitions();
         if (partitions != null && !partitions.isEmpty()) {
             sb.append(indent).append("Partitions [");
             for (final TopicPartition topicPartition : partitions) {
@@ -1018,5 +1052,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     long streamTime() {
         return partitionGroup.streamTime();
+    }
+
+    private class RecordQueueCreator {
+        private final LogContext logContext;
+        private final TimestampExtractor defaultTimestampExtractor;
+        private final DeserializationExceptionHandler defaultDeserializationExceptionHandler;
+
+        private RecordQueueCreator(final LogContext logContext,
+                                   final TimestampExtractor defaultTimestampExtractor,
+                                   final DeserializationExceptionHandler defaultDeserializationExceptionHandler) {
+            this.logContext = logContext;
+            this.defaultTimestampExtractor = defaultTimestampExtractor;
+            this.defaultDeserializationExceptionHandler = defaultDeserializationExceptionHandler;
+        }
+
+        public RecordQueue createQueue(final TopicPartition partition) {
+            final SourceNode<?, ?> source = topology.source(partition.topic());
+            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
+            final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
+            return new RecordQueue(
+                    partition,
+                    source,
+                    timestampExtractor,
+                    defaultDeserializationExceptionHandler,
+                    processorContext,
+                    logContext
+            );
+        }
     }
 }

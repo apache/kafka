@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -50,6 +51,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -280,8 +282,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public ClusterConfigState snapshot() {
         synchronized (lock) {
-            // Doing a shallow copy of the data is safe here because the complex nested data that is copied should all be
-            // immutable configs
+            // Only a shallow copy is performed here; in order to avoid accidentally corrupting the worker's view
+            // of the config topic, any nested structures should be copied before making modifications
             return new ClusterConfigState(
                     offset,
                     sessionKey,
@@ -443,21 +445,30 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
+        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
+
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(1).
-                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        Map<String, Object> topicSettings = config instanceof DistributedConfig
+                                            ? ((DistributedConfig) config).configStorageTopicSettings()
+                                            : Collections.emptyMap();
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .config(topicSettings) // first so that we override user-supplied settings as needed
+                .compacted()
+                .partitions(1)
+                .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
     }
@@ -548,6 +559,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         // Connector deletion will be written as a null value
                         log.info("Successfully processed removal of connector '{}'", connectorName);
                         connectorConfigs.remove(connectorName);
+                        connectorTaskCounts.remove(connectorName);
+                        taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
                         removed = true;
                     } else {
                         // Connector configs can be applied and callbacks invoked immediately

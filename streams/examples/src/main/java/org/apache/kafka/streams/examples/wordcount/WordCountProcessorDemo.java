@@ -93,8 +93,6 @@ public final class WordCountProcessorDemo {
                             this.kvStore.put(word, oldValue + 1);
                         }
                     }
-
-                    context.commit();
                 }
 
                 @Override

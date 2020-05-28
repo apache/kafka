@@ -171,6 +171,11 @@ public interface Task {
     void closeDirty();
 
     /**
+     * Updates input partitions and topology after rebalance
+     */
+    void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology);
+
+    /**
      * Revive a closed task to a created one; should never throw an exception
      */
     void revive();

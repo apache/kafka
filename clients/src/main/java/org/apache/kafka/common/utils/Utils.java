@@ -343,6 +343,18 @@ public final class Utils {
     }
 
     /**
+     * Cast {@code klass} to {@code base} and instantiate it.
+     * @param klass The class to instantiate
+     * @param base A know baseclass of klass.
+     * @param <T> the type of the base class
+     * @throws ClassCastException If {@code klass} is not a subclass of {@code base}.
+     * @return the new instance.
+     */
+    public static <T> T newInstance(Class<?> klass, Class<T> base) {
+        return Utils.newInstance(klass.asSubclass(base));
+    }
+
+    /**
      * Construct a new object using a class name and parameters.
      *
      * @param className                 The full name of the class to construct.
@@ -750,6 +762,20 @@ public final class Utils {
         final Properties result = new Properties();
         for (final Map.Entry<String, String> entry : properties.entrySet()) {
             result.setProperty(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkObjectProperties(final Map<String, Object> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), entry.getValue());
         }
         return result;
     }

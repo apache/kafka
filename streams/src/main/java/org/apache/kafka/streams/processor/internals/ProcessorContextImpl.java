@@ -142,7 +142,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 "make sure to connect the added store to the processor by providing the processor name to " +
                 "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
                 "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
-                "to connect the store to the corresponding operator. If you do not add stores manually, " +
+                "to connect the store to the corresponding operator, or they can provide a StoreBuilder by implementing " +
+                "the stores() method on the Supplier itself. If you do not add stores manually, " +
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
@@ -223,6 +224,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final V value) {
         setCurrentNode(child);
         child.process(key, value);
+        if (child.isTerminalNode()) {
+            streamTask.maybeRecordE2ELatency(timestamp(), child.name());
+        }
     }
 
     @Override

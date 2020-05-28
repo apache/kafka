@@ -28,7 +28,7 @@ import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
+import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -773,7 +773,9 @@ class TransactionStateManagerTest {
   def testPartitionLoadMetric(): Unit = {
     val server = ManagementFactory.getPlatformMBeanServer
     val mBeanName = "kafka.server:type=transaction-coordinator-metrics"
-    val reporter = new JmxReporter("kafka.server")
+    val reporter = new JmxReporter
+    val metricsContext = new KafkaMetricsContext("kafka.server")
+    reporter.contextChange(metricsContext)
     metrics.addReporter(reporter)
 
     def partitionLoadTime(attribute: String): Double = {

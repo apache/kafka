@@ -23,12 +23,38 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 public class WorkerConfigTest {
+    private static final List<String> VALID_HEADER_CONFIGS = Arrays.asList(
+            "add \t Cache-Control: no-cache, no-store, must-revalidate",
+            "add \r X-XSS-Protection: 1; mode=block",
+            "\n add Strict-Transport-Security: max-age=31536000; includeSubDomains",
+            "AdD   Strict-Transport-Security:  \r  max-age=31536000;  includeSubDomains",
+            "AdD \t Strict-Transport-Security : \n   max-age=31536000;  includeSubDomains",
+            "add X-Content-Type-Options: \r nosniff",
+            "Set \t X-Frame-Options: \t Deny\n ",
+            "seT \t X-Cache-Info: \t not cacheable\n ",
+            "seTDate \t Expires: \r 31540000000",
+            "adDdate \n Last-Modified: \t 0"
+    );
+
+    private static final List<String> INVALID_HEADER_CONFIGS = Arrays.asList(
+            "set \t",
+            "badaction \t X-Frame-Options:DENY",
+            "set add X-XSS-Protection:1",
+            "addX-XSS-Protection",
+            "X-XSS-Protection:",
+            "add set X-XSS-Protection: 1",
+            "add X-XSS-Protection:1 X-XSS-Protection:1 ",
+            "add X-XSS-Protection",
+            "set X-Frame-Options:DENY, add  :no-cache, no-store, must-revalidate "
+    );
 
     @Test
     public void testAdminListenersConfigAllowedValues() {
@@ -61,6 +87,28 @@ public class WorkerConfigTest {
         Map<String, String> props = baseProps();
         props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, ,https://a.b:9999");
         new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+    }
+
+    @Test
+    public void testInvalidHeaderConfigs() {
+        for (String config : INVALID_HEADER_CONFIGS) {
+            assertInvalidHeaderConfig(config);
+        }
+    }
+
+    @Test
+    public void testValidHeaderConfigs() {
+        for (String config : VALID_HEADER_CONFIGS) {
+            assertValidHeaderConfig(config);
+        }
+    }
+
+    private void assertInvalidHeaderConfig(String config) {
+        assertThrows(ConfigException.class, () -> WorkerConfig.validateHttpResponseHeaderConfig(config));
+    }
+
+    private void assertValidHeaderConfig(String config) {
+        WorkerConfig.validateHttpResponseHeaderConfig(config);
     }
 
     private Map<String, String> baseProps() {

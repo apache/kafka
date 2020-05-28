@@ -362,6 +362,7 @@
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
+      <allow pkg="org.eclipse.jetty.util" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />

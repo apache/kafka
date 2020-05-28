@@ -38,6 +38,9 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         self.security_config = SecurityConfig(self.context, security_protocol)
         self.stop_timeout_sec = 30
 
+        for node in self.nodes:
+            node.version = kafka.nodes[0].version
+
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableLog4jAppender %d command: %s" % (idx, cmd))

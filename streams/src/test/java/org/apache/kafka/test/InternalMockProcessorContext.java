@@ -69,6 +69,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private TaskType taskType = TaskType.ACTIVE;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -353,7 +354,11 @@ public class InternalMockProcessorContext
 
     @Override
     public TaskType taskType() {
-        return TaskType.ACTIVE;
+        return taskType;
+    }
+
+    public void setTaskType(final TaskType taskType) {
+        this.taskType = taskType;
     }
 
     @Override
