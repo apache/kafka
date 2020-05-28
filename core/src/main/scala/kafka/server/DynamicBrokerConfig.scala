@@ -793,6 +793,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
       currentReporters += reporter.getClass.getName -> reporter
     }
     server.notifyClusterListeners(reporters.asScala)
+    server.notifyMetricsReporters(reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {

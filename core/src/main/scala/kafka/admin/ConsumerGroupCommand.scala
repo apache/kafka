@@ -124,7 +124,7 @@ object ConsumerGroupCommand extends Logging {
                                                 consumerId: Option[String], host: Option[String],
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
-  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
+  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
@@ -249,20 +249,27 @@ object ConsumerGroupCommand extends Logging {
       for ((groupId, (state, assignments)) <- members) {
         if (shouldPrintMemberState(groupId, state, size(assignments))) {
           // find proper columns width
-          var (maxGroupLen, maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15, 15)
+          var (maxGroupLen, maxConsumerIdLen, maxGroupInstanceIdLen, maxHostLen, maxClientIdLen, includeGroupInstanceId) = (15, 15, 17, 15, 15, false)
           assignments match {
             case None => // do nothing
             case Some(memberAssignments) =>
               memberAssignments.foreach { memberAssignment =>
                 maxGroupLen = Math.max(maxGroupLen, memberAssignment.group.length)
                 maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length)
+                maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length)
                 maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
                 maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
+                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.length > 0
               }
           }
 
-          print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
-            .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+          if (includeGroupInstanceId) {
+            print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxGroupInstanceIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
+                .format("GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+          } else {
+            print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
+                .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+          }
           if (verbose)
             print(s"%s".format("ASSIGNMENT"))
           println()
@@ -271,8 +278,14 @@ object ConsumerGroupCommand extends Logging {
             case None => // do nothing
             case Some(memberAssignments) =>
               memberAssignments.foreach { memberAssignment =>
-                print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
-                  memberAssignment.group, memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
+                if (includeGroupInstanceId) {
+                  print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxGroupInstanceIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
+                    memberAssignment.group, memberAssignment.consumerId, memberAssignment.groupInstanceId, memberAssignment.host,
+                    memberAssignment.clientId, memberAssignment.numPartitions))
+                } else {
+                  print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
+                    memberAssignment.group, memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
+                }
                 if (verbose) {
                   val partitions = memberAssignment.assignment match {
                     case List() => MISSING_COLUMN_VALUE
@@ -559,6 +572,7 @@ object ConsumerGroupCommand extends Logging {
             consumer.consumerId,
             consumer.host,
             consumer.clientId,
+            consumer.groupInstanceId.orElse(""),
             consumer.assignment.topicPartitions.size(),
             if (verbose) consumer.assignment.topicPartitions.asScala.toList else List()
           )).toList

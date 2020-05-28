@@ -53,8 +53,12 @@ import org.junit.Test;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.Set;
+import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -130,6 +134,19 @@ public class ProcessorTopologyTest {
         assertNotNull(processorTopology.source("topic-3"));
 
         assertEquals(processorTopology.source("topic-2"), processorTopology.source("topic-3"));
+    }
+
+    @Test
+    public void shouldGetTerminalNodes() {
+        topology.addSource("source-1", "topic-1");
+        topology.addSource("source-2", "topic-2", "topic-3");
+        topology.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        topology.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1", "source-2");
+        topology.addSink("sink-1", "topic-3", "processor-1");
+
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
     }
 
     @Test
@@ -227,6 +244,57 @@ public class ProcessorTopologyTest {
         assertTrue(outputTopic1.isEmpty());
 
         final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
+    public void testDrivingConnectedStateStoreTopology() {
+        driver = new TopologyTestDriver(createConnectedStateStoreTopology("connectedStore"), props);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
+        final TestOutputTopic<Integer, String> outputTopic1 =
+            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        inputTopic.pipeInput("key2", "value2");
+        inputTopic.pipeInput("key3", "value3");
+        inputTopic.pipeInput("key1", "value4");
+        assertTrue(outputTopic1.isEmpty());
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
+    public void testDrivingConnectedStateStoreInDifferentProcessorsTopology() {
+        final String storeName = "connectedStore";
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        topology
+            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addSource("source2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
+            .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
+            .addProcessor("processor2", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
+
+        driver = new TopologyTestDriver(topology, props);
+
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
+        final TestOutputTopic<Integer, String> outputTopic1 =
+            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        inputTopic.pipeInput("key2", "value2");
+        inputTopic.pipeInput("key3", "value3");
+        inputTopic.pipeInput("key1", "value4");
+        assertTrue(outputTopic1.isEmpty());
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
         assertEquals("value4", store.get("key1"));
         assertEquals("value2", store.get("key2"));
         assertEquals("value3", store.get("key3"));
@@ -584,6 +652,14 @@ public class ProcessorTopologyTest {
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    private Topology createConnectedStateStoreTopology(final String storeName) {
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        return topology
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor");
+    }
+
     private Topology createInternalRepartitioningTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
             .addSink("sink0", THROUGH_TOPIC_1, "source")
@@ -756,6 +832,21 @@ public class ProcessorTopologyTest {
 
     private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
         return () -> processor;
+    }
+
+    private <K, V> ProcessorSupplier<K, V> defineWithStores(final Supplier<Processor<K, V>> supplier,
+                                                            final Set<StoreBuilder<?>> stores) {
+        return new ProcessorSupplier<K, V>() {
+            @Override
+            public Processor<K, V> get() {
+                return supplier.get();
+            }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return stores;
+            }
+        };
     }
 
     /**

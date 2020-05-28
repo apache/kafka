@@ -38,6 +38,7 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -71,9 +72,13 @@ public class JmxReporter implements MetricsReporter {
 
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
+     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
+     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
+     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
      */
+    @Deprecated
     public JmxReporter(String prefix) {
-        this.prefix = prefix;
+        this.prefix = prefix != null ? prefix : "";
     }
 
     @Override
@@ -316,6 +321,18 @@ public class JmxReporter implements MetricsReporter {
         } catch (PatternSyntaxException e) {
             throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
                                       + ".(whitelist/blacklist) is not a valid regular expression");
+        }
+    }
+
+    @Override
+    public void contextChange(MetricsContext metricsContext) {
+        String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
+        Objects.requireNonNull(namespace);
+        synchronized (LOCK) {
+            if (!mbeans.isEmpty()) {
+                throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
+            }
+            prefix = namespace;
         }
     }
 }
