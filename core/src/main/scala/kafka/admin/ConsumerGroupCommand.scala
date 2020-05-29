@@ -41,26 +41,35 @@ import org.apache.kafka.common.protocol.Errors
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 import org.apache.kafka.common.requests.ListOffsetResponse
+import org.apache.kafka.common.ConsumerGroupState
+import joptsimple.OptionException
 
 object ConsumerGroupCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
+
     val opts = new ConsumerGroupCommandOptions(args)
+    try {
+      opts.checkArgs()
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
+      // should have exactly one action
+      val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
+      if (actions != 1)
+        CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
-    // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
-    if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
+      run(opts)
+    } catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
+    }
+  }
 
-    opts.checkArgs()
-
+  def run(opts: ConsumerGroupCommandOptions): Unit = {
     val consumerGroupService = new ConsumerGroupService(opts)
-
     try {
       if (opts.options.has(opts.listOpt))
-        consumerGroupService.listGroups().foreach(println(_))
+        consumerGroupService.listGroups()
       else if (opts.options.has(opts.describeOpt))
         consumerGroupService.describeGroups()
       else if (opts.options.has(opts.deleteOpt))
@@ -77,11 +86,22 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupService.deleteOffsets()
       }
     } catch {
+      case e: IllegalArgumentException =>
+        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
       case e: Throwable =>
         printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
     } finally {
       consumerGroupService.close()
     }
+  }
+
+  def consumerGroupStatesFromString(input: String): Set[ConsumerGroupState] = {
+    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet
+    if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
+      val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
+    }
+    parsedStates
   }
 
   val MISSING_COLUMN_VALUE = "-"
@@ -178,10 +198,42 @@ object ConsumerGroupCommand extends Logging {
       } else None
     }
 
-    def listGroups(): List[String] = {
+    def listGroups(): Unit = {
+      if (opts.options.has(opts.stateOpt)) {
+        val stateValue = opts.options.valueOf(opts.stateOpt)
+        val states = if (stateValue == null || stateValue.isEmpty)
+          Set[ConsumerGroupState]()
+        else
+          consumerGroupStatesFromString(stateValue)
+        val listings = listConsumerGroupsWithState(states)
+        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+      } else
+        listConsumerGroups().foreach(println(_))
+    }
+
+    def listConsumerGroups(): List[String] = {
       val result = adminClient.listConsumerGroups(withTimeoutMs(new ListConsumerGroupsOptions))
       val listings = result.all.get.asScala
       listings.map(_.groupId).toList
+    }
+
+    def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
+      val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
+      listConsumerGroupsOptions.inStates(states.asJava)
+      val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
+      result.all.get.asScala.toList
+    }
+
+    private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
+      // find proper columns width
+      var maxGroupLen = 15
+      for ((groupId, state) <- groupsAndStates) {
+        maxGroupLen = Math.max(maxGroupLen, groupId.length)
+      }
+      println(s"%${-maxGroupLen}s %s".format("GROUP", "STATE"))
+      for ((groupId, state) <- groupsAndStates) {
+        println(s"%${-maxGroupLen}s %s".format(groupId, state))
+      }
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
@@ -317,7 +369,7 @@ object ConsumerGroupCommand extends Logging {
 
     def describeGroups(): Unit = {
       val groupIds =
-        if (opts.options.has(opts.allGroupsOpt)) listGroups()
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
         else opts.options.valuesOf(opts.groupOpt).asScala
       val membersOptPresent = opts.options.has(opts.membersOpt)
       val stateOptPresent = opts.options.has(opts.stateOpt)
@@ -381,7 +433,7 @@ object ConsumerGroupCommand extends Logging {
 
     def resetOffsets(): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
       val groupIds =
-        if (opts.options.has(opts.allGroupsOpt)) listGroups()
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
         else opts.options.valuesOf(opts.groupOpt).asScala
 
       val consumerGroups = adminClient.describeConsumerGroups(
@@ -869,7 +921,7 @@ object ConsumerGroupCommand extends Logging {
 
     def deleteGroups(): Map[String, Throwable] = {
       val groupIds =
-        if (opts.options.has(opts.allGroupsOpt)) listGroups()
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
         else opts.options.valuesOf(opts.groupOpt).asScala
 
       val groupsToDelete = adminClient.deleteConsumerGroups(
@@ -953,8 +1005,11 @@ object ConsumerGroupCommand extends Logging {
     val OffsetsDoc = "Describe the group and list all topic partitions in the group along with their offset lag. " +
       "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
-    val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
+    val StateDoc = "When specified with '--describe', includes the state of the group." + nl +
+      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state" + nl +
+      "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
+      "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
+      "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
     val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
@@ -1018,9 +1073,9 @@ object ConsumerGroupCommand extends Logging {
     val offsetsOpt = parser.accepts("offsets", OffsetsDoc)
                            .availableIf(describeOpt)
     val stateOpt = parser.accepts("state", StateDoc)
-                         .availableIf(describeOpt)
-
-    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+                         .availableIf(describeOpt, listOpt)
+                         .withOptionalArg()
+                         .ofType(classOf[String])
 
     options = parser.parse(args : _*)
 
@@ -1038,6 +1093,14 @@ object ConsumerGroupCommand extends Logging {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
           CommandLineUtils.printUsageAndDie(parser,
             s"Option $describeOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        val mutuallyExclusiveOpts: Set[OptionSpec[_]] = Set(membersOpt, offsetsOpt, stateOpt)
+        if (mutuallyExclusiveOpts.toList.map(o => if (options.has(o)) 1 else 0).sum > 1) {
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt takes at most one of these options: ${mutuallyExclusiveOpts.mkString(", ")}")
+        }
+        if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt does not take a value for $stateOpt")
       } else {
         if (options.has(timeoutMsOpt))
           debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")
