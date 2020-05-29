@@ -44,10 +44,9 @@ public class CommonClientConfigs {
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups."
                                                        + " If set to <code>use_all_dns_ips</code>, attempt to connect to all IP addresses returned by the lookup and use the first one that connects successfully."
-                                                       + " If set to <code>use_first_dns_ip</code>, connect to the first IP address returned by the lookup, even if the lookup returns multiple IP addresses."
+                                                       + " If set to <code>default</code>, connect to the first IP address returned by the lookup, even if the lookup returns multiple IP addresses."
                                                        + " If set to <code>resolve_canonical_bootstrap_servers_only</code>, each entry will be resolved and expanded into a list of canonical names."
-                                                       + " If set to <code>default</code>, which is the default value for this configuration, behaves like <code>use_all_dns_ips</code>."
-                                                       + " Note that <code>use_first_dns_ip</code> is deprecated and will be removed in future release.";
+                                                       + " Note that <code>default</code> is deprecated and will be removed in future release.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";

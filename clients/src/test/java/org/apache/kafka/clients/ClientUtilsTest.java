@@ -102,17 +102,12 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
+        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
         assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
-    }
-
-    @Test
-    public void testResolveDnsLookupFirstIp() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_FIRST_DNS_IP).size());
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {

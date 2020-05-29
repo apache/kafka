@@ -109,9 +109,9 @@ public final class ClientUtils {
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
         switch (clientDnsLookup) {
-            case USE_FIRST_DNS_IP:
-                return Collections.singletonList(addresses[0]);
             case DEFAULT:
+                log.warn("Configuration 'client.dns.lookup' value 'default' is deprecated and will be removed in the future version.")
+                return Collections.singletonList(addresses[0]);
             case USE_ALL_DNS_IPS:
             case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
                 return filterPreferredAddresses(addresses);
