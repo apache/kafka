@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import java.util.OptionalInt;
+import java.util.Set;
 
 /**
  * Encapsulate election state stored on disk after every state change.
@@ -25,29 +26,32 @@ public class ElectionState {
     public final int epoch;
     private final OptionalInt leaderIdOpt;
     private final OptionalInt votedIdOpt;
+    private final Set<Integer> voters;
 
     ElectionState(int epoch,
                   OptionalInt leaderIdOpt,
-                  OptionalInt votedIdOpt) {
+                  OptionalInt votedIdOpt,
+                  Set<Integer> voters) {
         this.epoch = epoch;
         this.leaderIdOpt = leaderIdOpt;
         this.votedIdOpt = votedIdOpt;
+        this.voters = voters;
     }
 
-    public static ElectionState withVotedCandidate(int epoch, int votedId) {
+    public static ElectionState withVotedCandidate(int epoch, int votedId, Set<Integer> voters) {
         if (votedId < 0)
             throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId));
+        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), voters);
     }
 
-    public static ElectionState withElectedLeader(int epoch, int leaderId) {
+    public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
         if (leaderId < 0)
             throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
-        return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty());
+        return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty(), voters);
     }
 
-    public static ElectionState withUnknownLeader(int epoch) {
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty());
+    public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {
+        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty(), voters);
     }
 
     public boolean isLeader(int nodeId) {
@@ -72,6 +76,10 @@ public class ElectionState {
         if (!votedIdOpt.isPresent())
             throw new IllegalStateException("Attempt to access nil votedId");
         return votedIdOpt.getAsInt();
+    }
+
+    public Set<Integer> voters() {
+        return voters;
     }
 
     public boolean hasLeader() {

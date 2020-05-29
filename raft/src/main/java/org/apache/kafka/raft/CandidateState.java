@@ -131,7 +131,7 @@ public class CandidateState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withVotedCandidate(epoch, localId);
+        return ElectionState.withVotedCandidate(epoch, localId, voteStates.keySet());
     }
 
     @Override

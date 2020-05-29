@@ -134,8 +134,9 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
+            Set<Integer> voters = cluster.voters();
             // Start with node 0 as the leader
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 0));
+            cluster.initializeElection(ElectionState.withElectedLeader(2, 0, voters));
             cluster.startAll();
             assertTrue(cluster.hasConsistentLeader());
 
@@ -186,7 +187,8 @@ public class RaftEventSimulationTest {
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
             // Start with node 1 as the leader
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 0));
+            Set<Integer> voters = cluster.voters();
+            cluster.initializeElection(ElectionState.withElectedLeader(2, 0, voters));
             cluster.startAll();
             assertTrue(cluster.hasConsistentLeader());
 
@@ -243,7 +245,8 @@ public class RaftEventSimulationTest {
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
             // Start with node 1 as the leader
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 1));
+            Set<Integer> voters = cluster.voters();
+            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
             cluster.startAll();
             assertTrue(cluster.hasConsistentLeader());
 
@@ -284,7 +287,8 @@ public class RaftEventSimulationTest {
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
             // Start with node 1 as the leader
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 1));
+            Set<Integer> voters = cluster.voters();
+            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
             cluster.startAll();
             assertTrue(cluster.hasConsistentLeader());
 
@@ -625,6 +629,7 @@ public class RaftEventSimulationTest {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
+
             QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
             MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
 

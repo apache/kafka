@@ -51,7 +51,7 @@ public class SimpleKeyValueStoreTest {
         MockTime time = new MockTime();
         MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
 
-        store.writeElectionState(ElectionState.withElectedLeader(epoch, localId));
+        store.writeElectionState(ElectionState.withElectedLeader(epoch, localId, Collections.singleton(localId)));
 
         ReplicatedLog log = new MockLog();
         NetworkChannel channel = new MockNetworkChannel();

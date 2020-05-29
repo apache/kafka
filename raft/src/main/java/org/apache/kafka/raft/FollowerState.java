@@ -18,18 +18,21 @@ package org.apache.kafka.raft;
 
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 
 public class FollowerState implements EpochState {
     private final int epoch;
     private OptionalInt leaderIdOpt;
     private OptionalInt votedIdOpt;
     private OptionalLong highWatermark;
+    private final Set<Integer> voters;
 
-    public FollowerState(int epoch) {
+    public FollowerState(int epoch, Set<Integer> voters) {
         this.epoch = epoch;
         this.leaderIdOpt = OptionalInt.empty();
         this.votedIdOpt = OptionalInt.empty();
         this.highWatermark = OptionalLong.empty();
+        this.voters = voters;
     }
 
     @Override
@@ -40,10 +43,10 @@ public class FollowerState implements EpochState {
     @Override
     public ElectionState election() {
         if (votedIdOpt.isPresent())
-            return ElectionState.withVotedCandidate(epoch, votedIdOpt.getAsInt());
+            return ElectionState.withVotedCandidate(epoch, votedIdOpt.getAsInt(), voters);
         if (leaderIdOpt.isPresent())
-            return ElectionState.withElectedLeader(epoch, leaderIdOpt.getAsInt());
-        return ElectionState.withUnknownLeader(epoch);
+            return ElectionState.withElectedLeader(epoch, leaderIdOpt.getAsInt(), voters);
+        return ElectionState.withUnknownLeader(epoch, voters);
     }
 
     @Override

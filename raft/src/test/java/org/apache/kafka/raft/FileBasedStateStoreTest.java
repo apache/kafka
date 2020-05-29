@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -23,6 +24,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.OptionalInt;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -40,13 +42,15 @@ public class FileBasedStateStoreTest {
 
         final int leaderId = 1;
         final int epoch = 2;
-        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId));
+        Set<Integer> voters = Utils.mkSet(leaderId);
+
+        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
         assertTrue(stateFile.exists());
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId), stateStore.readElectionState());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), stateStore.readElectionState());
 
         // Start another state store and try to read from the same file.
         final FileBasedStateStore secondStateStore = new FileBasedStateStore(stateFile);
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId), secondStateStore.readElectionState());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), secondStateStore.readElectionState());
     }
 
     @Test
@@ -65,21 +69,22 @@ public class FileBasedStateStoreTest {
         final int epoch = 2;
         final int leaderId = 1;
         final int votedId = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, votedId);
 
-        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId));
-
-        assertEquals(stateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.of(leaderId), OptionalInt.empty()));
-
-        stateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId));
+        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
 
         assertEquals(stateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.empty(), OptionalInt.of(votedId)));
+            OptionalInt.of(leaderId), OptionalInt.empty(), voters));
+
+        stateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+
+        assertEquals(stateStore.readElectionState(), new ElectionState(epoch,
+            OptionalInt.empty(), OptionalInt.of(votedId), voters));
 
         final FileBasedStateStore rebootStateStore = new FileBasedStateStore(stateFile);
 
         assertEquals(rebootStateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.empty(), OptionalInt.of(votedId)));
+            OptionalInt.empty(), OptionalInt.of(votedId), voters));
 
         stateStore.clear();
         assertFalse(stateFile.exists());
