@@ -248,7 +248,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     public String memberId() {
-        Generation generation = generation();
+        Generation generation = generationIfStable();
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -261,7 +261,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the generation ID or -1 if no generation is defined
      */
     public int generationId() {
-        Generation generation = super.generation();
+        Generation generation = super.generationIfStable();
         return generation == null ? OffsetCommitRequest.DEFAULT_GENERATION_ID : generation.generationId;
     }
 
