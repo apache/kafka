@@ -126,7 +126,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
-        SortedSet<TopicPartition> unassignedPartitions = processTopicPartitions(partitionsPerTopic);
+        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
 
         // Each consumer should end up in exactly one of the below
         List<String> unfilledMembers = new LinkedList<>();
@@ -218,7 +218,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return assignment;
     }
 
-    private SortedSet<TopicPartition> processTopicPartitions(Map<String, Integer> partitionsPerTopic) {
+    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
         SortedSet<TopicPartition> allPartitions =
             new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
         for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
