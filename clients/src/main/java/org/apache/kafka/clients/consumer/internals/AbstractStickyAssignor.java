@@ -86,7 +86,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                           Set<String> subscribedTopics) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
-        int maxGeneration = -1;
+        int maxGeneration = DEFAULT_GENERATION;
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
@@ -102,24 +102,27 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             MemberData memberData = memberData(subscription);
 
-            // If this member's generation is lower than the current max, or it is not present while
-            // other generations are, consider it as having lost its owned partition
-            if (!memberData.generation.isPresent() && maxGeneration > 0
-                    || memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
-                // just initialize with an empty assignment
-                consumerToOwnedPartitions.put(consumer, new ArrayList<>());
-            } else {
+            List<TopicPartition> ownedPartitions = new ArrayList<>();
+            consumerToOwnedPartitions.put(consumer, ownedPartitions);
+
+            // Only consider this consumer's owned partitions as valid if it is a member of the current highest
+            // generation, or it's generation is not present but we have not seen any known generation so far
+            if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
+                || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
+
+                membersOfCurrentHighestGeneration.add(consumer);
+                for (final TopicPartition tp : memberData.partitions) {
+                    if (subscribedTopics.contains(tp.topic())) {
+                        ownedPartitions.add(tp);
+                    }
+                }
+
                 // If the current member's generation is higher, all the previous owned partitions are invalid
                 if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
                     membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
                     membersOfCurrentHighestGeneration.clear();
                     maxGeneration = memberData.generation.get();
                 }
-                membersOfCurrentHighestGeneration.add(consumer);
-                List<TopicPartition> ownedPartitions = memberData.partitions.stream()
-                    .filter(tp -> subscribedTopics.contains(tp.topic()))
-                    .collect(Collectors.toList());
-                consumerToOwnedPartitions.put(consumer, ownedPartitions);
             }
         }
 
