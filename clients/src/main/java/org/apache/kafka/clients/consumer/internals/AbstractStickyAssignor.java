@@ -469,79 +469,17 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                 Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
         List<TopicPartition> sortedPartitions = new ArrayList<>();
 
-        if (!isFreshAssignment && areSubscriptionsIdentical(partition2AllPotentialConsumers, consumer2AllPotentialPartitions)) {
-            // if this is a reassignment and the subscriptions are identical (all consumers can consumer from all topics)
-            // then we just need to simply list partitions in a round robin fashion (from consumers with
-            // most assigned partitions to those with least)
-            Map<String, List<TopicPartition>> assignments = deepCopy(currentAssignment);
-            for (Entry<String, List<TopicPartition>> entry: assignments.entrySet()) {
-                List<TopicPartition> toRemove = new ArrayList<>();
-                for (TopicPartition partition: entry.getValue())
-                    if (!partition2AllPotentialConsumers.keySet().contains(partition))
-                        toRemove.add(partition);
-                for (TopicPartition partition: toRemove)
-                    entry.getValue().remove(partition);
-            }
-            TreeSet<String> sortedConsumers = new TreeSet<>(new SubscriptionComparator(assignments));
-            sortedConsumers.addAll(assignments.keySet());
-            // at this point, sortedConsumers contains an ascending-sorted list of consumers based on
-            // how many valid partitions are currently assigned to them
+        // an ascending sorted set of topic partitions based on how many consumers can potentially use them
+        TreeSet<TopicPartition> sortedAllPartitions = new TreeSet<>(new PartitionComparator(partition2AllPotentialConsumers));
+        sortedAllPartitions.addAll(partition2AllPotentialConsumers.keySet());
 
-            while (!sortedConsumers.isEmpty()) {
-                // take the consumer with the most partitions
-                String consumer = sortedConsumers.pollLast();
-                // currently assigned partitions to this consumer
-                List<TopicPartition> remainingPartitions = assignments.get(consumer);
-                // partitions that were assigned to a different consumer last time
-                List<TopicPartition> prevPartitions = new ArrayList<>(partitionsWithADifferentPreviousAssignment);
-                // from partitions that had a different consumer before, keep only those that are
-                // assigned to this consumer now
-                prevPartitions.retainAll(remainingPartitions);
-                if (!prevPartitions.isEmpty()) {
-                    // if there is a partition of this consumer that was assigned to another consumer before
-                    // mark it as good options for reassignment
-                    TopicPartition partition = prevPartitions.remove(0);
-                    remainingPartitions.remove(partition);
-                    sortedPartitions.add(partition);
-                    sortedConsumers.add(consumer);
-                } else if (!remainingPartitions.isEmpty()) {
-                    // otherwise, mark any other one of the current partitions as a reassignment candidate
-                    sortedPartitions.add(remainingPartitions.remove(0));
-                    sortedConsumers.add(consumer);
-                }
-            }
+        while (!sortedAllPartitions.isEmpty())
+            sortedPartitions.add(sortedAllPartitions.pollFirst());
 
-            for (TopicPartition partition: partition2AllPotentialConsumers.keySet()) {
-                if (!sortedPartitions.contains(partition))
-                    sortedPartitions.add(partition);
-            }
-
-        } else {
-            // an ascending sorted set of topic partitions based on how many consumers can potentially use them
-            TreeSet<TopicPartition> sortedAllPartitions = new TreeSet<>(new PartitionComparator(partition2AllPotentialConsumers));
-            sortedAllPartitions.addAll(partition2AllPotentialConsumers.keySet());
-
-            while (!sortedAllPartitions.isEmpty())
-                sortedPartitions.add(sortedAllPartitions.pollFirst());
-        }
 
         return sortedPartitions;
     }
-
-    /**
-     * @param partition2AllPotentialConsumers a mapping of partitions to their potential consumers
-     * @param consumer2AllPotentialPartitions a mapping of consumers to potential partitions they can consumer from
-     * @return true if potential consumers of partitions are the same, and potential partitions consumers can
-     * consumer from are the same too
-     */
-    private boolean areSubscriptionsIdentical(Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-        Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
-        if (!hasIdenticalListElements(partition2AllPotentialConsumers.values()))
-            return false;
-
-        return hasIdenticalListElements(consumer2AllPotentialPartitions.values());
-    }
-
+    
     /**
      * The assignment should improve the overall balance of the partition assignments to consumers.
      */
