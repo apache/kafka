@@ -581,7 +581,16 @@ public class SslTransportLayerTest {
 
     @Test
     public void testUnsupportedCipher() throws Exception {
-        String[] cipherSuites = ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites();
+        String[] cipherSuites;
+        if (Java.IS_JAVA11_COMPATIBLE) {
+            cipherSuites = new String[] {
+                "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites()[1]
+            };
+        } else {
+            cipherSuites = ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites();
+        }
+
         if (cipherSuites != null && cipherSuites.length > 1) {
             sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
             sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
@@ -633,7 +642,6 @@ public class SslTransportLayerTest {
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
 
-        //Note, that only some ciphers works out of the box. Others requires additional configuration.
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
         sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
