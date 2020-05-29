@@ -490,6 +490,15 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig.defaultProductionExceptionHandler(),
                 streamsMetrics
             );
+
+            final InternalProcessorContext context = new ProcessorContextImpl(
+                TASK_ID,
+                streamsConfig,
+                stateManager,
+                streamsMetrics,
+                cache
+            );
+
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByInputTopic.values()),
@@ -501,11 +510,12 @@ public class TopologyTestDriver implements Closeable {
                 cache,
                 mockWallClockTime,
                 stateManager,
-                recordCollector
+                recordCollector,
+                context
             );
             task.initializeIfNeeded();
             task.completeRestoration();
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
+            task.processorContext().setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,
                 -1,
@@ -991,7 +1001,7 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            final StateStore stateStore = ((ProcessorContextImpl) task.context()).stateManager().getStore(name);
+            final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);

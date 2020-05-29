@@ -176,6 +176,11 @@ public interface Task {
     void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology);
 
     /**
+     * Attempt a clean close but do not close the underlying state
+     */
+    void closeAndRecycleState();
+
+    /**
      * Revive a closed task to a created one; should never throw an exception
      */
     void revive();

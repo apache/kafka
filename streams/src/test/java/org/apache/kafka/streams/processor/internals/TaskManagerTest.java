@@ -978,9 +978,6 @@ public class TaskManagerTest {
         consumer.commitSync(expectedCommittedOffsets);
         expectLastCall().andThrow(new RuntimeException("Something went wrong!"));
 
-        changeLogReader.remove(singleton(t1p1));
-        expectLastCall();
-
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
@@ -1165,9 +1162,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
             .andReturn(asList(task00, task01, task02, task03)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
@@ -1249,9 +1243,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall().andThrow(new RuntimeException("whatever"));
@@ -1303,9 +1294,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall();
@@ -1468,9 +1456,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01, task02)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall().andThrow(new RuntimeException("whatever 0"));
@@ -2630,6 +2615,8 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
+        private InternalProcessorContext processorContext = mock(InternalProcessorContext.class);
+
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
@@ -2716,6 +2703,11 @@ public class TaskManagerTest {
 
         @Override
         public void closeDirty() {
+            transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void closeAndRecycleState() {
             transitionTo(State.CLOSED);
         }
 

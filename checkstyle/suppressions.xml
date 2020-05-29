@@ -143,7 +143,7 @@
               files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
-              files="(KTableImpl|StreamsPartitionAssignor|EosBetaUpgradeIntegrationTest).java"/>
+              files="(EosBetaUpgradeIntegrationTest|KTableImpl|TaskManager).java"/>
 
     <suppress checks="ParameterNumber"
               files="StreamTask.java"/>
@@ -166,12 +166,11 @@
     <suppress checks="CyclomaticComplexity"
               files="EosBetaUpgradeIntegrationTest.java"/>
 
-    <suppress checks="JavaNCSS"
-              files="StreamsPartitionAssignor.java"/>
-    <suppress checks="JavaNCSS"
-              files="EosBetaUpgradeIntegrationTest.java"/>
     <suppress checks="StaticVariableName"
               files="StreamsMetricsImpl.java"/>
+    
+    <suppress checks="JavaNCSS"
+              files="(EosBetaUpgradeIntegrationTest|StreamsPartitionAssignor|TaskManager).java"/>
 
     <suppress checks="NPathComplexity"
               files="(AssignorConfiguration|EosBetaUpgradeIntegrationTest|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>

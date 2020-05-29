@@ -39,13 +39,14 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final StreamsConfig config;
     private final StreamsMetricsImpl metrics;
     private final Serde<?> keySerde;
-    private final ThreadCache cache;
     private final Serde<?> valueSerde;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?> currentNode;
     private long currentSystemTimeMs;
+
     final StateManager stateManager;
+    protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,

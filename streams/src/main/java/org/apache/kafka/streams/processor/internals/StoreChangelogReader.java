@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -546,7 +547,7 @@ public class StoreChangelogReader implements ChangelogReader {
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
 
             try {
-                // first trigger the store's specific listener if its registered callback is also an lister,
+                // first trigger the store's specific listener if its registered callback is also an listener,
                 // then trigger the user registered global listener
                 final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
                 if (restoreCallback instanceof StateRestoreListener) {
@@ -811,17 +812,41 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    private RuntimeException invokeOnRestoreEnd(final TopicPartition partition,
+                                                final ChangelogMetadata changelogMetadata) {
+        // only trigger the store's specific listener to make sure we disable bulk loading before transition to standby
+        final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
+        final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
+        final String storeName = storeMetadata.store().name();
+        if (restoreCallback instanceof StateRestoreListener) {
+            try {
+                ((StateRestoreListener) restoreCallback).onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+            } catch (final RuntimeException e) {
+                return e;
+            }
+        }
+        return null;
+    }
+
     @Override
-    public void remove(final Collection<TopicPartition> revokedChangelogs) {
-        // Only changelogs that are initialized that been added to the restore consumer's assignment
+    public void unregister(final Collection<TopicPartition> revokedChangelogs,
+                           final boolean triggerOnRestoreEnd) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        // Only changelogs that are initialized have been added to the restore consumer's assignment
         final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();
 
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
             if (changelogMetadata != null) {
-                if (changelogMetadata.state() != ChangelogState.REGISTERED) {
+                if (triggerOnRestoreEnd && changelogMetadata.state().equals(ChangelogState.RESTORING)) {
+                    firstException.compareAndSet(null, invokeOnRestoreEnd(partition, changelogMetadata));
+                }
+
+                if (!changelogMetadata.state().equals(ChangelogState.REGISTERED)) {
                     revokedInitializedChangelogs.add(partition);
                 }
+
                 changelogMetadata.clear();
             } else {
                 log.debug("Changelog partition {} could not be found," +

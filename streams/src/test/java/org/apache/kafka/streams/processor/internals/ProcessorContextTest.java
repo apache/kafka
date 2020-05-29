@@ -52,13 +52,12 @@ public class ProcessorContextTest {
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
-            mock(StreamTask.class),
             streamsConfig,
-            mock(RecordCollector.class),
             stateManager,
             mock(StreamsMetricsImpl.class),
             mock(ThreadCache.class)
         );
+        ((InternalProcessorContext) context).transitionToActive(mock(StreamTask.class), null, null);
     }
 
     @Test

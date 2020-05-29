@@ -132,13 +132,15 @@ public class ProcessorContextImplTest {
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
-            mock(StreamTask.class),
             streamsConfig,
-            recordCollector,
             stateManager,
             mock(StreamsMetricsImpl.class),
             mock(ThreadCache.class)
         );
+
+        final StreamTask task = mock(StreamTask.class);
+        ((InternalProcessorContext) context).transitionToActive(task, null, null);
+        EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
 
         context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
             new HashSet<>(asList(
@@ -157,7 +159,8 @@ public class ProcessorContextImplTest {
             mock(TaskId.class),
             streamsConfig,
             stateManager,
-            mock(StreamsMetricsImpl.class)
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
         );
     }
 
@@ -375,7 +378,10 @@ public class ProcessorContextImplTest {
 
         recordCollector.send(null, key, value, null, 0, 42L, BYTES_KEY_SERIALIZER, BYTEARRAY_VALUE_SERIALIZER);
 
-        replay(recordCollector);
+        final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
+
+        replay(recordCollector, task);
+        context.transitionToActive(task, recordCollector, null);
         context.logChange("Store", key, value, 42L);
 
         verify(recordCollector);
