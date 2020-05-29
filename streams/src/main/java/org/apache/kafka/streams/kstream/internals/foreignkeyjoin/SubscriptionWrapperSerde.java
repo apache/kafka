@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
@@ -50,7 +51,7 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
     }
 
     private static class SubscriptionWrapperSerializer<K>
-        implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K> {
+        implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K, Void> {
 
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
@@ -63,9 +64,9 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
         }
 
         @Override
-        public void setIfUnset(final Serializer<K> defaultSerializer) {
+        public void setIfUnset(final Serializer<K> defaultKeySerializer, final Serializer<Void> defaultValueSerializer) {
             if (primaryKeySerializer == null) {
-                primaryKeySerializer = Objects.requireNonNull(defaultSerializer, "defaultSerializer cannot be null");
+                primaryKeySerializer = Objects.requireNonNull(defaultKeySerializer);
             }
         }
 
