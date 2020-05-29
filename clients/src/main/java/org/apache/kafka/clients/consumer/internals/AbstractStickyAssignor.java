@@ -176,7 +176,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // It's possible for a consumer to be at both min and max capacity if minQuota == maxQuota
                 if (consumerAssignment.size() == minQuota)
                     minCapacityMembers.add(consumer);
-                if (consumerAssignment.size() >= maxQuota)
+                if (consumerAssignment.size() == maxQuota)
                     maxCapacityMembers.add(consumer);
             }
         }
