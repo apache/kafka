@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
@@ -294,10 +293,6 @@ public final class AssignorConfiguration {
 
     public Admin adminClient() {
         return adminClient;
-    }
-
-    public int adminClientTimeout() {
-        return streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
     }
 
     public InternalTopicManager internalTopicManager() {
