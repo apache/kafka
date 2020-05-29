@@ -343,6 +343,18 @@ public final class Utils {
     }
 
     /**
+     * Cast {@code klass} to {@code base} and instantiate it.
+     * @param klass The class to instantiate
+     * @param base A know baseclass of klass.
+     * @param <T> the type of the base class
+     * @throws ClassCastException If {@code klass} is not a subclass of {@code base}.
+     * @return the new instance.
+     */
+    public static <T> T newInstance(Class<?> klass, Class<T> base) {
+        return Utils.newInstance(klass.asSubclass(base));
+    }
+
+    /**
      * Construct a new object using a class name and parameters.
      *
      * @param className                 The full name of the class to construct.

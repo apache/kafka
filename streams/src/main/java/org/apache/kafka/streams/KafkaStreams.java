@@ -92,7 +92,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsWithoutTimeout;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -1230,6 +1230,7 @@ public class KafkaStreams implements AutoCloseable {
      * of invocation to once every few seconds.
      *
      * @return map of store names to another map of partition to {@link LagInfo}s
+     * @throws StreamsException if the admin client request throws exception
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
@@ -1246,7 +1247,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
-        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsetsWithoutTimeout(allPartitions, adminClient);
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
 
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {
