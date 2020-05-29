@@ -172,28 +172,26 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
 
         Collections.sort(unfilledMembers);
-
         Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
-        Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
-        while (unfilledConsumerIter.hasNext()) {
-            String consumer = unfilledConsumerIter.next();
-            List<TopicPartition> consumerAssignment = assignment.get(consumer);
-            int remainingCapacity = minQuota - consumerAssignment.size();
-            while (remainingCapacity > 0) {
+
+        while (!unfilledMembers.isEmpty() && !unassignedPartitions.isEmpty()) {
+            Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
+
+            while (unfilledConsumerIter.hasNext()) {
+                String consumer = unfilledConsumerIter.next();
+                List<TopicPartition> consumerAssignment = assignment.get(consumer);
+
                 if (unassignedPartitionsIter.hasNext()) {
                     consumerAssignment.add(unassignedPartitionsIter.next());
-                    --remainingCapacity;
                     unassignedPartitionsIter.remove();
                 } else {
                     break;
                 }
-            }
-            if (remainingCapacity == 0) {
-                minCapacityMembers.add(consumer);
-                unfilledConsumerIter.remove();
-            }
-            if (unassignedPartitions.isEmpty()) {
-                break;
+
+                if (consumerAssignment.size() == minQuota) {
+                    minCapacityMembers.add(consumer);
+                    unfilledConsumerIter.remove();
+                }
             }
         }
 
