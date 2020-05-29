@@ -105,35 +105,4 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         return !allRevokedPartitions.isEmpty();
     }
-
-    @Test
-    public void testCooperativeStickyAssignor() {
-        final int NUM_CONSUMERS = 2100;
-        final int NUM_PARTITIONS_PER_TOPIC = 2100;
-        final int NUM_TOPICS = 1;
-
-        List<String> allTopics = new ArrayList<>();
-        Map<String, Subscription> subscriptions = new HashMap<>();
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-
-        assignor = new CooperativeStickyAssignor();
-
-        for (int i = 0; i < NUM_TOPICS; ++i) {
-            final String topicName = topic + "-" + i;
-            partitionsPerTopic.put(topicName, NUM_PARTITIONS_PER_TOPIC);
-            allTopics.add(topicName);
-        }
-
-        for (int i = 0; i < NUM_CONSUMERS; ++i) {
-            final Subscription subscription = new Subscription(allTopics, null);
-            subscriptions.put(consumerId + "-" + i, subscription);
-        }
-        long startTime = System.currentTimeMillis();
-
-        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-
-        long endTime = System.currentTimeMillis();
-
-        System.out.println("Total time to run was " + (endTime - startTime));
-    }
 }

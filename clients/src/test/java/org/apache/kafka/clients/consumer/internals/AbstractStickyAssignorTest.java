@@ -38,7 +38,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public abstract class AbstractStickyAssignorTest {
-
     protected AbstractStickyAssignor assignor;
     protected String consumerId = "consumer";
     protected Map<String, Subscription> subscriptions;
@@ -145,8 +144,6 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -238,8 +235,8 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic, 0), tp(topic, 2)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
 
@@ -555,7 +552,6 @@ public abstract class AbstractStickyAssignorTest {
         }
     }
 
-
     @Test
     public void testAssignmentUpdatedForDeletedTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -580,35 +576,6 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
         assertEquals(assignment.size(), 1);
         assertTrue(assignment.get(consumerId).isEmpty());
-    }
-
-    @Test
-    public void testConflictingPreviousAssignments() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 2);
-        subscriptions.put(consumer1, new Subscription(topics(topic)));
-        subscriptions.put(consumer2, new Subscription(topics(topic)));
-
-        TopicPartition tp0 = new TopicPartition(topic, 0);
-        TopicPartition tp1 = new TopicPartition(topic, 1);
-
-        // both c1 and c2 have partition 1 assigned to them in generation 1
-        List<TopicPartition> c1partitions0 = partitions(tp0, tp1);
-        List<TopicPartition> c2partitions0 = partitions(tp0, tp1);
-        subscriptions.put(consumer1, buildSubscription(topics(topic), c1partitions0));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), c2partitions0));
-
-        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        List<TopicPartition> c1partitions = assignment.get(consumer1);
-        List<TopicPartition> c2partitions = assignment.get(consumer2);
-
-        assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1);
-        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     @Test

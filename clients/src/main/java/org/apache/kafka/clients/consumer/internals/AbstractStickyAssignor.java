@@ -70,11 +70,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
-        Set<String> subscriptionSet = new HashSet<>();
-        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions, subscriptionSet)) {
+        Set<String> subscribedTopics = new HashSet<>();
+        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions, subscribedTopics)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
-            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions, subscriptionSet);
+            return constrainedAssign(partitionsPerTopic, subscribedTopics, consumerToOwnedPartitions);
         } else {
             log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
@@ -84,36 +84,40 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     private boolean allSubscriptionsEqual(Map<String, Subscription> subscriptions,
                                           Map<String, List<TopicPartition>> consumerToOwnedPartitions,
-                                          Set<String> subscriptionSet) {
+                                          Set<String> subscribedTopics) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
-        int maxGeneration = 0;
+        int maxGeneration = -1;
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             Subscription subscription = subscriptionEntry.getValue();
 
-            // initialize the subscriptionSet if this is the first subscription
-            if (subscriptionSet.isEmpty()) {
-                subscriptionSet.addAll(subscription.topics());
-            } else if (!(subscription.topics().size() == subscriptionSet.size()
-                && subscriptionSet.containsAll(subscription.topics()))) {
+            // initialize the subscribed topics set if this is the first subscription
+            if (subscribedTopics.isEmpty()) {
+                subscribedTopics.addAll(subscription.topics());
+            } else if (!(subscription.topics().size() == subscribedTopics.size()
+                && subscribedTopics.containsAll(subscription.topics()))) {
                 return false;
             }
 
             MemberData memberData = memberData(subscription);
-            if (!memberData.generation.isPresent() || memberData.generation.get() < maxGeneration) {
+
+            // If this member's generation is lower than the current max, or it is not present while
+            // other generations are, consider it as having lost its owned partition
+            if (!memberData.generation.isPresent() && maxGeneration > 0
+                    || memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
                 consumerToOwnedPartitions.put(consumer, new ArrayList<>());
             } else {
                 // If the current member's generation is higher, all the previous owned partitions are invalid
-                if (memberData.generation.get() > maxGeneration) {
+                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
                     membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
                     membersOfCurrentHighestGeneration.clear();
                     maxGeneration = memberData.generation.get();
                 }
                 membersOfCurrentHighestGeneration.add(consumer);
                 List<TopicPartition> ownedPartitions = memberData.partitions.stream()
-                    .filter(tp -> subscriptionSet.contains(tp.topic()))
+                    .filter(tp -> subscribedTopics.contains(tp.topic()))
                     .collect(Collectors.toList());
                 consumerToOwnedPartitions.put(consumer, ownedPartitions);
             }
@@ -126,17 +130,18 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
-                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions,
-                                                                final Set<String> subscriptionSet) {
-        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
+                                                                Set<String> subscribedTopics,
+                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic, subscribedTopics);
 
         // Each consumer should end up in exactly one of the below
         List<String> unfilledMembers = new LinkedList<>();
         Queue<String> maxCapacityMembers = new LinkedList<>();
         Queue<String> minCapacityMembers = new LinkedList<>();
 
-        int minQuota = (int) Math.floor(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
-        int maxQuota = (int) Math.ceil(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
+        int numberOfConsumers = consumerToOwnedPartitions.size();
+        int minQuota = (int) Math.floor(((double)unassignedPartitions.size()) / numberOfConsumers);
+        int maxQuota = (int) Math.ceil(((double)unassignedPartitions.size()) / numberOfConsumers);
 
         // initialize the assignment map with an empty array of size minQuota for all members
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
@@ -145,7 +150,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
-            ownedPartitions.retainAll(subscriptionSet);
 
             if (ownedPartitions.size() < minQuota) {
                 assignment.get(consumer).addAll(ownedPartitions);
@@ -159,7 +163,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 List<TopicPartition> assignmentPartitions = assignment.get(consumer);
                 Iterator<TopicPartition> ownedPartitionsIter = ownedPartitions.iterator();
                 for (int i = 0; i < maxQuota; ++i) {
-                    assignmentPartitions.add(ownedPartitionsIter.next());
+                    TopicPartition tp = ownedPartitionsIter.next();
+                    assignmentPartitions.add(tp);
+                    unassignedPartitions.remove(tp);
                 }
                 maxCapacityMembers.add(consumer);
             }
@@ -222,12 +228,16 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return assignment;
     }
 
-    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
+    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic,
+                                                         Set<String> subscribedTopics) {
         SortedSet<TopicPartition> allPartitions =
             new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
         for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
-            for (int i = 0; i < entry.getValue(); ++i) {
-                allPartitions.add(new TopicPartition(entry.getKey(), i));
+            String topic = entry.getKey();
+            if (subscribedTopics.contains(topic)) {
+                for (int i = 0; i < entry.getValue(); ++i) {
+                    allPartitions.add(new TopicPartition(topic, i));
+                }
             }
         }
         return allPartitions;
