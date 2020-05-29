@@ -18,8 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +26,6 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
 
 public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 

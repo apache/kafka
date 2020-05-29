@@ -50,6 +50,7 @@ public class StickyAssignorBenchmark {
 
     @Benchmark
     public void testCooperativeStickyAssignor() {
+        //WIP
         long startTime = System.currentTimeMillis();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         long endTime = System.currentTimeMillis();
