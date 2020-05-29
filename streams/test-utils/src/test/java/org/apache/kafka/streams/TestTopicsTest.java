@@ -21,8 +21,11 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
@@ -43,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -458,4 +462,35 @@ public class TestTopicsTest {
         assertThat(output, is(equalTo(expected)));
     }
 
+    @Test
+    public void testOutputTopicShouldPassRecordHeadersToDeserializer() {
+        final AtomicBoolean passedHeadersToKeyDeserializer = new AtomicBoolean(false);
+        final AtomicBoolean passedHeadersToValueDeserializer = new AtomicBoolean(false);
+
+        final Deserializer<String> keyDeserializer = new StringDeserializer() {
+            @Override
+            public String deserialize(String topic, Headers headers, byte[] data) {
+                passedHeadersToKeyDeserializer.set(true);
+                return deserialize(topic, data);
+            }
+        };
+        final Deserializer<Long> valueSerializer = new LongDeserializer() {
+            @Override
+            public Long deserialize(String topic, Headers headers, byte[] data) {
+                passedHeadersToValueDeserializer.set(true);
+                return deserialize(topic, data);
+            }
+        };
+
+        final TestInputTopic<Long, String> inputTopic =
+            testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<String, Long> outputTopic =
+            testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, keyDeserializer, valueSerializer);
+
+        inputTopic.pipeInput(new TestRecord<>(1L, "Hello"));
+        outputTopic.readRecord();
+
+        assertThat(passedHeadersToKeyDeserializer.get(), equalTo(true));
+        assertThat(passedHeadersToValueDeserializer.get(), equalTo(true));
+    }
 }
