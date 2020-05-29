@@ -88,8 +88,6 @@ public class InternalTopicsIntegrationTest {
         log.info("Verifying the internal topics for Connect");
         connect.assertions().assertTopicsExist(configTopic(), offsetTopic(), statusTopic());
         assertInternalTopicSettings();
-
-        connect.stop();
     }
 
     @Test

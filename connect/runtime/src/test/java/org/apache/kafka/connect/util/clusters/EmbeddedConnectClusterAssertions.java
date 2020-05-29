@@ -181,7 +181,7 @@ public class EmbeddedConnectClusterAssertions {
                                                      .collect(Collectors.toSet());
             return Optional.of(comp.apply(actualExistingTopics, topicNames));
         } catch (Exception e) {
-            log.error("Could not check config validation error count.", e);
+            log.error("Failed to describe the topic(s): {}.", topicNames, e);
             return Optional.empty();
         }
     }
@@ -223,7 +223,7 @@ public class EmbeddedConnectClusterAssertions {
                     && topicDesc.partitions().stream().allMatch(p -> p.replicas().size() >= replicas);
             return Optional.of(result);
         } catch (Exception e) {
-            log.error("Could not check config validation error count.", e);
+            log.error("Failed to describe the topic: {}.", topicName, e);
             return Optional.empty();
         }
     }
