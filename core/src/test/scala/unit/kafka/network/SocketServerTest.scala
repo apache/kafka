@@ -1811,7 +1811,8 @@ class SocketServerTest {
       /**
        * Process new results and return the results for the current poll if at least
        * `minPerPoll` results are available including any deferred results. Otherwise
-       * add the provided values to the deferred set and return an empty buffer.
+       * add the provided values to the deferred set and return an empty buffer. This allows
+       * tests to process `minPerPoll` elements as the results of a single poll iteration.
        */
       protected def update(newValues: mutable.Buffer[T]): mutable.Buffer[T] = {
         val currentPollValues = mutable.Buffer[T]()
@@ -1926,10 +1927,6 @@ class SocketServerTest {
         super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
 
-        // For each result type (completedReceives/completedSends/disconnected), defer the result to a subsequent poll()
-        // if `minPerPoll` results are not yet available. When sufficient results are available, all available results
-        // including previously deferred results are returned. This allows tests to process `minPerPoll` elements as the
-        // results of a single poll iteration.
         cachedCompletedReceives.updateResults()
         cachedCompletedSends.updateResults()
         cachedDisconnected.updateResults()
