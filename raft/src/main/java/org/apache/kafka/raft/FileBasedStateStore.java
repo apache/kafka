@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.raft.generated.QuorumStateData.Voter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,10 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.util.List;
 import java.util.OptionalInt;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Local file based quorum state store. It takes the JSON format of {@link QuorumStateData}
@@ -108,7 +112,9 @@ public class FileBasedStateStore implements QuorumStateStore {
             data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() :
                 OptionalInt.of(data.leaderId()),
             data.votedId() == NOT_VOTED ? OptionalInt.empty() :
-                OptionalInt.of(data.votedId()));
+                OptionalInt.of(data.votedId()),
+            data.currentVoters()
+                .stream().map(Voter::voterId).collect(Collectors.toSet()));
     }
 
     @Override
@@ -116,8 +122,14 @@ public class FileBasedStateStore implements QuorumStateStore {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(latest.epoch)
             .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
-            .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID);
+            .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID)
+            .setCurrentVoters(voters(latest.voters()));
         writeElectionStateToFile(stateFile, data);
+    }
+
+    private List<Voter> voters(Set<Integer> votersId) {
+        return votersId.stream().map(
+            voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList());
     }
 
     private void writeElectionStateToFile(final File stateFile, QuorumStateData state) throws IOException  {
