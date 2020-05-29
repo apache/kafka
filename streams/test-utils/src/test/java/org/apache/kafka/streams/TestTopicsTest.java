@@ -457,4 +457,5 @@ public class TestTopicsTest {
         final List<TestRecord<String, Long>> output = outputTopic.readRecordsToList();
         assertThat(output, is(equalTo(expected)));
     }
+
 }
