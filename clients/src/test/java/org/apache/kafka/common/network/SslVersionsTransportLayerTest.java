@@ -93,7 +93,7 @@ public class SslVersionsTransportLayerTest {
         String node = "0";
         selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
 
-        if (tlsServerProtocols.contains(tlsClientProtocols.get(0))) {
+        if (!Collections.disjoint(tlsServerProtocols, tlsClientProtocols)) {
             NetworkTestUtils.waitForChannelReady(selector, node);
 
             int msgSz = 1024 * 1024;

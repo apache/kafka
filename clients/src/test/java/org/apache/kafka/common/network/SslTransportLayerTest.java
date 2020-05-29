@@ -663,17 +663,19 @@ public class SslTransportLayerTest {
     public void testCiphersSuiteFailForServerTls12_ClientTls13() throws Exception {
         assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
-        String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+        String tls12CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+        String tls13CipherSuite = "TLS_AES_128_GCM_SHA256";
 
         sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.2"));
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(tls12CipherSuite));
         server = createEchoServer(SecurityProtocol.SSL);
 
         sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(tls13CipherSuite));
 
         checkAuthentiationFailed("0", "TLSv1.3");
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
