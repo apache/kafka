@@ -70,7 +70,7 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     // Following the cooperative rebalancing protocol requires removing partitions that must first be revoked from the assignment
     private void adjustAssignment(final Map<String, Subscription> subscriptions,
                                   final Map<String, List<TopicPartition>> assignments) {
-        // TODO-soph initialize these sets during assignment?
+        // TODO initialize these sets during assignment?
         Map<TopicPartition, String> allAddedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 

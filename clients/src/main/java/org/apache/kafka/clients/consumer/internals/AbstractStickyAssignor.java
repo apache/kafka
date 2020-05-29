@@ -271,8 +271,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             for (TopicPartition topicPartition: entry.getValue())
                 currentPartitionConsumer.put(topicPartition, entry.getKey());
 
-        List<TopicPartition> sortedPartitions = sortPartitions(
-            currentAssignment, prevAssignment.keySet(), isFreshAssignment, partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
+        List<TopicPartition> sortedPartitions = sortPartitions(partition2AllPotentialConsumers);
 
         // all partitions that need to be assigned (initially set to all partitions but adjusted in the following loop)
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
@@ -453,33 +452,15 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * Sort valid partitions so they are processed in the potential reassignment phase in the proper order
      * that causes minimal partition movement among consumers (hence honoring maximal stickiness)
      *
-     * @param currentAssignment the calculated assignment so far
-     * @param partitionsWithADifferentPreviousAssignment partitions that had a different consumer before (for every
-     *                                                   such partition there should also be a mapping in
-     *                                                   @currentAssignment to a different consumer)
-     * @param isFreshAssignment whether this is a new assignment, or a reassignment of an existing one
      * @param partition2AllPotentialConsumers a mapping of partitions to their potential consumers
-     * @param consumer2AllPotentialPartitions a mapping of consumers to potential partitions they can consumer from
-     * @return sorted list of valid partitions
+     * @return  an ascending sorted list of topic partitions based on how many consumers can potentially use them
      */
-    private List<TopicPartition> sortPartitions(Map<String, List<TopicPartition>> currentAssignment,
-                                                Set<TopicPartition> partitionsWithADifferentPreviousAssignment,
-                                                boolean isFreshAssignment,
-                                                Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-                                                Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
-        List<TopicPartition> sortedPartitions = new ArrayList<>();
-
-        // an ascending sorted set of topic partitions based on how many consumers can potentially use them
-        TreeSet<TopicPartition> sortedAllPartitions = new TreeSet<>(new PartitionComparator(partition2AllPotentialConsumers));
-        sortedAllPartitions.addAll(partition2AllPotentialConsumers.keySet());
-
-        while (!sortedAllPartitions.isEmpty())
-            sortedPartitions.add(sortedAllPartitions.pollFirst());
-
-
+    private List<TopicPartition> sortPartitions(Map<TopicPartition, List<String>> partition2AllPotentialConsumers) {
+        List<TopicPartition> sortedPartitions = new ArrayList<>(partition2AllPotentialConsumers.keySet());
+        Collections.sort(sortedPartitions, new PartitionComparator(partition2AllPotentialConsumers));
         return sortedPartitions;
     }
-    
+
     /**
      * The assignment should improve the overall balance of the partition assignments to consumers.
      */
