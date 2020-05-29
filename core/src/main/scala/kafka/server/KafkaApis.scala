@@ -2579,7 +2579,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val authorizedConfigs = adminManager.describeConfigs(authorizedResources.map { resource =>
       resource -> Option(describeConfigsRequest.configNames(resource)).map(_.asScala.toSet)
-    }.toMap, describeConfigsRequest.includeSynonyms)
+    }.toMap, describeConfigsRequest.includeSynonyms, describeConfigsRequest.includeDocumentation)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = configsAuthorizationApiError(resource)
       resource -> new DescribeConfigsResponse.Config(error, util.Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
