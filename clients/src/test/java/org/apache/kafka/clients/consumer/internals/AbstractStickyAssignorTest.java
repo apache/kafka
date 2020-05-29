@@ -238,8 +238,8 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic, 2), tp(topic, 1)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0), tp(topic, 2)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer2));
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
 

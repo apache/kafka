@@ -70,10 +70,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
-        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions)) {
+        Set<String> subscriptionSet = new HashSet<>();
+        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions, subscriptionSet)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
-            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
+            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions, subscriptionSet);
         } else {
             log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
@@ -82,17 +83,17 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     private boolean allSubscriptionsEqual(Map<String, Subscription> subscriptions,
-                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                          Set<String> subscriptionSet) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         int maxGeneration = 0;
-
-        final Set<String> subscriptionSet = new HashSet<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             Subscription subscription = subscriptionEntry.getValue();
 
+            // initialize the subscriptionSet if this is the first subscription
             if (subscriptionSet.isEmpty()) {
                 subscriptionSet.addAll(subscription.topics());
             } else if (!(subscription.topics().size() == subscriptionSet.size()
@@ -125,7 +126,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
-                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                                                final Set<String> subscriptionSet) {
         SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
 
         // Each consumer should end up in exactly one of the below
@@ -136,12 +138,14 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         int minQuota = (int) Math.floor(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
         int maxQuota = (int) Math.ceil(((double)unassignedPartitions.size()) / consumerToOwnedPartitions.size());
 
+        // initialize the assignment map with an empty array of size minQuota for all members
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
             consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
 
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
+            ownedPartitions.retainAll(subscriptionSet);
 
             if (ownedPartitions.size() < minQuota) {
                 assignment.get(consumer).addAll(ownedPartitions);
