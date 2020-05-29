@@ -251,7 +251,7 @@ object TopicCommand extends Logging {
         case e : ExecutionException =>
           if (e.getCause == null)
             throw e
-          if (!e.getCause.isInstanceOf[TopicExistsException] || !topic.ifTopicDoesntExist())
+          if (!(e.getCause.isInstanceOf[TopicExistsException] && topic.ifTopicDoesntExist()))
             throw e.getCause
       }
     }
@@ -265,23 +265,27 @@ object TopicCommand extends Logging {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
 
-      val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
-      adminClient.createPartitions(topics.map {topicName =>
-        if (topic.hasReplicaAssignment) {
-          val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
-          val newAssignment = {
-            val replicaMap = topic.replicaAssignment.get.drop(startPartitionId)
-            new util.ArrayList(replicaMap.map(p => p._2.asJava).asJavaCollection).asInstanceOf[util.List[util.List[Integer]]]
+      if (topics.nonEmpty) {
+        val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
+        adminClient.createPartitions(topics.map { topicName =>
+          if (topic.hasReplicaAssignment) {
+            val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
+            val newAssignment = {
+              val replicaMap = topic.replicaAssignment.get.drop(startPartitionId)
+              new util.ArrayList(replicaMap.map(p => p._2.asJava).asJavaCollection).asInstanceOf[util.List[util.List[Integer]]]
+            }
+            topicName -> NewPartitions.increaseTo(topic.partitions.get, newAssignment)
+          } else {
+            topicName -> NewPartitions.increaseTo(topic.partitions.get)
           }
-          topicName -> NewPartitions.increaseTo(topic.partitions.get, newAssignment)
-        } else {
-          topicName -> NewPartitions.increaseTo(topic.partitions.get)
-        }}.toMap.asJava).all().get()
+        }.toMap.asJava).all().get()
+      }
     }
 
-    private def listAllReassignments(): Map[TopicPartition, PartitionReassignment] = {
+    private def listAllReassignments(topicPartitions: util.Set[TopicPartition]): Map[TopicPartition, PartitionReassignment] = {
       try {
-        adminClient.listPartitionReassignments(new ListPartitionReassignmentsOptions).reassignments().get().asScala
+        adminClient.listPartitionReassignments(topicPartitions, new ListPartitionReassignmentsOptions)
+          .reassignments().get().asScala
       } catch {
         case e: ExecutionException =>
           e.getCause match {
@@ -297,33 +301,38 @@ object TopicCommand extends Logging {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
 
-      val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
-      val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
-      val reassignments = listAllReassignments()
-      val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
-      val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
+      if (topics.nonEmpty) {
+        val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
+        val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
+        val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+        val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
+        val topicPartitions = topicDescriptions
+          .flatMap(td => td.partitions.iterator().asScala.map(p => new TopicPartition(td.name(), p.partition())))
+          .toSet.asJava
+        val reassignments = listAllReassignments(topicPartitions)
 
-      for (td <- topicDescriptions) {
-        val topicName = td.name
-        val config = allConfigs.get(new ConfigResource(Type.TOPIC, topicName)).get()
-        val sortedPartitions = td.partitions.asScala.sortBy(_.partition)
+        for (td <- topicDescriptions) {
+          val topicName = td.name
+          val config = allConfigs.get(new ConfigResource(Type.TOPIC, topicName)).get()
+          val sortedPartitions = td.partitions.asScala.sortBy(_.partition)
 
-        if (describeOptions.describeConfigs) {
-          val hasNonDefault = config.entries().asScala.exists(!_.isDefault)
-          if (!opts.reportOverriddenConfigs || hasNonDefault) {
-            val numPartitions = td.partitions().size
-            val firstPartition = td.partitions.iterator.next()
-            val reassignment = reassignments.get(new TopicPartition(td.name, firstPartition.partition))
-            val topicDesc = TopicDescription(topicName, numPartitions, getReplicationFactor(firstPartition, reassignment), config, markedForDeletion = false)
-            topicDesc.printDescription()
+          if (describeOptions.describeConfigs) {
+            val hasNonDefault = config.entries().asScala.exists(!_.isDefault)
+            if (!opts.reportOverriddenConfigs || hasNonDefault) {
+              val numPartitions = td.partitions().size
+              val firstPartition = td.partitions.iterator.next()
+              val reassignment = reassignments.get(new TopicPartition(td.name, firstPartition.partition))
+              val topicDesc = TopicDescription(topicName, numPartitions, getReplicationFactor(firstPartition, reassignment), config, markedForDeletion = false)
+              topicDesc.printDescription()
+            }
           }
-        }
 
-        if (describeOptions.describePartitions) {
-          for (partition <- sortedPartitions) {
-            val reassignment = reassignments.get(new TopicPartition(td.name, partition.partition))
-            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false, reassignment)
-            describeOptions.maybePrintPartitionDescription(partitionDesc)
+          if (describeOptions.describePartitions) {
+            for (partition <- sortedPartitions) {
+              val reassignment = reassignments.get(new TopicPartition(td.name, partition.partition))
+              val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false, reassignment)
+              describeOptions.maybePrintPartitionDescription(partitionDesc)
+            }
           }
         }
       }
@@ -332,7 +341,8 @@ object TopicCommand extends Logging {
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
-      adminClient.deleteTopics(topics.asJavaCollection).all().get()
+      if (topics.nonEmpty)
+        adminClient.deleteTopics(topics.asJavaCollection).all().get()
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
