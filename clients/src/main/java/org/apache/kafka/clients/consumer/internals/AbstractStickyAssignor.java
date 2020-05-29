@@ -69,7 +69,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
-        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions)) {
+        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
             return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
@@ -80,7 +80,12 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    private boolean allSubscriptionsEqual(Map<String, Subscription> subscriptions,
+    /**
+     * Returns true iff all consumers have an identical subscription. Also fills out the passed in
+     * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions
+     */
+    private boolean allSubscriptionsEqual(Set<String> allTopics,
+                                          Map<String, Subscription> subscriptions,
                                           Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
@@ -112,7 +117,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
                 membersOfCurrentHighestGeneration.add(consumer);
                 for (final TopicPartition tp : memberData.partitions) {
-                    if (subscribedTopics.contains(tp.topic())) {
+                    // filter out any topics that no longer exist or aren't part of the current subscription
+                    if (allTopics.contains(tp.topic())) {
                         ownedPartitions.add(tp);
                     }
                 }
