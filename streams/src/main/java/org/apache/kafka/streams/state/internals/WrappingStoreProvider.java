@@ -48,9 +48,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider provider : storeProviders) {
             final List<T> stores = provider.stores(storeQueryParameters);
-            if (stores != null && !stores.isEmpty()) {
-                allStores.addAll(stores);
-            }
+            allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");

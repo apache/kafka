@@ -59,7 +59,7 @@ public class QueryableStoreProvider {
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
             final List<T> stores = storeProvider.stores(storeQueryParameters);
-            if (stores != null && !stores.isEmpty()) {
+            if (!stores.isEmpty()) {
                 allStores.addAll(stores);
                 if (storeQueryParameters.partition() != null) {
                     break;
