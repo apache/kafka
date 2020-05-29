@@ -56,7 +56,7 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
-        return new MemberData(subscription.ownedPartitions(), Optional.of(1));
+        return new MemberData(subscription.ownedPartitions(), Optional.empty());
     }
 
     @Override
