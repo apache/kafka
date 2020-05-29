@@ -46,8 +46,6 @@ import joptsimple.OptionException
 
 object ConsumerGroupCommand extends Logging {
 
-  val allStates = ConsumerGroupState.values.toList
-
   def main(args: Array[String]): Unit = {
 
     val opts = new ConsumerGroupCommandOptions(args)

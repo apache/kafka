@@ -35,8 +35,9 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     private Set<ConsumerGroupState> states = Collections.emptySet();
 
     /**
-     * Only groups in these states will be returned by listConsumerGroups()
-     * If not set, all groups are returned with their states
+     * If states is set, only groups in these states will be returned by listConsumerGroups()
+     * Otherwise, all groups are returned.
+     * This operation is supported by brokers with version 2.6.0 or later.
      */
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
         this.states = (states == null) ? Collections.emptySet() : new HashSet<>(states);

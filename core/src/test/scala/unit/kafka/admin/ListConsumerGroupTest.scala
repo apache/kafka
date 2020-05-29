@@ -23,6 +23,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
 import java.util.Optional
+import org.scalatest.Assertions.assertThrows
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -59,8 +60,8 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedListing = Set(
-        new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
-        new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
+      new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
+      new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
 
     var foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
@@ -69,7 +70,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to show groups $expectedListing, but found $foundListing")
 
     val expectedListingStable = Set(
-        new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
+      new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
@@ -89,32 +90,20 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
     assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
-    try {
+    assertThrows[IllegalArgumentException] {
       ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
-      fail("Should have thrown")
-    } catch {
-      case e: IllegalArgumentException => //Expected
     }
 
-    try {
+    assertThrows[IllegalArgumentException] {
       ConsumerGroupCommand.consumerGroupStatesFromString("stable")
-      fail("Should have thrown")
-    } catch {
-      case e: IllegalArgumentException => //Expected
     }
 
-    try {
+    assertThrows[IllegalArgumentException] {
       ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable")
-      fail("Should have thrown")
-    } catch {
-      case e: IllegalArgumentException => //Expected
     }
 
-    try {
+    assertThrows[IllegalArgumentException] {
       ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
-      fail("Should have thrown")
-    } catch {
-      case e: IllegalArgumentException => //Expected
     }
   }
 

@@ -48,10 +48,9 @@ public class ConsumerGroupListing {
      * @param state The state of the consumer group
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
-        Objects.requireNonNull(state);
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.state = state;
+        this.state = Objects.requireNonNull(state);
     }
 
     /**
