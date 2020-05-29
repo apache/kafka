@@ -69,11 +69,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
-        Set<String> subscribedTopics = new HashSet<>();
-        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions, subscribedTopics)) {
+        if (allSubscriptionsEqual(subscriptions, consumerToOwnedPartitions)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
-            return constrainedAssign(partitionsPerTopic, subscribedTopics, consumerToOwnedPartitions);
+            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
         } else {
             log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
@@ -82,11 +81,12 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     private boolean allSubscriptionsEqual(Map<String, Subscription> subscriptions,
-                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
-                                          Set<String> subscribedTopics) {
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         int maxGeneration = DEFAULT_GENERATION;
+
+        Set<String> subscribedTopics = new HashSet<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
@@ -133,9 +133,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
-                                                                Set<String> subscribedTopics,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
-        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic, subscribedTopics);
+        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
 
         // Each consumer should end up in exactly one of the below
         List<String> unfilledMembers = new LinkedList<>();
@@ -229,16 +228,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return assignment;
     }
 
-    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic,
-                                                         Set<String> subscribedTopics) {
+    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
         SortedSet<TopicPartition> allPartitions =
             new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
         for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
             String topic = entry.getKey();
-            if (subscribedTopics.contains(topic)) {
-                for (int i = 0; i < entry.getValue(); ++i) {
-                    allPartitions.add(new TopicPartition(topic, i));
-                }
+            for (int i = 0; i < entry.getValue(); ++i) {
+                allPartitions.add(new TopicPartition(topic, i));
             }
         }
         return allPartitions;
