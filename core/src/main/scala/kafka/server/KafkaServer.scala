@@ -451,7 +451,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
-          ClientDnsLookup.DEFAULT,
+          ClientDnsLookup.USE_ALL_DNS_IPS,
           time,
           false,
           new ApiVersions,
