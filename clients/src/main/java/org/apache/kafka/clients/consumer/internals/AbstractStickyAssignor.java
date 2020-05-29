@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -696,24 +695,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     public boolean isSticky() {
         return partitionMovements.isSticky();
-    }
-
-    /**
-     * @param col a collection of elements of type list
-     * @return true if all lists in the collection have the same members; false otherwise
-     */
-    private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
-        Iterator<List<T>> it = col.iterator();
-        if (!it.hasNext())
-            return true;
-        List<T> cur = it.next();
-        while (it.hasNext()) {
-            List<T> next = it.next();
-            if (!(cur.containsAll(next) && next.containsAll(cur)))
-                return false;
-            cur = next;
-        }
-        return true;
     }
 
     private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
