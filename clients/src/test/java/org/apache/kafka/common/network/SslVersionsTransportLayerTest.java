@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,15 +52,15 @@ public class SslVersionsTransportLayerTest {
     @Parameterized.Parameters(name = "tlsServerProtocol={0},tlsClientProtocol={1}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
-        values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.2")});
+        values.add(new Object[] {Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.2")});
         if (Java.IS_JAVA11_COMPATIBLE) {
-            values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")});
+            values.add(new Object[] {Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")});
+            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")});
+            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")});
+            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")});
+            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
+            values.add(new Object[] {Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")});
             values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
         }
         return values;
