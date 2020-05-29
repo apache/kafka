@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.streams.KafkaStreams;
@@ -88,8 +87,7 @@ public class TaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
-                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
-                mkEntry(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 9)
+                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener)
             )
         );
 
@@ -122,17 +120,12 @@ public class TaskAssignorIntegrationTest {
             final AssignorConfiguration.AssignmentListener actualAssignmentListener =
                 (AssignorConfiguration.AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
 
-            final Field adminClientTimeoutField = StreamsPartitionAssignor.class.getDeclaredField("adminClientTimeout");
-            adminClientTimeoutField.setAccessible(true);
-            final int adminClientTimeout =
-                (int) adminClientTimeoutField.get(streamsPartitionAssignor);
 
             assertThat(configs.numStandbyReplicas, is(5));
             assertThat(configs.acceptableRecoveryLag, is(6L));
             assertThat(configs.maxWarmupReplicas, is(7));
             assertThat(configs.probingRebalanceIntervalMs, is(480000L));
             assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
-            assertThat(adminClientTimeout, is(9));
         }
     }
 }

@@ -48,7 +48,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -168,7 +167,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private Admin adminClient;
-    private int adminClientTimeout;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
@@ -200,7 +198,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         adminClient = assignorConfiguration.adminClient();
-        adminClientTimeout = assignorConfiguration.adminClientTimeout();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
@@ -773,7 +770,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient, Duration.ofMillis(adminClientTimeout));
+                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient);
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
