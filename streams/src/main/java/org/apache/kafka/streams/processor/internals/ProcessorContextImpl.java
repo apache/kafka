@@ -200,6 +200,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             }
 
             final String sendTo = toInternal.child();
+            if (currentNode() == null) {
+                throw new StreamsException("Current node is unknown when forwarding to: " + key);
+            }
             if (sendTo == null) {
                 final List<ProcessorNode<?, ?>> children = currentNode().children();
                 for (final ProcessorNode<?, ?> child : children) {

@@ -648,11 +648,12 @@ public class Topology {
      * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
      * will be added to the topology and connected to this processor automatically.
      *
-     * @param name the unique name of the processor node
-     * @param supplier the supplier used to obtain this node's {@link Processor} instance
-     * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
-     * and process
-     * @return itself
+     * @param name          the unique name of the processor node
+     * @param supplier      the supplier used to construct this node's {@link Processor} instance; the implementation of supplier
+     *                      should return a newly constructed {@link Processor} instance inside the scope of the lambda expression.
+     * @param parentNames   the name of one or more source or processor nodes whose output records this processor should receive
+     *                      and process
+     * @return              itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
     @SuppressWarnings("rawtypes")

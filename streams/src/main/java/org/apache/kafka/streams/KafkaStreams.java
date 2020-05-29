@@ -704,7 +704,6 @@ public class KafkaStreams implements AutoCloseable {
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         final ProcessorTopology taskTopology = internalTopologyBuilder.buildTopology();
-
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));

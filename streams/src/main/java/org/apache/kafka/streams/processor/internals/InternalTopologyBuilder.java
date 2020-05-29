@@ -842,7 +842,14 @@ public class InternalTopologyBuilder {
             nodeGroup.addAll(value);
         }
         nodeGroup.removeAll(globalNodeGroups());
-
+        for (final NodeFactory<?, ?> entry : nodeFactories.values()) {
+            if (entry instanceof ProcessorNodeFactory) {
+                ProcessorNodeFactory<?, ?> factory = (ProcessorNodeFactory<?, ?>) entry;
+                if (factory.supplier.get() == factory.supplier.get()) {
+                    throw new TopologyException("topology has singleton result of ProcessorSupplier" + factory.name);
+                }
+            }
+        }
         initializeSubscription();
         return build(nodeGroup);
     }

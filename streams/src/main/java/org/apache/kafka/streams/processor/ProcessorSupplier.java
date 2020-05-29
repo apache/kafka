@@ -31,9 +31,9 @@ import org.apache.kafka.streams.Topology;
 public interface ProcessorSupplier<K, V> extends ConnectedStoreProvider {
 
     /**
-     * Return a new {@link Processor} instance.
+     * Return a newly constructed {@link Processor} instance.
      *
-     * @return  a new {@link Processor} instance
+     * @return  a newly constructed {@link Processor} instance
      */
     Processor<K, V> get();
 }

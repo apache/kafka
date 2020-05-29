@@ -35,9 +35,9 @@ import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 public interface TransformerSupplier<K, V, R> extends ConnectedStoreProvider {
 
     /**
-     * Return a new {@link Transformer} instance.
+     * Return a newly constructed {@link Transformer} instance.
      *
-     * @return a new {@link Transformer} instance
+     * @return a newly constructed {@link Transformer} instance
      */
     Transformer<K, V, R> get();
 }

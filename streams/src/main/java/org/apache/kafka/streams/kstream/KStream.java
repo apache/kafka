@@ -2523,7 +2523,8 @@ public interface KStream<K, V> {
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
+     *                            {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @param <K1>                the key type of the new stream
@@ -2646,7 +2647,8 @@ public interface KStream<K, V> {
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
+     *                            {@link Transformer}
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
@@ -3914,7 +3916,7 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @see #foreach(ForeachAction)
@@ -4005,7 +4007,7 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
      * @param named             a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames   the names of the state store used by the processor
      * @see #foreach(ForeachAction)
