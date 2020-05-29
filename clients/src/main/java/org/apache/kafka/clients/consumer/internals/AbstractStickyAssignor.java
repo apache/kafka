@@ -107,6 +107,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // other generations are, consider it as having lost its owned partition
             if (!memberData.generation.isPresent() && maxGeneration > 0
                     || memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
+                // just initialize with an empty assignment
                 consumerToOwnedPartitions.put(consumer, new ArrayList<>());
             } else {
                 // If the current member's generation is higher, all the previous owned partitions are invalid
@@ -140,8 +141,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Queue<String> minCapacityMembers = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
-        int minQuota = (int) Math.floor(((double)unassignedPartitions.size()) / numberOfConsumers);
-        int maxQuota = (int) Math.ceil(((double)unassignedPartitions.size()) / numberOfConsumers);
+        int minQuota = (int) Math.floor(((double) unassignedPartitions.size()) / numberOfConsumers);
+        int maxQuota = (int) Math.ceil(((double) unassignedPartitions.size()) / numberOfConsumers);
 
         // initialize the assignment map with an empty array of size minQuota for all members
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
