@@ -45,6 +45,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     private PartitionMovements partitionMovements = new PartitionMovements();
 
+    // Keep track of the partitions being migrated from one consumer to another during assignment
+    // so the cooperative assignor can adjust the assignment
+    protected Map<TopicPartition, String> partitionsTransferringOwnership = new HashMap<>();
+
     static final class ConsumerGenerationPair {
         final String consumer;
         final int generation;
@@ -72,10 +76,12 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
+            partitionsTransferringOwnership = new HashMap<>();
             return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
         } else {
             log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
+            partitionsTransferringOwnership = null;
             return generalAssign(partitionsPerTopic, subscriptions);
         }
     }
@@ -142,6 +148,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
         SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
 
+        Set<TopicPartition> allRevokedPartitions = new HashSet<>();
+
         // Each consumer should end up in exactly one of the below
         List<String> unfilledMembers = new LinkedList<>();
         Queue<String> maxCapacityMembers = new LinkedList<>();
@@ -161,11 +169,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
             int i = 0;
-            // assign the first N partitions up to the max quota
+            // assign the first N partitions up to the max quota, and mark the remaining as being revoked
             for (TopicPartition tp : ownedPartitions) {
                 if (i < maxQuota) {
                     consumerAssignment.add(tp);
                     unassignedPartitions.remove(tp);
+                } else {
+                    allRevokedPartitions.add(tp);
                 }
                 ++i;
             }
@@ -192,8 +202,12 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 List<TopicPartition> consumerAssignment = assignment.get(consumer);
 
                 if (unassignedPartitionsIter.hasNext()) {
-                    consumerAssignment.add(unassignedPartitionsIter.next());
+                    TopicPartition tp = unassignedPartitionsIter.next();
+                    consumerAssignment.add(tp);
                     unassignedPartitionsIter.remove();
+                    // We already assigned all possible ownedPartitions, so we know this must be newly to this consumer
+                    if (allRevokedPartitions.contains(tp))
+                        partitionsTransferringOwnership.put(tp, consumer);
                 } else {
                     break;
                 }
@@ -218,6 +232,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 TopicPartition swappedPartition = assignment.get(overloadedConsumer).remove(0);
                 consumerAssignment.add(swappedPartition);
                 --remainingCapacity;
+                // This partition is by definition transferring ownership, the swapped partition must have come from
+                // the max capacity member's owned partitions since it can only reach max capacity with owned partitions
+                partitionsTransferringOwnership.put(swappedPartition, consumer);
             }
             minCapacityMembers.add(consumer);
         }
@@ -231,6 +248,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
             // We can skip the bookkeeping of unassignedPartitions and maxCapacityMembers here since we are at the end
             assignment.get(underCapacityConsumer).add(unassignedPartition);
+
+            if (allRevokedPartitions.contains(unassignedPartition))
+                partitionsTransferringOwnership.put(unassignedPartition, underCapacityConsumer);
         }
 
         return assignment;
