@@ -110,7 +110,7 @@ public final class ClientUtils {
         InetAddress[] addresses = InetAddress.getAllByName(host);
         switch (clientDnsLookup) {
             case DEFAULT:
-                log.warn("Configuration 'client.dns.lookup' value 'default' is deprecated and will be removed in the future version.")
+                log.warn("Configuration 'client.dns.lookup' value 'default' is deprecated and will be removed in the future version.");
                 return Collections.singletonList(addresses[0]);
             case USE_ALL_DNS_IPS:
             case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
