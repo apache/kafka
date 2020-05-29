@@ -141,7 +141,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
         SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
-        
+
         // Each consumer should end up in exactly one of the below
         List<String> unfilledMembers = new LinkedList<>();
         Queue<String> maxCapacityMembers = new LinkedList<>();
@@ -159,26 +159,20 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
 
-            if (ownedPartitions.size() < minQuota) {
-                assignment.get(consumer).addAll(ownedPartitions);
-                unassignedPartitions.removeAll(ownedPartitions);
-                unfilledMembers.add(consumer);
-            } else if (ownedPartitions.size() == minQuota) {
-                assignment.get(consumer).addAll(ownedPartitions);
-                unassignedPartitions.removeAll(ownedPartitions);
-                minCapacityMembers.add(consumer);
-            } else {
-                List<TopicPartition> consumerAssignment = assignment.get(consumer);
-                int i = 0;
-                // assign the first N partitions up to the max quota, and mark the remaining as being revoked
-                for (TopicPartition tp : ownedPartitions) {
-                    if (i < maxQuota) {
-                        consumerAssignment.add(tp);
-                        unassignedPartitions.remove(tp);
-                    }
-                    ++i;
+            List<TopicPartition> consumerAssignment = assignment.get(consumer);
+            int i = 0;
+            // assign the first N partitions up to the max quota
+            for (TopicPartition tp : ownedPartitions) {
+                if (i < maxQuota) {
+                    consumerAssignment.add(tp);
+                    unassignedPartitions.remove(tp);
                 }
+                ++i;
+            }
 
+            if (ownedPartitions.size() < minQuota) {
+                unfilledMembers.add(consumer);
+            } else {
                 // It's possible for a consumer to be at both min and max capacity if minQuota == maxQuota
                 if (consumerAssignment.size() == minQuota)
                     minCapacityMembers.add(consumer);
