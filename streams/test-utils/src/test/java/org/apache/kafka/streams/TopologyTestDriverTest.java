@@ -726,14 +726,14 @@ public class TopologyTestDriverTest {
 
         final Serializer<byte[]> keySerializer = new ByteArraySerializer() {
             @Override
-            public byte[] serialize(String topic, Headers headers, byte[] data) {
+            public byte[] serialize(final String topic, final Headers headers, final byte[] data) {
                 passedHeadersToKeySerializer.set(true);
                 return serialize(topic, data);
             }
         };
         final Serializer<byte[]> valueSerializer = new ByteArraySerializer() {
             @Override
-            public byte[] serialize(String topic, Headers headers, byte[] data) {
+            public byte[] serialize(final String topic, final Headers headers, final byte[] data) {
                 passedHeadersToValueSerializer.set(true);
                 return serialize(topic, data);
             }
@@ -741,14 +741,14 @@ public class TopologyTestDriverTest {
 
         final Deserializer<byte[]> keyDeserializer = new ByteArrayDeserializer() {
             @Override
-            public byte[] deserialize(String topic, Headers headers, byte[] data) {
+            public byte[] deserialize(final String topic, final Headers headers, final byte[] data) {
                 passedHeadersToKeyDeserializer.set(true);
                 return deserialize(topic, data);
             }
         };
         final Deserializer<byte[]> valueDeserializer = new ByteArrayDeserializer() {
             @Override
-            public byte[] deserialize(String topic, Headers headers, byte[] data) {
+            public byte[] deserialize(final String topic, final Headers headers, final byte[] data) {
                 passedHeadersToValueDeserializer.set(true);
                 return deserialize(topic, data);
             }
