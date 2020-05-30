@@ -430,9 +430,10 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test(timeout = 30 * 1000)
     public void testLargeAssignmentAndGroupWithUniformSubscription() {
-        int topicCount = 200;
-        int consumerCount = 2_000;
+        // 1 million partitions!
+        int topicCount = 500;
         int partitionCount = 2_000;
+        int consumerCount = 2_000;
 
         List<String> topics = new ArrayList<>();
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
