@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
@@ -277,8 +278,10 @@ public class KafkaRaftClient implements RaftClient {
             applyCommittedRecordsToStateMachine();
         }
 
-        // maybe extend the fetch timer with the majority of voter-fetching timestamps
-        maybeUpdateFetchTimerWithRemoteFetchTimestamp(state, replicaId);
+        if (quorum.isVoter(replicaId)) {
+            // maybe extend the fetch timer with the majority of voter-fetching timestamps
+            maybeUpdateFetchTimerWithRemoteFetchTimestamp(state, replicaId);
+        }
     }
 
     private void maybeUpdateFetchTimerWithRemoteFetchTimestamp(LeaderState state, int replicaId) {
@@ -787,9 +790,8 @@ public class KafkaRaftClient implements RaftClient {
             return buildEmptyFetchQuorumRecordsResponse(Errors.NONE, highWatermark)
                 .setNextFetchOffset(nextOffsetAndEpoch.offset)
                 .setNextFetchOffsetEpoch(nextOffsetAndEpoch.epoch);
-        } else if (quorum.isVoter(replicaId)) {
-            updateReplicaEndOffset(state, replicaId, fetchOffset);
         }
+        updateReplicaEndOffset(state, replicaId, fetchOffset);
 
         Records records = log.read(fetchOffset, OptionalLong.empty());
         return buildFetchQuorumRecordsResponse(
@@ -936,6 +938,20 @@ public class KafkaRaftClient implements RaftClient {
         } else {
             return handleUnexpectedError(error, responseMetadata);
         }
+    }
+
+    private DescribeQuorumResponseData handleDescribeQuorumRequest() {
+        if (!quorum.isLeader()) {
+            return new DescribeQuorumResponseData()
+                       .setErrorCode(Errors.INVALID_REQUEST.code());
+        }
+
+        return new DescribeQuorumResponseData()
+                   .setErrorCode(Errors.NONE.code())
+                   .setLeaderEpoch(quorum.epoch())
+                   .setLeaderId(quorum.leaderIdOrNil())
+                   .setCurrentVoters(quorum.leaderStateOrThrow().getVoterStates())
+                   .setObservers(quorum.leaderStateOrThrow().getObserverStates());
     }
 
     private void updateVoterConnections(FindQuorumResponseData response) {
@@ -1114,7 +1130,7 @@ public class KafkaRaftClient implements RaftClient {
             return Optional.of(Errors.FENCED_LEADER_EPOCH);
         } else if (requestEpoch > quorum.epoch() || !quorum.isLeader()) {
             // If the epoch in the request is larger than our own epoch or
-            // it matches our epoch and we are not a leader, then the request
+            // it matches our epoch or we are not a leader, then the request
             // is invalid. Unlike with Kafka topic partitions, leaders will
             // always be the first to know of their status.
             return Optional.of(Errors.INVALID_REQUEST);
@@ -1148,6 +1164,10 @@ public class KafkaRaftClient implements RaftClient {
 
             case FIND_QUORUM:
                 responseFuture = completedFuture(handleFindQuorumRequest(request));
+                break;
+
+            case DESCRIBE_QUORUM:
+                responseFuture = completedFuture(handleDescribeQuorumRequest());
                 break;
 
             default:

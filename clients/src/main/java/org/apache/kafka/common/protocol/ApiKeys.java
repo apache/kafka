@@ -59,6 +59,8 @@ import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
@@ -234,7 +236,8 @@ public enum ApiKeys {
     BEGIN_QUORUM_EPOCH(51, "BeginQuorumEpoch", true, BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
     END_QUORUM_EPOCH(52, "EndQuorumEpoch", true, EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
     FETCH_QUORUM_RECORDS(53, "FetchQuorumRecords", true, FetchQuorumRecordsRequestData.SCHEMAS, FetchQuorumRecordsResponseData.SCHEMAS),
-    FIND_QUORUM(55, "FindQuorum", true, FindQuorumRequestData.SCHEMAS, FindQuorumResponseData.SCHEMAS);
+    FIND_QUORUM(55, "FindQuorum", true, FindQuorumRequestData.SCHEMAS, FindQuorumResponseData.SCHEMAS),
+    DESCRIBE_QUORUM(56, "DescribeQuorum", true, DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

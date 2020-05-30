@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -32,7 +36,8 @@ public class LeaderState implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
     private OptionalLong highWatermark = OptionalLong.empty();
-    private final Map<Integer, ReplicaState> voterReplicaStates = new HashMap<>();
+    private final Map<Integer, VoterState> voterReplicaStates = new HashMap<>();
+    private final Map<Integer, NodeState> observerReplicaStates = new HashMap<>();
 
     protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
         this.localId = localId;
@@ -41,7 +46,7 @@ public class LeaderState implements EpochState {
 
         for (int voterId : voters) {
             boolean hasEndorsedLeader = voterId == localId;
-            this.voterReplicaStates.put(voterId, new ReplicaState(voterId, hasEndorsedLeader));
+            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasEndorsedLeader));
         }
     }
 
@@ -70,7 +75,7 @@ public class LeaderState implements EpochState {
 
     public Set<Integer> nonEndorsingFollowers() {
         Set<Integer> nonEndorsing = new HashSet<>();
-        for (ReplicaState state : voterReplicaStates.values()) {
+        for (VoterState state : voterReplicaStates.values()) {
             if (!state.hasEndorsedLeader)
                 nonEndorsing.add(state.nodeId);
         }
@@ -79,7 +84,8 @@ public class LeaderState implements EpochState {
 
     private boolean updateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
-        List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
+        List<NodeState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
+
         int indexOfHw = voterReplicaStates.size() / 2;
         OptionalLong highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
@@ -98,7 +104,7 @@ public class LeaderState implements EpochState {
 
     private OptionalLong quorumMajorityFetchTimestamp() {
         // Find the latest timestamp which is fetched by a majority of replicas (the leader counts)
-        ArrayList<ReplicaState> followersByDescendingFetchTimestamp = new ArrayList<>(this.voterReplicaStates.values());
+        ArrayList<NodeState> followersByDescendingFetchTimestamp = new ArrayList<>(this.voterReplicaStates.values());
         followersByDescendingFetchTimestamp.sort(FETCH_TIMESTAMP_COMPARATOR);
         int indexOfTimestamp = voterReplicaStates.size() / 2;
         return followersByDescendingFetchTimestamp.get(indexOfTimestamp).lastFetchTimestamp;
@@ -109,7 +115,7 @@ public class LeaderState implements EpochState {
      *         not received fetch from the majority yet
      */
     public OptionalLong updateFetchTimestamp(int nodeId, long timestamp) {
-        ReplicaState state = ensureValidVoter(nodeId);
+        NodeState state = ensureValidVoter(nodeId);
         // To be resilient to system time shifts we do not strictly require the timestamp be monotonically increasing
         state.lastFetchTimestamp = OptionalLong.of(Math.max(state.lastFetchTimestamp.orElse(-1L), timestamp));
         return quorumMajorityFetchTimestamp();
@@ -131,26 +137,59 @@ public class LeaderState implements EpochState {
      * @return true if the high watermark is updated too
      */
     public boolean updateEndOffset(int remoteNodeId, long endOffset) {
-        ReplicaState state = ensureValidVoter(remoteNodeId);
+        NodeState state = getReplicaState(remoteNodeId);
+
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset > endOffset)
                 throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + remoteNodeId);
         });
-        state.hasEndorsedLeader = true;
         state.endOffset = OptionalLong.of(endOffset);
-        return updateHighWatermark();
+        if (isVoter(remoteNodeId)) {
+            addEndorsementFrom(remoteNodeId);
+            return updateHighWatermark();
+        }
+        return false;
     }
 
     public void addEndorsementFrom(int remoteNodeId) {
-        ReplicaState replicaState = ensureValidVoter(remoteNodeId);
-        replicaState.hasEndorsedLeader = true;
+        VoterState voterState = ensureValidVoter(remoteNodeId);
+        voterState.hasEndorsedLeader = true;
     }
 
-    private ReplicaState ensureValidVoter(int remoteNodeId) {
-        ReplicaState state = voterReplicaStates.get(remoteNodeId);
+    private VoterState ensureValidVoter(int remoteNodeId) {
+        VoterState state = voterReplicaStates.get(remoteNodeId);
         if (state == null)
             throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
         return state;
+    }
+
+    NodeState getReplicaState(int remoteNodeId) {
+        NodeState state = voterReplicaStates.get(remoteNodeId);
+        if (state == null) {
+            observerReplicaStates.putIfAbsent(remoteNodeId, new NodeState(remoteNodeId));
+            return observerReplicaStates.get(remoteNodeId);
+        }
+        return state;
+    }
+
+    List<ReplicaState> getVoterStates() {
+        return voterReplicaStates.entrySet().stream().filter(entry -> entry.getKey() != localId)
+            .map(entry -> new ReplicaState()
+                              .setReplicaId(entry.getKey())
+                              .setLogEndOffset(entry.getValue().endOffset.orElse(-1)))
+            .collect(Collectors.toList());
+    }
+
+    List<ReplicaState> getObserverStates() {
+        return observerReplicaStates.entrySet().stream()
+                   .map(entry -> new ReplicaState()
+                                     .setReplicaId(entry.getKey())
+                                     .setLogEndOffset(entry.getValue().endOffset.orElse(-1)))
+                   .collect(Collectors.toList());
+    }
+
+    private boolean isVoter(int remoteNodeId) {
+        return voterReplicaStates.containsKey(remoteNodeId);
     }
 
     /**
@@ -164,22 +203,19 @@ public class LeaderState implements EpochState {
         return updateEndOffset(localId, endOffset);
     }
 
-    private static class ReplicaState implements Comparable<ReplicaState> {
+    private static class NodeState implements Comparable<NodeState> {
         final int nodeId;
-        boolean hasEndorsedLeader;
         OptionalLong endOffset;
         OptionalLong lastFetchTimestamp;
 
-        public ReplicaState(int nodeId,
-                            boolean hasEndorsedLeader) {
+        public NodeState(int nodeId) {
             this.nodeId = nodeId;
-            this.hasEndorsedLeader = hasEndorsedLeader;
             this.endOffset = OptionalLong.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
         }
 
         @Override
-        public int compareTo(ReplicaState that) {
+        public int compareTo(NodeState that) {
             if (this.endOffset.equals(that.endOffset))
                 return Integer.compare(this.nodeId, that.nodeId);
             else if (!this.endOffset.isPresent())
@@ -191,7 +227,16 @@ public class LeaderState implements EpochState {
         }
     }
 
-    private static final Comparator<ReplicaState> FETCH_TIMESTAMP_COMPARATOR = (state, that) -> {
+    private static class VoterState extends NodeState {
+        boolean hasEndorsedLeader;
+
+        public VoterState(int nodeId, boolean hasEndorsedLeader) {
+            super(nodeId);
+            this.hasEndorsedLeader = hasEndorsedLeader;
+        }
+    }
+
+    private static final Comparator<NodeState> FETCH_TIMESTAMP_COMPARATOR = (state, that) -> {
         if (state.lastFetchTimestamp.equals(that.lastFetchTimestamp))
             return Integer.compare(state.nodeId, that.nodeId);
         else if (!state.lastFetchTimestamp.isPresent())
