@@ -38,15 +38,16 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
     private final Logger log;
     private final int nodeId;
     private final AtomicInteger committed = new AtomicInteger(0);
+    private final boolean verbose;
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
     private AtomicInteger uncommitted;
-
+    private boolean isLeader = false;
     private RecordAppender appender = null;
 
-    public ReplicatedCounter(int nodeId,
-                             LogContext logContext) {
+    public ReplicatedCounter(int nodeId, LogContext logContext, boolean verbose) {
         this.nodeId = nodeId;
         this.log = logContext.logger(ReplicatedCounter.class);
+        this.verbose = verbose;
     }
 
     @Override
@@ -57,11 +58,13 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
     @Override
     public synchronized void becomeLeader(int epoch) {
         uncommitted = new AtomicInteger(committed.get());
+        isLeader = true;
     }
 
     @Override
     public synchronized void becomeFollower(int epoch) {
         uncommitted = null;
+        isLeader = false;
     }
 
     @Override
@@ -82,6 +85,10 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
                     }
                     log.trace("Applied counter update at offset {}: {} -> {}", record.offset(), committed.get(), value);
                     committed.set(value);
+
+                    if (verbose) {
+                        System.out.println(Integer.toString(value));
+                    }
                 }
             }
             this.position = new OffsetAndEpoch(batch.lastOffset() + 1, batch.partitionLeaderEpoch());
@@ -121,9 +128,15 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
         int incremented = uncommitted != null ?
             uncommitted.get() + 1 :
             value() + 1;
+        log.trace("Attempt to increment counter from: {} -> {}", uncommitted.get(), incremented);
         Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
         CompletableFuture<OffsetAndEpoch> future = appender.append(records);
         return future.thenApply(offsetAndEpoch -> incremented);
+
+    }
+
+    public synchronized boolean isLeader() {
+        return isLeader;
     }
 
     private SimpleRecord serialize(int value) {

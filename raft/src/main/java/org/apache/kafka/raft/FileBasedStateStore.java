@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -68,11 +67,7 @@ public class FileBasedStateStore implements QuorumStateStore {
         this.stateFile = stateFile;
     }
 
-    private QuorumStateData loadState(File file) throws IOException {
-        if (!file.exists()) {
-            throw new NoSuchFileException("State store file " + file.toPath() + " is not found");
-        }
-
+    private QuorumStateData readStateFromFile(File file) throws IOException {
         try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
             final String line = reader.readLine();
             if (line == null) {
@@ -106,7 +101,11 @@ public class FileBasedStateStore implements QuorumStateStore {
      */
     @Override
     public ElectionState readElectionState() throws IOException {
-        QuorumStateData data = loadState(stateFile);
+        if (!stateFile.exists()) {
+            return null;
+        }
+
+        QuorumStateData data = readStateFromFile(stateFile);
 
         return new ElectionState(data.leaderEpoch(),
             data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() :

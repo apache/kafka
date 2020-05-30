@@ -41,12 +41,16 @@ public class ElectionState {
     public static ElectionState withVotedCandidate(int epoch, int votedId, Set<Integer> voters) {
         if (votedId < 0)
             throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
+        if (!voters.contains(votedId))
+            throw new IllegalArgumentException("Voted candidate with id " + votedId + " is not among the valid voters");
         return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), voters);
     }
 
     public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
         if (leaderId < 0)
             throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
+        if (!voters.contains(leaderId))
+            throw new IllegalArgumentException("Leader with id " + leaderId + " is not among the valid voters");
         return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty(), voters);
     }
 

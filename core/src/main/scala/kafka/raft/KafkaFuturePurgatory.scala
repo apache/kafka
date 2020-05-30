@@ -30,19 +30,19 @@ import org.apache.kafka.raft.FuturePurgatory
  * both [[await()]] and [[completeAll()]] are called in the same thread.
  */
 class KafkaFuturePurgatory(brokerId: Int, timer: Timer, reaperEnabled: Boolean = true)
-  extends FuturePurgatory[Unit] with Logging {
+  extends FuturePurgatory[Void] with Logging {
 
   private val key = new Object()
   private val purgatory = new DelayedOperationPurgatory[DelayedRaftRequest](
     "raft-request-purgatory", timer, brokerId, reaperEnabled = reaperEnabled)
 
-  override def await(future: CompletableFuture[Unit], maxWaitTimeMs: Long): Unit = {
+  override def await(future: CompletableFuture[Void], maxWaitTimeMs: Long): Unit = {
     val op = new DelayedRaftRequest(future, maxWaitTimeMs)
     purgatory.tryCompleteElseWatch(op, Seq(key))
     op.isCompletable.set(true)
   }
 
-  override def completeAll(value: Unit): Unit = {
+  override def completeAll(value: Void): Unit = {
     purgatory.checkAndComplete(key)
   }
 
@@ -51,7 +51,7 @@ class KafkaFuturePurgatory(brokerId: Int, timer: Timer, reaperEnabled: Boolean =
   }
 }
 
-class DelayedRaftRequest(future: CompletableFuture[Unit], delayMs: Long)
+class DelayedRaftRequest(future: CompletableFuture[Void], delayMs: Long)
   extends DelayedOperation(delayMs) {
 
   val isCompletable = new AtomicBoolean(false)
@@ -63,7 +63,7 @@ class DelayedRaftRequest(future: CompletableFuture[Unit], delayMs: Long)
     if (isExpired.get())
       future.completeExceptionally(new TimeoutException("Request timed out in purgatory"))
     else
-      future.complete(())
+      future.complete(null)
   }
 
   override def tryComplete(): Boolean = {
