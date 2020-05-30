@@ -341,8 +341,7 @@ object TopicCommand extends Logging {
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
-      if (topics.nonEmpty)
-        adminClient.deleteTopics(topics.asJavaCollection).all().get()
+      adminClient.deleteTopics(topics.asJavaCollection).all().get()
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {

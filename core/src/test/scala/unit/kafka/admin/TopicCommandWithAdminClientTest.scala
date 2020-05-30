@@ -233,12 +233,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testCreateWhenAlreadyExistsWithIfNotExists(): Unit = {
     val createOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-not-exists"))
     createAndWaitTopic(createOpts)
-
-    try {
-      topicService.createTopic(createOpts)
-    } catch {
-      case _ : TopicExistsException => fail("Topic recreation should not throw exception")
-    }
+    topicService.createTopic(createOpts)
   }
 
   @Test
@@ -445,12 +440,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testAlterWhenTopicDoesntExistWithIfExists(): Unit = {
-    try {
-      topicService.alterTopic(new TopicCommandOptions(
-        Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
-    } catch {
-      case _ : IllegalArgumentException => fail("Alter topic should not throw exception")
-    }
+    topicService.alterTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
   }
 
   @Test
@@ -556,11 +547,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDeleteWhenTopicDoesntExistWithIfExists(): Unit = {
-    try {
-      topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
-    } catch {
-      case _ : IllegalArgumentException => fail("Topic deletion should not throw an exception")
-    }
+    topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
@@ -585,11 +572,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDescribeWhenTopicDoesntExistWithIfExists(): Unit = {
-    try {
-      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
-    } catch {
-      case _ : IllegalArgumentException => fail("Describe topic should not throw an exception")
-    }
+    topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
