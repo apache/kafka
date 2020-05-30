@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -62,9 +63,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -247,6 +250,9 @@ public class ClientCompatibilityTest {
     void testAdminClient() throws Throwable {
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        String topic = "newtopic";
+        Collection<String> topics = Collections.singleton(topic);
+
         try (final Admin client = Admin.create(adminProps)) {
             while (true) {
                 Collection<Node> nodes = client.describeCluster().nodes().get();
@@ -263,13 +269,16 @@ public class ClientCompatibilityTest {
             tryFeature("createTopics", testConfig.createTopicsSupported,
                 () -> {
                     try {
-                        client.createTopics(Collections.singleton(
-                            new NewTopic("newtopic", 1, (short) 1))).all().get();
+                        List<NewTopic> newTopics = topics
+                            .stream()
+                            .map(value -> new NewTopic(value, 1, (short) 1))
+                            .collect(Collectors.toList());
+                        client.createTopics(newTopics).all().get();
                     } catch (ExecutionException e) {
                         throw e.getCause();
                     }
                 },
-                () ->  createTopicsResultTest(client, Collections.singleton("newtopic"))
+                () ->  createTopicsResultTest(client, topics, Optional.empty())
             );
 
             while (true) {
@@ -277,11 +286,11 @@ public class ClientCompatibilityTest {
                 if (!testConfig.createTopicsSupported)
                     break;
 
-                if (topicExists(listings, "newtopic"))
+                if (topicExists(listings, topic))
                     break;
 
                 Thread.sleep(1);
-                log.info("Did not see newtopic.  Retrying listTopics...");
+                log.info("Did not see '%s'.  Retrying listTopics...", topic);
             }
 
             tryFeature("describeAclsSupported", testConfig.describeAclsSupported,
@@ -294,14 +303,30 @@ public class ClientCompatibilityTest {
                         throw e.getCause();
                     }
                 });
+
+            // Describe topics request with authorized operations should be allowed against all
+            // cluster versions. For clusters that don't support this feature the request will be
+            // serialized and sent but the describe topics response will not contain any information
+            // about authorized operations.
+            tryFeature("createTopics", testConfig.createTopicsSupported,
+                () -> {
+                    DescribeTopicsOptions options = new DescribeTopicsOptions();
+                    options.includeAuthorizedOperations(true);
+                    createTopicsResultTest(client, topics, Optional.of(options));
+                }
+            );
         }
     }
 
-    private void createTopicsResultTest(Admin client, Collection<String> topics)
+    private void createTopicsResultTest(Admin client, Collection<String> topics, Optional<DescribeTopicsOptions> options)
             throws InterruptedException, ExecutionException {
         while (true) {
             try {
-                client.describeTopics(topics).all().get();
+                if (options.isPresent()) {
+                    client.describeTopics(topics, options.get()).all().get();
+                } else {
+                    client.describeTopics(topics).all().get();
+                }
                 break;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof UnknownTopicOrPartitionException)
