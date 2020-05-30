@@ -19,7 +19,7 @@ package kafka.raft
 import java.lang
 import java.util.{Optional, OptionalLong}
 
-import kafka.log.Log
+import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
@@ -45,7 +45,9 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
   }
 
   override def appendAsLeader(records: Records, epoch: Int): lang.Long = {
-    val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords], leaderEpoch = epoch)
+    val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords],
+      leaderEpoch = epoch,
+      origin = AppendOrigin.Coordinator)
     appendInfo.firstOffset.getOrElse {
       throw new KafkaException("Append failed unexpectedly")
     }

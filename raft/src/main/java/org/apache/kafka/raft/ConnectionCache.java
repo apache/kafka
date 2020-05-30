@@ -20,22 +20,26 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 public class ConnectionCache {
     private final Map<Integer, ConnectionState> connections = new HashMap<>();
     private final Map<Integer, ConnectionState> bootstrapConnections = new HashMap<>();
+    private final List<Integer> bootstrapServerIds = new ArrayList<>();
 
     private final NetworkChannel channel;
     private final Logger log;
     private final int retryBackoffMs;
     private final int requestTimeoutMs;
+    private final Random random = new Random();
 
     public ConnectionCache(NetworkChannel channel,
                            List<InetSocketAddress> bootstrapServers,
@@ -53,6 +57,7 @@ public class ConnectionCache {
             ConnectionState connection = new ConnectionState(nodeId);
             connection.maybeUpdate(new HostInfo(address, 0L));
             bootstrapConnections.put(nodeId, connection);
+            bootstrapServerIds.add(nodeId);
             channel.updateEndpoint(nodeId, address);
             nodeId--;
         }
@@ -67,17 +72,20 @@ public class ConnectionCache {
     }
 
     public OptionalInt findReadyBootstrapServer(long currentTimeMs) {
-        // TODO: This logic is important. We need something smarter.
-        for (Map.Entry<Integer, ConnectionState> connectionEntry : bootstrapConnections.entrySet()) {
-            int nodeId = connectionEntry.getKey();
-            ConnectionState connection = connectionEntry.getValue();
-            if (connection.isReady(currentTimeMs)) {
-                return OptionalInt.of(nodeId);
+        int startIndex = random.nextInt(bootstrapServerIds.size());
+        OptionalInt res = OptionalInt.empty();
+        for (int i = 0; i < bootstrapServerIds.size(); i++) {
+            int index = (startIndex + i) % bootstrapServerIds.size();
+            int nodeId = bootstrapServerIds.get(index);
+            ConnectionState connection = bootstrapConnections.get(nodeId);
+            if (!res.isPresent() && connection.isReady(currentTimeMs)) {
+                res = OptionalInt.of(nodeId);
             } else if (connection.inFlightCorrelationId.isPresent()) {
-                return OptionalInt.empty();
+                res = OptionalInt.empty();
+                break;
             }
         }
-        return OptionalInt.empty();
+        return res;
     }
 
     public boolean hasUnknownVoterEndpoints() {
@@ -198,7 +206,7 @@ public class ConnectionCache {
             });
         }
 
-        void onResponseReceived(long correlationId) {
+        void onResponseReceived(long correlationId, long timeMs) {
             inFlightCorrelationId.ifPresent(inflightRequestId -> {
                 if (inflightRequestId == correlationId) {
                     state = State.READY;

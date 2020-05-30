@@ -17,10 +17,9 @@
 package org.apache.kafka.raft;
 
 import java.io.IOException;
-import java.util.Collections;
 
 public class MockQuorumStateStore implements QuorumStateStore {
-    private ElectionState current = ElectionState.withUnknownLeader(0, Collections.emptySet());
+    private ElectionState current;
 
     @Override
     public ElectionState readElectionState() throws IOException {
@@ -34,6 +33,6 @@ public class MockQuorumStateStore implements QuorumStateStore {
 
     @Override
     public void clear() {
-        current = ElectionState.withUnknownLeader(0, Collections.emptySet());
+        current = null;
     }
 }

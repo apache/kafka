@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
@@ -36,40 +40,42 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class RaftConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
-    public static final String QUORUM_VOTERS_CONFIG = "quorum.voters";
+    private static final String QUORUM_PREFIX = "quorum.";
+
+    public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "bootstrap.voters";
     private static final String QUORUM_VOTERS_DOC = "List of voters. This is only used the " +
         "first time a cluster is initialized.";
 
-    public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = "quorum.election.timeout.ms";
+    public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     private static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
 
-    public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = "quorum.fetch.timeout.ms";
+    public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
     private static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
         "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
         "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
 
-    public static final String QUORUM_ELECTION_JITTER_MAX_MS_CONFIG = "quorum.election.jitter.max.ms";
+    public static final String QUORUM_ELECTION_JITTER_MAX_MS_CONFIG = QUORUM_PREFIX + "election.jitter.max.ms";
     private static final String QUORUM_ELECTION_JITTER_MAX_MS_DOC = "Maximum jitter to delay new elections. " +
         "This helps prevent gridlocked elections";
 
     static {
         CONFIG = new ConfigDef()
-            .define(BOOTSTRAP_SERVERS_CONFIG,
+            .define(QUORUM_PREFIX + BOOTSTRAP_SERVERS_CONFIG,
                 ConfigDef.Type.LIST,
                 Collections.emptyList(),
                 new ConfigDef.NonNullValidator(),
                 ConfigDef.Importance.HIGH,
                 CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-            .define(REQUEST_TIMEOUT_MS_CONFIG,
+            .define(QUORUM_PREFIX + REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 20000,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
                 REQUEST_TIMEOUT_MS_DOC)
-            .define(RETRY_BACKOFF_MS_CONFIG,
-                ConfigDef.Type.LONG,
-                100L,
+            .define(QUORUM_PREFIX + RETRY_BACKOFF_MS_CONFIG,
+                ConfigDef.Type.INT,
+                100,
                 atLeast(0L),
                 ConfigDef.Importance.LOW,
                 CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
@@ -93,13 +99,13 @@ public class RaftConfig extends AbstractConfig {
                 QUORUM_VOTERS_DOC)
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                30000,
-                atLeast(0),
+                5000,
+                atLeast(0L),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
             .define(QUORUM_ELECTION_JITTER_MAX_MS_CONFIG,
                 ConfigDef.Type.INT,
-                100,
+                5000,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_JITTER_MAX_MS_DOC)
@@ -134,6 +140,35 @@ public class RaftConfig extends AbstractConfig {
 
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml());
+    }
+
+    public int requestTimeoutMs() {
+        return getInt(QUORUM_PREFIX + CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
+    }
+
+    public int retryBackoffMs() {
+        return getInt(QUORUM_PREFIX + CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+    }
+
+    public int electionTimeoutMs() {
+        return getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int electionJitterMaxMs() {
+        return getInt(QUORUM_ELECTION_JITTER_MAX_MS_CONFIG);
+    }
+
+    public int fetchTimeoutMs() {
+        return getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+    }
+
+    public Set<Integer> bootstrapVoters() {
+        return getList(QUORUM_VOTERS_CONFIG).stream().map(Integer::valueOf).collect(Collectors.toSet());
+    }
+
+    public List<InetSocketAddress> bootstrapServers() {
+        return ClientUtils.parseAndValidateAddresses(getList(QUORUM_PREFIX + BOOTSTRAP_SERVERS_CONFIG),
+            ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
 }

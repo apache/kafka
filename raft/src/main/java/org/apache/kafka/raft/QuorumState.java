@@ -56,14 +56,15 @@ public class QuorumState {
         ElectionState election;
         try {
             election = store.readElectionState();
+            if (election == null) {
+                election = ElectionState.withUnknownLeader(0, voters);
+            }
         } catch (final IOException e) {
             // For exceptions during state file loading (missing or not readable),
             // we could assume the file is corrupted already and should be cleaned up.
             log.warn("Clear local quorum state store {}", store.toString(), e);
             store.clear();
-
             election = ElectionState.withUnknownLeader(0, voters);
-            state = new FollowerState(election.epoch, voters);
         }
 
         if (!election.voters().isEmpty() && !voters.equals(election.voters())) {
@@ -75,6 +76,7 @@ public class QuorumState {
             log.warn("Epoch from quorum-state file is {}, which is " +
                 "smaller than last written epoch {} in the log",
                 election.epoch, logEndOffsetAndEpoch.epoch);
+            state = new FollowerState(election.epoch, voters);
             becomeUnattachedFollower(logEndOffsetAndEpoch.epoch);
         } else if (election.isLeader(localId)) {
             state = new LeaderState(localId, election.epoch, logEndOffsetAndEpoch.offset, voters);

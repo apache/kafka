@@ -676,7 +676,7 @@ public class RaftEventSimulationTest {
         }
 
         void initialize() {
-            this.counter = new ReplicatedCounter(nodeId, logContext);
+            this.counter = new ReplicatedCounter(nodeId, logContext, false);
             try {
                 client.initialize(counter);
             } catch (IOException e) {
@@ -767,12 +767,7 @@ public class RaftEventSimulationTest {
             this.cluster = cluster;
             for (Map.Entry<Integer, PersistentState> nodeStateEntry : cluster.nodes.entrySet()) {
                 Integer nodeId = nodeStateEntry.getKey();
-                PersistentState state = nodeStateEntry.getValue();
-                try {
-                    nodeEpochs.put(nodeId, state.store.readElectionState().epoch);
-                } catch (IOException e) {
-                    fail("Unexpected IO exception from state store read" + e);
-                }
+                nodeEpochs.put(nodeId, 0);
             }
         }
 

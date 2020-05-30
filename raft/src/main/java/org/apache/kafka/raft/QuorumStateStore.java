@@ -30,7 +30,7 @@ public interface QuorumStateStore {
     /**
      * Read the latest election state.
      *
-     * @return The latest written election state or `ElectionState.withUnknownLeader(0)` if there is none.
+     * @return The latest written election state or `null` if there is none
      * @throws IOException For any error encountered reading from the storage
      */
     ElectionState readElectionState() throws IOException;
