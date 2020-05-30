@@ -351,7 +351,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.addAll(currentAssignment.keySet());
 
         balance(currentAssignment, prevAssignment, sortedPartitions, unassignedPartitions, sortedCurrentSubscriptions,
-                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer, revocationRequired);
+            consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer, revocationRequired);
         return currentAssignment;
     }
 
