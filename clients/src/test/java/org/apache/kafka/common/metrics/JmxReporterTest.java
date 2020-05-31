@@ -25,8 +25,12 @@ import org.junit.Test;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+<<<<<<< HEAD
 import java.util.ArrayList;
 import java.util.Arrays;
+=======
+import java.util.Collections;
+>>>>>>> KAFKA-10023: Enforce broker-wide and per-listener connection creation rate
 import java.util.HashMap;
 import java.util.Map;
 
@@ -190,6 +194,27 @@ public class JmxReporterTest {
             Sensor sensor = metrics.sensor("my-sensor");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
             assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
+        } finally {
+            metrics.close();
+        }
+    }
+
+    public void testMetricWithDoNotReportTag() throws Exception {
+        Metrics metrics = new Metrics();
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            JmxReporter reporter = new JmxReporter();
+            metrics.addReporter(reporter);
+
+            assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
+
+            Sensor sensor = metrics.sensor("kafka.requests");
+            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
+            sensor.add(metrics.metricName("pack.bean2.total", "grp2", "",
+                    Collections.singletonMap(JmxReporter.DO_NOT_REPORT_TAG, "")), new CumulativeSum());
+
+            assertTrue(server.isRegistered(new ObjectName(":type=grp1")));
+            assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
         } finally {
             metrics.close();
         }

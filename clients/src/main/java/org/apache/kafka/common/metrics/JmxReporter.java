@@ -59,6 +59,7 @@ public class JmxReporter implements MetricsReporter {
 
     public static final String DEFAULT_WHITELIST = ".*";
     public static final String DEFAULT_BLACKLIST = "";
+    public static final String DO_NOT_REPORT_TAG = "do-not-report";
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
@@ -166,6 +167,9 @@ public class JmxReporter implements MetricsReporter {
     private String addAttribute(KafkaMetric metric) {
         try {
             MetricName metricName = metric.metricName();
+            if (metricName.tags().containsKey(DO_NOT_REPORT_TAG)) {
+                return null;
+            }
             String mBeanName = getMBeanName(prefix, metricName);
             if (!this.mbeans.containsKey(mBeanName))
                 mbeans.put(mBeanName, new KafkaMbean(mBeanName));
