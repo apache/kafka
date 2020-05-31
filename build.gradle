@@ -12,11 +12,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+ScalaCompileOptions.metaClass.daemonServer = true
+ScalaCompileOptions.metaClass.fork = true
+ScalaCompileOptions.metaClass.useAnt = false
+ScalaCompileOptions.metaClass.useCompileDaemon = false
 
 import org.ajoberstar.grgit.Grgit
 
 buildscript {
   repositories {
+    mavenLocal()
+    maven {
+      url "/Users/ouweiqi/apache-maven-3.5.3/"
+    }
+    maven {
+      url "http://maven.aliyun.com/nexus/content/groups/public/"
+    }
     mavenCentral()
     jcenter()
   }
@@ -24,9 +35,14 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.5.0"
+    /*classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
-    classpath 'org.scoverage:gradle-scoverage:2.0.1'
+    classpath 'org.scoverage:gradle-scoverage:2.0.1'*/
+    classpath "org.ajoberstar:grgit:1.9.3"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
+    classpath 'org.scoverage:gradle-scoverage:2.5.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+    //链接：https://juejin.im/post/5c94f4ed6fb9a070e4623687
   }
 }
 

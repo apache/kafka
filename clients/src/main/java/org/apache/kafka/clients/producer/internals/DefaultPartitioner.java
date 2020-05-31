@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The default partitioning strategy:
@@ -56,6 +56,14 @@ public class DefaultPartitioner implements Partitioner {
     public void configure(Map<String, ?> configs) {}
 
     /**
+     * If no partition or key is present choose a partition round-robin fashion in batches,
+     * In this way one of partition be sent in advance
+     */
+    private static int batchToOnePartition(int number) {
+        return number >> 5;
+    }
+
+    /**
      * Compute the partition for the given record.
      *
      * @param topic The topic name
@@ -72,11 +80,11 @@ public class DefaultPartitioner implements Partitioner {
             int nextValue = counter.getAndIncrement();
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
-                int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
+                int part = batchToOnePartition(DefaultPartitioner.toPositive(nextValue)) % availablePartitions.size();
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition
-                return DefaultPartitioner.toPositive(nextValue) % numPartitions;
+                return batchToOnePartition(DefaultPartitioner.toPositive(nextValue)) % numPartitions;
             }
         } else {
             // hash the keyBytes to choose a partition
