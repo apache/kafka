@@ -223,6 +223,22 @@ class AclAuthorizer extends Authorizer with Logging {
     results.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
+  /**
+   *
+   * <b>Concurrent updates:</b>
+   * <ul>
+   *   <li>If ACLs are created using [[kafka.security.authorizer.AclAuthorizer#createAcls]] while a delete is in
+   *   progress, these ACLs may or may not be considered for deletion depending on the order of updates.
+   *   The returned [[org.apache.kafka.server.authorizer.AclDeleteResult]] indicates which ACLs were deleted.</li>
+   *   <li>If the provided filters use resource pattern type
+   *   [[org.apache.kafka.common.resource.PatternType#MATCH]] that needs to filter all resources to determine
+   *   matching ACLs, only ACLs that have already been propagated to the broker processing the ACL update will be
+   *   deleted. This may not include some ACLs that were persisted, but not yet propagated to all brokers. The
+   *   returned [[org.apache.kafka.server.authorizer.AclDeleteResult]] indicates which ACLs were deleted.</li>
+   *   <li>If the provided filters use other resource pattern types that perform a direct match, all matching ACLs
+   *   from previously completed [[kafka.security.authorizer.AclAuthorizer#createAcls]] are guaranteed to be deleted.</li>
+   * </ul>
+   */
   override def deleteAcls(requestContext: AuthorizableRequestContext,
                           aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
     val deletedBindings = new mutable.HashMap[AclBinding, Int]()
@@ -553,12 +569,16 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
+  private[authorizer] def processAclChangeNotification(resource: ResourcePattern): Unit = {
+    lock synchronized {
+      val versionedAcls = getAclsFromZk(resource)
+      updateCache(resource, versionedAcls)
+    }
+  }
+
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {
     override def processNotification(resource: ResourcePattern): Unit = {
-      lock synchronized {
-        val versionedAcls = getAclsFromZk(resource)
-        updateCache(resource, versionedAcls)
-      }
+      processAclChangeNotification(resource)
     }
   }
 }

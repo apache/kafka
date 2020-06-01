@@ -20,7 +20,7 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
-import java.util.UUID
+import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 
 import kafka.Kafka
@@ -910,6 +910,82 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
         assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
       case _ => assertEquals(prefixedValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
     })
+  }
+
+  @Test
+  def testCreateDeleteTiming(): Unit = {
+    val literalResource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
+    val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
+    val wildcardResource = new ResourcePattern(TOPIC, "*", LITERAL)
+    val ace = new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW)
+    val updateSemaphore = new Semaphore(1)
+
+    def createAcl(createAuthorizer: AclAuthorizer, resource: ResourcePattern): AclBinding = {
+      val acl = new AclBinding(resource, ace)
+      createAuthorizer.createAcls(requestContext, Collections.singletonList(acl)).asScala
+        .foreach(_.toCompletableFuture.get(15, TimeUnit.SECONDS))
+      acl
+    }
+
+    def deleteAcl(deleteAuthorizer: AclAuthorizer,
+                  resource: ResourcePattern,
+                  deletePatternType: PatternType): List[AclBinding] = {
+
+      val filter = new AclBindingFilter(
+        new ResourcePatternFilter(resource.resourceType(), resource.name(), deletePatternType),
+        AccessControlEntryFilter.ANY)
+      deleteAuthorizer.deleteAcls(requestContext, Collections.singletonList(filter)).asScala
+        .map(_.toCompletableFuture.get(15, TimeUnit.SECONDS))
+        .flatMap(_.aclBindingDeleteResults.asScala)
+        .map(_.aclBinding)
+        .toList
+    }
+
+    def listAcls(authorizer: AclAuthorizer): List[AclBinding] = {
+      authorizer.acls(AclBindingFilter.ANY).asScala.toList
+    }
+
+    def verifyCreateDeleteAcl(deleteAuthorizer: AclAuthorizer,
+                              resource: ResourcePattern,
+                              deletePatternType: PatternType): Unit = {
+      updateSemaphore.acquire()
+      assertEquals(List.empty, listAcls(deleteAuthorizer))
+      val acl = createAcl(aclAuthorizer, resource)
+      val deleted = deleteAcl(deleteAuthorizer, resource, deletePatternType)
+      if (deletePatternType != PatternType.MATCH) {
+        assertEquals(List(acl), deleted)
+      } else {
+        assertEquals(List.empty[AclBinding], deleted)
+      }
+      updateSemaphore.release()
+      if (deletePatternType == PatternType.MATCH) {
+        TestUtils.waitUntilTrue(() => listAcls(deleteAuthorizer).nonEmpty, "ACL not propagated")
+        assertEquals(List(acl), deleteAcl(deleteAuthorizer, resource, deletePatternType))
+      }
+      TestUtils.waitUntilTrue(() => listAcls(deleteAuthorizer).isEmpty, "ACL delete not propagated")
+    }
+
+    val deleteAuthorizer = new AclAuthorizer {
+      override def processAclChangeNotification(resource: ResourcePattern): Unit = {
+        updateSemaphore.acquire()
+        try {
+          super.processAclChangeNotification(resource)
+        } finally {
+          updateSemaphore.release()
+        }
+      }
+    }
+
+    try {
+      deleteAuthorizer.configure(config.originals)
+      List(literalResource, prefixedResource, wildcardResource).foreach { resource =>
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, resource.patternType())
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, PatternType.ANY)
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, PatternType.MATCH)
+      }
+    } finally {
+      deleteAuthorizer.close()
+    }
   }
 
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
