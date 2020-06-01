@@ -1257,9 +1257,9 @@ public class Selector implements Selectable, AutoCloseable {
 
         private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
                 SampledStat stat, String baseName, String descriptiveName) {
-            MetricName rateMetricName = metrics.metricName((baseName + "-rate"), groupName,
+            MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
                             String.format("The number of %s per second", descriptiveName), metricTags);
-            MetricName totalMetricName = metrics.metricName((baseName + "-total"), groupName,
+            MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
                             String.format("The total number of %s", descriptiveName), metricTags);
             if (stat == null)
                 return new Meter(rateMetricName, totalMetricName);
