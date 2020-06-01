@@ -702,8 +702,7 @@ public class SslTransportLayerTest {
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.READY);
+        NetworkTestUtils.waitForChannelReady(selector, node);
         server.verifyAuthenticationMetrics(1, 0);
     }
 
@@ -730,7 +729,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.READY);
+        NetworkTestUtils.waitForChannelReady(selector, node);
         server.verifyAuthenticationMetrics(1, 0);
     }
 
