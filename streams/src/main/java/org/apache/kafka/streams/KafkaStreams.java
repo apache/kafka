@@ -1225,6 +1225,7 @@ public class KafkaStreams implements AutoCloseable {
      * of invocation to once every few seconds.
      *
      * @return map of store names to another map of partition to {@link LagInfo}s
+     * @throws StreamsException if the admin client request throws exception
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
         final long latestSentinel = -2L;
