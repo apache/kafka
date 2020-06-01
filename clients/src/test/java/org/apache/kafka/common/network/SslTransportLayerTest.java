@@ -41,7 +41,6 @@ import org.junit.runners.Parameterized;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLServerSocketFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -583,29 +582,24 @@ public class SslTransportLayerTest {
     public void testUnsupportedCipher() throws Exception {
         String[] cipherSuites;
         if (Java.IS_JAVA11_COMPATIBLE) {
-            cipherSuites = new String[] {
-                "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-                ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites()[1]
-            };
+            cipherSuites = new String[] {"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "TLS_AES_256_GCM_SHA384"};
         } else {
-            cipherSuites = ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites();
+            cipherSuites = new String[] {"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"};
         }
 
-        if (cipherSuites != null && cipherSuites.length > 1) {
-            sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
-            sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
-            sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-            sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
 
-            server = createEchoServer(SecurityProtocol.SSL);
-            createSelector(sslClientConfigs);
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
 
-            checkAuthentiationFailed("1", "TLSv1.1");
-            server.verifyAuthenticationMetrics(0, 1);
+        checkAuthentiationFailed("1", "TLSv1.1");
+        server.verifyAuthenticationMetrics(0, 1);
 
-            checkAuthentiationFailed("2", "TLSv1");
-            server.verifyAuthenticationMetrics(0, 2);
-        }
+        checkAuthentiationFailed("2", "TLSv1");
+        server.verifyAuthenticationMetrics(0, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
@@ -638,9 +632,6 @@ public class SslTransportLayerTest {
     @Test
     public void testCiphersSuiteForTls12FailsForTls13() throws Exception {
         assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
-        SSLContext context = SSLContext.getInstance(tlsProtocol);
-        context.init(null, null, null);
 
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
@@ -686,9 +677,6 @@ public class SslTransportLayerTest {
         assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
         String node = "0";
-        SSLContext context = SSLContext.getInstance(tlsProtocol);
-        context.init(null, null, null);
-
         String cipherSuite = "TLS_AES_128_GCM_SHA256";
 
         sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
@@ -712,9 +700,6 @@ public class SslTransportLayerTest {
     @Test
     public void testCiphersSuiteForTls12() throws Exception {
         String node = "0";
-        SSLContext context = SSLContext.getInstance(tlsProtocol);
-        context.init(null, null, null);
-
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
         sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
