@@ -63,7 +63,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
@@ -578,30 +577,6 @@ public class SslTransportLayerTest {
         server.verifyAuthenticationMetrics(1, 2);
     }
 
-    @Test
-    public void testUnsupportedCipher() throws Exception {
-        String[] cipherSuites;
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            cipherSuites = new String[] {"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "TLS_AES_256_GCM_SHA384"};
-        } else {
-            cipherSuites = new String[] {"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"};
-        }
-
-        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
-        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
-
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs);
-
-        checkAuthentiationFailed("1", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
-
-        checkAuthentiationFailed("2", "TLSv1");
-        server.verifyAuthenticationMetrics(0, 2);
-    }
-
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthentiationFailed(String node, String tlsVersion) throws IOException {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
@@ -627,103 +602,10 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connections fails if TLSv1.3 enabled but cipher suite suitable only for TLSv1.2 used.
-     */
-    @Test
-    public void testCiphersSuiteForTls12FailsForTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
-        String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
-
-        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-        server = createEchoServer(SecurityProtocol.SSL);
-
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-
-        checkAuthentiationFailed("0", "TLSv1.3");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that connections can't be made if server uses TLSv1.2 with custom cipher suite and client uses TLSv1.3.
-     */
-    @Test
-    public void testCiphersSuiteFailForServerTls12ClientTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
-        String tls12CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
-        String tls13CipherSuite = "TLS_AES_128_GCM_SHA256";
-
-        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.2"));
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(tls12CipherSuite));
-        server = createEchoServer(SecurityProtocol.SSL);
-
-        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(tls13CipherSuite));
-
-        checkAuthentiationFailed("0", "TLSv1.3");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that connections can be made with TLSv1.3 cipher suite.
-     */
-    @Test
-    public void testCiphersSuiteForTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
-        String node = "0";
-        String cipherSuite = "TLS_AES_128_GCM_SHA256";
-
-        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split(",")));
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-        server = createEchoServer(SecurityProtocol.SSL);
-
-        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split(",")));
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelReady(selector, node);
-        server.verifyAuthenticationMetrics(1, 0);
-    }
-
-    /**
-     * Tests that connections can be made with TLSv1.2 cipher suite.
-     */
-    @Test
-    public void testCiphersSuiteForTls12() throws Exception {
-        String node = "0";
-        String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
-
-        sslServerConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split(",")));
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-        server = createEchoServer(SecurityProtocol.SSL);
-
-        sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL);
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split(",")));
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        NetworkTestUtils.waitForChannelReady(selector, node);
-        server.verifyAuthenticationMetrics(1, 0);
-    }
-
-    /**
      * Tests that connections cannot be made with unsupported TLS cipher suites
      */
     @Test
     public void testUnsupportedCiphers() throws Exception {
-        String node = "0";
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
@@ -732,11 +614,8 @@ public class SslTransportLayerTest {
 
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
         createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
-        server.verifyAuthenticationMetrics(0, 1);
+        checkAuthentiationFailed("1", tlsProtocol);
     }
 
     @Test
