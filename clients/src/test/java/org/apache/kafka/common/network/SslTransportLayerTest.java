@@ -636,7 +636,7 @@ public class SslTransportLayerTest {
      * Tests that connections fails if TLSv1.3 enabled but cipher suite suitable only for TLSv1.2 used.
      */
     @Test
-    public void testCiphersSuiteForTls12_FailsForTls13() throws Exception {
+    public void testCiphersSuiteForTls12FailsForTls13() throws Exception {
         assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
         SSLContext context = SSLContext.getInstance(tlsProtocol);
@@ -660,7 +660,7 @@ public class SslTransportLayerTest {
      * Tests that connections can't be made if server uses TLSv1.2 with custom cipher suite and client uses TLSv1.3.
      */
     @Test
-    public void testCiphersSuiteFailForServerTls12_ClientTls13() throws Exception {
+    public void testCiphersSuiteFailForServerTls12ClientTls13() throws Exception {
         assumeTrue(Java.IS_JAVA11_COMPATIBLE);
 
         String tls12CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";

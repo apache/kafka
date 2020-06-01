@@ -267,7 +267,7 @@ class SecurityConfig(TemplateRenderer):
         if self.has_sasl:
             self.setup_sasl(node)
 
-        if java_version(node) <= 9 and self.properties['tls.version'] == 'TLSv1.3':
+        if java_version(node) <= 11 and self.properties.get('tls.version') == 'TLSv1.3':
             self.properties.update({'tls.version': 'TLSv1.2'})
 
     def setup_credentials(self, node, path, zk_connect, broker):
