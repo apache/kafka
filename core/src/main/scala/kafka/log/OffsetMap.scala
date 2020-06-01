@@ -30,8 +30,8 @@ trait OffsetMap {
   /* The maximum number of entries this map can contain */
   def slots: Int
 
-  /* Initialize the map with the topic compact strategy */
-  def init(strategy: String, headerKey: String, cleanerThreadId: Int, topicPartitionName: String)
+  /* Reinitialize the map with the topic compact strategy */
+  def reinitialize(strategy: String, headerKey: String, cleanerThreadId: Int, topicPartitionName: String)
 
   /**
    * Associate this offset to the given key.
@@ -67,7 +67,7 @@ trait OffsetMap {
    */
   def updateLatestOffset(offset: Long): Unit
 
-  /* The number of entries put into the map (note that not all may remain) */
+  /* The number of entries put into the map */
   def size: Int
 
   def utilization: Double = size.toDouble / slots
@@ -119,11 +119,9 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   private var lastOffset = -1L
 
   /**
-   * The number of bytes of space each entry uses (the number of bytes in the hash plus an 8 byte offset)
-   * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
-   * and, if applicable, another 8 bytes for non-offset compact strategy (set in the init method).
+   * The number of bytes of space each entry uses.
    */
-  var bytesPerEntry = hashSize + longByteSize
+  var bytesPerEntry = -1L
 
   /**
    * The maximum number of entries this map can contain
@@ -137,13 +135,13 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   private var headerKey: String = ""
 
   /**
-   * Initialize the map with the topic compact strategy
+   * Reinitialize the map with the topic compact strategy
    * @param strategy The compaction strategy
    * @param headerKey The header key if the compaction strategy is set to header
    * @param cleanerThreadId The cleaner thread id
    * @param topicPartitionName The topic partition name
    */
-  override def init(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") {
+  override def reinitialize(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") {
     // set the log indent for the topic partition
     this.logIdent = s"[OffsetMap-$cleanerThreadId $topicPartitionName]: "
 

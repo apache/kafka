@@ -2369,7 +2369,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), StandardCharsets.UTF_8)
 
-  override def init(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
+  override def reinitialize(strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
     this.map.clear()
 
     this.isOffsetStrategy = Defaults.CompactionStrategyOffset.equalsIgnoreCase(strategy)

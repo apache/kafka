@@ -44,7 +44,7 @@ class OffsetMapTest {
   @Test
   def testInit(): Unit = {
     val map = new SkimpyOffsetMap(4000)
-    map.init()
+    map.reinitialize()
 
     for (i <- 0 until 10)
       map.put(new FakeRecord(key(i), i))
@@ -56,7 +56,7 @@ class OffsetMapTest {
       assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1)))
     }
 
-    map.init(Defaults.CompactionStrategyOffset)
+    map.reinitialize(Defaults.CompactionStrategyOffset)
     for (i <- 0 until 10) {
       assertEquals(map.getOffset(key(i)), -1L)
       assertEquals(map.getVersion(key(i)), -1L)
@@ -66,7 +66,7 @@ class OffsetMapTest {
   @Test
   def testGetWhenFull(): Unit = {
     val map = new SkimpyOffsetMap(4096)
-    map.init(Defaults.CompactionStrategyOffset)
+    map.reinitialize(Defaults.CompactionStrategyOffset)
     var i = 37L  //any value would do
     while (map.size < map.slots) {
       map.put(new FakeRecord(key(i), i))
@@ -84,7 +84,7 @@ class OffsetMapTest {
   @Test
   def testTimestampLogCompaction(): Unit = {
     val map = new SkimpyOffsetMap(4096)
-    map.init("timestamp")
+    map.reinitialize("timestamp")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
     val time = System.currentTimeMillis()
@@ -127,7 +127,7 @@ class OffsetMapTest {
   @Test
   def testSequenceLogCompaction(): Unit = {
     val map = new SkimpyOffsetMap(4096)
-    map.init("header", "sequence")
+    map.reinitialize("header", "sequence")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
     for (i <- 0 until 10)
@@ -205,7 +205,7 @@ class OffsetMapTest {
     /*
      * offset based compaction
      */
-    map.init()
+    map.reinitialize()
 
     for (i <- 0 until 10)
       map.put(new FakeRecord(key(i), i))
@@ -236,7 +236,7 @@ class OffsetMapTest {
     /*
      * timestamp based compaction
      */
-    map.init("timestamp")
+    map.reinitialize("timestamp")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
     val time = System.currentTimeMillis()
@@ -270,7 +270,7 @@ class OffsetMapTest {
     /* 
      * header sequence based compaction
      */
-    map.init("header", "sequence")
+    map.reinitialize("header", "sequence")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
     for (i <- 0 until 10)
@@ -295,7 +295,7 @@ class OffsetMapTest {
   
   def validateMap(items: Int, loadFactor: Double = 0.5, strategy: String = Defaults.CompactionStrategyOffset, headerKey: String = ""): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
-    map.init(strategy, headerKey)
+    map.reinitialize(strategy, headerKey)
 
     val isOffsetStrategy = Defaults.CompactionStrategyOffset.equalsIgnoreCase(strategy)
     val isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)

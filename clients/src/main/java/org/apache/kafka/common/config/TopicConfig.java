@@ -120,7 +120,7 @@ public class TopicConfig {
     	"the given strategy name (case-insensitive). The valid strategies are \"offset\", \"timestamp\" and \"header\".";
 
     public static final String COMPACTION_STRATEGY_HEADER_KEY_CONFIG = "compaction.strategy.header";
-    public static final String COMPACTION_STRATEGY_HEADER_KEY_DOC = "The header key for the compaction. Only applicable for compaction strategy header.";
+    public static final String COMPACTION_STRATEGY_HEADER_KEY_DOC = "The header key for the compaction. Only applicable for \"header\" compaction strategy.";
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +

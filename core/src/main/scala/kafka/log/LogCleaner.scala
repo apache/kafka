@@ -867,7 +867,7 @@ private[log] class Cleaner(val id: Int,
                                   map: OffsetMap,
                                   stats: CleanerStats): Unit = {
     // initialize the map for the topic partition
-    map.init(log.config.compactionStrategy, log.config.compactionStrategyHeaderKey, this.id, log.topicPartition.toString)
+    map.reinitialize(log.config.compactionStrategy, log.config.compactionStrategyHeaderKey, this.id, log.topicPartition.toString)
 
     val dirty = log.logSegments(start, end).toBuffer
     val nextSegmentStartOffsets = new ListBuffer[Long]
