@@ -66,6 +66,7 @@ object AclAuthorizer {
 
   class AclSeqs(seqs: Seq[AclEntry]*) {
     def find(p: AclEntry => Boolean): Option[AclEntry] = {
+      // Lazily iterate through the inner `Seq` elements and stop as soon as we find a match
       val it = seqs.iterator.flatMap(_.find(p))
       if (it.hasNext) Some(it.next)
       else None
