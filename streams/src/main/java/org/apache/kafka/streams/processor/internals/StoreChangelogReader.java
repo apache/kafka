@@ -415,7 +415,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
-                polledRecords = restoreConsumer.poll(pollTime);
+                polledRecords = restoreConsumer.poll(state.equals(ChangelogReaderState.STANDBY_UPDATING) ? Duration.ZERO : pollTime);
             } catch (final InvalidOffsetException e) {
                 log.warn("Encountered {} fetching records from restore consumer for partitions {}, it is likely that " +
                     "the consumer's position has fallen out of the topic partition offset range because the topic was " +
