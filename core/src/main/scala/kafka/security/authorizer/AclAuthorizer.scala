@@ -40,6 +40,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
@@ -63,9 +64,15 @@ object AclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
 
-  class AclSeqs(classes: Seq[AclEntry]*) {
-    def find(p: AclEntry => Boolean): Option[AclEntry] = classes.flatMap(_.find(p)).headOption
-    def isEmpty: Boolean = !classes.exists(_.nonEmpty)
+  class AclSeqs(seqs: Seq[AclEntry]*) {
+    def find(p: AclEntry => Boolean): Option[AclEntry] = {
+      // Lazily iterate through the inner `Seq` elements and stop as soon as we find a match
+      val it = seqs.iterator.flatMap(_.find(p))
+      if (it.hasNext) Some(it.next)
+      else None
+    }
+
+    def isEmpty: Boolean = !seqs.exists(_.nonEmpty)
   }
 
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
@@ -344,8 +351,10 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  @nowarn("cat=deprecation")
+  @nowarn("cat=deprecation&cat=optimizer")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
+    // this code is performance sensitive, make sure to run AclAuthorizerBenchmark after any changes
+
     // save aclCache reference to a local val to get a consistent view of the cache during acl updates.
     val aclCacheSnapshot = aclCache
     val wildcard = aclCacheSnapshot.get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
@@ -356,11 +365,13 @@ class AclAuthorizer extends Authorizer with Logging {
       .map(_.acls.toBuffer)
       .getOrElse(mutable.Buffer.empty)
 
-    val prefixed = aclCacheSnapshot
+    val prefixed = new ArrayBuffer[AclEntry]
+    aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-      .flatMap { case (resource, acls) => if (resourceName.startsWith(resource.name)) acls.acls else Seq.empty }
-      .toBuffer
+      .foreach { case (resource, acls) =>
+        if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
+      }
 
     new AclSeqs(prefixed, wildcard, literal)
   }
