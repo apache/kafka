@@ -18,8 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.PriorityQueue;
 import java.util.Queue;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -59,13 +57,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -138,8 +134,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
         }
 
-        void addPreviousTasksAndOffsetSums(final Map<TaskId, Long> taskOffsetSums) {
-            state.addPreviousTasksAndOffsetSums(taskOffsetSums);
+        void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
+            state.addPreviousTasksAndOffsetSums(consumerId, taskOffsetSums);
         }
 
         @Override
@@ -323,7 +319,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // add the consumer and any info in its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
-            clientMetadata.addPreviousTasksAndOffsetSums(info.taskOffsetSums());
+            clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
         }
 
         final boolean versionProbing =
@@ -1076,10 +1072,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * balance. The stateful and total task load are both balanced across threads. Tasks without previous owners
      * will be interleaved by group id to spread subtopologies across threads and further balance the workload.
      */
-    private static Map<String, List<TaskId>> assignTasksToThreads(final Set<TaskId> statefulTasksToAssign,
-                                                                  final Set<TaskId> statelessTasksToAssign,
-                                                                  final Set<String> consumers,
-                                                                  final Function<String, Set<TaskId>> previousTasksForConsumer) {
+    static Map<String, List<TaskId>> assignTasksToThreads(final Set<TaskId> statefulTasksToAssign,
+                                                          final Set<TaskId> statelessTasksToAssign,
+                                                          final Set<String> consumers,
+                                                          final Function<String, Set<TaskId>> previousTasksForConsumer) {
         final Map<String, List<TaskId>> assignment = new HashMap<>();
         for (final String consumer : consumers) {
             assignment.put(consumer, new ArrayList<>());

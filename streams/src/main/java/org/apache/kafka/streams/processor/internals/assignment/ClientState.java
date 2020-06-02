@@ -49,6 +49,7 @@ public class ClientState {
     private final Set<TaskId> prevActiveTasks;
     private final Set<TaskId> prevStandbyTasks;
 
+    private final Map<String, Set<TaskId>> consumerToPreviousTaskIds;
     private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
@@ -64,6 +65,7 @@ public class ClientState {
         standbyTasks = new TreeSet<>();
         prevActiveTasks = new TreeSet<>();
         prevStandbyTasks = new TreeSet<>();
+        consumerToPreviousTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
@@ -74,6 +76,7 @@ public class ClientState {
                         final Set<TaskId> standbyTasks,
                         final Set<TaskId> prevActiveTasks,
                         final Set<TaskId> prevStandbyTasks,
+                        final Map<String, Set<TaskId>> consumerToPreviousTaskIds,
                         final SortedMap<TopicPartition, String> ownedPartitions,
                         final Map<TaskId, Long> taskOffsetSums,
                         final Map<TaskId, Long> taskLagTotals,
@@ -82,6 +85,7 @@ public class ClientState {
         this.standbyTasks = standbyTasks;
         this.prevActiveTasks = prevActiveTasks;
         this.prevStandbyTasks = prevStandbyTasks;
+        this.consumerToPreviousTaskIds = consumerToPreviousTaskIds;
         this.ownedPartitions = ownedPartitions;
         this.taskOffsetSums = taskOffsetSums;
         this.taskLagTotals = taskLagTotals;
@@ -96,6 +100,7 @@ public class ClientState {
         standbyTasks = new TreeSet<>();
         prevActiveTasks = unmodifiableSet(new TreeSet<>(previousActiveTasks));
         prevStandbyTasks = unmodifiableSet(new TreeSet<>(previousStandbyTasks));
+        consumerToPreviousTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
@@ -110,6 +115,7 @@ public class ClientState {
             new TreeSet<>(standbyTasks),
             new TreeSet<>(prevActiveTasks),
             new TreeSet<>(prevStandbyTasks),
+            new TreeMap<>(consumerToPreviousTaskIds),
             newOwnedPartitions,
             new TreeMap<>(taskOffsetSums),
             new TreeMap<>(taskLagTotals),
@@ -244,8 +250,9 @@ public class ClientState {
         }
     }
 
-    public void addPreviousTasksAndOffsetSums(final Map<TaskId, Long> taskOffsetSums) {
+    public void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
         this.taskOffsetSums.putAll(taskOffsetSums);
+        consumerToPreviousTaskIds.put(consumerId, taskOffsetSums.keySet());
     }
 
     public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap) {
@@ -312,13 +319,24 @@ public class ClientState {
     }
 
     public Set<TaskId> previousStatefulActiveTasksForConsumer(final String memberId) {
-        //TODO
-        return null;
+        final Set<TaskId> prevTasks = new HashSet<>();
+        for (final TaskId task : consumerToPreviousTaskIds.get(memberId)) {
+            if (isStateful(task) && prevActiveTasks.contains(task)) {
+                prevTasks.add(task);
+            }
+        }
+        return prevTasks;
     }
 
+    // Equivalent to previousStatefulStandbyTasksForConsumer since all standbys are by definition stateful
     public Set<TaskId> previousStandbyTasksForConsumer(final String memberId) {
-        //TODO
-        return null;
+        final Set<TaskId> prevTasks = new HashSet<>();
+        for (final TaskId task : consumerToPreviousTaskIds.get(memberId)) {
+            if (prevStandbyTasks.contains(task)) {
+                prevTasks.add(task);
+            }
+        }
+        return prevTasks;
     }
 
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
