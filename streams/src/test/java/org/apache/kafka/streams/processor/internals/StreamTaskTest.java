@@ -217,7 +217,7 @@ public class StreamTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null && !task.isClosed()) {
+        if (task != null) {
             task.prepareCloseDirty();
             task.closeDirty();
             task = null;
@@ -1789,7 +1789,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowIfClosingOnIllegalState() {
+    public void closeShouldBeIdempotent() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
 
@@ -1798,9 +1798,9 @@ public class StreamTaskTest {
         final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
         task.closeClean(checkpoint);
 
-        // close call are not idempotent since we are already in closed
-        assertThrows(IllegalStateException.class, () -> task.closeClean(checkpoint));
-        assertThrows(IllegalStateException.class, task::closeDirty);
+        // close calls are idempotent since we are already in closed
+        task.closeClean(checkpoint);
+        task.closeDirty();
 
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
