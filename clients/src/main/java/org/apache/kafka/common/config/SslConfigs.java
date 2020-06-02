@@ -52,7 +52,8 @@ public class SslConfigs {
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
             + "Default setting is TLSv1.2(TLSv1.3 for modern JVM), which is fine for most cases. "
             + "Allowed values in recent JVMs are TLSv1.2 and TLSv1.3. TLS, TLSv1.1, SSL, SSLv2 and SSLv3 "
-            + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
+            + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities."
+            + "Please, note, TLSv1.2 clients can't connect to the servers with TLSv1.3 only even if ssl.enabled.protocols contains TLSv1.3";
 
     public static final String DEFAULT_SSL_PROTOCOL;
 
