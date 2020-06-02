@@ -482,6 +482,25 @@ public class AbstractConfigTest {
         assertEquals(config.originals().get("sasl.truststore.location"), "/usr/vault");
     }
 
+    @Test
+    public void testDocumentationOf() {
+        Properties props = new Properties();
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+
+        assertEquals(
+            config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS),
+            TestIndirectConfigResolution.INDIRECT_CONFIGS_DOC
+        );
+    }
+
+    @Test
+    public void testDocumentationOfExpectNull() {
+        Properties props = new Properties();
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+
+        assertNull(config.documentationOf("xyz"));
+    }
+
     private static class TestIndirectConfigResolution extends AbstractConfig {
 
         private static final ConfigDef CONFIG;

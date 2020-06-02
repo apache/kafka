@@ -39,11 +39,13 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
@@ -66,10 +68,10 @@ public class InternalMockProcessorContext
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ToInternal toInternal = new ToInternal();
 
+    private TaskType taskType = TaskType.ACTIVE;
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
-    private TaskType taskType = TaskType.ACTIVE;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -160,7 +162,8 @@ public class InternalMockProcessorContext
                                         final Serde<?> valSerde,
                                         final RecordCollector collector,
                                         final ThreadCache cache) {
-        this(stateDir,
+        this(
+            stateDir,
             keySerde,
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
@@ -177,11 +180,13 @@ public class InternalMockProcessorContext
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache) {
-        super(new TaskId(0, 0),
+        super(
+            new TaskId(0, 0),
             config,
             metrics,
             null,
-            cache);
+            cache
+        );
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
@@ -357,10 +362,6 @@ public class InternalMockProcessorContext
         return taskType;
     }
 
-    public void setTaskType(final TaskType taskType) {
-        this.taskType = taskType;
-    }
-
     @Override
     public void logChange(final String storeName,
                           final Bytes key,
@@ -375,6 +376,21 @@ public class InternalMockProcessorContext
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        taskType = TaskType.ACTIVE;
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        taskType = TaskType.STANDBY;
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache().addDirtyEntryFlushListener(namespace, listener);
     }
 
     public StateRestoreListener getRestoreListener(final String storeName) {

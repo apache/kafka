@@ -1472,7 +1472,9 @@ public class KafkaAdminClient extends AdminClient {
                                                 configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
                                                 config.isSensitive(),
                                                 config.readOnly(),
-                                                Collections.emptyList()))
+                                                Collections.emptyList(),
+                                                null,
+                                                null))
                                         .collect(Collectors.toSet()));
                                 topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
                                         result.replicationFactor(),
@@ -1936,7 +1938,8 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(unifiedRequestResources)
-                            .includeSynonyms(options.includeSynonyms());
+                            .includeSynonyms(options.includeSynonyms())
+                            .includeDocumentation(options.includeDocumentation());
                 }
 
                 @Override
@@ -1960,7 +1963,8 @@ public class KafkaAdminClient extends AdminClient {
                             configEntries.add(new ConfigEntry(configEntry.name(),
                                     configEntry.value(), configSource(configEntry.source()),
                                     configEntry.isSensitive(), configEntry.isReadOnly(),
-                                    configSynonyms(configEntry)));
+                                    configSynonyms(configEntry), configType(configEntry.type()),
+                                    configEntry.documentation()));
                         }
                         future.complete(new Config(configEntries));
                     }
@@ -1983,7 +1987,8 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
-                            .includeSynonyms(options.includeSynonyms());
+                            .includeSynonyms(options.includeSynonyms())
+                            .includeDocumentation(options.includeDocumentation());
                 }
 
                 @Override
@@ -2003,7 +2008,7 @@ public class KafkaAdminClient extends AdminClient {
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
                                 configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
-                                configSynonyms(configEntry)));
+                                configSynonyms(configEntry), configType(configEntry.type()), configEntry.documentation()));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }
@@ -2054,6 +2059,46 @@ public class KafkaAdminClient extends AdminClient {
                 throw new IllegalArgumentException("Unexpected config source " + source);
         }
         return configSource;
+    }
+
+    private ConfigEntry.ConfigType configType(DescribeConfigsResponse.ConfigType type) {
+        if (type == null) {
+            return ConfigEntry.ConfigType.UNKNOWN;
+        }
+
+        ConfigEntry.ConfigType configType;
+        switch (type) {
+            case BOOLEAN:
+                configType = ConfigEntry.ConfigType.BOOLEAN;
+                break;
+            case CLASS:
+                configType = ConfigEntry.ConfigType.CLASS;
+                break;
+            case DOUBLE:
+                configType = ConfigEntry.ConfigType.DOUBLE;
+                break;
+            case INT:
+                configType = ConfigEntry.ConfigType.INT;
+                break;
+            case LIST:
+                configType = ConfigEntry.ConfigType.LIST;
+                break;
+            case LONG:
+                configType = ConfigEntry.ConfigType.LONG;
+                break;
+            case PASSWORD:
+                configType = ConfigEntry.ConfigType.PASSWORD;
+                break;
+            case SHORT:
+                configType = ConfigEntry.ConfigType.SHORT;
+                break;
+            case STRING:
+                configType = ConfigEntry.ConfigType.STRING;
+                break;
+            default:
+                configType = ConfigEntry.ConfigType.UNKNOWN;
+        }
+        return configType;
     }
 
     @Override
@@ -3056,14 +3101,21 @@ public class KafkaAdminClient extends AdminClient {
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         ListGroupsRequest.Builder createRequest(int timeoutMs) {
-                            return new ListGroupsRequest.Builder(new ListGroupsRequestData());
+                            List<String> states = options.states()
+                                    .stream()
+                                    .map(s -> s.toString())
+                                    .collect(Collectors.toList());
+                            return new ListGroupsRequest.Builder(new ListGroupsRequestData().setStatesFilter(states));
                         }
 
                         private void maybeAddConsumerGroup(ListGroupsResponseData.ListedGroup group) {
                             String protocolType = group.protocolType();
                             if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                 final String groupId = group.groupId();
-                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty());
+                                final Optional<ConsumerGroupState> state = group.groupState().equals("")
+                                        ? Optional.empty()
+                                        : Optional.of(ConsumerGroupState.parse(group.groupState()));
+                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty(), state);
                                 results.addListing(groupListing);
                             }
                         }

@@ -33,7 +33,11 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
@@ -116,5 +120,18 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
                           final Bytes key,
                           final byte[] value,
                           final long timestamp) {
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
     }
 }

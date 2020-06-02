@@ -86,6 +86,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
+import kafka.coordinator.group.GroupOverview
 
 
 /**
@@ -1394,29 +1395,35 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
-    val (error, groups) = groupCoordinator.handleListGroups()
+    val listGroupsRequest = request.body[ListGroupsRequest]
+    val states = if (listGroupsRequest.data.statesFilter == null)
+      // Handle a null array the same as empty
+      immutable.Set[String]()
+    else 
+      listGroupsRequest.data.statesFilter.asScala.toSet
+
+    def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
+       new ListGroupsResponse(new ListGroupsResponseData()
+            .setErrorCode(error.code)
+            .setGroups(groups.map { group =>
+                val listedGroup = new ListGroupsResponseData.ListedGroup()
+                  .setGroupId(group.groupId)
+                  .setProtocolType(group.protocolType)
+                  .setGroupState(group.state.toString)
+                listedGroup
+            }.asJava)
+            .setThrottleTimeMs(throttleMs)
+        )
+    }
+    val (error, groups) = groupCoordinator.handleListGroups(states)
     if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
       // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ListGroupsResponse(new ListGroupsResponseData()
-            .setErrorCode(error.code)
-            .setGroups(groups.map { group => new ListGroupsResponseData.ListedGroup()
-              .setGroupId(group.groupId)
-              .setProtocolType(group.protocolType)}.asJava
-            )
-            .setThrottleTimeMs(requestThrottleMs)
-        ))
+        createResponse(requestThrottleMs, groups, error))
     else {
       val filteredGroups = groups.filter(group => authorize(request.context, DESCRIBE, GROUP, group.groupId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ListGroupsResponse(new ListGroupsResponseData()
-          .setErrorCode(error.code)
-          .setGroups(filteredGroups.map { group => new ListGroupsResponseData.ListedGroup()
-            .setGroupId(group.groupId)
-            .setProtocolType(group.protocolType)}.asJava
-          )
-          .setThrottleTimeMs(requestThrottleMs)
-        ))
+        createResponse(requestThrottleMs, filteredGroups, error))
     }
   }
 
@@ -2572,7 +2579,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val authorizedConfigs = adminManager.describeConfigs(authorizedResources.map { resource =>
       resource -> Option(describeConfigsRequest.configNames(resource)).map(_.asScala.toSet)
-    }.toMap, describeConfigsRequest.includeSynonyms)
+    }.toMap, describeConfigsRequest.includeSynonyms, describeConfigsRequest.includeDocumentation)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = configsAuthorizationApiError(resource)
       resource -> new DescribeConfigsResponse.Config(error, util.Collections.emptyList[DescribeConfigsResponse.ConfigEntry])

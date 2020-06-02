@@ -200,8 +200,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix used to isolate {@link Admin admin} configs from other client configs.
-     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
-     * properties}.
+     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link AdminClientConfig admin
+     * client properties}.
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
