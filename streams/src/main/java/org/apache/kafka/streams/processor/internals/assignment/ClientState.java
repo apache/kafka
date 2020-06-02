@@ -301,6 +301,11 @@ public class ClientState {
         }
     }
 
+    public Set<TaskId> previousStatefulTasksForConsumer(final String memberId) {
+        //TODO
+        return null;
+    }
+
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }

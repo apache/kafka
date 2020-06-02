@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Queue;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -1247,6 +1250,75 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         return previousConsumers;
+    }
+
+    /**
+     * @param taskIds the set of tasks to be distributed
+     * @param consumers the set of consumers to receive tasks
+     * @return a map of task assignments keyed by the consumer id
+     */
+    private static Map<String, List<TaskId>> assignTasksToClients(final Collection<TaskId> taskIds,
+                                                                  final Set<TaskId> statefulTasks,
+                                                                  final Set<String> consumers,
+                                                                  final ClientState state) {
+        final Map<String, List<TaskId>> assignment = new HashMap<>();
+        for (final String consumer : consumers) {
+            assignment.put(consumer, new ArrayList<>());
+        }
+
+        final int minStatefulTasksPerThread = (int) Math.floor(((double) statefulTasks.size()) / consumers.size());
+        final SortedSet<TaskId> unassignedStatefulTasks = new TreeSet<>(statefulTasks);
+
+        final Queue<String> unfilledConsumers = new LinkedList<>();
+
+        // First assign stateful tasks to previous owner, up to the min expected tasks/thread
+        for (final String consumer : consumers) {
+            final List<TaskId> threadAssignment = assignment.get(consumer);
+
+            int i = 0;
+            for (final TaskId task : state.previousStatefulTasksForConsumer(consumer)) {
+               if (i < minStatefulTasksPerThread) {
+                   threadAssignment.add(task);
+                   unassignedStatefulTasks.remove(task);
+               } else {
+                   break;
+               }
+               ++i;
+            }
+
+            if (threadAssignment.size() < minStatefulTasksPerThread) {
+                unfilledConsumers.offer(consumer);
+            }
+        }
+
+        // Next interleave remaining unassigned tasks amongst unfilled consumers
+        while (!unassignedStatefulTasks.isEmpty()) {
+            final Iterator<TaskId> unassignedTaskIter = unassignedStatefulTasks.iterator();
+            while (unassignedTaskIter.hasNext()) {
+                final TaskId task = unassignedTaskIter.next();
+                unassignedTaskIter.remove();
+                final String consumer = unfilledConsumers.poll();
+                if (consumer != null) {
+                    final List<TaskId> threadAssignment = assignment.get(consumer);
+
+                    threadAssignment.add(task);
+                    if (threadAssignment.size() < minStatefulTasksPerThread) {
+                       unfilledConsumers.offer(consumer);
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // At this point all consumers are at the minimum capacity, so just give one unassigned task to each
+        while (!unassignedStatefulTasks.isEmpty()) {
+
+        }
+
+
+        // distribute stateless tasks
+        return assignment;
     }
 
     /**
