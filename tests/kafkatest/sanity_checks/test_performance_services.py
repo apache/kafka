@@ -77,7 +77,7 @@ class PerformanceServiceTest(Test):
 
         # check basic run of consumer performance service
         self.consumer_perf = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, new_consumer=new_consumer,
+            self.test_context, 1, None, self.kafka, new_consumer=new_consumer,
             topic=self.topic, version=version, messages=self.num_records)
         self.consumer_perf.group = "test-consumer-group"
         self.consumer_perf.run()

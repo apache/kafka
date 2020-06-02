@@ -36,7 +36,7 @@ class ConsumerPerformanceService(PerformanceService):
 
         "fetch-size", "The amount of data to fetch in a single request."
 
-        "from-latest", "If the consumer does not already have an establishedoffset to consume from,
+        "from-latest", "If the consumer does not already have an established offset to consume from,
                         start with the latest message present in the log rather than the earliest message."
 
         "socket-buffer-size", "The size of the tcp RECV size."
@@ -46,6 +46,9 @@ class ConsumerPerformanceService(PerformanceService):
         "num-fetch-threads", "Number of fetcher threads. Defaults to 1"
 
         "new-consumer", "Use the new consumer implementation."
+
+        "paused-partitions-percent", "The percentage [0-1] of subscribed partitions to pause each poll."
+
         "consumer.config", "Consumer config properties file."
     """
 
@@ -70,13 +73,15 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}):
+    def __init__(self, context, num_nodes, paused_partitions_percent, kafka, topic, messages, version=DEV_BRANCH,
+                 new_consumer=True, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.topic = topic
         self.messages = messages
         self.new_consumer = new_consumer
+        self.paused_partitions_percent = paused_partitions_percent
         self.settings = settings
 
         assert version >= V_0_9_0_0 or (not new_consumer), \
@@ -131,6 +136,9 @@ class ConsumerPerformanceService(PerformanceService):
 
         if self.from_latest:
             args['from-latest'] = ""
+
+        if self.paused_partitions_percent is not None:
+            args['paused-partitions-percent'] = self.paused_partitions_percent
 
         return args
 
