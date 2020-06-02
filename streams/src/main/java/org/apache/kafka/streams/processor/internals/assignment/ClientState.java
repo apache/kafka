@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -143,7 +144,7 @@ public class ClientState {
         activeTasks.addAll(tasks);
     }
 
-    void assignActive(final TaskId task) {
+    public void assignActive(final TaskId task) {
         assertNotAssigned(task);
         activeTasks.add(task);
     }
@@ -232,8 +233,9 @@ public class ClientState {
         return union(() -> new HashSet<>(prevActiveTasks.size() + prevStandbyTasks.size()), prevActiveTasks, prevStandbyTasks);
     }
 
-    public Map<TopicPartition, String> ownedPartitions() {
-        return unmodifiableMap(ownedPartitions);
+    // May return null
+    public String previousOwnerForPartition(final TopicPartition partition) {
+        return ownedPartitions.get(partition);
     }
 
     public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
@@ -301,7 +303,20 @@ public class ClientState {
         }
     }
 
-    public Set<TaskId> previousStatefulTasksForConsumer(final String memberId) {
+    public Set<TaskId> statefulActiveTasks() {
+        return activeTasks.stream().filter(this::isStateful).collect(Collectors.toSet());
+    }
+
+    public Set<TaskId> statelessActiveTasks() {
+        return activeTasks.stream().filter(task -> !isStateful(task)).collect(Collectors.toSet());
+    }
+
+    public Set<TaskId> previousStatefulActiveTasksForConsumer(final String memberId) {
+        //TODO
+        return null;
+    }
+
+    public Set<TaskId> previousStandbyTasksForConsumer(final String memberId) {
         //TODO
         return null;
     }
@@ -345,12 +360,16 @@ public class ClientState {
             "]";
     }
 
+    private boolean isStateful(final TaskId task) {
+        return taskLagTotals.containsKey(task);
+    }
+
     private void initializePrevActiveTasksFromOwnedPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap) {
         // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
         // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
         // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
         // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
-        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions().entrySet()) {
+        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions.entrySet()) {
             final TopicPartition tp = partitionEntry.getKey();
             final TaskId task = taskForPartitionMap.get(tp);
             if (task != null) {
