@@ -121,7 +121,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
                 || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
 
-                // If the current member's generation is higher, all the previous owned partitions are invalid
+                // If the current member's generation is higher, all the previously owned partitions are invalid
                 if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
                     membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
                     membersOfCurrentHighestGeneration.clear();
