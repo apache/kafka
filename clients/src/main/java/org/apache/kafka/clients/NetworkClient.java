@@ -268,6 +268,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 处理实际读取和写入到socket
      * Do actual reads and writes to sockets.
      *
      * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
@@ -278,14 +279,16 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
+        //可能更新集群元数据
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
+            //处理IO请求，
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
 
-        // process completed actions
+        // process completed actions 处理完成事件
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);

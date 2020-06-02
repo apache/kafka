@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.KafkaException;
 
 /**
+ * 这个异常是当提交offset的时候抛出。当成功完成提交之前完成组重新平衡时，可能会发生这种情况。
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
  * with an unrecoverable error. This can happen when a group rebalance completes before the commit
  * could be successfully applied. In this case, the commit cannot generally be retried because some

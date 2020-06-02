@@ -462,7 +462,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    /**
+     * 自动提交任务
+     */
     private class AutoCommitTask implements DelayedTask {
+        //offset提交间隔
         private final long interval;
 
         public AutoCommitTask(long interval) {
@@ -478,19 +482,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         public void run(final long now) {
+            //如果coordinatorUnknown位置则重试retryBackoffMs
             if (coordinatorUnknown()) {
                 log.debug("Cannot auto-commit offsets for group {} since the coordinator is unknown", groupId);
                 reschedule(now + retryBackoffMs);
                 return;
             }
 
+            //如果需要在join到消费者组，则重新调度
             if (needRejoin()) {
                 // skip the commit when we're rejoining since we'll commit offsets synchronously
                 // before the revocation callback is invoked
                 reschedule(now + interval);
                 return;
             }
-
+            //异步提交消费offset
             commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {

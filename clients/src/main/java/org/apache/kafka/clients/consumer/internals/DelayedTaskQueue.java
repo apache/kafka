@@ -18,6 +18,7 @@ import java.util.PriorityQueue;
 
 /**
  * Tracks a set of tasks to be executed after a delay.
+ * 基于优先级队列，最小堆实现
  */
 public class DelayedTaskQueue {
 
@@ -61,19 +62,23 @@ public class DelayedTaskQueue {
      * @return the remaining time in milliseconds
      */
     public long nextTimeout(long now) {
+        //如果为null，表示最长
         if (tasks.isEmpty())
             return Long.MAX_VALUE;
         else
+            //拿到最近要执行的任务的超时时间减去目前的时间与0取最大
             return Math.max(tasks.peek().timeout - now, 0);
     }
 
     /**
      * Run any ready tasks.
-     *
+     * 运行全部就绪任务
      * @param now the current time
      */
     public void poll(long now) {
+        //如果tasks.isEmpty不为null并且执行的任务已经超时
         while (!tasks.isEmpty() && tasks.peek().timeout <= now) {
+            //拿到任务并且执行
             Entry entry = tasks.poll();
             entry.task.run(now);
         }

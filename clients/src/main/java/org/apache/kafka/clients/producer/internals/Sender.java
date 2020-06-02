@@ -220,6 +220,8 @@ public class Sender implements Runnable {
             }
         }
 
+
+
         // create produce requests 转换数据，将KafkaProducer所需的ConcurrentMap<TopicPartition, Deque<RecordBatch>>转换为Map<NodeId，List<RecordBatch>>
         Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
                 result.readyNodes,

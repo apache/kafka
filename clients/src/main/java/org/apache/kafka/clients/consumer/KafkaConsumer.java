@@ -500,21 +500,49 @@ import java.util.regex.Pattern;
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
+    /**
+     * 当前线程
+     */
     private static final long NO_CURRENT_THREAD = -1L;
+    /**
+     * 消费者Client Id生成器
+     */
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    /**
+     * 消费者JMX前缀
+     */
     private static final String JMX_PREFIX = "kafka.consumer";
 
     private final String clientId;
+    /**
+     * 控制着Consumer与服务端GroupCoordinator之间的通信逻辑
+     */
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
+    /**
+     * 负责从服务端获取消息
+     */
     private final Fetcher<K, V> fetcher;
+    /**
+     * ConsumerInterceptor.onConsumer()方法可以在消息通过poll()方法返回给用户之前对其进行拦截或修改；
+     * ConsumerInterceptor.onCommit()方法也可以在服务端返回提交offset成功的响应时对其进行拦截或修改。与ProducerInterceptors类似。
+     */
     private final ConsumerInterceptors<K, V> interceptors;
 
     private final Time time;
+    /**
+     * 负责消费者与Kafka服务端通信
+     */
     private final ConsumerNetworkClient client;
     private final Metrics metrics;
+    /**
+     * 维护了消费者的消费状态
+     */
     private final SubscriptionState subscriptions;
+    /**
+     * Kafka集群的元数据信息
+     */
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
@@ -522,7 +550,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
+    //当前线程id
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
+    //重入次数，用于“检测是否有多线程并发操作KafkaConsumer
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
     private final AtomicInteger refcount = new AtomicInteger(0);
 
