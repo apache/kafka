@@ -108,16 +108,19 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
+        List<InetAddress> returnedAddresses = null;
+
         switch (clientDnsLookup) {
             case DEFAULT:
-                log.warn("Configuration 'client.dns.lookup' value 'default' is deprecated and will be removed in the future version.");
-                return Collections.singletonList(addresses[0]);
+                returnedAddresses = Collections.singletonList(addresses[0]);
+                break;
             case USE_ALL_DNS_IPS:
             case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
-                return filterPreferredAddresses(addresses);
-            default:
-                throw new ConfigException("Invalid client.dns.lookup value " + clientDnsLookup.toString());
+                returnedAddresses = filterPreferredAddresses(addresses);
+                break;
         }
+
+        return returnedAddresses;
     }
 
     static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {

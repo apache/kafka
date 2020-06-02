@@ -45,8 +45,8 @@ public class CommonClientConfigs {
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups."
                                                        + " If set to <code>use_all_dns_ips</code>, attempt to connect to all IP addresses returned by the lookup and use the first one that connects successfully."
                                                        + " If set to <code>default</code>, attempt to connect to the first IP address returned by the lookup, even if the lookup returns multiple IP addresses."
-                                                       + " If set to <code>resolve_canonical_bootstrap_servers_only</code>, will try to expand bootstrap hostname into a list of canonical names, if bootstrap hostname is an alias for multiple canonical names."
-                                                       + " And each canonical name will be resolved in the same way as <code>use_all_dns_ips</code>."
+                                                       + " If set to <code>resolve_canonical_bootstrap_servers_only</code>, will try to expand bootstrap address into a list of canonical names, if bootstrap address is an alias for multiple canonical names."
+                                                       + " And each canonical name will be resolved in the same way as <code>use_all_dns_ips</code>. This expansion only impacts bootstrap address configured on the client, not broker's advertised addresses."
                                                        + " Note that <code>default</code> is deprecated and will be removed in future release.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
