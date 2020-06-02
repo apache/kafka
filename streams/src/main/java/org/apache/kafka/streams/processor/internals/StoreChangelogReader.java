@@ -548,10 +548,14 @@ public class StoreChangelogReader implements ChangelogReader {
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> committedOffsets;
         try {
-           committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
-        } catch (final TimeoutException e) {
-            // if it timed out we just retry next time.
-            return Collections.emptyMap();
+            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
+        } catch (final StreamsException e) {
+            if (e.getCause() instanceof TimeoutException) {
+                // if it timed out we just retry next time
+                return Collections.emptyMap();
+            } else {
+                throw e;
+            }
         }
         lastUpdateOffsetTime = time.milliseconds();
         return committedOffsets;

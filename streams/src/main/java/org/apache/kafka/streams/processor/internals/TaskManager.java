@@ -118,6 +118,10 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
     public UUID processId() {
         return processId;
     }
