@@ -23,7 +23,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -176,7 +175,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private Admin adminClient;
-    private Consumer<byte[], byte[]> mainConsumerClient;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
@@ -213,7 +211,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
-        mainConsumerClient = taskManager.mainConsumer();
     }
 
     @Override
@@ -793,7 +790,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 fetchEndOffsetsFuture(preexistingChangelogPartitions, adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(preexistingSourceChangelogPartitions, mainConsumerClient);
+                fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = fetchEndOffsets(endOffsetsFuture);
 
