@@ -170,7 +170,7 @@ class SocketServerTest {
   }
 
   private def sslClientSocket(port: Int): Socket = {
-    val sslContext = SSLContext.getInstance("TLSv1.2")
+    val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
     sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
     val socketFactory = sslContext.getSocketFactory
     val socket = socketFactory.createSocket("localhost", port)

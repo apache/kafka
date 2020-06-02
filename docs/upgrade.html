@@ -23,7 +23,12 @@
 <ul>
     <li>Kafka Streams adds a new processing mode (requires broker 2.5 or newer) that improves application
         scalability using exactly-once guarantees
-        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a></li>
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>)
+    </li>
+    <li>TLSv1.3 has been enabled by default for Java 11 or newer. The client and server will negotiate TLSv1.3 if
+        both support it and fallback to TLSv1.2 otherwise. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-573%3A+Enable+TLSv1.3+by+default">KIP-573</a> for more details.
+    </li>
 </ul>
 
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
