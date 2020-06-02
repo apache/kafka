@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Try}
@@ -1197,7 +1196,7 @@ class KafkaController(val config: KafkaConfig,
     val offlineReplicas = new ArrayBuffer[TopicPartition]()
     val onlineReplicas = new ArrayBuffer[TopicPartition]()
 
-    leaderAndIsrResponse.partitions.asScala.foreach { partition =>
+    leaderAndIsrResponse.partitions.forEach { partition =>
       val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
       if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
         offlineReplicas += tp

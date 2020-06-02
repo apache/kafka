@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -357,7 +358,18 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldRestoreToByteStore() {
+    public void shouldRestoreToByteStoreForActiveTask() {
+        shouldRestoreToByteStore(TaskType.ACTIVE);
+    }
+
+    @Test
+    public void shouldRestoreToByteStoreForStandbyTask() {
+        context.transitionToStandby(null);
+        shouldRestoreToByteStore(TaskType.STANDBY);
+    }
+
+    private void shouldRestoreToByteStore(final TaskType taskType) {
+        bytesStore.init(context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
@@ -369,9 +381,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // 2 segments are created during restoration.
         assertEquals(2, bytesStore.getSegments().size());
 
-        // Bulk loading is enabled during recovery.
+        // Bulk loading is disabled during recovery for stand-by tasks.
         for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(1 << 30));
+            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(taskType == TaskType.ACTIVE ? 1 << 30 : 4));
         }
 
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();

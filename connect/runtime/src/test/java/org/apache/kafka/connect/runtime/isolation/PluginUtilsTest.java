@@ -150,6 +150,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.sink.SinkRecord",
             "org.apache.kafka.connect.sink.SinkTask",
             "org.apache.kafka.connect.sink.SinkTaskContext",
+            "org.apache.kafka.connect.sink.ErrantRecordReporter",
             "org.apache.kafka.connect.source.",
             "org.apache.kafka.connect.source.SourceConnector",
             "org.apache.kafka.connect.source.SourceRecord",
@@ -166,6 +167,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.storage.StringConverterConfig",
             //"org.apache.kafka.connect.transforms.", isolated by default
             "org.apache.kafka.connect.transforms.Transformation",
+            "org.apache.kafka.connect.transforms.predicates.Predicate",
             "org.apache.kafka.connect.util.",
             "org.apache.kafka.connect.util.ConnectorUtils"
         };
@@ -279,7 +281,9 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.TimestampRouter",
             "org.apache.kafka.connect.transforms.TimestampRouter$Key",
             "org.apache.kafka.connect.transforms.TimestampRouter$Value",
-            "org.apache.kafka.connect.transforms.ValueToKey"
+            "org.apache.kafka.connect.transforms.ValueToKey",
+            "org.apache.kafka.connect.transforms.predicates.",
+            "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
         };
         for (String clazz : transformsClasses) {
             assertTrue(

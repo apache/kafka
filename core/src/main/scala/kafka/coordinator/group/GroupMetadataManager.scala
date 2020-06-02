@@ -611,7 +611,7 @@ class GroupMetadataManager(brokerId: Int,
               MemoryRecords.readableRecords(buffer)
           }
 
-          memRecords.batches.asScala.foreach { batch =>
+          memRecords.batches.forEach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
               val recordIterator = batch.iterator
@@ -786,7 +786,8 @@ class GroupMetadataManager(brokerId: Int,
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
     offsetExpiredSensor.record(numOffsetsRemoved)
-    info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
+    if (numOffsetsRemoved > 0)
+      info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 
   /**

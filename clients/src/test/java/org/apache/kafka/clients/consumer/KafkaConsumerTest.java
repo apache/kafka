@@ -85,9 +85,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.common.metrics.stats.Avg;
+
 import org.junit.Assert;
 import org.junit.Test;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -282,6 +287,13 @@ public class KafkaConsumerTest {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnEmptyPattern() {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
+            consumer.subscribe(Pattern.compile(""));
+        }
+    }
+
     @Test(expected = IllegalStateException.class)
     public void testSubscriptionWithEmptyPartitionAssignment() {
         Properties props = new Properties();
@@ -373,6 +385,23 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
         assertTrue(consumer.paused().isEmpty());
 
+        consumer.close();
+    }
+
+    @Test
+    public void testConsumerJmxPrefix() throws  Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        config.put("client.id", "client-1");
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
+                config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        MetricName testMetricName = consumer.metrics.metricName("test-metric",
+                "grp1", "test metric");
+        consumer.metrics.addMetric(testMetricName, new Avg());
+        Assert.assertNotNull(server.getObjectInstance(new ObjectName("kafka.consumer:type=grp1,client-id=client-1")));
         consumer.close();
     }
 

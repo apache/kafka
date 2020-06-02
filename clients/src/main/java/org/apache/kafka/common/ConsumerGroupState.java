@@ -45,7 +45,6 @@ public enum ConsumerGroupState {
         this.name = name;
     }
 
-
     /**
      * Parse a string into a consumer group state.
      */

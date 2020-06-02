@@ -70,8 +70,8 @@ public class EmbeddedConnectCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);
 
-    private static final int DEFAULT_NUM_BROKERS = 1;
-    private static final int DEFAULT_NUM_WORKERS = 1;
+    public static final int DEFAULT_NUM_BROKERS = 1;
+    public static final int DEFAULT_NUM_WORKERS = 1;
     private static final Properties DEFAULT_BROKER_CONFIG = new Properties();
     private static final String REST_HOST_NAME = "localhost";
 

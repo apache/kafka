@@ -863,6 +863,25 @@
                             </div>
                         </td>
                     </tr>
+                    <tr class="row-even">
+                        <td><p class="first"><strong>Repartition</strong></p>
+                            <ul class="last simple">
+                                <li>KStream &rarr; KStream</li>
+                            </ul>
+                        </td>
+                        <td>
+                            <p class="first">Manually trigger repartitioning of the stream with desired number of partitions. (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--">details</a>)</p>
+
+                            <code><span class="pre">repartition()</span></code> is similar to <code><span class="pre">through()</span></code> however Kafka Streams will manage the topic for you.
+                            Generated topic is treated as internal topic, as a result data will be purged automatically as any other internal repartition topic.
+                            In addition, you can specify the desired number of partitions, which allows to easily scale in/out downstream sub-topologies.
+                            <code><span class="pre">repartition()</span></code> operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like <code><span class="pre">transform()</span></code> et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand.
+
+                            <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">... ;</span>
+<span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">repartitionedStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">repartition</span><span class="o">(</span><span class="n">Repartitioned</span><span class="o">.</span><span class="na">numberOfPartitions</span><span class="o">(</span><span class="s">10</span>)<span class="o">);</span></pre></div>
+                            </div>
+                        </td>
+                    </tr>
                     </tbody>
                 </table>
             </div>
@@ -1744,32 +1763,23 @@
                                 streams/tables of a join &#8211; it is up to the user to ensure that this is the case.</p>
                         </div>
                         <p><strong>Ensuring data co-partitioning:</strong> If the inputs of a join are not co-partitioned yet, you must ensure this manually.
-                            You may follow a procedure such as outlined below.</p>
+                            You may follow a procedure such as outlined below.
+                            It is recommended to repartition the topic with fewer partitions to match the larger partition number of avoid bottlenecks.
+                            Technically it would also be possible to repartition the topic with more partitions to the smaller partition number.
+                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result is a second state store.
+                            For table-table joins, you might also consider to size of the KTables and repartition the smaller KTable.</p>
                         <ol class="arabic">
                             <li><p class="first">Identify the input KStream/KTable in the join whose underlying Kafka topic has the smaller number of partitions.
                                 Let&#8217;s call this stream/table &#8220;SMALLER&#8221;, and the other side of the join &#8220;LARGER&#8221;.  To learn about the number of
                                 partitions of a Kafka topic you can use, for example, the CLI tool <code class="docutils literal"><span class="pre">bin/kafka-topics</span></code> with the <code class="docutils literal"><span class="pre">--describe</span></code>
                                 option.</p>
                             </li>
-                            <li><p class="first">Pre-create a new Kafka topic for &#8220;SMALLER&#8221; that has the same number of partitions as &#8220;LARGER&#8221;.  Let&#8217;s call this
-                                new topic &#8220;repartitioned-topic-for-smaller&#8221;.  Typically, you&#8217;d use the CLI tool <code class="docutils literal"><span class="pre">bin/kafka-topics</span></code> with the
-                                <code class="docutils literal"><span class="pre">--create</span></code> option for this.</p>
-                            </li>
-                            <li><p class="first">Within your application, re-write the data of &#8220;SMALLER&#8221; into the new Kafka topic.  You must ensure that, when writing
-                                the data with <code class="docutils literal"><span class="pre">to</span></code> or <code class="docutils literal"><span class="pre">through</span></code>, the same partitioner is used as for &#8220;LARGER&#8221;.</p>
+                            <li><p class="first">Within your application, re-partition the data of &#8220;SMALLER&#8221;.  You must ensure that, when repartitioning
+                                the data with <code class="docutils literal"><span class="pre">repartition</span></code>, the same partitioner is used as for &#8220;LARGER&#8221;.</p>
                                 <blockquote>
                                     <div><ul class="simple">
-                                        <li>If &#8220;SMALLER&#8221; is a KStream: <code class="docutils literal"><span class="pre">KStream#to(&quot;repartitioned-topic-for-smaller&quot;)</span></code>.</li>
-                                        <li>If &#8220;SMALLER&#8221; is a KTable: <code class="docutils literal"><span class="pre">KTable#to(&quot;repartitioned-topic-for-smaller&quot;)</span></code>.</li>
-                                    </ul>
-                                    </div></blockquote>
-                            </li>
-                            <li><p class="first">Within your application, re-read the data in &#8220;repartitioned-topic-for-smaller&#8221; into
-                                a new KStream/KTable.</p>
-                                <blockquote>
-                                    <div><ul class="simple">
-                                        <li>If &#8220;SMALLER&#8221; is a KStream: <code class="docutils literal"><span class="pre">StreamsBuilder#stream(&quot;repartitioned-topic-for-smaller&quot;)</span></code>.</li>
-                                        <li>If &#8220;SMALLER&#8221; is a KTable: <code class="docutils literal"><span class="pre">StreamsBuilder#table(&quot;repartitioned-topic-for-smaller&quot;)</span></code>.</li>
+                                        <li>If &#8220;SMALLER&#8221; is a KStream: <code class="docutils literal"><span class="pre">KStream#repartition(Repartitioned.numberOfPartitions(...))</span></code>.</li>
+                                        <li>If &#8220;SMALLER&#8221; is a KTable: <code class="docutils literal"><span class="pre">KTable#toStream#repartition(Repartitioned.numberOfPartitions(...).toTable())</span></code>.</li>
                                     </ul>
                                     </div></blockquote>
                             </li>
@@ -3523,10 +3533,17 @@ grouped
                 <div class="admonition tip">
                     <p><b>Tip</b></p>
                     <p class="last">Even though we do not demonstrate it in this example, a stream processor can access any available state stores by
-                        calling <code class="docutils literal"><span class="pre">ProcessorContext#getStateStore()</span></code>.  Only such state stores are available that (1) have been named in the
-                        corresponding <code class="docutils literal"><span class="pre">KStream#process()</span></code> method call (note that this is a different method than <code class="docutils literal"><span class="pre">Processor#process()</span></code>),
-                        plus (2) all global stores.  Note that global stores do not need to be attached explicitly;  however, they only
-                        allow for read-only access.</p>
+                        calling <code class="docutils literal"><span class="pre">ProcessorContext#getStateStore()</span></code>.
+                        State stores are only available if they have been connected to the processor, or if they are global stores.  While global stores do not need to be connected explicitly, they only allow for read-only access.
+                        There are two ways to connect state stores to a processor:
+                    <ul class="simple">
+                        <li>By passing the name of a store that has already been added via <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code> to the corresponding <code class="docutils literal"><span class="pre">KStream#process()</span></code> method call.</li>
+                        <li>Implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
+                            passed to <code class="docutils literal"><span class="pre">KStream#process()</span></code>.  In this case there is no need to call <code class="docutils literal"><span class="pre">StreamsBuilder#addStateStore()</span></code>
+                            beforehand, the store will be automatically added for you. You can also implement <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the
+                            <code class="docutils literal"><span class="pre">Value*</span></code> or <code class="docutils literal"><span class="pre">*WithKey</span></code> supplier variants, or <code class="docutils literal"><span class="pre">TransformerSupplier</span></code> or any of its variants.
+                        </li>
+                    </ul>
                 </div>
                 <p>Then we can leverage the <code class="docutils literal"><span class="pre">PopularPageEmailAlert</span></code> processor in the DSL via <code class="docutils literal"><span class="pre">KStream#process</span></code>.</p>
                 <p>In Java 8+, using lambda expressions:</p>
@@ -3672,58 +3689,6 @@ groupedTable
                         </ol>
                     </td>
                 </tr>
-                <tr class="row-odd"><td><p class="first"><strong>Through</strong></p>
-                    <ul class="last simple">
-                        <li>KStream -&gt; KStream</li>
-                        <li>KTable -&gt; KTable</li>
-                    </ul>
-                </td>
-                    <td><p class="first">Write the records to a Kafka topic and create a new stream/table from that topic.
-                        Essentially a shorthand for <code class="docutils literal"><span class="pre">KStream#to()</span></code> followed by <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code>, same for tables.
-                        (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#through(java.lang.String)">KStream details</a>)</p>
-                        <p>When to provide SerDes explicitly:</p>
-                        <ul class="simple">
-                            <li>If you do not specify SerDes explicitly, the default SerDes from the
-                                <a class="reference internal" href="config-streams.html#streams-developer-guide-configuration"><span class="std std-ref">configuration</span></a> are used.</li>
-                            <li>You <strong>must specify SerDes explicitly</strong> if the key and/or value types of the <code class="docutils literal"><span class="pre">KStream</span></code> or <code class="docutils literal"><span class="pre">KTable</span></code> do not
-                                match the configured default SerDes.</li>
-                            <li>See <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for information about configuring default SerDes, available SerDes,
-                                and implementing your own custom SerDes.</li>
-                        </ul>
-                        <p>A variant of <code class="docutils literal"><span class="pre">through</span></code> exists that enables you to specify how the data is produced by using a <code class="docutils literal"><span class="pre">Produced</span></code>
-                            instance to specify, for example, a <code class="docutils literal"><span class="pre">StreamPartitioner</span></code> that gives you control over
-                            how output records are distributed across the partitions of the output topic.</p>
-                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
-
-<span class="c1">// Variant 1: Imagine that your application needs to continue reading and processing</span>
-<span class="c1">// the records after they have been written to a topic via ``to()``.  Here, one option</span>
-<span class="c1">// is to write to an output topic, then read from the same topic by constructing a</span>
-<span class="c1">// new stream from it, and then begin processing it (here: via `map`, for example).</span>
-<span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">);</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">newStream</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="na">stream</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">).</span><span class="na">map</span><span class="o">(...);</span>
-
-<span class="c1">// Variant 2 (better): Since the above is a common pattern, the DSL provides the</span>
-<span class="c1">// convenience method ``through`` that is equivalent to the code above.</span>
-<span class="c1">// Note that you may need to specify key and value serdes explicitly, which is</span>
-<span class="c1">// not shown in this simple example.</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">newStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">through</span><span class="o">(</span><span class="s">&quot;user-clicks-topic&quot;</span><span class="o">).</span><span class="na">map</span><span class="o">(...);</span>
-
-<span class="c1">// ``through`` is also available for tables</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">newTable</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="na">through</span><span class="o">(</span><span class="s">&quot;my-table-output-topic&quot;</span><span class="o">).</span><span class="na">map</span><span class="o">(...);</span>
-</pre></div>
-                        </div>
-                        <p><strong>Causes data re-partitioning if any of the following conditions is true:</strong></p>
-                        <ol class="last arabic simple">
-                            <li>If the output topic has a different number of partitions than the stream/table.</li>
-                            <li>If the <code class="docutils literal"><span class="pre">KStream</span></code> was marked for re-partitioning.</li>
-                            <li>If you provide a custom <code class="docutils literal"><span class="pre">StreamPartitioner</span></code> to explicitly control how to distribute the output records
-                                across the partitions of the output topic.</li>
-                            <li>If the key of an output record is <code class="docutils literal"><span class="pre">null</span></code>.</li>
-                        </ol>
-                    </td>
-                </tr>
                 </tbody>
             </table>
             <div class="admonition note">
@@ -3738,7 +3703,7 @@ groupedTable
             </div>
         </div>
         <div class="section" id="testing-a-streams-app">
-            <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</h2></a>
+            <h2><a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline">Testing a Streams application</a></h2>
             Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
             </div>
         </div>
@@ -3835,8 +3800,8 @@ object WordCountApplication extends App {
             </div>
             <div class="section" id="scala-dsl-implicit-serdes">
               <span id="streams-developer-guide-dsl-scala-dsl-implicit-serdes"></span><h3><a class="toc-backref" href="#id29">Implicit SerDes</a><a class="headerlink" href="#scala-dsl-implicit-serdes" title="Permalink to this headline"></a></h3>
-              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
-              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
+              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
+              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
               <p>The library also bundles all implicit SerDes of the commonly used primitive types in a Scala module - so just import the module vals and have all SerDes in scope.  A similar strategy of modular implicits can be adopted for any user-defined SerDes as well (User-defined SerDes are discussed in the next section).</p>
               <p>Here's an example:</p>
               <pre class="brush: scala;">

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -312,8 +313,27 @@ public class AbstractCoordinatorTest {
         mockTime.sleep(REQUEST_TIMEOUT_MS + 1);
         assertFalse(consumerClient.poll(future, mockTime.timer(0)));
 
-        mockTime.sleep(REBALANCE_TIMEOUT_MS - REQUEST_TIMEOUT_MS + 5000);
+        mockTime.sleep(REBALANCE_TIMEOUT_MS - REQUEST_TIMEOUT_MS + AbstractCoordinator.JOIN_GROUP_TIMEOUT_LAPSE);
         assertTrue(consumerClient.poll(future, mockTime.timer(0)));
+        assertTrue(future.exception() instanceof DisconnectException);
+    }
+
+    @Test
+    public void testJoinGroupRequestTimeoutLowerBoundedByDefaultRequestTimeout() {
+        int rebalanceTimeoutMs = REQUEST_TIMEOUT_MS - 10000;
+        setupCoordinator(RETRY_BACKOFF_MS, rebalanceTimeoutMs, Optional.empty());
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        long expectedRequestDeadline = mockTime.milliseconds() + REQUEST_TIMEOUT_MS;
+        mockTime.sleep(rebalanceTimeoutMs + AbstractCoordinator.JOIN_GROUP_TIMEOUT_LAPSE + 1);
+        assertFalse(consumerClient.poll(future, mockTime.timer(0)));
+
+        mockTime.sleep(expectedRequestDeadline - mockTime.milliseconds() + 1);
+        assertTrue(consumerClient.poll(future, mockTime.timer(0)));
+        assertTrue(future.exception() instanceof DisconnectException);
     }
 
     @Test

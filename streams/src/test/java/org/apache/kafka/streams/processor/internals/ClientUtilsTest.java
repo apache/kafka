@@ -18,22 +18,19 @@ package org.apache.kafka.streams.processor.internals;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsWithoutTimeout;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertThrows;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -45,12 +42,12 @@ public class ClientUtilsTest {
         final Admin adminClient = EasyMock.createMock(AdminClient.class);
         EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andThrow(new RuntimeException());
         replay(adminClient);
-        assertThrows(StreamsException.class, () ->  fetchEndOffsetsWithoutTimeout(emptyList(), adminClient));
+        assertThrows(StreamsException.class, () ->  fetchEndOffsets(emptyList(), adminClient));
         verify(adminClient);
     }
 
     @Test
-    public void fetchEndOffsetsShouldRethrowInterruptedExceptionAsStreamsException() throws InterruptedException, ExecutionException {
+    public void fetchEndOffsetsShouldRethrowInterruptedExceptionAsStreamsException() throws Exception {
         final Admin adminClient = EasyMock.createMock(AdminClient.class);
         final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
         final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
@@ -60,12 +57,12 @@ public class ClientUtilsTest {
         EasyMock.expect(allFuture.get()).andThrow(new InterruptedException());
         replay(adminClient, result, allFuture);
 
-        assertThrows(StreamsException.class, () -> fetchEndOffsetsWithoutTimeout(emptyList(), adminClient));
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
         verify(adminClient);
     }
 
     @Test
-    public void fetchEndOffsetsShouldRethrowExecutionExceptionAsStreamsException() throws InterruptedException, ExecutionException {
+    public void fetchEndOffsetsShouldRethrowExecutionExceptionAsStreamsException() throws Exception {
         final Admin adminClient = EasyMock.createMock(AdminClient.class);
         final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
         final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
@@ -75,22 +72,23 @@ public class ClientUtilsTest {
         EasyMock.expect(allFuture.get()).andThrow(new ExecutionException(new RuntimeException()));
         replay(adminClient, result, allFuture);
 
-        assertThrows(StreamsException.class, () -> fetchEndOffsetsWithoutTimeout(emptyList(), adminClient));
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
         verify(adminClient);
     }
 
     @Test
-    public void fetchEndOffsetsWithTimeoutShouldRethrowTimeoutExceptionAsStreamsException() throws InterruptedException, ExecutionException, TimeoutException {
+    public void fetchEndOffsetsWithTimeoutShouldRethrowTimeoutExceptionAsStreamsException() throws Exception {
         final Admin adminClient = EasyMock.createMock(AdminClient.class);
         final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
         final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
 
         EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andStubReturn(result);
         EasyMock.expect(result.all()).andStubReturn(allFuture);
-        EasyMock.expect(allFuture.get(1L, TimeUnit.MILLISECONDS)).andThrow(new TimeoutException());
+        EasyMock.expect(allFuture.get()).andThrow(new TimeoutException());
         replay(adminClient, result, allFuture);
 
-        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient, Duration.ofMillis(1)));
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
         verify(adminClient);
     }
+
 }

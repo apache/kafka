@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -42,6 +43,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -93,6 +95,7 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
+    private final WorkerErrantRecordReporter workerErrantRecordReporter;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -109,6 +112,7 @@ class WorkerSinkTask extends WorkerTask {
                           ClassLoader loader,
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
+                          WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore) {
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -135,6 +139,7 @@ class WorkerSinkTask extends WorkerTask {
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
         this.consumer = consumer;
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.workerErrantRecordReporter = workerErrantRecordReporter;
     }
 
     @Override
@@ -164,18 +169,8 @@ class WorkerSinkTask extends WorkerTask {
         } catch (Throwable t) {
             log.warn("Could not stop task", t);
         }
-        if (consumer != null) {
-            try {
-                consumer.close();
-            } catch (Throwable t) {
-                log.warn("Could not close consumer", t);
-            }
-        }
-        try {
-            transformationChain.close();
-        } catch (Throwable t) {
-            log.warn("Could not close transformation chain", t);
-        }
+        Utils.closeQuietly(consumer, "consumer");
+        Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
     }
 
@@ -193,13 +188,11 @@ class WorkerSinkTask extends WorkerTask {
     @Override
     public void execute() {
         initializeAndStart();
-        try {
+        // Make sure any uncommitted data has been committed and the task has
+        // a chance to clean up its state
+        try (UncheckedCloseable suppressible = this::closePartitions) {
             while (!isStopping())
                 iteration();
-        } finally {
-            // Make sure any uncommitted data has been committed and the task has
-            // a chance to clean up its state
-            closePartitions();
         }
     }
 
@@ -371,6 +364,12 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void commitOffsets(long now, boolean closing) {
+        if (workerErrantRecordReporter != null) {
+            log.trace("Awaiting all reported errors to be completed");
+            workerErrantRecordReporter.awaitAllFutures();
+            log.trace("Completed all reported errors");
+        }
+
         if (currentOffsets.isEmpty())
             return;
 
@@ -513,7 +512,14 @@ class WorkerSinkTask extends WorkerTask {
         if (isTopicTrackingEnabled) {
             recordActiveTopic(origRecord.topic());
         }
-        return transformationChain.apply(origRecord);
+
+        // Apply the transformations
+        SinkRecord transformedRecord = transformationChain.apply(origRecord);
+        if (transformedRecord == null) {
+            return null;
+        }
+        // Error reporting will need to correlate each sink record with the original consumer record
+        return new InternalSinkRecord(msg, transformedRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
@@ -527,6 +533,10 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         return result;
+    }
+
+    protected WorkerErrantRecordReporter workerErrantRecordReporter() {
+        return workerErrantRecordReporter;
     }
 
     private void resumeAll() {

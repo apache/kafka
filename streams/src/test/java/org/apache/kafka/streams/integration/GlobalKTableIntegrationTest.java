@@ -145,7 +145,6 @@ public class GlobalKTableIntegrationTest {
             30000L,
             "waiting for initial values");
 
-
         firstTimestamp = mockTime.milliseconds();
         produceGlobalTableValues();
 
@@ -153,10 +152,24 @@ public class GlobalKTableIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
+        final Map<Long, String> expectedState = new HashMap<>();
+        expectedState.put(1L, "F");
+        expectedState.put(2L, "G");
+        expectedState.put(3L, "H");
+        expectedState.put(4L, "I");
+        expectedState.put(5L, "J");
+
+        final Map<Long, String> globalState = new HashMap<>();
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> {
+                globalState.clear();
+                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                return globalState.equals(expectedState);
+            },
             30000,
-            "waiting for data in replicated store");
+            () -> "waiting for data in replicated store" +
+                "\n  expected: " + expectedState +
+                "\n  received: " + globalState);
 
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp = IntegrationTestUtils
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
@@ -222,10 +235,24 @@ public class GlobalKTableIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(replicatedStore);
 
+        final Map<Long, String> expectedState = new HashMap<>();
+        expectedState.put(1L, "F");
+        expectedState.put(2L, "G");
+        expectedState.put(3L, "H");
+        expectedState.put(4L, "I");
+        expectedState.put(5L, "J");
+
+        final Map<Long, String> globalState = new HashMap<>();
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> {
+                globalState.clear();
+                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                return globalState.equals(expectedState);
+            },
             30000,
-            "waiting for data in replicated store");
+            () -> "waiting for data in replicated store" +
+                "\n  expected: " + expectedState +
+                "\n  received: " + globalState);
 
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp = IntegrationTestUtils
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
@@ -313,7 +340,7 @@ public class GlobalKTableIntegrationTest {
         kafkaStreams.start();
     }
 
-    private void produceTopicValues(final String topic) throws Exception {
+    private void produceTopicValues(final String topic) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic,
                 Arrays.asList(
@@ -330,7 +357,7 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
-    private void produceInitialGlobalTableValues() throws Exception {
+    private void produceInitialGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalTableTopic,
                 Arrays.asList(
@@ -347,7 +374,7 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
-    private void produceGlobalTableValues() throws Exception {
+    private void produceGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalTableTopic,
                 Arrays.asList(

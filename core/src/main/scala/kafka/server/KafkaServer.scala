@@ -35,10 +35,10 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils, CommonClientConfigs}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
@@ -129,7 +129,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private var shutdownLatch = new CountDownLatch(1)
 
-  private val jmxPrefix: String = "kafka.server"
+  //properties for MetricsContext
+  private val metricsPrefix: String = "kafka.server"
+  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
+
 
   private var logContext: LogContext = null
 
@@ -189,6 +193,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
+  val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
+
+  if (linuxIoMetricsCollector.usable()) {
+    newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
+    newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+  }
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -240,13 +251,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
 
-        val jmxReporter = new JmxReporter(jmxPrefix)
+        val jmxReporter = new JmxReporter()
         jmxReporter.configure(config.originals)
 
         val reporters = new util.ArrayList[MetricsReporter]
         reporters.add(jmxReporter)
+
         val metricConfig = KafkaServer.metricConfig(config)
-        metrics = new Metrics(metricConfig, reporters, time, true)
+        val metricsContext = createKafkaMetricsContext()
+        metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
@@ -358,7 +371,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
-        AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics, time.milliseconds())
+        AppInfoParser.registerAppInfo(metricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
         info("started")
       }
     }
@@ -375,6 +388,23 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     val clusterResourceListeners = new ClusterResourceListeners
     clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
+  }
+
+  private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
+    val metricsContext = createKafkaMetricsContext()
+    metricsReporters.foreach {
+      case x: MetricsReporter => x.contextChange(metricsContext)
+      case _ => //do nothing
+    }
+  }
+
+  private[server] def createKafkaMetricsContext() : KafkaMetricsContext = {
+    val contextLabels = new util.HashMap[String, Object]
+    contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
+    contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
+    metricsContext
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
@@ -680,7 +710,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         startupComplete.set(false)
         isShuttingDown.set(false)
-        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString, metrics), this)
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(metricsPrefix, config.brokerId.toString, metrics), this)
         shutdownLatch.countDown()
         info("shut down completed")
       }

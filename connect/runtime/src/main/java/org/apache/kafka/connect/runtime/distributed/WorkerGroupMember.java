@@ -27,6 +27,8 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -36,12 +38,15 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,10 +93,17 @@ public class WorkerGroupMember {
             List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class,
                     Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
-            JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+            JmxReporter jmxReporter = new JmxReporter();
             jmxReporter.configure(config.originals());
             reporters.add(jmxReporter);
-            this.metrics = new Metrics(metricConfig, reporters, time);
+
+            Map<String, Object> contextLabels = new HashMap<>();
+            contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+            contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(config));
+            contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
+
+            this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
                     logContext, new ClusterResourceListeners());
@@ -222,5 +234,10 @@ public class WorkerGroupMember {
             throw new KafkaException("Failed to stop the Connect group member", firstException.get());
         else
             log.debug("The Connect group member has stopped.");
+    }
+
+    // Visible for testing
+    Metrics metrics() {
+        return this.metrics;
     }
 }

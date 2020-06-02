@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -643,6 +645,8 @@ public class Topology {
      * Add a new processor node that receives and processes records output by one or more parent source or processor
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
+     * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
+     * will be added to the topology and connected to this processor automatically.
      *
      * @param name the unique name of the processor node
      * @param supplier the supplier used to obtain this node's {@link Processor} instance
@@ -656,6 +660,12 @@ public class Topology {
                                               final ProcessorSupplier supplier,
                                               final String... parentNames) {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
+        final Set<StoreBuilder<?>> stores = supplier.stores();
+        if (stores != null) {
+            for (final StoreBuilder storeBuilder : stores) {
+                internalTopologyBuilder.addStateStore(storeBuilder, name);
+            }
+        }
         return this;
     }
 

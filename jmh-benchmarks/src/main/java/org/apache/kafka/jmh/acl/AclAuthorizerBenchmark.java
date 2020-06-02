@@ -68,18 +68,18 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-
 public class AclAuthorizerBenchmark {
-    @Param({"5000", "10000", "50000"})
+    @Param({"10000", "50000", "200000"})
     private int resourceCount;
     //no. of. rules per resource
-    @Param({"5", "10", "15"})
+    @Param({"10", "50"})
     private int aclCount;
 
-    private int hostPreCount = 1000;
+    private final int hostPreCount = 1000;
+    private final String resourceNamePrefix = "foo-bar35_resource-";
 
-    private AclAuthorizer aclAuthorizer = new AclAuthorizer();
-    private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private final AclAuthorizer aclAuthorizer = new AclAuthorizer();
+    private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     private List<Action> actions = new ArrayList<>();
     private RequestContext context;
 
@@ -87,11 +87,16 @@ public class AclAuthorizerBenchmark {
     public void setup() throws Exception {
         setFieldValue(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache").getName(),
             prepareAclCache());
-        actions = Collections.singletonList(new Action(AclOperation.WRITE, new ResourcePattern(ResourceType.TOPIC, "resource-1", PatternType.LITERAL),
-                                                       1, true, true));
-        context = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(), "someclient", 1),
-                                     "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                                     ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
+        // By adding `-95` to the resource name prefix, we cause the `TreeMap.from/to` call to return
+        // most map entries. In such cases, we rely on the filtering based on `String.startsWith`
+        // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
+        // tree) should improve performance significantly).
+        actions = Collections.singletonList(new Action(AclOperation.WRITE,
+            new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
+            1, true, true));
+        context = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
+            "someclient", 1), "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+            ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
     }
 
     private void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
@@ -103,10 +108,9 @@ public class AclAuthorizerBenchmark {
     private TreeMap<ResourcePattern, VersionedAcls> prepareAclCache() {
         Map<ResourcePattern, Set<AclEntry>> aclEntries = new HashMap<>();
         for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
-
             ResourcePattern resource = new ResourcePattern(
                 (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
-                "resource-" + resourceId,
+                resourceNamePrefix + resourceId,
                 (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
             Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
@@ -118,20 +122,22 @@ public class AclAuthorizerBenchmark {
             }
         }
 
-        ResourcePattern resourceWildcard = new ResourcePattern(ResourceType.TOPIC, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL);
-        ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, "resource-", PatternType.PREFIXED);
-
-        Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
+        ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix,
+            PatternType.PREFIXED);
         Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
-
         for (int hostId = 0; hostId < hostPreCount; hostId++) {
-            AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
+            AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
+                AclOperation.READ, AclPermissionType.ALLOW);
             entriesPrefix.add(new AclEntry(ace));
         }
 
+        ResourcePattern resourceWildcard = new ResourcePattern(ResourceType.TOPIC, ResourcePattern.WILDCARD_RESOURCE,
+            PatternType.LITERAL);
+        Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
         // get dynamic entries number for wildcard acl
         for (int hostId = 0; hostId < resourceCount / 10; hostId++) {
-            AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId, AclOperation.READ, AclPermissionType.ALLOW);
+            AccessControlEntry ace = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
+                AclOperation.READ, AclPermissionType.ALLOW);
             entriesWildcard.add(new AclEntry(ace));
         }
 
@@ -155,7 +161,7 @@ public class AclAuthorizerBenchmark {
     }
 
     @Benchmark
-    public void testAuthorizer() throws Exception {
+    public void testAuthorizer() {
         aclAuthorizer.authorize(context, actions);
     }
 }
