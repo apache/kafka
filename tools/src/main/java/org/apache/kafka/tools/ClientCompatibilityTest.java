@@ -22,9 +22,10 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -65,6 +66,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
@@ -88,6 +90,7 @@ public class ClientCompatibilityTest {
         final int numClusterNodes;
         final boolean createTopicsSupported;
         final boolean describeAclsSupported;
+        final boolean includeAuthorizedOperationsSupported;
 
         TestConfig(Namespace res) {
             this.bootstrapServer = res.getString("bootstrapServer");
@@ -98,6 +101,7 @@ public class ClientCompatibilityTest {
             this.numClusterNodes = res.getInt("numClusterNodes");
             this.createTopicsSupported = res.getBoolean("createTopicsSupported");
             this.describeAclsSupported = res.getBoolean("describeAclsSupported");
+            this.includeAuthorizedOperationsSupported = res.getBoolean("includeAuthorizedOperationsSupported");
         }
     }
 
@@ -164,6 +168,13 @@ public class ClientCompatibilityTest {
             .dest("describeAclsSupported")
             .metavar("DESCRIBE_ACLS_SUPPORTED")
             .help("Whether describeAcls is supported in the AdminClient.");
+        parser.addArgument("--include-authorized-operations-supported")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("includeAuthorizedOperationsSupported")
+            .metavar("INCLUDE_AUTHORIZED_OPERATIONS_SUPPORTED")
+            .help("Whether includeAuthorizedOperations option in describeTopics is supported in the AdminClient.");
 
         Namespace res = null;
         try {
@@ -312,22 +323,35 @@ public class ClientCompatibilityTest {
                 () -> {
                     DescribeTopicsOptions options = new DescribeTopicsOptions();
                     options.includeAuthorizedOperations(true);
-                    createTopicsResultTest(client, topics, Optional.of(options));
+                    Set<Map.Entry<String, TopicDescription>> result = createTopicsResultTest(client, topics, Optional.of(options))
+                        .entrySet()
+                        .stream()
+                        .filter((entry) -> entry.getValue().authorizedOperations() != null)
+                        .collect(Collectors.toSet());
+
+                    if (testConfig.includeAuthorizedOperationsSupported & result.isEmpty()) {
+                        String message = "Describe topic doesn't contains information about authorized options";
+                        throw new KafkaException(message);
+                    } else if (!testConfig.includeAuthorizedOperationsSupported & !result.isEmpty()) {
+                        String message = String.format("Describe topic contains information about authorized options: %s", result);
+                        throw new KafkaException(message);
+                    }
                 }
             );
         }
     }
 
-    private void createTopicsResultTest(Admin client, Collection<String> topics, Optional<DescribeTopicsOptions> options)
-            throws InterruptedException, ExecutionException {
+    private Map<String, TopicDescription> createTopicsResultTest(
+            Admin client,
+            Collection<String> topics,
+            Optional<DescribeTopicsOptions> options) throws InterruptedException, ExecutionException {
         while (true) {
             try {
                 if (options.isPresent()) {
-                    client.describeTopics(topics, options.get()).all().get();
-                } else {
-                    client.describeTopics(topics).all().get();
+                    return client.describeTopics(topics, options.get()).all().get();
                 }
-                break;
+
+                return client.describeTopics(topics).all().get();
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof UnknownTopicOrPartitionException)
                     continue;

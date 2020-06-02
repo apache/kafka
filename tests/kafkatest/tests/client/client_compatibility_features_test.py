@@ -23,7 +23,7 @@ from ducktape.tests.test import TestContext
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, V_0_11_0_0, V_0_10_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, V_0_11_0_0, V_0_10_1_0, V_2_3_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -37,10 +37,17 @@ def get_broker_features(broker_version):
         features["offsets-for-times-supported"] = True
         features["cluster-id-supported"] = True
         features["expect-record-too-large-exception"] = False
+
     if broker_version < V_0_11_0_0:
         features["describe-acls-supported"] = False
     else:
         features["describe-acls-supported"] = True
+
+    if broker_version < V_2_3_0:
+        features["include-authorized-operations-supported"] = False
+    else:
+        features["include-authorized-operations-supported"] = True
+
     return features
 
 def run_command(node, cmd, ssh_log_file):
