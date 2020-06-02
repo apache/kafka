@@ -76,9 +76,7 @@ import java.util.UUID;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 public class StreamThreadStateStoreProviderTest {
 
@@ -326,16 +324,12 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
-    public void shouldThrowForInvalidPartitions() {
+    public void shouldReturnEmptyListForInvalidPartitions() {
         mockThread(true);
-        final InvalidStateStoreException thrown = assertThrows(
-            InvalidStateStoreException.class,
-            () -> provider.stores(
-                StoreQueryParameters
-                    .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
-                    .withPartition(2))
+        assertEquals(
+                Collections.emptyList(),
+                provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()).withPartition(2))
         );
-        assertThat(thrown.getMessage(), equalTo("The specified partition 2 for store kv-store does not exist."));
     }
 
     @Test
