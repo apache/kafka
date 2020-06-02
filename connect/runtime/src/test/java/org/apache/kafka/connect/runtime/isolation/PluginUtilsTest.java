@@ -94,7 +94,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testConnectApiClasses() {
-        String[] apiClasses = new String[] {
+        List<String> apiClasses = Arrays.asList(
             // Enumerate all packages and classes
             "org.apache.kafka.connect.",
             "org.apache.kafka.connect.components.",
@@ -171,7 +171,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.predicates.Predicate",
             "org.apache.kafka.connect.util.",
             "org.apache.kafka.connect.util.ConnectorUtils"
-        };
+        );
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
             assertFalse(
@@ -184,7 +184,7 @@ public class PluginUtilsTest {
     @Test
     public void testConnectRuntimeClasses() {
         // Only list packages, because there are too many classes.
-        String[] runtimeClasses = new String[]{
+        List<String> runtimeClasses = Arrays.asList(
             "org.apache.kafka.connect.cli.",
             //"org.apache.kafka.connect.connector.policy.", isolated by default
             //"org.apache.kafka.connect.converters.", isolated by default
@@ -202,8 +202,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.runtime.rest.",
             "org.apache.kafka.connect.storage.",
             "org.apache.kafka.connect.tools.",
-            "org.apache.kafka.connect.util.",
-        };
+            "org.apache.kafka.connect.util."
+        );
         for (String clazz : runtimeClasses) {
             assertFalse(
                 clazz + " from 'runtime' is loaded in isolation but should not be",
@@ -214,7 +214,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedRuntimeClasses() {
-        String[] jsonConverterClasses = new String[]{
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.connector.policy.",
             "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy",
             "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy",
@@ -231,8 +231,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.converters.ShortConverter",
             //"org.apache.kafka.connect.storage.", not isolated by default
             "org.apache.kafka.connect.storage.StringConverter",
-            "org.apache.kafka.connect.storage.SimpleHeaderConverter",
-        };
+            "org.apache.kafka.connect.storage.SimpleHeaderConverter"
+        );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
                 clazz + " from 'runtime' is not loaded in isolation but should be",
@@ -243,7 +243,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testTransformsClasses() {
-        String[] transformsClasses = new String[] {
+        List<String> transformsClasses = Arrays.asList(
             "org.apache.kafka.connect.transforms.",
             "org.apache.kafka.connect.transforms.util.",
             "org.apache.kafka.connect.transforms.util.NonEmptyListValidator",
@@ -287,7 +287,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
             "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
             "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
-        };
+        );
         for (String clazz : transformsClasses) {
             assertTrue(
                 clazz + " from 'transforms' is not loaded in isolation but should be",
@@ -298,7 +298,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedJsonConverterClasses() {
-        String[] jsonConverterClasses = new String[]{
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.json.",
             "org.apache.kafka.connect.json.DecimalFormat",
             "org.apache.kafka.connect.json.JsonConverter",
@@ -306,7 +306,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.json.JsonDeserializer",
             "org.apache.kafka.connect.json.JsonSchema",
             "org.apache.kafka.connect.json.JsonSerializer"
-        };
+        );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
                 clazz + " from 'json' is not loaded in isolation but should be",
@@ -317,13 +317,13 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedFileConnectors() {
-        String[] jsonConverterClasses = new String[]{
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.file.",
             "org.apache.kafka.connect.file.FileStreamSinkConnector",
             "org.apache.kafka.connect.file.FileStreamSinkTask",
             "org.apache.kafka.connect.file.FileStreamSourceConnector",
-            "org.apache.kafka.connect.file.FileStreamSourceTask",
-        };
+            "org.apache.kafka.connect.file.FileStreamSourceTask"
+        );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
                 clazz + " from 'file' is not loaded in isolation but should be",
@@ -334,11 +334,11 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedBasicAuthExtensionClasses() {
-        String[] basicAuthExtensionClasses = new String[] {
-            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension",
+        List<String> basicAuthExtensionClasses = Arrays.asList(
+            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
             //"org.apache.kafka.connect.rest.basic.auth.extension.JaasBasicAuthFilter", TODO fix?
             //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
-        };
+        );
         for (String clazz : basicAuthExtensionClasses) {
             assertTrue(
                 clazz + " from 'basic-auth-extension' is not loaded in isolation but should be",
