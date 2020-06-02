@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
+import java.util.Set;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -93,6 +97,27 @@ public class ClientUtils {
             }
         }
         return result;
+    }
+
+    public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
+                                                                  final Consumer<byte[], byte[]> mainConsumer) {
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        final Map<TopicPartition, Long> committedOffsets;
+        try {
+            // those which do not have a committed offset would default to 0
+            committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+        } catch (final TimeoutException e) {
+            // if it timed out we just retry next time.
+            return Collections.emptyMap();
+        } catch (final KafkaException e) {
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        }
+
+        return committedOffsets;
     }
 
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,

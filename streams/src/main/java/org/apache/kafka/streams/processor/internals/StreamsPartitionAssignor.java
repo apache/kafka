@@ -630,12 +630,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * Resolve changelog topic metadata and create them if necessary. Fills in the changelogsByStatefulTask map
-     * and returns the set of changelogs which were newly created.
+     * Resolve changelog topic metadata and create them if necessary. Fills in the changelogsByStatefulTask map and
+     * the optimizedSourceChangelogs set and returns the set of changelogs which were newly created.
      */
     private Set<String> prepareChangelogTopics(final Map<Integer, TopicsInfo> topicGroups,
                                                final Map<Integer, Set<TaskId>> tasksForTopicGroup,
-                                               final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask) {
+                                               final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask,
+                                               final Set<String> optimizedSourceChangelogs) {
         // add tasks to state change log topic subscribers
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
         for (final Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
@@ -671,6 +672,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 topicConfig.setNumberOfPartitions(numPartitions);
                 changelogTopicMetadata.put(topicConfig.name(), topicConfig);
             }
+
+            optimizedSourceChangelogs.addAll(topicsInfo.sourceTopicChangelogs());
         }
 
         final Set<String> newlyCreatedTopics = internalTopicManager.makeReady(changelogTopicMetadata);
@@ -692,11 +695,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         populateTasksForMaps(taskForPartition, tasksForTopicGroup, allSourceTopics, partitionsForTask, fullMetadata);
 
         final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask = new HashMap<>();
-        final Set<String> newlyCreatedChangelogs = prepareChangelogTopics(topicGroups, tasksForTopicGroup, changelogsByStatefulTask);
+        final Set<String> optimizedSourceChangelogs = new HashSet<>();
+        final Set<String> newlyCreatedChangelogs =
+            prepareChangelogTopics(topicGroups, tasksForTopicGroup, changelogsByStatefulTask, optimizedSourceChangelogs);
 
         final Map<UUID, ClientState> clientStates = new HashMap<>();
         final boolean lagComputationSuccessful =
-            populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogsByStatefulTask, newlyCreatedChangelogs);
+            populateClientStatesMap(clientStates,
+                clientMetadataMap,
+                taskForPartition,
+                changelogsByStatefulTask,
+                newlyCreatedChangelogs,
+                optimizedSourceChangelogs
+            );
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         final Set<TaskId> statefulTasks = changelogsByStatefulTask.keySet();
@@ -747,7 +758,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                             final Map<UUID, ClientMetadata> clientMetadataMap,
                                             final Map<TopicPartition, TaskId> taskForPartition,
                                             final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask,
-                                            final Set<String> newlyCreatedChangelogs) {
+                                            final Set<String> newlyCreatedChangelogs,
+                                            final Set<String> optimizedSourceChangelogs) {
         boolean fetchEndOffsetsSuccessful;
         Map<TaskId, Long> allTaskEndOffsetSums;
         try {
@@ -756,16 +768,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     .flatMap(Collection::stream)
                     .collect(Collectors.toList());
 
-            final Collection<TopicPartition> allPreexistingChangelogPartitions = new ArrayList<>(allChangelogPartitions);
-            allPreexistingChangelogPartitions.removeIf(partition -> newlyCreatedChangelogs.contains(partition.topic()));
-
-            final Collection<TopicPartition> allNewlyCreatedChangelogPartitions = new ArrayList<>(allChangelogPartitions);
-            allNewlyCreatedChangelogPartitions.removeAll(allPreexistingChangelogPartitions);
+            final Collection<TopicPartition> preexistingChangelogPartitions = new ArrayList<>();
+            final Collection<TopicPartition> preexistingSourceChangelogPartitions = new ArrayList<>();
+            final Collection<TopicPartition> newlyCreatedChangelogPartitions = new ArrayList<>();
+            for (final TopicPartition changelog : allChangelogPartitions) {
+                if (newlyCreatedChangelogs.contains(changelog.topic())) {
+                    newlyCreatedChangelogPartitions.add(changelog);
+                } else if (optimizedSourceChangelogs.contains(changelog.topic())) {
+                    preexistingSourceChangelogPartitions.add(changelog);
+                } else {
+                    preexistingChangelogPartitions.add(changelog);
+                }
+            }
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-                fetchEndOffsets(allPreexistingChangelogPartitions, adminClient);
+                fetchEndOffsets(preexistingChangelogPartitions, adminClient);
 
-            allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
+            allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, newlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException e) {
             allTaskEndOffsetSums = changelogsByStatefulTask.keySet().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
