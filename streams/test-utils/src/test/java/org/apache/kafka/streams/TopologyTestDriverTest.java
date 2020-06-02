@@ -716,7 +716,7 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldPassRecordHeadersIntoDeSerializers() {
+    public void shouldPassRecordHeadersIntoSerializersAndDeserializers() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         final AtomicBoolean passedHeadersToKeySerializer = new AtomicBoolean(false);
