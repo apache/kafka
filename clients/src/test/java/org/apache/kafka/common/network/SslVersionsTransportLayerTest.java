@@ -102,7 +102,7 @@ public class SslVersionsTransportLayerTest {
             new TestSecurityConfig(sslServerConfigs),
             null,
             TIME);
-        Selector selector = createSelector(sslClientConfigs);
+        Selector selector = createClientSelector(sslClientConfigs);
 
         String node = "0";
         selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
@@ -165,7 +165,7 @@ public class SslVersionsTransportLayerTest {
         return sslConfig;
     }
 
-    private Selector createSelector(Map<String, Object> sslClientConfigs) {
+    private Selector createClientSelector(Map<String, Object> sslClientConfigs) {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder =
             new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
