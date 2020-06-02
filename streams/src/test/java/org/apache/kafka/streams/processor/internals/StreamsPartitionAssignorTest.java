@@ -326,7 +326,6 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldProduceStickyAndBalancedAssignmentWhenNothingChanges() {
-        final ClientState state = new ClientState();
         final List<TaskId> allTasks =
                 asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
@@ -336,19 +335,18 @@ public class StreamsPartitionAssignorTest {
             mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
         );
 
+        final ClientState state = new ClientState();
+        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap());
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
-        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
-        state.assignActiveTasks(allTasks);
-
         assertEquivalentAssignment(
             previousAssignment,
             assignTasksToThreads(
-                state.activeTasks(),
+                allTasks,
                 emptySet(),
                 consumers,
                 state::previousStatefulActiveTasksForConsumer
@@ -356,15 +354,10 @@ public class StreamsPartitionAssignorTest {
         );
     }
 
-    /*
-
     @Test
     public void shouldProduceStickyAndBalancedAssignmentWhenNewTasksAreAdded() {
-        configureDefault();
-        final ClientState state = new ClientState();
-
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2,
-            TASK_1_3);
+        final List<TaskId> allTasks =
+            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
             mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_1_1, TASK_1_3))),
@@ -372,122 +365,60 @@ public class StreamsPartitionAssignorTest {
             mkEntry(CONSUMER_3, new ArrayList<>(asList(TASK_0_1, TASK_0_2, TASK_1_2)))
         );
 
-        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
-            for (final TaskId task : entry.getValue()) {
-                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
-            }
-        }
-
+        final ClientState state = new ClientState();
         final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
+        state.initializePrevTasks(emptyMap());
+        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
-        // We should be able to add a new task without sacrificing stickyness
+        // We should be able to add a new task without sacrificing stickiness
         final TaskId newTask = TASK_2_0;
         allTasks.add(newTask);
         state.assignActiveTasks(allTasks);
 
         final Map<String, List<TaskId>> newAssignment =
-            partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, emptySet());
+            assignTasksToThreads(
+                allTasks,
+                emptySet(),
+                consumers,
+                state::previousStatefulActiveTasksForConsumer
+            );
 
         previousAssignment.get(CONSUMER_2).add(newTask);
         assertEquivalentAssignment(previousAssignment, newAssignment);
     }
 
     @Test
-    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseNewConsumerJoined() {
-        configureDefault();
-        final ClientState state = new ClientState();
+    public void shouldInterleaveTasksByGroupIdDuringNewAssignment() {
+        final List<TaskId> allTasks =
+            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1);
 
-        final List<TaskId> allTasks = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2,
-            TASK_1_3);
-
-        final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
-            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
-            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+        final Map<String, List<TaskId>> assignment = mkMap(
+            mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_0_3, TASK_1_2))),
+            mkEntry(CONSUMER_2, new ArrayList<>(asList(TASK_0_1, TASK_1_0, TASK_2_0))),
+            mkEntry(CONSUMER_3, new ArrayList<>(asList(TASK_0_2, TASK_1_1, TASK_2_1)))
         );
 
-        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
-            for (final TaskId task : entry.getValue()) {
-                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
-            }
-        }
-
-        // If we add a new consumer here, we cannot produce an assignment that is both sticky and balanced
-        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3, CONSUMER_4);
-        state.assignActiveTasks(allTasks);
-
-        assertThat(partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, emptySet()),
-                   equalTo(emptyMap()));
-    }
-
-    @Test
-    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseOtherClientOwnedPartition() {
-        configureDefault();
         final ClientState state = new ClientState();
-
-        final List<TaskId> allTasks = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2,
-            TASK_1_3);
-
-        final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_1_1, TASK_1_3))),
-            mkEntry(CONSUMER_2, new ArrayList<>(asList(TASK_0_3, TASK_1_0))),
-            mkEntry(CONSUMER_3, new ArrayList<>(asList(TASK_0_1, TASK_0_2, TASK_1_2)))
-        );
-
-        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
-            for (final TaskId task : entry.getValue()) {
-                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
-            }
-        }
-
-        // Add the partitions of TASK_0_0 to allOwnedPartitions but not c1's ownedPartitions/previousAssignment
-        final Set<TopicPartition> allOwnedPartitions = new HashSet<>(partitionsForTask.get(TASK_0_0));
-
         final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
-        state.assignActiveTasks(allTasks);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, emptyMap());
+        state.addPreviousTasksAndOffsetSums(CONSUMER_2, emptyMap());
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, emptyMap());
 
-        assertThat(partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, allOwnedPartitions),
-                   equalTo(emptyMap()));
-    }
-
-    @Test
-    public void shouldInterleaveTasksByGroupId() {
-        final TaskId taskIdA0 = new TaskId(0, 0);
-        final TaskId taskIdA1 = new TaskId(0, 1);
-        final TaskId taskIdA2 = new TaskId(0, 2);
-        final TaskId taskIdA3 = new TaskId(0, 3);
-
-        final TaskId taskIdB0 = new TaskId(1, 0);
-        final TaskId taskIdB1 = new TaskId(1, 1);
-        final TaskId taskIdB2 = new TaskId(1, 2);
-
-        final TaskId taskIdC0 = new TaskId(2, 0);
-        final TaskId taskIdC1 = new TaskId(2, 1);
-
-        final String c1 = "c1";
-        final String c2 = "c2";
-        final String c3 = "c3";
-
-        final Set<String> consumers = mkSet(c1, c2, c3);
-
-        final List<TaskId> expectedSubList1 = asList(taskIdA0, taskIdA3, taskIdB2);
-        final List<TaskId> expectedSubList2 = asList(taskIdA1, taskIdB0, taskIdC0);
-        final List<TaskId> expectedSubList3 = asList(taskIdA2, taskIdB1, taskIdC1);
-
-        final Map<String, List<TaskId>> assignment = new HashMap<>();
-        assignment.put(c1, expectedSubList1);
-        assignment.put(c2, expectedSubList2);
-        assignment.put(c3, expectedSubList3);
-
-        final List<TaskId> tasks = asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3);
-        Collections.shuffle(tasks);
+        Collections.shuffle(allTasks);
 
         final Map<String, List<TaskId>> interleavedTaskIds =
-            StreamsPartitionAssignor.interleaveConsumerTasksByGroupId(tasks, consumers);
+            assignTasksToThreads(
+                allTasks,
+                emptySet(),
+                consumers,
+                state::previousStatefulActiveTasksForConsumer
+            );
 
         assertThat(interleavedTaskIds, equalTo(assignment));
     }
-*/
 
     @Test
     public void testEagerSubscription() {

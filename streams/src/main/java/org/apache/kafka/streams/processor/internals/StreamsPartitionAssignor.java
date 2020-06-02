@@ -1073,8 +1073,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * balance. The stateful and total task load are both balanced across threads. Tasks without previous owners
      * will be interleaved by group id to spread subtopologies across threads and further balance the workload.
      */
-    static Map<String, List<TaskId>> assignTasksToThreads(final Set<TaskId> statefulTasksToAssign,
-                                                          final Set<TaskId> statelessTasksToAssign,
+    static Map<String, List<TaskId>> assignTasksToThreads(final Collection<TaskId> statefulTasksToAssign,
+                                                          final Collection<TaskId> statelessTasksToAssign,
                                                           final Set<String> consumers,
                                                           final Function<String, Set<TaskId>> previousTasksForConsumer) {
         final Map<String, List<TaskId>> assignment = new HashMap<>();
