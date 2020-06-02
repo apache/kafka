@@ -509,6 +509,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.postProcessCheckClientDnsLookupValue(this);
+
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 

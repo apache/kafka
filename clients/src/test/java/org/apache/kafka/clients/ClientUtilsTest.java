@@ -97,21 +97,29 @@ public class ClientUtilsTest {
 
     @Test(expected = UnknownHostException.class)
     public void testResolveUnknownHostException() throws UnknownHostException {
-        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.DEFAULT);
+        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
+        // kafka.apache.org resolves to 2 IP addresses. DEFAULT should only return the first one.
         assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
+        // kafka.apache.org resolves to 2 IP addresses. USE_ALL_DNS_IPS should return both addresses.
         assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
     }
 
+    @Test
+    public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
+        // kafka.apache.org resolves to 2 IP addresses. RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY should return both addresses, like USE_ALL_DNS_IPS.
+        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
+    }
+
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.DEFAULT);
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {

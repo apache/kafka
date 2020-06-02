@@ -44,8 +44,9 @@ public class CommonClientConfigs {
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups."
                                                        + " If set to <code>use_all_dns_ips</code>, attempt to connect to all IP addresses returned by the lookup and use the first one that connects successfully."
-                                                       + " If set to <code>default</code>, connect to the first IP address returned by the lookup, even if the lookup returns multiple IP addresses."
-                                                       + " If set to <code>resolve_canonical_bootstrap_servers_only</code>, each entry will be resolved and expanded into a list of canonical names."
+                                                       + " If set to <code>default</code>, attempt to connect to the first IP address returned by the lookup, even if the lookup returns multiple IP addresses."
+                                                       + " If set to <code>resolve_canonical_bootstrap_servers_only</code>, will try to expand bootstrap hostname into a list of canonical names, if bootstrap hostname is an alias for multiple canonical names."
+                                                       + " And each canonical name will be resolved in the same way as <code>use_all_dns_ips</code>."
                                                        + " Note that <code>default</code> is deprecated and will be removed in future release.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
@@ -162,5 +163,18 @@ public class CommonClientConfigs {
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;
+    }
+
+    /**
+     * Postprocess the configuration to check if 'client.dns.lookup' configuration is set
+     * with deprecated value 'default'.
+     *
+     * @param config                    The config object.
+     */
+    public static void postProcessCheckClientDnsLookupValue(AbstractConfig config) {
+        String clientDnsLookupValue = config.getString(CLIENT_DNS_LOOKUP_CONFIG);
+        if (clientDnsLookupValue.equals(ClientDnsLookup.DEFAULT.toString()))
+            log.warn("Configuration '{}' value '{}' is deprecated and will be removed in future version.",
+                    CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT.toString());
     }
 }
