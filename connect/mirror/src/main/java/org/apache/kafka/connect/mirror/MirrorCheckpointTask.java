@@ -19,10 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,6 @@ public class MirrorCheckpointTask extends SourceTask {
     private String checkpointsTopic;
     private Duration interval;
     private Duration pollTimeout;
-    private Duration adminTimeout;
     private TopicFilter topicFilter;
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
@@ -78,7 +78,6 @@ public class MirrorCheckpointTask extends SourceTask {
         replicationPolicy = config.replicationPolicy();
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
-        adminTimeout = config.adminTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         metrics = config.metrics();
@@ -106,7 +105,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        try { 
+        try {
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopping && System.currentTimeMillis() < deadline) {
                 offsetSyncStore.update(pollTimeout);
@@ -185,7 +184,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         metrics.checkpointLatency(MirrorUtils.unwrapPartition(record.sourcePartition()),
             Checkpoint.unwrapGroup(record.sourcePartition()),
             System.currentTimeMillis() - record.timestamp());

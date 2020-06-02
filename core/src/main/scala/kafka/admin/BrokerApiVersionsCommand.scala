@@ -42,7 +42,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -118,7 +118,7 @@ object BrokerApiVersionsCommand {
         case t: Throwable =>
           error("admin-client-network-thread exited", t)
       } finally {
-        pendingFutures.asScala.foreach { future =>
+        pendingFutures.forEach { future =>
           try {
             future.raise(Errors.UNKNOWN_SERVER_ERROR)
           } catch {

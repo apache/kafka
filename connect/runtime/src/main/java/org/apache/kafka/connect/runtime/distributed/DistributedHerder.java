@@ -46,6 +46,7 @@ import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -60,6 +61,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.slf4j.Logger;
 
 import javax.crypto.KeyGenerator;
@@ -80,7 +82,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -90,6 +91,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
@@ -150,6 +152,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
+    private final boolean isTopicTrackingEnabled;
 
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
@@ -158,7 +161,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     private ExtendedAssignment assignment;
     private boolean canReadConfigs;
-    private ClusterConfigState configState;
+    // visible for testing
+    protected ClusterConfigState configState;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -216,6 +220,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
         this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
+        this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
@@ -227,15 +232,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       : new WorkerGroupMember(config, restUrl, this.configBackingStore,
                               new RebalanceListener(time), time, clientId, logContext);
 
-        this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>(1),
-                new ThreadFactory() {
-                    @Override
-                    public Thread newThread(Runnable herder) {
-                        return new Thread(herder, "DistributedHerder-" + clientId);
-                    }
-                });
-        this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
-        this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE);
+        this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingDeque<Runnable>(1),
+                ThreadUtils.createThreadFactory(
+                        this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
+
+        this.forwardRequestExecutor = Executors.newFixedThreadPool(1,
+                ThreadUtils.createThreadFactory(
+                        "ForwardRequestExecutor-" + clientId + "-%d", false));
+        this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
+                ThreadUtils.createThreadFactory(
+                        "StartAndStopExecutor-" + clientId + "-%d", false));
         this.config = config;
 
         stopping = new AtomicBoolean(false);
@@ -699,7 +707,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     public Void call() throws Exception {
                         log.trace("Handling connector config request {}", connName);
                         if (!isLeader()) {
-                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            callback.onCompletion(new NotLeaderException("Only the leader can delete connector configs.", leaderUrl()), null);
                             return null;
                         }
 
@@ -1245,8 +1253,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }, new Callback<Void>() {
                                 @Override
                                 public void onCompletion(Throwable error, Void result) {
-                                    log.error("Unexpected error during connector task reconfiguration: ", error);
-                                    log.error("Task reconfiguration for {} failed unexpectedly, this connector will not be properly reconfigured unless manually triggered.", connName);
+                                    if (error != null) {
+                                        log.error("Unexpected error during connector task reconfiguration: ", error);
+                                        log.error("Task reconfiguration for {} failed unexpectedly, this connector will not be properly reconfigured unless manually triggered.", connName);
+                                    }
                                 }
                             }
                     );
@@ -1279,7 +1289,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (worker.isSinkConnector(connName)) {
                 connConfig = new SinkConnectorConfig(plugins(), configs);
             } else {
-                connConfig = new SourceConnectorConfig(plugins(), configs);
+                connConfig = new SourceConnectorConfig(plugins(), configs, worker.isTopicCreationEnabled());
             }
 
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
@@ -1517,6 +1527,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    private void updateDeletedTaskStatus() {
+        ClusterConfigState snapshot = configBackingStore.snapshot();
+        for (String connector : statusBackingStore.connectors()) {
+            Set<ConnectorTaskId> remainingTasks = new HashSet<>(snapshot.tasks(connector));
+            
+            statusBackingStore.getAll(connector).stream()
+                .map(TaskStatus::id)
+                .filter(task -> !remainingTasks.contains(task))
+                .forEach(this::onDeletion);
+        }
+    }
+
     protected HerderMetrics herderMetrics() {
         return herderMetrics;
     }
@@ -1579,11 +1601,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }
 
-            // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
-            // be done after the rebalance completes to avoid race conditions as the previous generation attempts
-            // to change the state to UNASSIGNED after tasks have been stopped.
-            if (isLeader())
+            // Delete the statuses of all connectors and tasks removed prior to the start of this rebalance. This
+            // has to be done after the rebalance completes to avoid race conditions as the previous generation
+            // attempts to change the state to UNASSIGNED after tasks have been stopped.
+            if (isLeader()) {
                 updateDeletedConnectorStatus();
+                updateDeletedTaskStatus();
+            }
 
             // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
             // sleep in the poll() for a long time. Forcing a wakeup ensures we'll get to process this event in the
@@ -1614,14 +1638,31 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 startAndStop(callables);
                 log.info("Finished stopping tasks in preparation for rebalance");
 
+                if (isTopicTrackingEnabled) {
+                    // Send tombstones to reset active topics for removed connectors only after
+                    // connectors and tasks have been stopped, or these tombstones will be overwritten
+                    resetActiveTopics(connectors, tasks);
+                }
+
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
                 // completes.
                 statusBackingStore.flush();
                 log.info("Finished flushing status backing store in preparation for rebalance");
             } else {
-                log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
+                log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
+        }
+
+        private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
+            connectors.stream()
+                    .filter(connectorName -> !configState.contains(connectorName))
+                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
+            tasks.stream()
+                    .map(ConnectorTaskId::connector)
+                    .distinct()
+                    .filter(connectorName -> !configState.contains(connectorName))
+                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
         }
     }
 

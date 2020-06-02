@@ -46,11 +46,21 @@ import java.util.Set;
  * This set does not allow null elements.  It does not have internal synchronization.
  */
 public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection.Element> extends AbstractCollection<E> {
+    /**
+     * The interface which elements of this collection must implement.  The prev,
+     * setPrev, next, and setNext functions handle manipulating the implicit linked
+     * list which these elements reside in inside the collection.
+     * elementKeysAreEqual() is the function which this collection uses to compare
+     * elements.
+     */
     public interface Element {
         int prev();
         void setPrev(int prev);
         int next();
         void setNext(int next);
+        default boolean elementKeysAreEqual(Object other) {
+            return equals(other);
+        }
     }
 
     /**
@@ -313,7 +323,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             if (element == null) {
                 return INVALID_INDEX;
             }
-            if (key.equals(element)) {
+            if (element.elementKeysAreEqual(key)) {
                 return slot;
             }
             slot = (slot + 1) % elements.length;
@@ -322,7 +332,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * An element e in the collection such that e.equals(key) and
+     * An element e in the collection such that e.elementKeysAreEqual(key) and
      * e.hashCode() == key.hashCode().
      *
      * @param key   The element to match.
@@ -348,7 +358,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
     /**
      * Returns true if there is at least one element e in the collection such
-     * that key.equals(e) and key.hashCode() == e.hashCode().
+     * that key.elementKeysAreEqual(e) and key.hashCode() == e.hashCode().
      *
      * @param key       The object to try to match.
      */
@@ -361,10 +371,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         // Avoid using even-sized capacities, to get better key distribution.
         int newCapacity = (2 * expectedNumElements) + 1;
         // Don't use a capacity that is too small.
-        if (newCapacity < MIN_NONEMPTY_CAPACITY) {
-            return MIN_NONEMPTY_CAPACITY;
-        }
-        return newCapacity;
+        return Math.max(newCapacity, MIN_NONEMPTY_CAPACITY);
     }
 
     /**
@@ -417,7 +424,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
                 addElements[slot] = newElement;
                 return slot;
             }
-            if (element.equals(newElement)) {
+            if (element.elementKeysAreEqual(newElement)) {
                 return INVALID_INDEX;
             }
             slot = (slot + 1) % addElements.length;
@@ -441,7 +448,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * Remove the first element e such that key.equals(e)
+     * Remove the first element e such that key.elementKeysAreEqual(e)
      * and key.hashCode == e.hashCode.
      *
      * @param key       The object to try to match.

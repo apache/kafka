@@ -119,7 +119,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
                 partitionStateStore, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager);
-        partition.makeLeader(0, partitionState, 0, offsetCheckpoints);
+        partition.makeLeader(partitionState, offsetCheckpoints);
     }
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
@@ -161,9 +161,9 @@ public class UpdateFollowerFetchStateBenchmark {
     public void updateFollowerFetchStateBench() {
         // measure the impact of two follower fetches on the leader
         partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, nextOffset, nextOffset);
+                0, 1, nextOffset);
         partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, nextOffset, nextOffset);
+                0, 1, nextOffset);
         nextOffset++;
     }
 
@@ -173,8 +173,8 @@ public class UpdateFollowerFetchStateBenchmark {
         // measure the impact of two follower fetches on the leader when the follower didn't
         // end up fetching anything
         partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, 100, nextOffset);
+                0, 1, 100);
         partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, 100, nextOffset);
+                0, 1, 100);
     }
 }

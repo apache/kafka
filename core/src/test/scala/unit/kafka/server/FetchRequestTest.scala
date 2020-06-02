@@ -33,7 +33,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Random
 
@@ -246,6 +246,55 @@ class FetchRequestTest extends BaseRequestTest {
     assertResponseErrorForEpoch(Errors.NONE, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
+  }
+
+  @Test
+  def testEpochValidationWithinFetchSession(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+
+    // We need a leader change in order to check epoch fencing since the first epoch is 0 and
+    // -1 is treated as having no epoch at all
+    killBroker(firstLeaderId)
+
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+    verifyFetchSessionErrors(topicPartition, secondLeaderEpoch, secondLeaderId)
+
+    val followerId = TestUtils.findFollowerId(topicPartition, servers)
+    verifyFetchSessionErrors(topicPartition, secondLeaderEpoch, followerId)
+  }
+
+  private def verifyFetchSessionErrors(topicPartition: TopicPartition,
+                                       leaderEpoch: Int,
+                                       destinationBrokerId: Int): Unit = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    partitionMap.put(topicPartition, new FetchRequest.PartitionData(0L, 0L, 1024,
+      Optional.of(leaderEpoch)))
+    val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap)
+      .metadata(JFetchMetadata.INITIAL)
+      .build()
+    val fetchResponse = sendFetchRequest(destinationBrokerId, fetchRequest)
+    val sessionId = fetchResponse.sessionId
+
+    def assertResponseErrorForEpoch(expectedError: Errors,
+                                    sessionFetchEpoch: Int,
+                                    leaderEpoch: Optional[Integer]): Unit = {
+      val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      partitionMap.put(topicPartition, new FetchRequest.PartitionData(0L, 0L, 1024, leaderEpoch))
+      val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap)
+        .metadata(new JFetchMetadata(sessionId, sessionFetchEpoch))
+        .build()
+      val fetchResponse = sendFetchRequest(destinationBrokerId, fetchRequest)
+      val partitionData = fetchResponse.responseData.get(topicPartition)
+      assertEquals(expectedError, partitionData.error)
+    }
+
+    // We only check errors because we do not expect the partition in the response otherwise
+    assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, 1, Optional.of(leaderEpoch - 1))
+    assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, 2, Optional.of(leaderEpoch + 1))
   }
 
   /**
@@ -481,6 +530,12 @@ class FetchRequestTest extends BaseRequestTest {
     val data1 = res1.responseData.get(topicPartition)
     assertEquals(Errors.NONE, data1.error)
     assertEquals(3, records(data1).size)
+  }
+
+  @Test
+  def testPartitionDataEquals(): Unit = {
+    assertEquals(new FetchRequest.PartitionData(300, 0L, 300, Optional.of(300)),
+    new FetchRequest.PartitionData(300, 0L, 300, Optional.of(300)));
   }
 
   @Test

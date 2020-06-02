@@ -18,15 +18,16 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeoutException, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, Semaphore, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
+import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException, ReplicaNotAvailableException}
@@ -44,7 +45,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
 import unit.kafka.cluster.AbstractPartitionTest
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class PartitionTest extends AbstractPartitionTest {
@@ -53,7 +54,7 @@ class PartitionTest extends AbstractPartitionTest {
   def testMakeLeaderUpdatesEpochCache(): Unit = {
     val leaderEpoch = 8
 
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)
@@ -79,7 +80,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val logConfig = LogConfig(createLogProperties(Map(
       LogConfig.MessageFormatVersionProp -> kafka.api.KAFKA_0_10_2_IV0.shortVersion)))
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     log.appendAsLeader(TestUtils.records(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)),
@@ -108,7 +109,7 @@ class PartitionTest extends AbstractPartitionTest {
     val latch = new CountDownLatch(1)
 
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
-    partition.createLogIfNotExists(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = false, offsetCheckpoints)
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
 
@@ -135,12 +136,65 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(None, partition.futureLog)
   }
 
+  // Verify that partition.makeFollower() and partition.appendRecordsToFollowerOrFutureReplica() can run concurrently
+  @Test
+  def testMakeFollowerWithWithFollowerAppendRecords(): Unit = {
+    val appendSemaphore = new Semaphore(0)
+    val mockTime = new MockTime()
+
+    partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      logManager) {
+
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints)
+        new SlowLog(log, mockTime, appendSemaphore)
+      }
+    }
+
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = false, offsetCheckpoints)
+
+    val appendThread = new Thread {
+      override def run(): Unit = {
+        val records = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+          new SimpleRecord("k2".getBytes, "v2".getBytes)),
+          baseOffset = 0)
+        partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
+      }
+    }
+    appendThread.start()
+    TestUtils.waitUntilTrue(() => appendSemaphore.hasQueuedThreads, "follower log append is not called.")
+
+    val partitionState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(0)
+      .setLeader(2)
+      .setLeaderEpoch(1)
+      .setIsr(List[Integer](0, 1, 2, brokerId).asJava)
+      .setZkVersion(1)
+      .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
+      .setIsNew(false)
+    assertTrue(partition.makeFollower(partitionState, offsetCheckpoints))
+
+    appendSemaphore.release()
+    appendThread.join()
+
+    assertEquals(2L, partition.localLogOrException.logEndOffset)
+    assertEquals(2L, partition.leaderReplicaIdOpt.get)
+  }
+
   @Test
   // Verify that replacement works when the replicas have the same log end offset but different base offsets in the
   // active segment
   def testMaybeReplaceCurrentWithFutureReplicaDifferentBaseOffsets(): Unit = {
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
-    partition.createLogIfNotExists(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = false, offsetCheckpoints)
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
 
@@ -411,7 +465,6 @@ class PartitionTest extends AbstractPartitionTest {
     val leader = brokerId
     val follower1 = brokerId + 1
     val follower2 = brokerId + 2
-    val controllerId = brokerId + 3
     val replicas = List(leader, follower1, follower2)
     val isr = List[Integer](leader, follower2).asJava
     val leaderEpoch = 8
@@ -432,7 +485,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(true)
 
     assertTrue("Expected first makeLeader() to return 'leader changed'",
-      partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints))
+      partition.makeLeader(leaderState, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
     assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
@@ -450,8 +503,7 @@ class PartitionTest extends AbstractPartitionTest {
         followerFetchOffsetMetadata = fetchOffsetMetadata,
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset,
-        lastSentHighwatermark = partition.localLogOrException.highWatermark)
+        leaderEndOffset = partition.localLogOrException.logEndOffset)
     }
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
@@ -507,7 +559,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas.map(Int.box).asJava)
       .setIsNew(false)
 
-    assertTrue(partition.makeFollower(controllerId, followerState, 1, offsetCheckpoints))
+    assertTrue(partition.makeFollower(followerState, offsetCheckpoints))
 
     // Back to leader, this resets the startLogOffset for this epoch (to 2), we're now in the fault condition
     val newLeaderState = new LeaderAndIsrPartitionState()
@@ -519,7 +571,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas.map(Int.box).asJava)
       .setIsNew(false)
 
-    assertTrue(partition.makeLeader(controllerId, newLeaderState, 2, offsetCheckpoints))
+    assertTrue(partition.makeLeader(newLeaderState, offsetCheckpoints))
 
     // Try to get offsets as a client
     fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
@@ -581,35 +633,34 @@ class PartitionTest extends AbstractPartitionTest {
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
-                                      log: Log = logManager.getOrCreateLog(topicPartition, logConfig)): Partition = {
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+                                      log: Log = logManager.getOrCreateLog(topicPartition, () => logConfig)): Partition = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
     val isr = replicas
 
     if (isLeader) {
       assertTrue("Expected become leader transition to succeed",
-        partition.makeLeader(controllerId, new LeaderAndIsrPartitionState()
+        partition.makeLeader(new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
           .setLeaderEpoch(leaderEpoch)
           .setIsr(isr)
           .setZkVersion(1)
           .setReplicas(replicas)
-          .setIsNew(true), 0, offsetCheckpoints))
+          .setIsNew(true), offsetCheckpoints))
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
     } else {
       assertTrue("Expected become follower transition to succeed",
-        partition.makeFollower(controllerId, new LeaderAndIsrPartitionState()
+        partition.makeFollower(new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId + 1)
           .setLeaderEpoch(leaderEpoch)
           .setIsr(isr)
           .setZkVersion(1)
           .setReplicas(replicas)
-          .setIsNew(true), 0, offsetCheckpoints))
+          .setIsNew(true), offsetCheckpoints))
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
       assertEquals(None, partition.leaderLogIfLocal)
     }
@@ -619,7 +670,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testAppendRecordsAsFollowerBelowLogStartOffset(): Unit = {
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     val log = partition.localLogOrException
 
     val initialLogStartOffset = 5L
@@ -669,7 +720,6 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testListOffsetIsolationLevels(): Unit = {
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -677,17 +727,17 @@ class PartitionTest extends AbstractPartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     assertTrue("Expected become leader transition to succeed",
-      partition.makeLeader(controllerId, new LeaderAndIsrPartitionState()
+      partition.makeLeader(new LeaderAndIsrPartitionState()
         .setControllerEpoch(controllerEpoch)
         .setLeader(brokerId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
         .setZkVersion(1)
         .setReplicas(replicas)
-        .setIsNew(true), 0, offsetCheckpoints))
+        .setIsNew(true), offsetCheckpoints))
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
 
     val records = createTransactionalRecords(List(
@@ -757,7 +807,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
       .setIsNew(false)
-    partition.makeFollower(0, partitionState, 0, offsetCheckpoints)
+    partition.makeFollower(partitionState, offsetCheckpoints)
 
     // Request with same leader and epoch increases by only 1, do become-follower steps
     partitionState = new LeaderAndIsrPartitionState()
@@ -768,7 +818,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
       .setIsNew(false)
-    assertTrue(partition.makeFollower(0, partitionState, 2, offsetCheckpoints))
+    assertTrue(partition.makeFollower(partitionState, offsetCheckpoints))
 
     // Request with same leader and same epoch, skip become-follower steps
     partitionState = new LeaderAndIsrPartitionState()
@@ -778,7 +828,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsr(List[Integer](0, 1, 2, brokerId).asJava)
       .setZkVersion(1)
       .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
-    assertFalse(partition.makeFollower(0, partitionState, 2, offsetCheckpoints))
+    assertFalse(partition.makeFollower(partitionState, offsetCheckpoints))
   }
 
   @Test
@@ -787,7 +837,6 @@ class PartitionTest extends AbstractPartitionTest {
     val leader = brokerId
     val follower1 = brokerId + 1
     val follower2 = brokerId + 2
-    val controllerId = brokerId + 3
     val replicas = List[Integer](leader, follower1, follower2).asJava
     val isr = List[Integer](leader, follower2).asJava
     val leaderEpoch = 8
@@ -808,7 +857,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas)
       .setIsNew(true)
     assertTrue("Expected first makeLeader() to return 'leader changed'",
-               partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints))
+               partition.makeLeader(leaderState, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
     assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
@@ -827,8 +876,7 @@ class PartitionTest extends AbstractPartitionTest {
         followerFetchOffsetMetadata = fetchOffsetMetadata,
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset,
-        lastSentHighwatermark = partition.localLogOrException.highWatermark)
+        leaderEndOffset = partition.localLogOrException.logEndOffset)
     }
 
     updateFollowerFetchState(follower2, LogOffsetMetadata(0))
@@ -844,7 +892,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(replicas)
       .setIsNew(false)
-    partition.makeFollower(controllerId, followerState, 1, offsetCheckpoints)
+    partition.makeFollower(followerState, offsetCheckpoints)
 
     val newLeaderState = new LeaderAndIsrPartitionState()
       .setControllerEpoch(controllerEpoch)
@@ -855,7 +903,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas)
       .setIsNew(false)
     assertTrue("Expected makeLeader() to return 'leader changed' after makeFollower()",
-               partition.makeLeader(controllerEpoch, newLeaderState, 2, offsetCheckpoints))
+               partition.makeLeader(newLeaderState, offsetCheckpoints))
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
@@ -883,7 +931,6 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testDelayedFetchAfterAppendRecords(): Unit = {
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicaIds = List[Integer](brokerId, brokerId + 1).asJava
@@ -891,7 +938,7 @@ class PartitionTest extends AbstractPartitionTest {
     val logConfig = LogConfig(new Properties)
 
     val topicPartitions = (0 until 5).map { i => new TopicPartition("test-topic", i) }
-    val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, logConfig) }
+    val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, () => logConfig) }
     val partitions = ListBuffer.empty[Partition]
 
     logs.foreach { log =>
@@ -924,7 +971,7 @@ class PartitionTest extends AbstractPartitionTest {
         .setZkVersion(1)
         .setReplicas(replicaIds)
         .setIsNew(true)
-      partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+      partition.makeLeader(leaderState, offsetCheckpoints)
       partitions += partition
     }
 
@@ -981,8 +1028,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   def createTransactionalRecords(records: Iterable[SimpleRecord],
-                                 baseOffset: Long,
-                                 partitionLeaderEpoch: Int = 0): MemoryRecords = {
+                                 baseOffset: Long): MemoryRecords = {
     val producerId = 1L
     val producerEpoch = 0.toShort
     val baseSequence = 0
@@ -1004,7 +1050,6 @@ class PartitionTest extends AbstractPartitionTest {
     val leader = brokerId
     val follower1 = brokerId + 1
     val follower2 = brokerId + 2
-    val controllerId = brokerId + 3
     val replicas = List[Integer](leader, follower1, follower2).asJava
     val isr = List[Integer](leader).asJava
     val leaderEpoch = 8
@@ -1019,16 +1064,15 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(replicas)
       .setIsNew(true)
-    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints)
     assertTrue(partition.isAtMinIsr)
   }
 
   @Test
   def testUpdateFollowerFetchState(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1037,12 +1081,11 @@ class PartitionTest extends AbstractPartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     val initializeTimeMs = time.milliseconds()
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1051,7 +1094,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas)
           .setIsNew(true),
-        0,
         offsetCheckpoints))
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1065,8 +1107,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 6L)
 
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(3L, remoteReplica.logEndOffset)
@@ -1078,8 +1119,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(6L),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 6L)
 
     assertEquals(time.milliseconds(), remoteReplica.lastCaughtUpTimeMs)
     assertEquals(6L, remoteReplica.logEndOffset)
@@ -1089,10 +1129,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrExpansion(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1101,11 +1140,10 @@ class PartitionTest extends AbstractPartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue(
       "Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1114,7 +1152,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas.map(Int.box).asJava)
           .setIsNew(true),
-        0,
         offsetCheckpoints)
     )
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1127,8 +1164,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 6L)
 
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(3L, remoteReplica.logEndOffset)
@@ -1146,8 +1182,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 6L)
 
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1156,10 +1191,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotExpandedIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1168,10 +1202,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1180,7 +1213,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas)
           .setIsNew(true),
-        0,
         offsetCheckpoints))
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
 
@@ -1200,8 +1232,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 10L)
 
     // Follower state is updated, but the ISR has not expanded
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1211,10 +1242,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testMaybeShrinkIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1224,11 +1254,10 @@ class PartitionTest extends AbstractPartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue(
       "Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1237,7 +1266,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas.map(Int.box).asJava)
           .setIsNew(true),
-        0,
         offsetCheckpoints)
     )
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
@@ -1268,10 +1296,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfPreviousFetchIsCaughtUp(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1281,11 +1308,10 @@ class PartitionTest extends AbstractPartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue(
       "Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1294,7 +1320,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas.map(Int.box).asJava)
           .setIsNew(true),
-        0,
         offsetCheckpoints)
     )
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
@@ -1312,8 +1337,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(5),
       followerStartOffset = 0L,
       followerFetchTimeMs = firstFetchTimeMs,
-      leaderEndOffset = 10L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 10L)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(5L, partition.localLogOrException.highWatermark)
     assertEquals(5L, remoteReplica.logEndOffset)
@@ -1327,8 +1351,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 15L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 15L)
     assertEquals(firstFetchTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1342,10 +1365,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfFollowerCaughtUpToLogEnd(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1355,11 +1377,10 @@ class PartitionTest extends AbstractPartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue(
       "Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1368,7 +1389,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas.map(Int.box).asJava)
           .setIsNew(true),
-        0,
         offsetCheckpoints)
     )
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
@@ -1384,8 +1404,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L,
-      lastSentHighwatermark = partition.localLogOrException.highWatermark)
+      leaderEndOffset = 10L)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1401,10 +1420,9 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotShrunkIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
-    val controllerId = 0
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
@@ -1414,10 +1432,9 @@ class PartitionTest extends AbstractPartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(
-        controllerId,
         new LeaderAndIsrPartitionState()
           .setControllerEpoch(controllerEpoch)
           .setLeader(brokerId)
@@ -1426,7 +1443,6 @@ class PartitionTest extends AbstractPartitionTest {
           .setZkVersion(1)
           .setReplicas(replicas)
           .setIsNew(true),
-        0,
         offsetCheckpoints))
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1453,13 +1469,12 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testUseCheckpointToInitializeHighWatermark(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 6, leaderEpoch = 5)
 
     when(offsetCheckpoints.fetch(logDir1.getAbsolutePath, topicPartition))
       .thenReturn(Some(4L))
 
-    val controllerId = 0
     val controllerEpoch = 3
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
     val leaderState = new LeaderAndIsrPartitionState()
@@ -1470,7 +1485,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(replicas)
       .setIsNew(false)
-    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints)
     assertEquals(4, partition.localLogOrException.highWatermark)
   }
 
@@ -1485,7 +1500,7 @@ class PartitionTest extends AbstractPartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      Metrics.defaultRegistry().allMetrics().asScala.filterKeys { metricName =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
         metricName.getName == metric && metricName.getType == "Partition"
       }.headOption.map(_._2)
     }
@@ -1494,12 +1509,11 @@ class PartitionTest extends AbstractPartitionTest {
 
     Partition.removeMetrics(topicPartition)
 
-    assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
+    assertEquals(Set(), KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
   }
 
   @Test
   def testUnderReplicatedPartitionsCorrectSemantics(): Unit = {
-    val controllerId = 0
     val controllerEpoch = 3
     val replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2).asJava
     val isr = List[Integer](brokerId, brokerId + 1).asJava
@@ -1512,11 +1526,11 @@ class PartitionTest extends AbstractPartitionTest {
       .setZkVersion(1)
       .setReplicas(replicas)
       .setIsNew(false)
-    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints)
     assertTrue(partition.isUnderReplicated)
 
     leaderState = leaderState.setIsr(replicas)
-    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints)
     assertFalse(partition.isUnderReplicated)
   }
 
@@ -1572,7 +1586,7 @@ class PartitionTest extends AbstractPartitionTest {
       metadataCache,
       spyLogManager)
 
-    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
@@ -1606,7 +1620,7 @@ class PartitionTest extends AbstractPartitionTest {
       metadataCache,
       spyLogManager)
 
-    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
@@ -1641,7 +1655,7 @@ class PartitionTest extends AbstractPartitionTest {
       metadataCache,
       spyLogManager)
 
-    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
@@ -1659,6 +1673,27 @@ class PartitionTest extends AbstractPartitionTest {
       val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
         new SimpleRecord(s"k$i".getBytes, s"v$i".getBytes))
       log.appendAsLeader(records, leaderEpoch)
+    }
+  }
+
+  private class SlowLog(log: Log, mockTime: MockTime, appendSemaphore: Semaphore) extends Log(
+    log.dir,
+    log.config,
+    log.logStartOffset,
+    log.recoveryPoint,
+    mockTime.scheduler,
+    new BrokerTopicStats,
+    log.time,
+    log.maxProducerIdExpirationMs,
+    log.producerIdExpirationCheckIntervalMs,
+    log.topicPartition,
+    log.producerStateManager,
+    new LogDirFailureChannel(1)) {
+
+    override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+      appendSemaphore.acquire()
+      val appendInfo = super.appendAsFollower(records)
+      appendInfo
     }
   }
 }

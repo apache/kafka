@@ -36,7 +36,8 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
@@ -102,6 +103,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 1. Send with null key/value/partition-id should be accepted; send with null topic should be rejected.
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
+  @nowarn("cat=deprecation")
   @Test
   def testSendOffset(): Unit = {
     val producer = createProducer(brokerList)

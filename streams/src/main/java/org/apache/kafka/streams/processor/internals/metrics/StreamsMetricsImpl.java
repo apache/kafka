@@ -28,6 +28,9 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
+import org.apache.kafka.common.metrics.stats.Percentile;
+import org.apache.kafka.common.metrics.stats.Percentiles;
+import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -46,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.Optional;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -120,15 +124,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
+    public static final String RECORDS_SUFFIX = "-records";
     public static final String AVG_SUFFIX = "-avg";
     public static final String MAX_SUFFIX = "-max";
     public static final String MIN_SUFFIX = "-min";
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
-
-    public static final String AVG_VALUE_DOC = "The average value of ";
-    public static final String MAX_VALUE_DOC = "The maximum value of ";
+    public static final String P99_SUFFIX = "-p99";
+    public static final String P90_SUFFIX = "-p90";
 
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
@@ -149,6 +153,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
+
+    private static final int PERCENTILES_SIZE_IN_BYTES = 1000 * 1000;    // 1 MB
+    private static double MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000d; // maximum latency is 10 days; values above that will be pinned
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -210,11 +217,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                           final Sensor... parents) {
         final String key = threadSensorPrefix(threadId);
         synchronized (threadLevelSensors) {
-            threadLevelSensors.putIfAbsent(key, new LinkedList<>());
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-            threadLevelSensors.get(key).push(fullSensorName);
-            return sensor;
+            return Optional.ofNullable(metrics.getSensor(fullSensorName))
+                .orElseGet(() -> {
+                    threadLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                    return metrics.sensor(fullSensorName, recordingLevel, parents);
+                });
         }
     }
 
@@ -290,13 +298,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                         final Sensor... parents) {
         final String key = taskSensorPrefix(threadId, taskId);
         synchronized (taskLevelSensors) {
-            if (!taskLevelSensors.containsKey(key)) {
-                taskLevelSensors.put(key, new LinkedList<>());
-            }
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-            taskLevelSensors.get(key).push(fullSensorName);
-            return sensor;
+            return Optional.ofNullable(metrics.getSensor(fullSensorName))
+                .orElseGet(() -> {
+                    taskLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                    return metrics.sensor(fullSensorName, recordingLevel, parents);
+                });
         }
     }
 
@@ -323,17 +330,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                   final Sensor... parents) {
         final String key = nodeSensorPrefix(threadId, taskId, processorNodeName);
         synchronized (nodeLevelSensors) {
-            if (!nodeLevelSensors.containsKey(key)) {
-                nodeLevelSensors.put(key, new LinkedList<>());
-            }
-
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-
-            nodeLevelSensors.get(key).push(fullSensorName);
-
-            return sensor;
+            return Optional.ofNullable(metrics.getSensor(fullSensorName))
+                .orElseGet(() -> {
+                    nodeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                    return metrics.sensor(fullSensorName, recordingLevel, parents);
+                });
         }
     }
 
@@ -362,17 +364,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                    final Sensor... parents) {
         final String key = cacheSensorPrefix(threadId, taskName, storeName);
         synchronized (cacheLevelSensors) {
-            if (!cacheLevelSensors.containsKey(key)) {
-                cacheLevelSensors.put(key, new LinkedList<>());
-            }
-
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-
-            cacheLevelSensors.get(key).push(fullSensorName);
-
-            return sensor;
+            return Optional.ofNullable(metrics.getSensor(fullSensorName))
+                .orElseGet(() -> {
+                    cacheLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                    return metrics.sensor(fullSensorName, recordingLevel, parents);
+                });
         }
     }
 
@@ -413,15 +410,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                          final Sensor... parents) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
         synchronized (storeLevelSensors) {
-            if (!storeLevelSensors.containsKey(key)) {
-                storeLevelSensors.put(key, new LinkedList<>());
-            }
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-
-            storeLevelSensors.get(key).push(fullSensorName);
-
-            return sensor;
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            } else {
+                return sensor;
+            }
         }
     }
 
@@ -651,6 +647,54 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 descriptionOfMax,
                 tags),
             new Max()
+        );
+    }
+
+    public static void addMinAndMaxAndP99AndP90ToSensor(final Sensor sensor,
+                                                        final String group,
+                                                        final Map<String, String> tags,
+                                                        final String operation,
+                                                        final String descriptionOfMin,
+                                                        final String descriptionOfMax,
+                                                        final String descriptionOfP99,
+                                                        final String descriptionOfP90) {
+        sensor.add(
+            new MetricName(
+                operation + MIN_SUFFIX,
+                group,
+                descriptionOfMin,
+                tags),
+            new Min()
+        );
+
+        sensor.add(
+            new MetricName(
+                operation + MAX_SUFFIX,
+                group,
+                descriptionOfMax,
+                tags),
+            new Max()
+        );
+
+        sensor.add(
+            new Percentiles(
+                PERCENTILES_SIZE_IN_BYTES,
+                MAXIMUM_E2E_LATENCY,
+                BucketSizing.LINEAR,
+                new Percentile(
+                    new MetricName(
+                        operation + P99_SUFFIX,
+                        group,
+                        descriptionOfP99,
+                        tags),
+                    99),
+                new Percentile(
+                    new MetricName(
+                        operation + P90_SUFFIX,
+                        group,
+                        descriptionOfP90,
+                        tags),
+                    90))
         );
     }
 

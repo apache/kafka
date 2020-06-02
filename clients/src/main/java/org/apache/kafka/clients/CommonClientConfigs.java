@@ -90,6 +90,8 @@ public class CommonClientConfigs {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
+    public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
+
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
         Utils.join(SecurityProtocol.names(), ", ") + ".";
@@ -143,6 +145,10 @@ public class CommonClientConfigs {
                                                            + "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. "
                                                            + "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
+    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
+            "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

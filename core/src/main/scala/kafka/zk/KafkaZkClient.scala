@@ -25,19 +25,21 @@ import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAs
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
-import kafka.security.auth.{Acl, Resource, ResourceType}
+import kafka.security.authorizer.AclEntry
 import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
+
 import scala.collection.{Map, Seq, mutable}
 
 /**
@@ -91,7 +93,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def registerBroker(brokerInfo: BrokerInfo): Long = {
     val path = brokerInfo.path
     val stat = checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
-    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid (broker epoch): ${stat.getCzxid}")
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: " +
+      s"${brokerInfo.broker.endPoints.map(_.connectionString).mkString(",")}, czxid (broker epoch): ${stat.getCzxid}")
     stat.getCzxid
   }
 
@@ -353,13 +356,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
     def set(configData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),
-        ConfigEntityZNode.encode(config), ZkVersion.MatchAnyVersion)
+        configData, ZkVersion.MatchAnyVersion)
       retryRequestUntilConnected(setDataRequest)
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
       val path = ConfigEntityZNode.path(rootEntityType, sanitizedEntityName)
-      try createRecursive(path, ConfigEntityZNode.encode(config))
+      try createRecursive(path, configData)
       catch {
         case _: NodeExistsException => set(configData).maybeThrow
       }
@@ -456,16 +459,17 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets all topics in the cluster.
+   * @param registerWatch indicates if a watch must be registered or not
    * @return sequence of topics in the cluster.
    */
-  def getAllTopicsInCluster: Set[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
+  def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(
+      GetChildrenRequest(TopicsZNode.path, registerWatch))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.toSet
       case Code.NONODE => Set.empty
       case _ => throw getChildrenResponse.resultException.get
     }
-
   }
 
   /**
@@ -511,8 +515,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
-    val persistedAssignments = assignment.mapValues(ReplicaAssignment(_)).toMap
+  def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
+    val persistedAssignments = assignment.map { case (k, v) => k -> ReplicaAssignment(v) }
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(persistedAssignments))
   }
 
@@ -521,7 +525,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return sequence of znode names and not the absolute znode path.
    */
   def getAllLogDirEventNotifications: Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path, registerWatch = true))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber)
       case Code.NONODE => Seq.empty
@@ -553,7 +557,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteLogDirEventNotifications(expectedControllerEpochZkVersion: Int): Unit = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path, registerWatch = true))
     if (getChildrenResponse.resultCode == Code.OK) {
       deleteLogDirEventNotifications(getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber), expectedControllerEpochZkVersion)
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
@@ -580,7 +584,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return the replica assignment for each partition from the given topics.
    */
   def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicPartition, Seq[Int]] = {
-    getFullReplicaAssignmentForTopics(topics).mapValues(_.replicas).toMap
+    getFullReplicaAssignmentForTopics(topics).map { case (k, v) => k -> v.replicas }
   }
 
   /**
@@ -712,7 +716,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return list of child node names
    */
   def getChildren(path : String): Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path, registerWatch = true))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children
       case Code.NONODE => Seq.empty
@@ -785,7 +789,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return sequence of topics marked for deletion.
    */
   def getTopicDeletions: Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(DeleteTopicsZNode.path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(DeleteTopicsZNode.path, registerWatch = true))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children
       case Code.NONODE => Seq.empty
@@ -953,7 +957,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return sequence of znode names and not the absolute znode path.
    */
   def getAllIsrChangeNotifications: Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path, registerWatch = true))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber)
       case Code.NONODE => Seq.empty
@@ -985,7 +989,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteIsrChangeNotifications(expectedControllerEpochZkVersion: Int): Unit = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path, registerWatch = true))
     if (getChildrenResponse.resultCode == Code.OK) {
       deleteIsrChangeNotifications(getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber), expectedControllerEpochZkVersion)
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
@@ -1104,7 +1108,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def createAclPaths(): Unit = {
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
-      ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
+      AclEntry.ResourceTypes.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
 
     ZkAclChangeStore.stores.foreach(store => createRecursive(store.aclChangePath, throwIfPathExists = false))
@@ -1115,7 +1119,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param resource Resource to get VersionedAcls for
    * @return  VersionedAcls
    */
-  def getVersionedAclsForResource(resource: Resource): VersionedAcls = {
+  def getVersionedAclsForResource(resource: ResourcePattern): VersionedAcls = {
     val getDataRequest = GetDataRequest(ResourceZNode.path(resource))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
@@ -1133,7 +1137,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedVersion
    * @return true if the update was successful and the new version
    */
-  def conditionalSetAclsForResource(resource: Resource, aclsSet: Set[Acl], expectedVersion: Int): (Boolean, Int) = {
+  def conditionalSetAclsForResource(resource: ResourcePattern,
+                                    aclsSet: Set[AclEntry],
+                                    expectedVersion: Int): (Boolean, Int) = {
     def set(aclData: Array[Byte],  expectedVersion: Int): SetDataResponse = {
       val setDataRequest = SetDataRequest(ResourceZNode.path(resource), aclData, expectedVersion)
       retryRequestUntilConnected(setDataRequest)
@@ -1152,7 +1158,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }
   }
 
-  def createAclsForResourceIfNotExists(resource: Resource, aclsSet: Set[Acl]): (Boolean, Int) = {
+  def createAclsForResourceIfNotExists(resource: ResourcePattern, aclsSet: Set[AclEntry]): (Boolean, Int) = {
     def create(aclData: Array[Byte]): CreateResponse = {
       val path = ResourceZNode.path(resource)
       val createRequest = CreateRequest(path, aclData, defaultAcls(path), CreateMode.PERSISTENT)
@@ -1173,7 +1179,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Creates an Acl change notification message.
    * @param resource resource pattern that has changed
    */
-  def createAclChangeNotification(resource: Resource): Unit = {
+  def createAclChangeNotification(resource: ResourcePattern): Unit = {
     val aclChange = ZkAclStore(resource.patternType).changeStore.createChangeNode(resource)
     val createRequest = CreateRequest(aclChange.path, aclChange.bytes, defaultAcls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
@@ -1199,7 +1205,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    */
   def deleteAclChangeNotifications(): Unit = {
     ZkAclChangeStore.stores.foreach(store => {
-      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
+      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath, registerWatch = true))
       if (getChildrenResponse.resultCode == Code.OK) {
         deleteAclChangeNotifications(store.aclChangePath, getChildrenResponse.children)
       } else if (getChildrenResponse.resultCode != Code.NONODE) {
@@ -1251,7 +1257,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param resource
    * @return delete status
    */
-  def deleteResource(resource: Resource): Boolean = {
+  def deleteResource(resource: ResourcePattern): Boolean = {
     deleteRecursive(ResourceZNode.path(resource))
   }
 
@@ -1260,7 +1266,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param resource
    * @return existence status
    */
-  def resourceExists(resource: Resource): Boolean = {
+  def resourceExists(resource: ResourcePattern): Boolean = {
     pathExists(ResourceZNode.path(resource))
   }
 
@@ -1270,7 +1276,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedVersion
    * @return return true if it succeeds, false otherwise (the current version is not the expected version)
    */
-  def conditionalDelete(resource: Resource, expectedVersion: Int): Boolean = {
+  def conditionalDelete(resource: ResourcePattern, expectedVersion: Int): Boolean = {
     val deleteRequest = DeleteRequest(ResourceZNode.path(resource), expectedVersion)
     val deleteResponse = retryRequestUntilConnected(deleteRequest)
     deleteResponse.resultCode match {
@@ -1581,7 +1587,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @throws KeeperException if there is an error while deleting the znodes
    */
   def deleteRecursive(path: String, expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion): Boolean = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path, registerWatch = true))
     getChildrenResponse.resultCode match {
       case Code.OK =>
         getChildrenResponse.children.foreach(child => deleteRecursive(s"$path/$child", expectedControllerEpochZkVersion))
@@ -1853,9 +1859,10 @@ object KafkaZkClient {
             time: Time,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            name: Option[String] = None) = {
+            name: Option[String] = None,
+            zkClientConfig: Option[ZKClientConfig] = None) = {
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType, name)
+      time, metricGroup, metricType, name, zkClientConfig)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

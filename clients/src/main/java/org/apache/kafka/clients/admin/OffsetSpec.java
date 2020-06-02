@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import java.util.Map;
 
 /** 
  * This class allows to specify the desired offsets when using {@link KafkaAdminClient#listOffsets(Map, ListOffsetsOptions)}
@@ -51,7 +52,7 @@ public class OffsetSpec {
     }
 
     /**
-     * Used to retrieve the the earliest offset whose timestamp is greater than
+     * Used to retrieve the earliest offset whose timestamp is greater than
      * or equal to the given timestamp in the corresponding partition
      * @param timestamp in milliseconds
      */

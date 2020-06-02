@@ -33,6 +33,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
@@ -41,7 +42,6 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,7 +59,6 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Logger log;
-    private final boolean eosEnabled;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final File baseDir;
@@ -81,7 +80,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         baseDir = stateDirectory.globalStateDir();
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
@@ -158,26 +156,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
-        StateManagerUtil.reinitializeStateStoresForPartitions(
-            log,
-            eosEnabled,
-            baseDir,
-            globalStores,
-            topology.storeToChangelogTopic(),
-            partitions,
-            processorContext,
-            checkpointFile,
-            checkpointFileCache
-        );
-
-        globalConsumer.assign(partitions);
-        globalConsumer.seekToBeginning(partitions);
-    }
-
-    @Override
     public StateStore getGlobalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
@@ -191,9 +169,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return baseDir;
     }
 
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-
+    @Override
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
@@ -246,7 +223,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         } finally {
             globalConsumer.unsubscribe();
         }
-
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -331,9 +307,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
                         storeName,
                         recoverableException.toString());
-                    reinitializeStateStoresForPartitions(recoverableException.partitions(), globalProcessorContext);
 
-                    stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+                    // TODO K9113: we remove the re-init logic and push it to be handled by the thread directly
+
                     restoreCount = 0L;
                 }
             }
@@ -363,9 +339,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
     }
 
-
     @Override
-    public void close(final boolean clean) throws IOException {
+    public void close() throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;
@@ -419,9 +394,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
-        return Collections.unmodifiableMap(checkpointFileCache);
+    public TaskType taskType() {
+        return TaskType.GLOBAL;
     }
 
-
+    @Override
+    public Map<TopicPartition, Long> changelogOffsets() {
+        return Collections.unmodifiableMap(checkpointFileCache);
+    }
 }

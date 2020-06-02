@@ -40,7 +40,7 @@ public interface OffsetCommitCallback {
      *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
      *            it is in the middle of a rebalance. In such cases
-     *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
+     *            commit could be retried after the rebalance is completed with the {@link KafkaConsumer#poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link KafkaConsumer#wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while

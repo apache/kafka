@@ -26,17 +26,20 @@ import java.util.Set;
 
 public class ProcessorTopology {
 
-    private final List<ProcessorNode> processorNodes;
-    private final Map<String, SourceNode> sourcesByTopic;
-    private final Map<String, SinkNode> sinksByTopic;
+    private final List<ProcessorNode<?, ?>> processorNodes;
+    private final Map<String, SourceNode<?, ?>> sourcesByTopic;
+    private final Map<String, SinkNode<?, ?>> sinksByTopic;
+    private final Set<String> terminalNodes;
     private final List<StateStore> stateStores;
-    private final List<StateStore> globalStateStores;
-    private final Map<String, String> storeToChangelogTopic;
     private final Set<String> repartitionTopics;
 
-    public ProcessorTopology(final List<ProcessorNode> processorNodes,
-                             final Map<String, SourceNode> sourcesByTopic,
-                             final Map<String, SinkNode> sinksByTopic,
+    // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
+    private final List<StateStore> globalStateStores;
+    private final Map<String, String> storeToChangelogTopic;
+
+    public ProcessorTopology(final List<ProcessorNode<?, ?>> processorNodes,
+                             final Map<String, SourceNode<?, ?>> sourcesByTopic,
+                             final Map<String, SinkNode<?, ?>> sinksByTopic,
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> storeToChangelogTopic,
@@ -48,17 +51,24 @@ public class ProcessorTopology {
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
+
+        this.terminalNodes = new HashSet<>();
+        for (final ProcessorNode<?, ?> node : processorNodes) {
+            if (node.isTerminalNode()) {
+                terminalNodes.add(node.name());
+            }
+        }
     }
 
     public Set<String> sourceTopics() {
         return sourcesByTopic.keySet();
     }
 
-    public SourceNode source(final String topic) {
+    public SourceNode<?, ?> source(final String topic) {
         return sourcesByTopic.get(topic);
     }
 
-    public Set<SourceNode> sources() {
+    public Set<SourceNode<?, ?>> sources() {
         return new HashSet<>(sourcesByTopic.values());
     }
 
@@ -66,15 +76,15 @@ public class ProcessorTopology {
         return sinksByTopic.keySet();
     }
 
-    public SinkNode sink(final String topic) {
+    public SinkNode<?, ?> sink(final String topic) {
         return sinksByTopic.get(topic);
     }
 
-    public Set<SinkNode> sinks() {
-        return new HashSet<>(sinksByTopic.values());
+    public Set<String> terminalNodes() {
+        return terminalNodes;
     }
 
-    public List<ProcessorNode> processors() {
+    public List<ProcessorNode<?, ?>> processors() {
         return processorNodes;
     }
 
@@ -92,6 +102,15 @@ public class ProcessorTopology {
 
     boolean isRepartitionTopic(final String topic) {
         return repartitionTopics.contains(topic);
+    }
+
+    boolean hasStateWithChangelogs() {
+        for (final StateStore stateStore : stateStores) {
+            if (storeToChangelogTopic.containsKey(stateStore.name())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean hasPersistentLocalStore() {
@@ -118,7 +137,7 @@ public class ProcessorTopology {
         }
 
         final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (final ProcessorNode child : children) {
+        for (final ProcessorNode<?, ?> child : children) {
             sb.append(child.name());
             sb.append(", ");
         }

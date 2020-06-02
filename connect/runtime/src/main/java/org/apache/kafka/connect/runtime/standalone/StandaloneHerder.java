@@ -300,7 +300,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         ConnectorConfig connConfig = worker.isSinkConnector(connName) ?
             new SinkConnectorConfig(plugins(), config) :
-            new SourceConnectorConfig(plugins(), config);
+            new SourceConnectorConfig(plugins(), config, worker.isTopicCreationEnabled());
 
         return worker.connectorTaskConfigs(connName, connConfig);
     }
@@ -319,6 +319,7 @@ public class StandaloneHerder extends AbstractHerder {
         if (!tasks.isEmpty()) {
             worker.stopAndAwaitTasks(tasks);
             configBackingStore.removeTaskConfigs(connName);
+            tasks.forEach(this::onDeletion);
         }
     }
 

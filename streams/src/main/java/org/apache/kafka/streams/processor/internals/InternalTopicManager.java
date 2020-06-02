@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.ClientUtils.QuietAdminClientConfig;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -44,12 +45,6 @@ public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
-    private static final class InternalAdminClientConfig extends AdminClientConfig {
-        private InternalAdminClientConfig(final Map<?, ?> props) {
-            super(props, false);
-        }
-    }
-
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
@@ -60,8 +55,7 @@ public class InternalTopicManager {
     private final int retries;
     private final long retryBackOffMs;
 
-    public InternalTopicManager(final Admin adminClient,
-                                final StreamsConfig streamsConfig) {
+    public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
         final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
@@ -69,9 +63,9 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
-        retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
-        retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        final QuietAdminClientConfig adminConfigs = new QuietAdminClientConfig(streamsConfig);
+        retries = adminConfigs.getInt(AdminClientConfig.RETRIES_CONFIG);
+        retryBackOffMs = adminConfigs.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
         log.debug("Configs:" + Utils.NL +
             "\t{} = {}" + Utils.NL +
@@ -94,16 +88,20 @@ public class InternalTopicManager {
      * If a topic does not exist creates a new topic.
      * If a topic with the correct number of partitions exists ignores it.
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
+     * @return the set of topics which had to be newly created
      */
-    public void makeReady(final Map<String, InternalTopicConfig> topics) {
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         // we will do the validation / topic-creation in a loop, until we have confirmed all topics
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
+        log.debug("Starting to validate internal topics {} in partition assignor.", topics);
 
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
+        final Set<String> newlyCreatedTopics = new HashSet<>();
 
         while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
+            newlyCreatedTopics.addAll(topicsNotReady);
 
             if (!topicsNotReady.isEmpty()) {
                 final Set<NewTopic> newTopics = new HashSet<>();
@@ -170,6 +168,9 @@ public class InternalTopicManager {
             log.error(timeoutAndRetryError);
             throw new StreamsException(timeoutAndRetryError);
         }
+        log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
+
+        return newlyCreatedTopics;
     }
 
     /**
@@ -202,7 +203,7 @@ public class InternalTopicManager {
                 if (cause instanceof UnknownTopicOrPartitionException ||
                     cause instanceof LeaderNotAvailableException) {
                     // This topic didn't exist or leader is not known yet, proceed to try to create it
-                    log.debug("Topic {} is unknown or not found, hence not existed yet.", topicName);
+                    log.debug("Topic {} is unknown or not found, hence not existed yet: {}", topicName, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -217,16 +218,22 @@ public class InternalTopicManager {
     /**
      * Check the existing topics to have correct number of partitions; and return the remaining topics that needs to be created
      */
-    private Set<String> validateTopics(final Set<String> topicsToValidate,
-                                       final Map<String, InternalTopicConfig> topicsMap) {
+    private Set<String> validateTopics(final Set<String> topicsToValidate, final Map<String, InternalTopicConfig> topicsMap) {
+        if (!topicsMap.keySet().containsAll(topicsToValidate)) {
+            throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
+                topicsToValidate + " trying to validate.");
+        }
 
         final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
 
         final Set<String> topicsToCreate = new HashSet<>();
-        for (final Map.Entry<String, InternalTopicConfig> entry : topicsMap.entrySet()) {
-            final String topicName = entry.getKey();
-            final Optional<Integer> numberOfPartitions = entry.getValue().numberOfPartitions();
-            if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
+        for (final String topicName : topicsToValidate) {
+            final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
+            if (!numberOfPartitions.isPresent()) {
+                log.error("Found undefined number of partitions for topic {}", topicName);
+                throw new StreamsException("Topic " + topicName + " number of partitions not defined");
+            }
+            if (existedTopicPartition.containsKey(topicName)) {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +

@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
@@ -107,6 +108,7 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
     /**
      * <code>security.providers</code>
@@ -143,7 +145,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         RETRY_BACKOFF_MS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
-                                        120000,
+                                        30000,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
@@ -154,10 +156,16 @@ public class AdminClientConfig extends AbstractConfig {
                                         CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(RETRIES_CONFIG,
                                         Type.INT,
-                                        5,
-                                        atLeast(0),
+                                        Integer.MAX_VALUE,
+                                        between(0, Integer.MAX_VALUE),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRIES_DOC)
+                                .define(DEFAULT_API_TIMEOUT_MS_CONFIG,
+                                        Type.INT,
+                                        60000,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

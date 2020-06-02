@@ -17,13 +17,15 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
+import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern}
 
+@deprecated("Use org.apache.kafka.common.resource.ResourcePattern", "Since 2.5")
 object Resource {
-  val Separator = ":"
+  val Separator = AclEntry.ResourceSeparator
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, PatternType.LITERAL)
-  val WildCardResource = "*"
+  val WildCardResource = AclEntry.WildcardResource
 
   @deprecated("This resource name is not used by Kafka and will be removed in a future release", since = "2.1")
   val ProducerIdResourceName = "producer-id" // This is not used since we don't have a producer id resource
@@ -53,6 +55,7 @@ object Resource {
  *             it will be a constant string kafka-cluster.
  * @param patternType non-null resource pattern type: literal, prefixed, etc.
  */
+@deprecated("Use org.apache.kafka.common.resource.ResourcePattern", "Since 2.5")
 case class Resource(resourceType: ResourceType, name: String, patternType: PatternType) {
 
   if (!patternType.isSpecific)
@@ -67,7 +70,7 @@ case class Resource(resourceType: ResourceType, name: String, patternType: Patte
     * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, PatternType)]]
     */
   @deprecated("Use Resource(ResourceType, String, PatternType", "Since 2.0")
-  def this(resourceType: ResourceType, name: String) {
+  def this(resourceType: ResourceType, name: String) = {
     this(resourceType, name, PatternType.LITERAL)
   }
 

@@ -36,7 +36,7 @@ import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.concurrent.duration._
 
@@ -309,15 +309,13 @@ object LeaderElectionCommandTest {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),
-      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "20000"
+      AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG -> "20000",
+      AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "10000"
     )
   }
 
   def bootstrapServers(servers: Seq[KafkaServer]): String = {
-    servers.map { server =>
-      val port = server.socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
-      s"localhost:$port"
-    }.headOption.mkString(",")
+    TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {

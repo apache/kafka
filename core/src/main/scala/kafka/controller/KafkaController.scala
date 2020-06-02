@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Try}
@@ -348,7 +347,7 @@ class KafkaController(val config: KafkaConfig,
     info(s"New broker startup callback for ${newBrokers.mkString(",")}")
     newBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val newBrokersSet = newBrokers.toSet
-    val existingBrokers = controllerContext.liveOrShuttingDownBrokerIds -- newBrokers
+    val existingBrokers = controllerContext.liveOrShuttingDownBrokerIds.diff(newBrokersSet)
     // Send update metadata request to all the existing brokers in the cluster so that they know about the new brokers
     // via this update. No need to include any partition states in the request since there are no partition state changes.
     sendUpdateMetadataRequest(existingBrokers.toSeq, Set.empty)
@@ -725,9 +724,9 @@ class KafkaController(val config: KafkaConfig,
   private def initializeControllerContext(): Unit = {
     // update controller cache with delete topic information
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
-    controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
+    controllerContext.setLiveBrokers(curBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
-    controllerContext.allTopics = zkClient.getAllTopicsInCluster
+    controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getFullReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
       case (topicPartition, replicaAssignment) =>
@@ -736,7 +735,7 @@ class KafkaController(val config: KafkaConfig,
           controllerContext.partitionsBeingReassigned.add(topicPartition)
     }
     controllerContext.partitionLeadershipInfo.clear()
-    controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
+    controllerContext.shuttingDownBrokerIds.clear()
     // register broker modifications handlers
     registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
     // update the leader and isr cache for all existing partitions from Zookeeper
@@ -848,8 +847,9 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateReplicaAssignmentForPartition(topicPartition: TopicPartition, assignment: ReplicaAssignment): Unit = {
-    var topicAssignment = controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic)
-    topicAssignment += topicPartition -> assignment
+    val topicAssignment = mutable.Map() ++=
+      controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic) +=
+      (topicPartition -> assignment)
 
     val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic, topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
@@ -884,7 +884,7 @@ class KafkaController(val config: KafkaConfig,
           case e: IllegalStateException =>
             handleIllegalState(e)
         }
-        stateChangeLog.trace(s"Sent LeaderAndIsr request $updatedLeaderIsrAndControllerEpoch with " +
+        stateChangeLog.info(s"Sent LeaderAndIsr request $updatedLeaderIsrAndControllerEpoch with " +
           s"new replica assignment $assignment to leader ${updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader} " +
           s"for partition being reassigned $topicPartition")
 
@@ -1064,13 +1064,24 @@ class KafkaController(val config: KafkaConfig,
       if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
         // do this check only if the broker is live and there are no partitions being reassigned currently
         // and preferred replica election is not in progress
-        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContext.isReplicaOnline(leaderBroker, tp) &&
+        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp =>
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
-          controllerContext.allTopics.contains(tp.topic))
+          controllerContext.allTopics.contains(tp.topic) &&
+          canPreferredReplicaBeLeader(tp)
+       )
         onReplicaElection(candidatePartitions.toSet, ElectionType.PREFERRED, AutoTriggered)
       }
     }
+  }
+
+  private def canPreferredReplicaBeLeader(tp: TopicPartition): Boolean = {
+    val assignment = controllerContext.partitionReplicaAssignment(tp)
+    val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, tp))
+    val isr = controllerContext.partitionLeadershipInfo(tp).leaderAndIsr.isr
+    PartitionLeaderElectionAlgorithms
+      .preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas.toSet)
+      .nonEmpty
   }
 
   private def processAutoPreferredReplicaLeaderElection(): Unit = {
@@ -1185,7 +1196,7 @@ class KafkaController(val config: KafkaConfig,
     val offlineReplicas = new ArrayBuffer[TopicPartition]()
     val onlineReplicas = new ArrayBuffer[TopicPartition]()
 
-    leaderAndIsrResponse.partitions.asScala.foreach { partition =>
+    leaderAndIsrResponse.partitions.forEach { partition =>
       val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
       if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
         offlineReplicas += tp
@@ -1194,9 +1205,9 @@ class KafkaController(val config: KafkaConfig,
     }
 
     val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicPartition])
-    val currentOfflineReplicas = previousOfflineReplicas -- onlineReplicas ++ offlineReplicas
+    val currentOfflineReplicas = mutable.Set() ++= previousOfflineReplicas --= onlineReplicas ++= offlineReplicas
     controllerContext.replicasOnOfflineDirs.put(brokerId, currentOfflineReplicas)
-    val newOfflineReplicas = currentOfflineReplicas -- previousOfflineReplicas
+    val newOfflineReplicas = currentOfflineReplicas.diff(previousOfflineReplicas)
 
     if (newOfflineReplicas.nonEmpty) {
       stateChangeLogger.info(s"Mark replicas ${newOfflineReplicas.mkString(",")} on broker $brokerId as offline")
@@ -1221,7 +1232,7 @@ class KafkaController(val config: KafkaConfig,
     topicDeletionManager.failReplicaDeletion(replicasInError)
     if (replicasInError.size != partitionErrors.size) {
       // some replicas could have been successfully deleted
-      val deletedReplicas = partitionErrors.keySet -- partitionsInError
+      val deletedReplicas = partitionErrors.keySet.diff(partitionsInError)
       topicDeletionManager.completeReplicaDeletion(deletedReplicas.map(PartitionAndReplica(_, replicaId)))
     }
   }
@@ -1364,8 +1375,8 @@ class KafkaController(val config: KafkaConfig,
     val curBrokerIdAndEpochs = curBrokerAndEpochs map { case (broker, epoch) => (broker.id, epoch) }
     val curBrokerIds = curBrokerIdAndEpochs.keySet
     val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-    val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
-    val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+    val newBrokerIds = curBrokerIds.diff(liveOrShuttingDownBrokerIds)
+    val deadBrokerIds = liveOrShuttingDownBrokerIds.diff(curBrokerIds)
     val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
       .filter(brokerId => curBrokerIdAndEpochs(brokerId) > controllerContext.liveBrokerIdAndEpochs(brokerId))
     val newBrokerAndEpochs = curBrokerAndEpochs.filter { case (broker, _) => newBrokerIds.contains(broker.id) }
@@ -1384,13 +1395,13 @@ class KafkaController(val config: KafkaConfig,
     bouncedBrokerAndEpochs.keySet.foreach(controllerChannelManager.addBroker)
     deadBrokerIds.foreach(controllerChannelManager.removeBroker)
     if (newBrokerIds.nonEmpty) {
-      controllerContext.addLiveBrokersAndEpochs(newBrokerAndEpochs)
+      controllerContext.addLiveBrokers(newBrokerAndEpochs)
       onBrokerStartup(newBrokerIdsSorted)
     }
     if (bouncedBrokerIds.nonEmpty) {
       controllerContext.removeLiveBrokers(bouncedBrokerIds)
       onBrokerFailure(bouncedBrokerIdsSorted)
-      controllerContext.addLiveBrokersAndEpochs(bouncedBrokerAndEpochs)
+      controllerContext.addLiveBrokers(bouncedBrokerAndEpochs)
       onBrokerStartup(bouncedBrokerIdsSorted)
     }
     if (deadBrokerIds.nonEmpty) {
@@ -1420,10 +1431,10 @@ class KafkaController(val config: KafkaConfig,
 
   private def processTopicChange(): Unit = {
     if (!isActive) return
-    val topics = zkClient.getAllTopicsInCluster
+    val topics = zkClient.getAllTopicsInCluster(true)
     val newTopics = topics -- controllerContext.allTopics
-    val deletedTopics = controllerContext.allTopics -- topics
-    controllerContext.allTopics = topics
+    val deletedTopics = controllerContext.allTopics.diff(topics)
+    controllerContext.setAllTopics(topics)
 
     registerPartitionModificationsHandlers(newTopics.toSeq)
     val addedPartitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(newTopics)
@@ -1569,13 +1580,15 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
       reassignments.foreach { case (tp, targetReplicas) =>
-        if (replicasAreValid(tp, targetReplicas)) {
-          maybeBuildReassignment(tp, targetReplicas) match {
-            case Some(context) => partitionsToReassign.put(tp, context)
-            case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
-          }
-        } else {
-          reassignmentResults.put(tp, new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT))
+        val maybeApiError = targetReplicas.flatMap(validateReplicas(tp, _))
+        maybeApiError match {
+          case None =>
+            maybeBuildReassignment(tp, targetReplicas) match {
+              case Some(context) => partitionsToReassign.put(tp, context)
+              case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
+            }
+          case Some(err) =>
+            reassignmentResults.put(tp, err)
         }
       }
 
@@ -1588,22 +1601,27 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def replicasAreValid(topicPartition: TopicPartition, replicasOpt: Option[Seq[Int]]): Boolean = {
-    replicasOpt match {
-      case Some(replicas) =>
-        val replicaSet = replicas.toSet
-        if (replicas.isEmpty || replicas.size != replicaSet.size)
-          false
-        else if (replicas.exists(_ < 0))
-          false
-        else {
-          // Ensure that any new replicas are among the live brokers
-          val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-          val newAssignment = currentAssignment.reassignTo(replicas)
-          newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
-        }
-
-      case None => true
+  private def validateReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
+    val replicaSet = replicas.toSet
+    if (replicas.isEmpty)
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Empty replica list specified in partition reassignment."))
+    else if (replicas.size != replicaSet.size) {
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Duplicate replica ids in partition reassignment replica list: $replicas"))
+    } else if (replicas.exists(_ < 0))
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Invalid broker id in replica list: $replicas"))
+    else {
+      // Ensure that any new replicas are among the live brokers
+      val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+      val newAssignment = currentAssignment.reassignTo(replicas)
+      val areNewReplicasAlive = newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+      if (!areNewReplicasAlive)
+        Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Replica assignment has brokers that are not alive. Replica list: " +
+            s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
+      else None
     }
   }
 

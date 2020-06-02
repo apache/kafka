@@ -29,7 +29,7 @@ import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpda
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 

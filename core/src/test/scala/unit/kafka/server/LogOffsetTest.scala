@@ -21,7 +21,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 
-import kafka.log.{Log, LogSegment}
+import kafka.log.{ClientRecordDeletion, Log, LogSegment}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -31,7 +31,7 @@ import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogOffsetTest extends BaseRequestTest {
 
@@ -78,7 +78,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.flush()
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(3)
+    log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
     log.deleteOldSegments()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
@@ -162,7 +162,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -192,7 +192,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
