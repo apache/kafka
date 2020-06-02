@@ -274,7 +274,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment, prevAssignment);
-        boolean isFreshAssignment = currentAssignment.isEmpty();
 
         // a mapping of all topic partitions to all consumers that can be assigned to them
         final Map<TopicPartition, List<String>> partition2AllPotentialConsumers = new HashMap<>();
