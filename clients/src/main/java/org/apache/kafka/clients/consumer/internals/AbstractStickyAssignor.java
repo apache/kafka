@@ -121,19 +121,19 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
                 || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
 
+                // If the current member's generation is higher, all the previously owned partitions are invalid
+                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
+                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
+                    membersOfCurrentHighestGeneration.clear();
+                    maxGeneration = memberData.generation.get();
+                }
+
                 membersOfCurrentHighestGeneration.add(consumer);
                 for (final TopicPartition tp : memberData.partitions) {
                     // filter out any topics that no longer exist or aren't part of the current subscription
                     if (allTopics.contains(tp.topic())) {
                         ownedPartitions.add(tp);
                     }
-                }
-
-                // If the current member's generation is higher, all the previous owned partitions are invalid
-                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
-                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
-                    membersOfCurrentHighestGeneration.clear();
-                    maxGeneration = memberData.generation.get();
                 }
             }
         }
@@ -274,7 +274,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment, prevAssignment);
-        boolean isFreshAssignment = currentAssignment.isEmpty();
 
         // a mapping of all topic partitions to all consumers that can be assigned to them
         final Map<TopicPartition, List<String>> partition2AllPotentialConsumers = new HashMap<>();
