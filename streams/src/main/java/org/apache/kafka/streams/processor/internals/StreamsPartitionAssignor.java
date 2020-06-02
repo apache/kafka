@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.function.Function;
@@ -1084,7 +1085,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final int minStatefulTasksPerThread = (int) Math.floor(((double) statefulTasksToAssign.size()) / consumers.size());
         final PriorityQueue<TaskId> unassignedStatefulTasks = new PriorityQueue<>(statefulTasksToAssign);
 
-        final Queue<String> unfilledConsumers = new LinkedList<>();
+        final PriorityQueue<String> consumersToFill = new PriorityQueue<>();
+        // keep track of tasks that we have to skip during the first pass in case we can reassign them later
+        final Map<TaskId, String> unassignedTaskToPreviousOwner = new HashMap<>();
 
         // First assign stateful tasks to previous owner, up to the min expected tasks/thread
         for (final String consumer : consumers) {
@@ -1096,47 +1099,76 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     threadAssignment.add(task);
                     unassignedStatefulTasks.remove(task);
                 } else {
-                    break;
+                    unassignedTaskToPreviousOwner.put(task, consumer);
                 }
                 ++i;
             }
 
             if (threadAssignment.size() < minStatefulTasksPerThread) {
-                unfilledConsumers.offer(consumer);
+                consumersToFill.offer(consumer);
             }
         }
 
         // Next interleave remaining unassigned tasks amongst unfilled consumers
-        while (!unfilledConsumers.isEmpty()) {
+        while (!consumersToFill.isEmpty()) {
             final TaskId task = unassignedStatefulTasks.poll();
             if (task != null) {
-                final String consumer = unfilledConsumers.poll();
+                final String consumer = consumersToFill.poll();
                 final List<TaskId> threadAssignment = assignment.get(consumer);
                 threadAssignment.add(task);
                 if (threadAssignment.size() < minStatefulTasksPerThread) {
-                    unfilledConsumers.offer(consumer);
+                    consumersToFill.offer(consumer);
                 }
             } else {
                 throw new IllegalStateException("Ran out of unassigned stateful tasks but some members were not at capacity");
             }
         }
 
-        // At this point all consumers are at the minimum capacity, so just add the remaining stateful tasks and
-        // distribute them with the stateless tasks
-        final LinkedList<TaskId> unassignedTasks = new LinkedList<>(statelessTasksToAssign);
-        Collections.sort(unassignedTasks);
-        for (final TaskId task : unassignedStatefulTasks) {
-            unassignedTasks.addFirst(task);
+        // At this point all consumers are at the min capacity, so there may be up to N - 1 unassigned
+        // stateful tasks remaining that should now be distributed over the consumers
+        consumersToFill.addAll(consumers);
+
+        // Go over the tasks we skipped earlier and assign them to their previous owner when possible
+        for (final Map.Entry<TaskId, String> taskEntry : unassignedTaskToPreviousOwner.entrySet()) {
+            final TaskId task = taskEntry.getKey();
+            final String consumer = taskEntry.getValue();
+            if (consumersToFill.contains(consumer)) {
+                assignment.get(consumer).add(task);
+                unassignedStatefulTasks.remove(task);
+                consumersToFill.remove(consumer);
+            }
         }
 
-        // Reset the unfilled consumers and just cycle through them until we've assigned all tasks
-        unfilledConsumers.addAll(consumers);
-
-        while (!unassignedTasks.isEmpty()) {
-            final TaskId task = unassignedTasks.poll();
-            final String consumer = unfilledConsumers.poll();
+        // Now just distribute the remaining unassigned tasks over the consumers still at min capacity
+        for (final TaskId task : unassignedStatefulTasks) {
+            final String consumer = consumersToFill.poll();
             assignment.get(consumer).add(task);
-            unfilledConsumers.offer(consumer);
+        }
+
+        // There must be at least one consumer still at min capacity while all the others are at min
+        // capacity + 1, so start distributing stateless tasks to get all consumers back to the same count
+        final List<TaskId> unassignedStatelessTasks = new ArrayList<>(statelessTasksToAssign);
+        Collections.sort(unassignedStatelessTasks);
+
+        final Iterator<TaskId> unassignedStatelessTasksIter = unassignedStatelessTasks.iterator();
+        while (unassignedStatelessTasksIter.hasNext()) {
+            final TaskId task = unassignedStatelessTasksIter.next();
+            final String consumer = consumersToFill.poll();
+            if (consumer != null) {
+                assignment.get(consumer).add(task);
+            } else {
+                break;
+            }
+        }
+
+        // Now just distribute tasks while circling through all the consumers
+        consumersToFill.addAll(consumers);
+
+        while (unassignedStatelessTasksIter.hasNext()) {
+            final TaskId task = unassignedStatelessTasksIter.next();
+            final String consumer = consumersToFill.poll();
+            assignment.get(consumer).add(task);
+            consumersToFill.offer(consumer);
         }
 
         return assignment;
