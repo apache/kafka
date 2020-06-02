@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfoList;
+import io.github.classgraph.ScanResult;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
@@ -25,15 +28,10 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.reflections.Configuration;
-import org.reflections.Reflections;
-import org.reflections.ReflectionsException;
-import org.reflections.scanners.SubTypesScanner;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -52,6 +50,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -215,9 +214,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (CLASSPATH_NAME.equals(path)) {
                 scanUrlsAndAddPlugins(
                         getParent(),
-                        ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
-                        null
-                );
+                        forJavaClassPath().toArray(new URL[0]));
             } else {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
                 // Update for exception handling
@@ -241,6 +238,30 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
+    public static Collection<URL> forJavaClassPath() {
+        Collection<URL> urls = new ArrayList<>();
+        String javaClassPath = System.getProperty("java.class.path");
+        if (javaClassPath != null) {
+            for (String path : javaClassPath.split(File.pathSeparator)) {
+                try {
+                    urls.add(new File(path).toURI().toURL());
+                } catch (Exception e) {
+                    log.debug("Could not get URL", e);
+                }
+            }
+        }
+        return distinctUrls(urls);
+    }
+
+    //http://michaelscharf.blogspot.co.il/2006/11/javaneturlequals-and-hashcode-make.html
+    private static Collection<URL> distinctUrls(Collection<URL> urls) {
+        Map<String, URL> distinct = new LinkedHashMap<>(urls.size());
+        for (URL url : urls) {
+            distinct.put(url.toExternalForm(), url);
+        }
+        return distinct.values();
+    }
+
     private void registerPlugin(Path pluginLocation)
             throws InstantiationException, IllegalAccessException, IOException {
         log.info("Loading plugin from: {}", pluginLocation);
@@ -257,14 +278,11 @@ public class DelegatingClassLoader extends URLClassLoader {
                 urls,
                 this
         );
-        scanUrlsAndAddPlugins(loader, urls, pluginLocation);
+        scanUrlsAndAddPlugins(loader, urls);
     }
 
-    private void scanUrlsAndAddPlugins(
-            ClassLoader loader,
-            URL[] urls,
-            Path pluginLocation
-    ) throws InstantiationException, IllegalAccessException {
+    private void scanUrlsAndAddPlugins(ClassLoader loader, URL[] urls)
+            throws InstantiationException, IllegalAccessException {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
@@ -326,46 +344,41 @@ public class DelegatingClassLoader extends URLClassLoader {
             ClassLoader loader,
             URL[] urls
     ) throws InstantiationException, IllegalAccessException {
-        ConfigurationBuilder builder = new ConfigurationBuilder();
-        builder.setClassLoaders(new ClassLoader[]{loader});
-        builder.addUrls(urls);
-        builder.setScanners(new SubTypesScanner());
-        builder.useParallelExecutor();
-        Reflections reflections = new InternalReflections(builder);
-
-        return new PluginScanResult(
-                getPluginDesc(reflections, Connector.class, loader),
-                getPluginDesc(reflections, Converter.class, loader),
-                getPluginDesc(reflections, HeaderConverter.class, loader),
-                getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, Predicate.class, loader),
-                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
-        );
+        ClassGraph builder = new ClassGraph().enableClassInfo()
+                .overrideClassLoaders(loader)
+                .overrideClasspath(Arrays.asList(urls))
+                .ignoreParentClassLoaders();
+        try (ScanResult classGraph = builder.scan()) {
+            return new PluginScanResult(
+                    getPluginDesc(classGraph, Connector.class, loader),
+                    getPluginDesc(classGraph, Converter.class, loader),
+                    getPluginDesc(classGraph, HeaderConverter.class, loader),
+                    getPluginDesc(classGraph, Transformation.class, loader),
+                    getPluginDesc(classGraph, Predicate.class, loader),
+                    getServiceLoaderPluginDesc(ConfigProvider.class, loader),
+                    getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
+                    getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+            );
+        }
     }
 
     private <T> Collection<PluginDesc<T>> getPluginDesc(
-            Reflections reflections,
+            ScanResult classGraph,
             Class<T> klass,
             ClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
-        Set<Class<? extends T>> plugins;
+        ClassInfoList plugins;
         try {
-            plugins = reflections.getSubTypesOf(klass);
-        } catch (ReflectionsException e) {
-            log.debug("Reflections scanner could not find any classes for URLs: " +
-                    reflections.getConfiguration().getUrls(), e);
+            plugins = classGraph.getSubclasses(klass.getName());
+        } catch (Exception e) {
+            log.debug("Class scanner could not find any classes for URLs: " +
+                    classGraph.getClasspathURLs(), e);
             return Collections.emptyList();
         }
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (Class<? extends T> plugin : plugins) {
-            if (PluginUtils.isConcrete(plugin)) {
-                result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
-            } else {
-                log.debug("Skipping {} as it is not concrete implementation", plugin);
-            }
+        for (Class<? extends T> plugin : plugins.getStandardClasses().loadClasses(klass)) {
+            result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
         }
         return result;
     }
@@ -433,27 +446,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                             pruned,
                             plugin.className()
                     );
-                }
-            }
-        }
-    }
-
-    private static class InternalReflections extends Reflections {
-
-        public InternalReflections(Configuration configuration) {
-            super(configuration);
-        }
-
-        // When Reflections is used for parallel scans, it has a bug where it propagates ReflectionsException
-        // as RuntimeException.  Override the scan behavior to emulate the singled-threaded logic.
-        @Override
-        protected void scan(URL url) {
-            try {
-                super.scan(url);
-            } catch (ReflectionsException e) {
-                Logger log = Reflections.log;
-                if (log != null && log.isWarnEnabled()) {
-                    log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
                 }
             }
         }
