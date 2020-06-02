@@ -932,7 +932,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * Adds the encoded assignment for each StreamThread consumer in the client to the overall assignment map
-     * @return true if a followup rebalance will be required due to revoekd tasks
+     * @return true if a followup rebalance will be required due to revoked tasks
      */
     private boolean addClientAssignments(final Map<String, Assignment> assignment,
                                          final ClientMetadata clientMetadata,

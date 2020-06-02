@@ -1963,7 +1963,7 @@ public class StreamsPartitionAssignorTest {
 
     // Stub end offsets sums for situations where we don't really care about computing exact lags
     private static Map<TaskId, Long> getTaskEndOffsetSums(final Collection<TaskId> allStatefulTasks) {
-        return allStatefulTasks.stream().collect(Collectors.toMap(t -> t, t-> Long.MAX_VALUE));
+        return allStatefulTasks.stream().collect(Collectors.toMap(t -> t, t -> Long.MAX_VALUE));
     }
 
 }
