@@ -49,9 +49,9 @@ import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchRespons
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
@@ -89,7 +89,7 @@ class GroupMetadataManager(brokerId: Int,
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
   /* setup metrics*/
-  val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
+  private val partitionLoadSensor = metrics.sensor("GroupPartitionLoadTime")
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
     "group-coordinator-metrics",
