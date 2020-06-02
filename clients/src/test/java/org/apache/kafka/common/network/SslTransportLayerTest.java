@@ -616,6 +616,7 @@ public class SslTransportLayerTest {
         createSelector(sslClientConfigs);
 
         checkAuthentiationFailed("1", tlsProtocol);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     @Test
