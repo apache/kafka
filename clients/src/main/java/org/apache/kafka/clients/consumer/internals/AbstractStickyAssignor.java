@@ -43,7 +43,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     public static final int DEFAULT_GENERATION = -1;
 
-    private PartitionMovements partitionMovements = new PartitionMovements();
+    private PartitionMovements partitionMovements;
 
     // Keep track of the partitions being migrated from one consumer to another during assignment
     // so the cooperative assignor can adjust the assignment
@@ -272,6 +272,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                             Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
+        partitionMovements = new PartitionMovements();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment, prevAssignment);
         boolean isFreshAssignment = currentAssignment.isEmpty();
