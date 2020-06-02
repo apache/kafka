@@ -37,6 +37,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+
 /**
  * Tests for the SSL transport layer.
  * Checks different versions of the protocol usage on the server and client.
@@ -143,13 +146,18 @@ public class SslVersionsTransportLayerTest {
      *
      * This mean that TLSv1.3 client can fallback to TLSv1.2 but TLSv1.2 client can't change protocol to TLSv1.3.
      *
-     * @param serverProtocols Server protocols.
-     * @param clientProtocols Client protocols.
-     * @return {@code True} if client should be able to connect to the server.
+     * @param serverProtocols Server protocols. Expected to be non empty.
+     * @param clientProtocols Client protocols. Expected to be non empty.
+     * @return {@code true} if client should be able to connect to the server.
      */
     private boolean isCompatible(List<String> serverProtocols, List<String> clientProtocols) {
+        assertNotNull(serverProtocols);
+        assertFalse(serverProtocols.isEmpty());
+        assertNotNull(clientProtocols);
+        assertFalse(clientProtocols.isEmpty());
+
         return serverProtocols.contains(clientProtocols.get(0)) ||
-            (clientProtocols.get(0).equals("TLSv1.3") && clientProtocols.contains("TLSv1.2"));
+            (clientProtocols.get(0).equals("TLSv1.3") && !Collections.disjoint(serverProtocols, clientProtocols));
     }
 
     private static Map<String, Object> getTrustingConfig(CertStores certStores, CertStores peerCertStores, List<String> tlsProtocols) {
