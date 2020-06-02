@@ -128,8 +128,7 @@ public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
     private static final String CONSUMER_3 = "consumer3";
-    private static final String CONSUMER_4 = "consumer4";
-    
+
     private final Set<String> allTopics = mkSet("topic1", "topic2");
 
     private final TopicPartition t1p0 = new TopicPartition("topic1", 0);
@@ -351,7 +350,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousActiveTasksForConsumer
+                state
             )
         );
     }
@@ -369,9 +368,9 @@ public class StreamsPartitionAssignorTest {
 
         final ClientState state = new ClientState();
         final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
-        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
-        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap());
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
@@ -385,7 +384,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousActiveTasksForConsumer
+                state
             );
 
         previousAssignment.get(CONSUMER_2).add(newTask);
@@ -416,7 +415,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousActiveTasksForConsumer
+                state
             );
 
         assertThat(interleavedTaskIds, equalTo(assignment));
@@ -573,16 +572,6 @@ public class StreamsPartitionAssignorTest {
 
         final List<String> topics = asList("topic1", "topic2");
 
-        final TaskId taskIdA0 = new TaskId(0, 0);
-        final TaskId taskIdA1 = new TaskId(0, 1);
-        final TaskId taskIdA2 = new TaskId(0, 2);
-        final TaskId taskIdA3 = new TaskId(0, 3);
-
-        final TaskId taskIdB0 = new TaskId(1, 0);
-        final TaskId taskIdB1 = new TaskId(1, 1);
-        final TaskId taskIdB2 = new TaskId(1, 2);
-        final TaskId taskIdB3 = new TaskId(1, 3);
-
         configureDefault();
 
         subscriptions.put("consumer10",
@@ -605,12 +594,12 @@ public class StreamsPartitionAssignorTest {
         // the first consumer
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
 
-        final List<TaskId> expectedInfo10TaskIds = asList(taskIdA0, taskIdA2, taskIdB0, taskIdB2);
+        final List<TaskId> expectedInfo10TaskIds = asList(TASK_0_0, TASK_0_2, TASK_1_0, TASK_1_2);
         assertEquals(expectedInfo10TaskIds, info10.activeTasks());
 
         // the second consumer
         final AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
-        final List<TaskId> expectedInfo11TaskIds = asList(taskIdA1, taskIdA3, taskIdB1, taskIdB3);
+        final List<TaskId> expectedInfo11TaskIds = asList(TASK_0_1, TASK_0_3, TASK_1_1, TASK_1_3);
 
         assertEquals(expectedInfo11TaskIds, info11.activeTasks());
     }

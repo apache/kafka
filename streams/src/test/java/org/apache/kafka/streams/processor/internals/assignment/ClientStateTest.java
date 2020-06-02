@@ -28,6 +28,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -309,43 +310,54 @@ public class ClientStateTest {
     }
 
     @Test
-    public void shouldGetPreviousStatefulActiveTasksForConsumer() {
-        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_0, Task.LATEST_OFFSET));
-        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_1, 0L));
-        client.addPreviousTasksAndOffsetSums("c3", Collections.singletonMap(TASK_0_2, Task.LATEST_OFFSET));
+    public void shouldReturnPreviousStatefulTasksForConsumer() {
+        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET));
+        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
+        client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
 
         client.initializePrevTasks(Collections.emptyMap());
         client.computeTaskLags(
             UUID_1,
             mkMap(
-                mkEntry(TASK_0_0, 100L),
-                mkEntry(TASK_0_1, 100L)
+                mkEntry(TASK_0_1, 1_000L),
+                mkEntry(TASK_0_2, 1_000L)
             )
         );
 
-        assertThat(client.previousActiveTasksForConsumer("c1"), equalTo(Collections.singleton(TASK_0_0)));
-        assertTrue(client.previousActiveTasksForConsumer("c2").isEmpty());
-        assertTrue(client.previousActiveTasksForConsumer("c3").isEmpty());
+        assertThat(client.previousTasksForConsumer("c1"), equalTo(mkSortedSet(TASK_0_1)));
+        assertThat(client.previousTasksForConsumer("c2"), equalTo(mkSortedSet(TASK_0_2)));
+        assertTrue(client.previousTasksForConsumer("c3").isEmpty());
     }
 
     @Test
-    public void shouldGetPreviousStandbyTasksForConsumer() {
-        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_0, Task.LATEST_OFFSET));
-        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_1, 0L));
-        client.addPreviousTasksAndOffsetSums("c3", Collections.singletonMap(TASK_0_2, Task.LATEST_OFFSET));
-
+    public void shouldReturnPreviousStatefulTasksForConsumerWhenLagIsNotComputed() {
+        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_1, 1000L));
         client.initializePrevTasks(Collections.emptyMap());
+
+        assertThat(client.previousTasksForConsumer("c1"), equalTo(mkSortedSet(TASK_0_1)));
+    }
+
+    @Test
+    public void shouldReturnPreviousStatefulTasksForConsumerInIncreasingLagOrder() {
+        client.addPreviousTasksAndOffsetSums("c1", mkMap(
+            mkEntry(TASK_0_1, 100L),
+            mkEntry(TASK_0_2, 0L),
+            mkEntry(TASK_0_3, Task.LATEST_OFFSET)
+        ));
+
         client.computeTaskLags(
             UUID_1,
             mkMap(
-                mkEntry(TASK_0_0, 100L),
-                mkEntry(TASK_0_1, 100L)
+                mkEntry(TASK_0_1, 1_000L),
+                mkEntry(TASK_0_2, 1_000L),
+                mkEntry(TASK_0_3, 1_000L)
+
             )
         );
 
-        assertTrue(client.previousStandbyTasksForConsumer("c1").isEmpty());
-        assertThat(client.previousStandbyTasksForConsumer("c2"), equalTo(Collections.singleton(TASK_0_1)));
-        assertTrue(client.previousStandbyTasksForConsumer("c3").isEmpty());
+        client.initializePrevTasks(Collections.emptyMap());
+
+        assertThat(client.previousTasksForConsumer("c1"), equalTo(mkSortedSet(TASK_0_3, TASK_0_2, TASK_0_1)));
     }
 
     @Test
