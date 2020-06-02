@@ -283,6 +283,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.TimestampRouter$Value",
             "org.apache.kafka.connect.transforms.ValueToKey",
             "org.apache.kafka.connect.transforms.predicates.",
+            "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+            "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
             "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
         };
         for (String clazz : transformsClasses) {
