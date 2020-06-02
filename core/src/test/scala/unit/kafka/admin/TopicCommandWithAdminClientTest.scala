@@ -28,6 +28,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
+import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -214,7 +215,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateIfItAlreadyExists(): Unit = {
+  def testCreateWhenAlreadyExists(): Unit = {
     val numPartitions = 1
 
     // create the topic
@@ -223,9 +224,16 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     createAndWaitTopic(createOpts)
 
     // try to re-create the topic
-    intercept[IllegalArgumentException] {
+    intercept[TopicExistsException] {
       topicService.createTopic(createOpts)
     }
+  }
+
+  @Test
+  def testCreateWhenAlreadyExistsWithIfNotExists(): Unit = {
+    val createOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-not-exists"))
+    createAndWaitTopic(createOpts)
+    topicService.createTopic(createOpts)
   }
 
   @Test
@@ -431,10 +439,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testIfExistsAndIfNotExistsOptionsInvalidWithBootstrapServers(): Unit = {
-    // alter a topic that does not exist without --if-exists
-    assertCheckArgsExitCode(1, new TopicCommandOptions(Array("--bootstrap-server", "server1:9092", "--alter", "--if-exists", "--topic", testTopicName, "--partitions", "1")))
-    assertCheckArgsExitCode(1, new TopicCommandOptions(Array("--bootstrap-server", "server1:9092", "--create", "--if-not-exists", "--topic", testTopicName, "--partitions", "1", "--replication-factor", "1")))
+  def testAlterWhenTopicDoesntExistWithIfExists(): Unit = {
+    topicService.alterTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
   }
 
   @Test
@@ -530,12 +537,17 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testDeleteIfExists(): Unit = {
+  def testDeleteWhenTopicDoesntExist(): Unit = {
     // delete a topic that does not exist
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
     intercept[IllegalArgumentException] {
       topicService.deleteTopic(deleteOpts)
     }
+  }
+
+  @Test
+  def testDeleteWhenTopicDoesntExistWithIfExists(): Unit = {
+    topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
@@ -549,6 +561,18 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val rows = output.split("\n")
     assertEquals(3, rows.size)
     rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:2")
+  }
+
+  @Test
+  def testDescribeWhenTopicDoesntExist(): Unit = {
+    intercept[IllegalArgumentException] {
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
+    }
+  }
+
+  @Test
+  def testDescribeWhenTopicDoesntExistWithIfExists(): Unit = {
+    topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
