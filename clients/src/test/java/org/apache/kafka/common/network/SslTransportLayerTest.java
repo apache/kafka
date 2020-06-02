@@ -41,7 +41,6 @@ import org.junit.runners.Parameterized;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLServerSocketFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -578,26 +577,6 @@ public class SslTransportLayerTest {
         server.verifyAuthenticationMetrics(1, 2);
     }
 
-    @Test
-    public void testUnsupportedCipher() throws Exception {
-        String[] cipherSuites = ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites();
-        if (cipherSuites != null && cipherSuites.length > 1) {
-            sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
-            sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
-            sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-            sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
-
-            server = createEchoServer(SecurityProtocol.SSL);
-            createSelector(sslClientConfigs);
-
-            checkAuthentiationFailed("1", "TLSv1.1");
-            server.verifyAuthenticationMetrics(0, 1);
-
-            checkAuthentiationFailed("2", "TLSv1");
-            server.verifyAuthenticationMetrics(0, 2);
-        }
-    }
-
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthentiationFailed(String node, String tlsVersion) throws IOException {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
@@ -627,7 +606,6 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testUnsupportedCiphers() throws Exception {
-        String node = "0";
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
@@ -636,10 +614,8 @@ public class SslTransportLayerTest {
 
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
         createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        checkAuthentiationFailed("1", tlsProtocol);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -1250,7 +1226,7 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    private static class TestSslChannelBuilder extends SslChannelBuilder {
+    static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
@@ -1361,7 +1337,7 @@ public class SslTransportLayerTest {
             }
         }
 
-        private static class ResizeableBufferSize {
+        static class ResizeableBufferSize {
             private Integer bufSizeOverride;
             ResizeableBufferSize(Integer bufSizeOverride) {
                 this.bufSizeOverride = bufSizeOverride;
