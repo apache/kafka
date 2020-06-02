@@ -886,7 +886,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     state.statefulActiveTasks(),
                     state.statelessActiveTasks(),
                     consumers,
-                    state::previousStatefulActiveTasksForConsumer
+                    state::previousActiveTasksForConsumer
             );
 
             final Map<String, List<TaskId>> standbyTaskAssignment = assignTasksToThreads(
@@ -1097,11 +1097,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             int i = 0;
             for (final TaskId task : previousTasksForConsumer.apply(consumer)) {
-                if (i < minStatefulTasksPerThread) {
-                    threadAssignment.add(task);
-                    unassignedStatefulTasks.remove(task);
-                } else {
-                    unassignedTaskToPreviousOwner.put(task, consumer);
+                if (unassignedStatefulTasks.contains(task)) {
+                    if (i < minStatefulTasksPerThread) {
+                        threadAssignment.add(task);
+                        unassignedStatefulTasks.remove(task);
+                    } else {
+                        unassignedTaskToPreviousOwner.put(task, consumer);
+                    }
                 }
                 ++i;
             }

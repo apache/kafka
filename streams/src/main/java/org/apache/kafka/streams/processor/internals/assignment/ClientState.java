@@ -318,10 +318,10 @@ public class ClientState {
         return activeTasks.stream().filter(task -> !isStateful(task)).collect(Collectors.toSet());
     }
 
-    public Set<TaskId> previousStatefulActiveTasksForConsumer(final String memberId) {
+    public Set<TaskId> previousActiveTasksForConsumer(final String memberId) {
         final Set<TaskId> prevTasks = new HashSet<>();
         for (final TaskId task : consumerToPreviousTaskIds.get(memberId)) {
-            if (isStateful(task) && prevActiveTasks.contains(task)) {
+            if (prevActiveTasks.contains(task)) {
                 prevTasks.add(task);
             }
         }

@@ -351,7 +351,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousStatefulActiveTasksForConsumer
+                state::previousActiveTasksForConsumer
             )
         );
     }
@@ -385,7 +385,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousStatefulActiveTasksForConsumer
+                state::previousActiveTasksForConsumer
             );
 
         previousAssignment.get(CONSUMER_2).add(newTask);
@@ -416,7 +416,7 @@ public class StreamsPartitionAssignorTest {
                 allTasks,
                 emptySet(),
                 consumers,
-                state::previousStatefulActiveTasksForConsumer
+                state::previousActiveTasksForConsumer
             );
 
         assertThat(interleavedTaskIds, equalTo(assignment));

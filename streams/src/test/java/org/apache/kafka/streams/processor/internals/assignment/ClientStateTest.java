@@ -323,9 +323,9 @@ public class ClientStateTest {
             )
         );
 
-        assertThat(client.previousStatefulActiveTasksForConsumer("c1"), equalTo(Collections.singleton(TASK_0_0)));
-        assertTrue(client.previousStatefulActiveTasksForConsumer("c2").isEmpty());
-        assertTrue(client.previousStatefulActiveTasksForConsumer("c3").isEmpty());
+        assertThat(client.previousActiveTasksForConsumer("c1"), equalTo(Collections.singleton(TASK_0_0)));
+        assertTrue(client.previousActiveTasksForConsumer("c2").isEmpty());
+        assertTrue(client.previousActiveTasksForConsumer("c3").isEmpty());
     }
 
     @Test
