@@ -40,7 +40,7 @@ import java.util.Objects;
 public final class ForwardingDisabledProcessorContext implements ProcessorContext {
     private final ProcessorContext delegate;
 
-    private String explanation = "ProcessorContext#forward() is not supported from this context, "
+    private static final String explanation = "ProcessorContext#forward() is not supported from this context, "
         + "as the framework must ensure the key is not changed (#forward allows changing the key on "
         + "messages which are sent). Try plain other functions which don't allow the key to be changed.";
 
