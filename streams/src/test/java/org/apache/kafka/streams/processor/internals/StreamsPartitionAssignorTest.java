@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.SortedSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -88,6 +89,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignTasksToThreads;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
@@ -336,7 +338,7 @@ public class StreamsPartitionAssignorTest {
         );
 
         final ClientState state = new ClientState();
-        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
@@ -357,7 +359,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldProduceStickyAndBalancedAssignmentWhenNewTasksAreAdded() {
         final List<TaskId> allTasks =
-            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
+            new ArrayList<>(asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3));
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
             mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_1_1, TASK_1_3))),
@@ -366,10 +368,10 @@ public class StreamsPartitionAssignorTest {
         );
 
         final ClientState state = new ClientState();
-        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
-        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
+        final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
-        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap());
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
@@ -402,7 +404,7 @@ public class StreamsPartitionAssignorTest {
         );
 
         final ClientState state = new ClientState();
-        final Set<String> consumers = mkSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, emptyMap());
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, emptyMap());
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, emptyMap());

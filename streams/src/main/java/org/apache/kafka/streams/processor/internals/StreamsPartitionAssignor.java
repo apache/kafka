@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -114,7 +116,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private static class ClientMetadata {
 
         private final HostInfo hostInfo;
-        private final Set<String> consumers;
+        private final SortedSet<String> consumers;
         private final ClientState state;
 
         ClientMetadata(final String endPoint) {
@@ -123,7 +125,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
 
             // initialize the consumer memberIds
-            consumers = new HashSet<>();
+            consumers = new TreeSet<>();
 
             // initialize the client state
             state = new ClientState();
@@ -878,7 +880,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final UUID clientId = clientEntry.getKey();
             final ClientMetadata clientMetadata = clientEntry.getValue();
             final ClientState state = clientMetadata.state;
-            final Set<String> consumers = clientMetadata.consumers;
+            final SortedSet<String> consumers = clientMetadata.consumers;
 
             final Map<String, List<TaskId>> activeTaskAssignment = assignTasksToThreads(
                     state.statefulActiveTasks(),
@@ -1075,7 +1077,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     static Map<String, List<TaskId>> assignTasksToThreads(final Collection<TaskId> statefulTasksToAssign,
                                                           final Collection<TaskId> statelessTasksToAssign,
-                                                          final Set<String> consumers,
+                                                          final SortedSet<String> consumers,
                                                           final Function<String, Set<TaskId>> previousTasksForConsumer) {
         final Map<String, List<TaskId>> assignment = new HashMap<>();
         for (final String consumer : consumers) {
@@ -1085,7 +1087,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final int minStatefulTasksPerThread = (int) Math.floor(((double) statefulTasksToAssign.size()) / consumers.size());
         final PriorityQueue<TaskId> unassignedStatefulTasks = new PriorityQueue<>(statefulTasksToAssign);
 
-        final PriorityQueue<String> consumersToFill = new PriorityQueue<>();
+        final Queue<String> consumersToFill = new LinkedList<>();
         // keep track of tasks that we have to skip during the first pass in case we can reassign them later
         final Map<TaskId, String> unassignedTaskToPreviousOwner = new HashMap<>();
 
