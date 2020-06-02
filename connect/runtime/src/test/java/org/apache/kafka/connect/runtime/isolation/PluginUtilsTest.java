@@ -102,6 +102,7 @@ public class PluginUtilsTest {
             //"org.apache.kafka.connect.connector.policy.", isolated by default
             "org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy",
             "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest",
+            "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest$ClientType",
             "org.apache.kafka.connect.connector.",
             "org.apache.kafka.connect.connector.Connector",
             "org.apache.kafka.connect.connector.ConnectorContext",
