@@ -214,11 +214,11 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  private def writeTxnCompletion(pendingCommitTxn: PendingCompleteTxn): Unit = {
-    val transactionalId = pendingCommitTxn.transactionalId
-    val txnMetadata = pendingCommitTxn.txnMetadata
-    val newMetadata = pendingCommitTxn.newMetadata
-    val coordinatorEpoch = pendingCommitTxn.coordinatorEpoch
+  private def writeTxnCompletion(pendingCompleteTxn: PendingCompleteTxn): Unit = {
+    val transactionalId = pendingCompleteTxn.transactionalId
+    val txnMetadata = pendingCompleteTxn.txnMetadata
+    val newMetadata = pendingCompleteTxn.newMetadata
+    val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch
 
     trace(s"Completed sending transaction markers for $transactionalId; begin transition " +
       s"to ${newMetadata.txnState}")
@@ -281,10 +281,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   def maybeWriteTxnCompletion(transactionalId: String): Unit = {
-    Option(transactionsWithPendingMarkers.get(transactionalId)).foreach { pendingCommitTxn =>
-      if (!hasPendingMarkersToWrite(pendingCommitTxn.txnMetadata) &&
-          transactionsWithPendingMarkers.remove(transactionalId, pendingCommitTxn)) {
-        writeTxnCompletion(pendingCommitTxn)
+    Option(transactionsWithPendingMarkers.get(transactionalId)).foreach { pendingCompleteTxn =>
+      if (!hasPendingMarkersToWrite(pendingCompleteTxn.txnMetadata) &&
+          transactionsWithPendingMarkers.remove(transactionalId, pendingCompleteTxn)) {
+        writeTxnCompletion(pendingCompleteTxn)
       }
     }
   }
