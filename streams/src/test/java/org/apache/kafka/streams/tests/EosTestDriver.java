@@ -581,35 +581,32 @@ public class EosTestDriver extends SmokeTestUtil {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
-        final Map<TopicPartition, Long> topicEndOffsets;
-
-        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
-            topicEndOffsets = consumerUncommitted.endOffsets(partitions);
-        }
 
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-        while (!topicEndOffsets.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
-            consumer.seekToEnd(partitions);
+        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
+            while (System.currentTimeMillis() < maxWaitTime) {
+                consumer.seekToEnd(partitions);
+                final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
 
-            final Iterator<TopicPartition> iterator = partitions.iterator();
-            while (iterator.hasNext()) {
-                final TopicPartition topicPartition = iterator.next();
-                final long position = consumer.position(topicPartition);
+                final Iterator<TopicPartition> iterator = partitions.iterator();
+                while (iterator.hasNext()) {
+                    final TopicPartition topicPartition = iterator.next();
+                    final long position = consumer.position(topicPartition);
 
-                if (position == topicEndOffsets.get(topicPartition)) {
-                    iterator.remove();
-                    topicEndOffsets.remove(topicPartition);
-                    System.out.println("Removing " + topicPartition + " at position " + position);
-                } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
-                    throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
-                } else {
-                    System.out.println("Retry " + topicPartition + " at position " + position);
+                    if (position == topicEndOffsets.get(topicPartition)) {
+                        iterator.remove();
+                        System.out.println("Removing " + topicPartition + " at position " + position);
+                    } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
+                        throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                    } else {
+                        System.out.println("Retry " + topicPartition + " at position " + position);
+                    }
                 }
+                sleep(1000L);
             }
-            sleep(1000L);
         }
 
-        if (!topicEndOffsets.isEmpty()) {
+        if (!partitions.isEmpty()) {
             throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
         }
     }
