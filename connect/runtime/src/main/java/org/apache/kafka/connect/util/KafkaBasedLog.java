@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -84,6 +85,7 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private Runnable initializer;
+    private final long topicMetadataTimeoutMs;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -108,6 +110,17 @@ public class KafkaBasedLog<K, V> {
                          Callback<ConsumerRecord<K, V>> consumedCallback,
                          Time time,
                          Runnable initializer) {
+        this(topic, producerConfigs, consumerConfigs, consumedCallback, time, initializer, CREATE_TOPIC_TIMEOUT_MS);
+    }
+
+    // package-level constructor for testing only
+    KafkaBasedLog(String topic,
+                  Map<String, Object> producerConfigs,
+                  Map<String, Object> consumerConfigs,
+                  Callback<ConsumerRecord<K, V>> consumedCallback,
+                  Time time,
+                  Runnable initializer,
+                  long topicMetadataTimeoutMs) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -120,6 +133,7 @@ public class KafkaBasedLog<K, V> {
             public void run() {
             }
         };
+        this.topicMetadataTimeoutMs = topicMetadataTimeoutMs;
     }
 
     public void start() {
@@ -134,11 +148,11 @@ public class KafkaBasedLog<K, V> {
         // We expect that the topics will have been created either manually by the user or automatically by the herder
         List<PartitionInfo> partitionInfos = null;
         long started = time.milliseconds();
-        while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
+        while (!partitionInfosReady(partitionInfos) && time.milliseconds() - started < topicMetadataTimeoutMs) {
             partitionInfos = consumer.partitionsFor(topic);
             Utils.sleep(Math.min(time.milliseconds() - started, 1000));
         }
-        if (partitionInfos == null)
+        if (!partitionInfosReady(partitionInfos))
             throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");
@@ -237,8 +251,7 @@ public class KafkaBasedLog<K, V> {
     public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
         producer.send(new ProducerRecord<>(topic, key, value), callback);
     }
-
-
+    
     private Producer<K, V> createProducer() {
         // Always require producer acks to all to ensure durable writes
         producerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -297,6 +310,11 @@ public class KafkaBasedLog<K, V> {
         }
     }
 
+    private boolean partitionInfosReady(List<PartitionInfo> partitionInfos) {
+        return partitionInfos != null &&
+                !partitionInfos.isEmpty() &&
+                partitionInfos.stream().noneMatch(info -> info.leader() == null || info.leader().id() == Node.noNode().id());
+    }
 
     private class WorkThread extends Thread {
         public WorkThread() {

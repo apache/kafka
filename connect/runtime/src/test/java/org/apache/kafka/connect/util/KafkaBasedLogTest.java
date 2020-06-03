@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -143,6 +144,33 @@ public class KafkaBasedLogTest {
         beginningOffsets.put(TP0, 0L);
         beginningOffsets.put(TP1, 0L);
         consumer.updateBeginningOffsets(beginningOffsets);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testStartFailedWhenSomePartitionOffline() throws Exception {
+        KafkaBasedLog store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, Time.SYSTEM, initializer, 1000L);
+
+        PartitionInfo tpWithNoLeader = new PartitionInfo(TOPIC, 2, null, new Node[]{REPLICA}, new Node[0], new Node[]{REPLICA});
+        consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1, tpWithNoLeader));
+        try {
+            // Expectation
+            initializer.run();
+            EasyMock.expectLastCall().times(1);
+
+            PowerMock.expectPrivate(store, "createProducer")
+                    .andReturn(producer);
+            PowerMock.expectPrivate(store, "createConsumer")
+                    .andReturn(consumer);
+            EasyMock.expectLastCall().times(1);
+
+            PowerMock.replayAll();
+
+            store.start();
+        } finally {
+            // Recover consumer subscription
+            consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
+        }
     }
 
     @Test
