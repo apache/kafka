@@ -83,7 +83,7 @@ class ControllerContext {
 
   val allTopics = mutable.Set.empty[String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
-  val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
+  private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
@@ -404,11 +404,47 @@ class ControllerContext {
     partitionsForTopic(topic).filter { partition => states.contains(partitionState(partition)) }.toSet
   }
 
-  def putLeadershipInfo(partition: TopicPartition, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Unit = {
+  def putPartitionLeadershipInfo(partition: TopicPartition,
+                                 leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Unit = {
     val previous = partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     val replicaAssignment = partitionFullReplicaAssignment(partition)
     updatePreferredReplicaImbalanceMetric(partition, Some(replicaAssignment), previous,
       Some(replicaAssignment), Some(leaderIsrAndControllerEpoch))
+  }
+
+  def partitionLeadershipInfo(partition: TopicPartition): Option[LeaderIsrAndControllerEpoch] = {
+    partitionLeadershipInfo.get(partition)
+  }
+
+  def partitionsLeadershipInfo(): Iterable[(TopicPartition, LeaderIsrAndControllerEpoch)] = {
+    partitionLeadershipInfo
+  }
+
+  def partitionsWithLeaders(): Set[TopicPartition] = {
+    partitionLeadershipInfo.keySet
+  }
+
+  def partitionsWithoutLeaders(): Set[TopicPartition] = {
+    partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
+      !isReplicaOnline(leaderIsrAndControllerEpoch.leaderAndIsr.leader, topicPartition) &&
+        !topicsQueuedForDeletion.contains(topicPartition.topic)
+    }.keySet
+  }
+
+  def partitionLeadsOnBroker(brokerId: Int): Set[TopicPartition] = {
+    partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
+      !topicsQueuedForDeletion.contains(topicPartition.topic) &&
+        leaderIsrAndControllerEpoch.leaderAndIsr.leader == brokerId &&
+        partitionReplicaAssignment(topicPartition).size > 1
+    }.keySet
+  }
+
+  def clearPartitionLeadershipInfo(): Unit = {
+    partitionLeadershipInfo.clear()
+  }
+
+  def partitionWithLeaderInfoCount(): Int = {
+    partitionLeadershipInfo.size
   }
 
   private def updatePreferredReplicaImbalanceMetric(partition: TopicPartition,
@@ -419,14 +455,14 @@ class ControllerContext {
     if (!isTopicQueuedUpForDeletion(partition.topic)) {
       oldReplicaAssignment.foreach { replicaAssignment =>
         oldLeadershipInfo.foreach { leadershipInfo =>
-          if (isReplicaImbalance(replicaAssignment, leadershipInfo))
+          if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
             preferredReplicaImbalanceCount -= 1
         }
       }
 
       newReplicaAssignment.foreach { replicaAssignment =>
         newLeadershipInfo.foreach { leadershipInfo =>
-          if (isReplicaImbalance(replicaAssignment, leadershipInfo))
+          if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
             preferredReplicaImbalanceCount += 1
         }
       }
@@ -436,20 +472,20 @@ class ControllerContext {
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).foreach { case (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
-        if (isReplicaImbalance(replicaAssignment, leadershipInfo))
+        if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1
       }
     }
   }
 
-  private def isReplicaImbalance(replicaAssignment: ReplicaAssignment,
+  private def hasPreferredLeader(replicaAssignment: ReplicaAssignment,
                                  leadershipInfo: LeaderIsrAndControllerEpoch): Boolean = {
     val preferredReplica = replicaAssignment.replicas.head
     if (replicaAssignment.isBeingReassigned && replicaAssignment.addingReplicas.contains(preferredReplica))
       // reassigning partitions are not counted as imbalanced until the new replica joins the ISR (completes reassignment)
-      leadershipInfo.leaderAndIsr.isr.contains(preferredReplica)
+      !leadershipInfo.leaderAndIsr.isr.contains(preferredReplica)
     else
-      leadershipInfo.leaderAndIsr.leader != preferredReplica
+      leadershipInfo.leaderAndIsr.leader == preferredReplica
   }
 
   private def isValidReplicaStateTransition(replica: PartitionAndReplica, targetState: ReplicaState): Boolean =

@@ -169,13 +169,13 @@ class ControllerContextTest {
     context.updatePartitionFullReplicaAssignment(tp3, ReplicaAssignment(Seq(1, 2, 3)))
     assertEquals(0, context.preferredReplicaImbalanceCount)
 
-    context.putLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(1, 2, 3)), 0))
+    context.putPartitionLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(1, 2, 3)), 0))
     assertEquals(0, context.preferredReplicaImbalanceCount)
 
-    context.putLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(LeaderAndIsr(2, List(2, 3, 1)), 0))
+    context.putPartitionLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(LeaderAndIsr(2, List(2, 3, 1)), 0))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
-    context.putLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(3, List(3, 1, 2)), 0))
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(3, List(3, 1, 2)), 0))
     assertEquals(2, context.preferredReplicaImbalanceCount)
 
     context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(2, 3, 1)))
@@ -185,7 +185,7 @@ class ControllerContextTest {
     context.queueTopicDeletion(Set(tp3.topic))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
-    context.putLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(3, 1, 2)), 0))
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(3, 1, 2)), 0))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
     context.removeTopic(tp1.topic)
