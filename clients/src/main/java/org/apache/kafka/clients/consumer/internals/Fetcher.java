@@ -822,19 +822,25 @@ public class Fetcher<K, V> implements Closeable {
                         FetchPosition requestPosition = fetchPositions.get(respTopicPartition);
 
                         if (respEndOffset.hasUndefinedEpochOrOffset()) {
-                            handleOffsetOutOfRange(requestPosition, respTopicPartition,
-                                "Failed leader offset epoch validation for " + respEndOffset
-                                + " since no end offset larger than current fetch epoch was reported");
+                            try {
+                                handleOffsetOutOfRange(requestPosition, respTopicPartition,
+                                    "Failed leader offset epoch validation for " + requestPosition
+                                        + " since no end offset larger than current fetch epoch was reported");
+                            } catch (OffsetOutOfRangeException e) {
+                                // Swallow the OffsetOutOfRangeException to finish all partitions validation.
+                            }
                         } else {
                             Optional<OffsetAndMetadata> divergentOffsetOpt = subscriptions.maybeCompleteValidation(
                                 respTopicPartition, requestPosition, respEndOffset);
                             divergentOffsetOpt.ifPresent(
-                                divergentOffset -> truncationWithoutResetPolicy.put(respTopicPartition, divergentOffset));
+                                divergentOffset -> {
+                                    log.info("Detected log truncation with diverging offset: {}", divergentOffset);
+                                    truncationWithoutResetPolicy.put(respTopicPartition, divergentOffset);
+                                });
                         }
                     });
 
                     if (!truncationWithoutResetPolicy.isEmpty()) {
-                        log.error("Detected log truncation with diverging offsets " + truncationWithoutResetPolicy);
                         throw new LogTruncationException(truncationWithoutResetPolicy);
                     }
                 }
@@ -1328,7 +1334,7 @@ public class Fetcher<K, V> implements Closeable {
                 ", for fetch offset: %d, " +
                 "root cause: %s",
                 offsetOutOfRangePartitions, fetchPosition.offset, reason);
-            log.error(errorMessage);
+            log.info(errorMessage);
             throw new OffsetOutOfRangeException(errorMessage, offsetOutOfRangePartitions);
         }
     }
