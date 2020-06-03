@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 
@@ -507,17 +508,24 @@ public class TaskManager {
 
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
-     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}
-     *
-     * @return Map from task id to its total offset summed across all state stores
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
+     * Does not include stateless or non-logged tasks.
      */
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
-        for (final TaskId id : lockedTaskDirectories) {
+        // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
+        // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
+        // just have an empty changelogOffsets map.
+        for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.keySet())) {
             final Task task = tasks.get(id);
             if (task != null) {
-                taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
+                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                if (changelogOffsets.isEmpty()) {
+                    log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}", id);
+                } else {
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, changelogOffsets));
+                }
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
@@ -598,13 +606,14 @@ public class TaskManager {
             final long offset = changelogEntry.getValue();
 
 
-            if (offset == Task.LATEST_OFFSET) { // this condition can only be true for active tasks; never for standby
+            if (offset == Task.LATEST_OFFSET) {
+                // this condition can only be true for active tasks; never for standby
                 // for this case, the offset of all partitions is set to `LATEST_OFFSET`
                 // and we "forward" the sentinel value directly
                 return Task.LATEST_OFFSET;
             } else {
                 if (offset < 0) {
-                    throw new IllegalStateException("Offset should not be negative.");
+                    throw new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry);
                 }
                 offsetSum += offset;
                 if (offsetSum < 0) {

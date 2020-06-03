@@ -174,7 +174,7 @@ public class ClientState {
         return standbyTasks.size();
     }
 
-    void assignStandby(final TaskId task) {
+    public void assignStandby(final TaskId task) {
         assertNotAssigned(task);
         standbyTasks.add(task);
     }
