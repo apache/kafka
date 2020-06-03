@@ -30,8 +30,9 @@ public class OffsetOutOfRangeException extends InvalidOffsetException {
     private static final long serialVersionUID = 1L;
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
 
-    public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions) {
-        super("Offsets out of range with no configured reset policy for partitions: " + offsetOutOfRangePartitions);
+    public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions, String reason) {
+        super("Offsets out of range with no configured reset policy for partitions: " +
+            offsetOutOfRangePartitions + " due to: " + reason);
         this.offsetOutOfRangePartitions = offsetOutOfRangePartitions;
     }
 

@@ -820,12 +820,9 @@ public class Fetcher<K, V> implements Closeable {
                         SubscriptionState.FetchPosition requestPosition = fetchPositions.get(respTopicPartition);
 
                         if (respEndOffset.hasUndefinedEpochOrOffset()) {
-                            if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                log.info("Fetch offset {} is out of range for partition {}, resetting offset", requestPosition, respTopicPartition);
-                                subscriptions.requestOffsetReset(respTopicPartition);
-                            } else {
-                                throw new OffsetOutOfRangeException(Collections.singletonMap(respTopicPartition, requestPosition.offset));
-                            }
+                            handleOffsetOutOfRange(requestPosition.offset, respTopicPartition,
+                                "Failed leader offset epoch validation for " + respEndOffset
+                                + " since no end offset larger than current fetch epoch was reported");
                         } else {
                             Optional<OffsetAndMetadata> divergentOffsetOpt = subscriptions.maybeCompleteValidation(
                                 respTopicPartition, requestPosition, respEndOffset);
@@ -1272,11 +1269,8 @@ public class Fetcher<K, V> implements Closeable {
                     if (fetchOffset != subscriptions.position(tp).offset) {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                                 "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
-                    } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                        log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
-                        subscriptions.requestOffsetReset(tp);
                     } else {
-                        throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                        handleOffsetOutOfRange(fetchOffset, tp, "error response in offset fetch");
                     }
                 } else {
                     log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
@@ -1314,6 +1308,19 @@ public class Fetcher<K, V> implements Closeable {
         }
 
         return completedFetch;
+    }
+
+    private void handleOffsetOutOfRange(long fetchOffset,
+                                        TopicPartition topicPartition,
+                                        String reason) {
+        if (subscriptions.hasDefaultOffsetResetPolicy()) {
+            log.info("Fetch offset {} is out of range for partition {}, resetting offset",
+                topicPartition, fetchOffset);
+            subscriptions.requestOffsetReset(topicPartition);
+        } else {
+            throw new OffsetOutOfRangeException(Collections.singletonMap(
+                topicPartition, fetchOffset), reason);
+        }
     }
 
     /**

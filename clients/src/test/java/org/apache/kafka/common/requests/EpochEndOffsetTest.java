@@ -22,6 +22,8 @@ import org.junit.Test;
 import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH_OFFSET;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class EpochEndOffsetTest {
 
@@ -31,33 +33,32 @@ public class EpochEndOffsetTest {
         long endOffset = 10L;
         EpochEndOffset epochEndOffset = new EpochEndOffset(Errors.FENCED_LEADER_EPOCH, leaderEpoch, endOffset);
 
-        verify(leaderEpoch, endOffset, true, Errors.FENCED_LEADER_EPOCH, false, epochEndOffset);
+        assertEquals(leaderEpoch, epochEndOffset.leaderEpoch());
+        assertEquals(endOffset, epochEndOffset.endOffset());
+        assertTrue(epochEndOffset.hasError());
+        assertEquals(Errors.FENCED_LEADER_EPOCH, epochEndOffset.error());
+        assertFalse(epochEndOffset.hasUndefinedEpochOrOffset());
     }
 
     @Test
     public void testWithUndefinedEpoch() {
         EpochEndOffset epochEndOffset = new EpochEndOffset(-1, 2L);
 
-        verify(UNDEFINED_EPOCH, 2L, false, Errors.NONE, true, epochEndOffset);
+        assertEquals(UNDEFINED_EPOCH, epochEndOffset.leaderEpoch());
+        assertEquals(2L, epochEndOffset.endOffset());
+        assertFalse(epochEndOffset.hasError());
+        assertEquals(Errors.NONE, epochEndOffset.error());
+        assertTrue(epochEndOffset.hasUndefinedEpochOrOffset());
     }
 
     @Test
     public void testWithUndefinedEndOffset() {
         EpochEndOffset epochEndOffset = new EpochEndOffset(3, -1L);
 
-        verify(3, UNDEFINED_EPOCH_OFFSET, false, Errors.NONE, true, epochEndOffset);
-    }
-
-    private void verify(int leaderEpoch,
-                        long endOffset,
-                        boolean hasError,
-                        Errors error,
-                        boolean hasUndefinedEpochOffset,
-                        EpochEndOffset epochEndOffset) {
-        assertEquals(leaderEpoch, epochEndOffset.leaderEpoch());
-        assertEquals(endOffset, epochEndOffset.endOffset());
-        assertEquals(hasError, epochEndOffset.hasError());
-        assertEquals(error, epochEndOffset.error());
-        assertEquals(hasUndefinedEpochOffset, epochEndOffset.hasUndefinedEpochOrOffset());
+        assertEquals(3, epochEndOffset.leaderEpoch());
+        assertEquals(UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset());
+        assertFalse(epochEndOffset.hasError());
+        assertEquals(Errors.NONE, epochEndOffset.error());
+        assertTrue(epochEndOffset.hasUndefinedEpochOrOffset());
     }
 }

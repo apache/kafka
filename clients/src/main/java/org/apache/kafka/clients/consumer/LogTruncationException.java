@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -33,18 +32,8 @@ import java.util.function.Function;
  */
 public class LogTruncationException extends OffsetOutOfRangeException {
 
-    private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
-
     public LogTruncationException(Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
-        super(Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset));
-        this.divergentOffsets = Collections.unmodifiableMap(divergentOffsets);
-    }
-
-    /**
-     * Get the offsets for the partitions which were truncated. This is the first offset which is known to diverge
-     * from what the consumer read.
-     */
-    public Map<TopicPartition, OffsetAndMetadata> divergentOffsets() {
-        return divergentOffsets;
+        super(Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset),
+            "detected log truncation");
     }
 }

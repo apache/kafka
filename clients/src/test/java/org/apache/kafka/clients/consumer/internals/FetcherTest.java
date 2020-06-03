@@ -151,8 +151,6 @@ public class FetcherTest {
     private int validLeaderEpoch = 0;
     private MetadataResponse initialUpdateResponse =
         TestUtils.metadataUpdateWith(1, singletonMap(topicName, 4));
-    private MetadataResponse initialUpdateResponseWithLeaderEpoch =
-        TestUtils.metadataUpdateWith(1, singletonMap(topicName, 4), tp -> validLeaderEpoch);
 
     private int minBytes = 1;
     private int maxBytes = Integer.MAX_VALUE;
@@ -345,7 +343,6 @@ public class FetcherTest {
 
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
-        client.updateMetadata(initialUpdateResponseWithLeaderEpoch);
         Node node = initialUpdateResponse.brokers().iterator().next();
 
         client.blackout(node, 500);
@@ -863,7 +860,8 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        client.updateMetadata(initialUpdateResponseWithLeaderEpoch);
+        client.updateMetadata(TestUtils.metadataUpdateWith(
+            1, singletonMap(topicName, 4), tp -> validLeaderEpoch));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -886,7 +884,8 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        client.updateMetadata(initialUpdateResponseWithLeaderEpoch);
+        client.updateMetadata(TestUtils.metadataUpdateWith(
+            1, singletonMap(topicName, 4), tp -> validLeaderEpoch));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -3790,17 +3789,32 @@ public class FetcherTest {
     }
 
     @Test
-    public void testOffsetValidationResetOffsetForUndefinedEpoch() {
-        testOffsetValidationWithGivenEpochOffset(new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 0L));
+    public void testOffsetValidationResetOffsetForUndefinedEpochWithDefinedResetPolicy() {
+        testOffsetValidationWithGivenEpochOffset(
+            new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 0L), OffsetResetStrategy.EARLIEST);
 
     }
     @Test
-    public void testOffsetValidationResetOffsetForUndefinedOffset() {
-        testOffsetValidationWithGivenEpochOffset(new EpochEndOffset(2, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+    public void testOffsetValidationResetOffsetForUndefinedOffsetWithDefinedResetPolicy() {
+        testOffsetValidationWithGivenEpochOffset(
+            new EpochEndOffset(2, EpochEndOffset.UNDEFINED_EPOCH_OFFSET), OffsetResetStrategy.EARLIEST);
     }
 
-    private void testOffsetValidationWithGivenEpochOffset(final EpochEndOffset epochEndOffset) {
-        buildFetcher();
+    @Test
+    public void testOffsetValidationResetOffsetForUndefinedEpochWithUndefinedResetPolicy() {
+        testOffsetValidationWithGivenEpochOffset(
+            new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 0L), OffsetResetStrategy.NONE);
+    }
+
+    @Test
+    public void testOffsetValidationResetOffsetForUndefinedOffsetWithUndefinedResetPolicy() {
+        testOffsetValidationWithGivenEpochOffset(
+            new EpochEndOffset(2, EpochEndOffset.UNDEFINED_EPOCH_OFFSET), OffsetResetStrategy.NONE);
+    }
+
+    private void testOffsetValidationWithGivenEpochOffset(final EpochEndOffset epochEndOffset,
+                                                          OffsetResetStrategy offsetResetStrategy) {
+        buildFetcher(offsetResetStrategy);
         assignFromUser(singleton(tp0));
 
         Map<String, Integer> partitionCounts = new HashMap<>();
@@ -3831,7 +3845,12 @@ public class FetcherTest {
         consumerClient.poll(time.timer(Duration.ZERO));
 
         assertEquals(0, subscriptions.position(tp0).offset);
-        assertFalse(subscriptions.awaitingValidation(tp0));
+
+        if (offsetResetStrategy == OffsetResetStrategy.NONE) {
+            assertTrue(subscriptions.awaitingValidation(tp0));
+        } else {
+            assertFalse(subscriptions.awaitingValidation(tp0));
+        }
     }
 
     @Test
@@ -4325,6 +4344,12 @@ public class FetcherTest {
                               Deserializer<?> valueDeserializer) {
         buildFetcher(OffsetResetStrategy.EARLIEST, keyDeserializer, valueDeserializer,
                 Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private void buildFetcher(OffsetResetStrategy offsetResetStrategy) {
+        buildFetcher(new MetricConfig(), offsetResetStrategy,
+            new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+            Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private <K, V> void buildFetcher(OffsetResetStrategy offsetResetStrategy,
