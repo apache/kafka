@@ -111,7 +111,7 @@ versions += [
   shadowPlugin: "5.2.0",
   slf4j: "1.7.30",
   snappy: "1.1.7.3",
-  spotbugs: "4.0.2",
+  spotbugs: "4.0.3",
   spotbugsPlugin: "4.2.4",
   spotlessPlugin: "3.28.1",
   testRetryPlugin: "1.1.5",
