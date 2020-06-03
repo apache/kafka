@@ -145,7 +145,7 @@ public class FeaturesTest {
     }
 
     @Test
-    public void testDeserializationFailureFinalizedFeatures() {
+    public void testFinalizedFeaturesFromMapFailure() {
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
             mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));
         assertThrows(
