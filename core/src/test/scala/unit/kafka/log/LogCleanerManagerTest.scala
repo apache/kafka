@@ -571,12 +571,12 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress)
     cleanerManager.doneCleaning(topicPartition, log.dir, 1)
     assertTrue(cleanerManager.cleaningState(topicPartition).isEmpty)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningAborted)
     cleanerManager.doneCleaning(topicPartition, log.dir, 1)
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
