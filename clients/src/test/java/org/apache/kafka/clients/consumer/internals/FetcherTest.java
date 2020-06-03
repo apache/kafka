@@ -27,6 +27,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -3792,8 +3793,8 @@ public class FetcherTest {
     public void testOffsetValidationResetOffsetForUndefinedEpochWithDefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
             new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 0L), OffsetResetStrategy.EARLIEST);
-
     }
+
     @Test
     public void testOffsetValidationResetOffsetForUndefinedOffsetWithDefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
@@ -3812,6 +3813,12 @@ public class FetcherTest {
             new EpochEndOffset(2, EpochEndOffset.UNDEFINED_EPOCH_OFFSET), OffsetResetStrategy.NONE);
     }
 
+    @Test
+    public void testOffsetValidationTriggerLogTruncationForBadOffsetWithUndefinedResetPolicy() {
+        testOffsetValidationWithGivenEpochOffset(
+            new EpochEndOffset(1, 1L), OffsetResetStrategy.NONE);
+    }
+
     private void testOffsetValidationWithGivenEpochOffset(final EpochEndOffset epochEndOffset,
                                                           OffsetResetStrategy offsetResetStrategy) {
         buildFetcher(offsetResetStrategy);
@@ -3821,6 +3828,7 @@ public class FetcherTest {
         partitionCounts.put(tp0.topic(), 4);
 
         final int epochOne = 1;
+        final long initialOffset = 5;
 
         metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
             Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
@@ -3830,7 +3838,7 @@ public class FetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(initialOffset, Optional.of(epochOne), leaderAndEpoch));
 
         fetcher.validateOffsetsIfNeeded();
 
@@ -3845,11 +3853,19 @@ public class FetcherTest {
         }, new OffsetsForLeaderEpochResponse(singletonMap(tp0, epochEndOffset)));
         consumerClient.poll(time.timer(Duration.ZERO));
 
-        assertEquals(0, subscriptions.position(tp0).offset);
+        assertEquals(initialOffset, subscriptions.position(tp0).offset);
 
         if (offsetResetStrategy == OffsetResetStrategy.NONE) {
+            OffsetOutOfRangeException thrown =
+                assertThrows(OffsetOutOfRangeException.class, () -> fetcher.validateOffsetsIfNeeded());
+
+            // If epoch offset is valid, we are testing for the log truncation case.
+            if (!epochEndOffset.hasUndefinedEpochOrOffset()) {
+                assertTrue(thrown instanceof LogTruncationException);
+            }
             assertTrue(subscriptions.awaitingValidation(tp0));
         } else {
+            fetcher.validateOffsetsIfNeeded();
             assertFalse(subscriptions.awaitingValidation(tp0));
         }
     }

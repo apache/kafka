@@ -827,21 +827,23 @@ public class Fetcher<K, V> implements Closeable {
                                     "Failed leader offset epoch validation for " + requestPosition
                                         + " since no end offset larger than current fetch epoch was reported");
                             } catch (OffsetOutOfRangeException e) {
-                                // Swallow the OffsetOutOfRangeException to finish all partitions validation.
+                                // Catch the exception here to ensure finishing other partitions validation.
+                                setFatalOffsetForLeaderException(e);
                             }
                         } else {
                             Optional<OffsetAndMetadata> divergentOffsetOpt = subscriptions.maybeCompleteValidation(
                                 respTopicPartition, requestPosition, respEndOffset);
                             divergentOffsetOpt.ifPresent(
                                 divergentOffset -> {
-                                    log.info("Detected log truncation with diverging offset: {}", divergentOffset);
+                                    log.info("Detected log truncation for topic partition {} with diverging offset {}",
+                                        respTopicPartition, divergentOffset);
                                     truncationWithoutResetPolicy.put(respTopicPartition, divergentOffset);
                                 });
                         }
                     });
 
                     if (!truncationWithoutResetPolicy.isEmpty()) {
-                        throw new LogTruncationException(truncationWithoutResetPolicy);
+                        setFatalOffsetForLeaderException(new LogTruncationException(truncationWithoutResetPolicy));
                     }
                 }
 
@@ -850,12 +852,16 @@ public class Fetcher<K, V> implements Closeable {
                     subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
-                    if (!(e instanceof RetriableException) && !cachedOffsetForLeaderException.compareAndSet(null, e)) {
-                        log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
-                    }
+                    setFatalOffsetForLeaderException(e);
                 }
             });
         });
+    }
+
+    private void setFatalOffsetForLeaderException(RuntimeException e) {
+        if (!(e instanceof RetriableException) && !cachedOffsetForLeaderException.compareAndSet(null, e)) {
+            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
+        }
     }
 
     /**
