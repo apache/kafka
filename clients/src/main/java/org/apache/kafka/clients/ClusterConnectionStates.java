@@ -231,6 +231,7 @@ final class ClusterConnectionStates {
         nodeState.state = ConnectionState.READY;
         nodeState.authenticationException = null;
         resetReconnectBackoff(nodeState);
+        connectingNodes.remove(id);
     }
 
     /**
