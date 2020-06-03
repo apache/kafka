@@ -3833,6 +3833,7 @@ public class FetcherTest {
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         fetcher.validateOffsetsIfNeeded();
+
         consumerClient.poll(time.timer(Duration.ZERO));
         assertTrue(subscriptions.awaitingValidation(tp0));
         assertTrue(client.hasInFlightRequests());

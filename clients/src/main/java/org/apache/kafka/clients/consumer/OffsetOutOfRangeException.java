@@ -31,12 +31,12 @@ public class OffsetOutOfRangeException extends InvalidOffsetException {
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
 
     public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions) {
-        this(offsetOutOfRangePartitions, "undefined");
+        this("Offsets out of range with no configured reset policy for partitions: " +
+            offsetOutOfRangePartitions, offsetOutOfRangePartitions);
     }
 
-    public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions, String reason) {
-        super("Offsets out of range with no configured reset policy for partitions: " +
-            offsetOutOfRangePartitions + ", root cause: " + reason);
+    public OffsetOutOfRangeException(String message, Map<TopicPartition, Long> offsetOutOfRangePartitions) {
+        super(message);
         this.offsetOutOfRangePartitions = offsetOutOfRangePartitions;
     }
 

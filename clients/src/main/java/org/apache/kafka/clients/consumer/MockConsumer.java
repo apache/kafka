@@ -199,8 +199,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                     long position = subscriptions.position(entry.getKey()).offset;
 
                     if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > position) {
-                        throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position),
-                            "beginning offset is greater than the current position");
+                        throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position));
                     }
 
                     if (assignment().contains(entry.getKey()) && rec.offset() >= position) {
