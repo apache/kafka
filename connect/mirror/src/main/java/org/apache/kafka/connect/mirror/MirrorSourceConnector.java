@@ -217,11 +217,9 @@ public class MirrorSourceConnector extends SourceConnector {
                 .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
                 .collect(Collectors.toList());
 
-        Set<TopicPartition> newTopicPartitions = new HashSet<>();
-        newTopicPartitions.addAll(knownSourceTopicPartitions);
+        Set<TopicPartition> newTopicPartitions = new HashSet<>(knownSourceTopicPartitions);
         newTopicPartitions.removeAll(upstreamTargetTopicPartitions);
-        Set<TopicPartition> deadTopicPartitions = new HashSet<>();
-        deadTopicPartitions.addAll(upstreamTargetTopicPartitions);
+        Set<TopicPartition> deadTopicPartitions = new HashSet<>(upstreamTargetTopicPartitions);
         deadTopicPartitions.removeAll(knownSourceTopicPartitions);
         if (!newTopicPartitions.isEmpty() || !deadTopicPartitions.isEmpty()) {
             log.info("Found {} topic-partitions on {}. {} are new. {} were removed. Previously had {}.",
