@@ -169,6 +169,7 @@ class GroupMetadataTest {
     group.transitionTo(CompletingRebalance)
   }
 
+  @Test
   def testDeadToDeadIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
