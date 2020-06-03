@@ -108,6 +108,10 @@
         enabling a user to provide <code>StateStore</code>s with alongside Processor/Transformer logic so that they are automatically
         added and connected to the processor.
     </p>
+    <p>
+        We added a <code>--force</code> option in StreamsResetter to force remove left-over members on broker side when long session time out was configured
+        as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-571%3A+Add+option+to+force+remove+members+in+StreamsResetter">KIP-571</a>.
+    </p>
 
     <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
     <p>
