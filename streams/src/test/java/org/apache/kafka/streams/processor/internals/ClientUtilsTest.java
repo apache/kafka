@@ -38,11 +38,17 @@ import org.junit.Test;
 public class ClientUtilsTest {
 
     @Test
-    public void fetchEndOffsetsShouldRethrowRuntimeExceptionAsStreamsException() {
+    public void fetchEndOffsetsShouldRethrowRuntimeExceptionAsStreamsException() throws Exception {
         final Admin adminClient = EasyMock.createMock(AdminClient.class);
-        EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andThrow(new RuntimeException());
-        replay(adminClient);
-        assertThrows(StreamsException.class, () ->  fetchEndOffsets(emptyList(), adminClient));
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = EasyMock.createMock(KafkaFuture.class);
+
+        EasyMock.expect(adminClient.listOffsets(EasyMock.anyObject())).andStubReturn(result);
+        EasyMock.expect(result.all()).andStubReturn(allFuture);
+        EasyMock.expect(allFuture.get()).andThrow(new RuntimeException());
+        replay(adminClient, result, allFuture);
+
+        assertThrows(StreamsException.class, () -> fetchEndOffsets(emptyList(), adminClient));
         verify(adminClient);
     }
 
