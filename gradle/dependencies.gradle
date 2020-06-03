@@ -112,7 +112,7 @@ versions += [
   slf4j: "1.7.30",
   snappy: "1.1.7.3",
   spotbugs: "4.0.2",
-  spotbugsPlugin: "4.0.5",
+  spotbugsPlugin: "4.2.4",
   spotlessPlugin: "3.28.1",
   testRetryPlugin: "1.1.5",
   zinc: "1.3.5",
