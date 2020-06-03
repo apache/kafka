@@ -1261,7 +1261,13 @@ public class Fetcher<K, V> implements Closeable {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                                 "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
                     } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                        log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
+                        if (partition.logStartOffset > 0) {
+                            log.info("Fetch offset {} is out of range for partition {}. We only have log segments in " +
+                                            "the range from {} to {}. Resetting offset",
+                                    fetchOffset, tp, partition.logStartOffset,
+                                    isolationLevel == IsolationLevel.READ_COMMITTED ?
+                                            partition.lastStableOffset : partition.highWatermark);
+                        }
                         subscriptions.requestOffsetReset(tp);
                     } else {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
