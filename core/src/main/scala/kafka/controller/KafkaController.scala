@@ -1249,7 +1249,7 @@ class KafkaController(val config: KafkaConfig,
 
     globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size
 
-    globalPartitionCount = if (!isActive) 0 else controllerContext.partitionWithLeaderInfoCount
+    globalPartitionCount = if (!isActive) 0 else controllerContext.partitionWithLeadersCount
 
     topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
 
