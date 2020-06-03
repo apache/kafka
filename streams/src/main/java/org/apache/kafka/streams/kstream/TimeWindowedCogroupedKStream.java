@@ -155,7 +155,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * parameters for {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
-     * To query the local {@link ReadOnlyWindowStore} it must be obtained via
+     * To query the local {@link org.apache.kafka.streams.state.ReadOnlyWindowStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
@@ -211,7 +211,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * parameters for {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
-     * To query the local {@link ReadOnlyWindowStore} it must be obtained via
+     * To query the local {@link org.apache.kafka.streams.state.ReadOnlyWindowStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
