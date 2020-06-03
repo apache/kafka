@@ -118,7 +118,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
     assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
     TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.isEmpty
+      FinalizedFeatureCache.get.isDefined &&
+        FinalizedFeatureCache.get.get.features.equals(updatedFinalizedFeatures) &&
+        FinalizedFeatureCache.get.get.epoch == updatedVersion
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
     assertTrue(listener.isListenerInitiated)
   }
