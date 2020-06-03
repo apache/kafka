@@ -982,16 +982,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (tasksRevoked) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
-                log.debug("Requesting followup rebalance be scheduled immediately due to tasks changing ownership.");
+                log.info("Requesting followup rebalance be scheduled immediately due to tasks changing ownership.");
                 info.setNextRebalanceTime(0L);
                 followupRebalanceRequiredForRevokedTasks = true;
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
-            }
-
-            if (shouldEncodeProbingRebalance) {
+            } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.debug("Requesting followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
+                log.info("Requesting followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
