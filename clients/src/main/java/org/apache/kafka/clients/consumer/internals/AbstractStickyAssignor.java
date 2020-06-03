@@ -43,7 +43,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     public static final int DEFAULT_GENERATION = -1;
 
-    private PartitionMovements partitionMovements = new PartitionMovements();
+    private PartitionMovements partitionMovements;
 
     // Keep track of the partitions being migrated from one consumer to another during assignment
     // so the cooperative assignor can adjust the assignment
@@ -72,6 +72,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
+        partitionMovements = new PartitionMovements();
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
         if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
