@@ -59,7 +59,7 @@ class FinalizedFeatureCacheTest {
       () => FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12))
 
     // Check that the failed updateOrThrow call did not make any mutations.
-    assertTrue(FinalizedFeatureCache.empty)
+    assertTrue(FinalizedFeatureCache.isEmpty)
   }
 
   @Test
@@ -94,6 +94,6 @@ class FinalizedFeatureCacheTest {
     assertEquals(12, FinalizedFeatureCache.get.get.epoch)
 
     FinalizedFeatureCache.clear()
-    assertTrue(FinalizedFeatureCache.empty)
+    assertTrue(FinalizedFeatureCache.isEmpty)
   }
 }

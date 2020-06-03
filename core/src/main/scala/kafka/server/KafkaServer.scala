@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV1}
+import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -228,8 +228,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* initialize features */
         _featureChangeListener = new FinalizedFeatureChangeListener(_zkClient)
-        if (config.interBrokerProtocolVersion >= KAFKA_2_6_IV1) {
-          _featureChangeListener.initOrThrow(config.featureChangeListenerCacheUpdateWaitTimeMs)
+        if (config.isFeatureVersioningEnabled) {
+          _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
         }
 
         /* Get or create cluster_id */

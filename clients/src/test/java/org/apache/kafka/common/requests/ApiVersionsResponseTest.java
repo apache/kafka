@@ -108,9 +108,9 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
             RecordBatch.MAGIC_VALUE_V1,
-            Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1, 4)))),
-            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2, 3)))),
-            10L);
+            Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
+            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
+            10);
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
 

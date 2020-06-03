@@ -19,24 +19,23 @@ package org.apache.kafka.common.feature;
 import java.util.Map;
 
 /**
- * A specialization of {@link BaseVersionRange} representing a range of version levels.
- * NOTE: This is the backing class used to define the min/max version levels for finalized features.
+ * An extended {@link BaseVersionRange} representing the min/max versions for finalized features.
  */
 public class FinalizedVersionRange extends BaseVersionRange {
-    // Label for the min version key, that's used only for serialization/deserialization purposes.
+    // Label for the min version key, that's used only to convert to/from a map.
     private static final String MIN_VERSION_LEVEL_KEY_LABEL = "min_version_level";
 
-    // Label for the max version key, that's used only for serialization/deserialization purposes.
+    // Label for the max version key, that's used only to convert to/from a map.
     private static final String MAX_VERSION_LEVEL_KEY_LABEL = "max_version_level";
 
-    public FinalizedVersionRange(long minVersionLevel, long maxVersionLevel) {
+    public FinalizedVersionRange(short minVersionLevel, short maxVersionLevel) {
         super(MIN_VERSION_LEVEL_KEY_LABEL, minVersionLevel, MAX_VERSION_LEVEL_KEY_LABEL, maxVersionLevel);
     }
 
-    public static FinalizedVersionRange deserialize(Map<String, Long> serialized) {
+    public static FinalizedVersionRange fromMap(Map<String, Short> versionRangeMap) {
         return new FinalizedVersionRange(
-            BaseVersionRange.valueOrThrow(MIN_VERSION_LEVEL_KEY_LABEL, serialized),
-            BaseVersionRange.valueOrThrow(MAX_VERSION_LEVEL_KEY_LABEL, serialized));
+            BaseVersionRange.valueOrThrow(MIN_VERSION_LEVEL_KEY_LABEL, versionRangeMap),
+            BaseVersionRange.valueOrThrow(MAX_VERSION_LEVEL_KEY_LABEL, versionRangeMap));
     }
 
     /**

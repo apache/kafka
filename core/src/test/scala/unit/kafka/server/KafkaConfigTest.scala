@@ -776,9 +776,6 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
-        // Feature configuration
-        case KafkaConfig.FeatureChangeListenerCacheUpdateWaitTimeMsProp => //ignore
-
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

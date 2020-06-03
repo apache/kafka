@@ -38,93 +38,104 @@ public class SupportedVersionRangeTest {
         // min and max can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange(0, 0));
+            () -> new SupportedVersionRange((short) 0, (short) 0));
         // min can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange(0, 1));
+            () -> new SupportedVersionRange((short) 0, (short) 1));
         // max can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange(1, 0));
+            () -> new SupportedVersionRange((short) 1, (short) 0));
         // min can't be > max.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange(2, 1));
+            () -> new SupportedVersionRange((short) 2, (short) 1));
     }
 
     @Test
-    public void testSerializeDeserializeTest() {
-        SupportedVersionRange versionRange = new SupportedVersionRange(1, 2);
+    public void testFromToMap() {
+        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
         assertEquals(2, versionRange.max());
 
-        Map<String, Long> serialized = versionRange.serialize();
+        Map<String, Short> versionRangeMap = versionRange.toMap();
         assertEquals(
             mkMap(mkEntry("min_version", versionRange.min()), mkEntry("max_version", versionRange.max())),
-            serialized);
+            versionRangeMap);
 
-        SupportedVersionRange deserialized = SupportedVersionRange.deserialize(serialized);
-        assertEquals(1, deserialized.min());
-        assertEquals(2, deserialized.max());
-        assertEquals(versionRange, deserialized);
+        SupportedVersionRange newVersionRange = SupportedVersionRange.fromMap(versionRangeMap);
+        assertEquals(1, newVersionRange.min());
+        assertEquals(2, newVersionRange.max());
+        assertEquals(versionRange, newVersionRange);
     }
 
     @Test
-    public void testDeserializationFailureTest() {
+    public void testFromMapFailure() {
         // min_version can't be < 1.
-        Map<String, Long> invalidWithBadMinVersion = mkMap(mkEntry("min_version", 0L), mkEntry("max_version", 1L));
+        Map<String, Short> invalidWithBadMinVersion =
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithBadMinVersion));
+            () -> SupportedVersionRange.fromMap(invalidWithBadMinVersion));
 
         // max_version can't be < 1.
-        Map<String, Long> invalidWithBadMaxVersion = mkMap(mkEntry("min_version", 1L), mkEntry("max_version", 0L));
+        Map<String, Short> invalidWithBadMaxVersion =
+            mkMap(mkEntry("min_version", (short) 1), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithBadMaxVersion));
+            () -> SupportedVersionRange.fromMap(invalidWithBadMaxVersion));
 
         // min_version and max_version can't be < 1.
-        Map<String, Long> invalidWithBadMinMaxVersion = mkMap(mkEntry("min_version", 0L), mkEntry("max_version", 0L));
+        Map<String, Short> invalidWithBadMinMaxVersion =
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithBadMinMaxVersion));
+            () -> SupportedVersionRange.fromMap(invalidWithBadMinMaxVersion));
 
         // min_version can't be > max_version.
-        Map<String, Long> invalidWithLowerMaxVersion = mkMap(mkEntry("min_version", 2L), mkEntry("max_version", 1L));
+        Map<String, Short> invalidWithLowerMaxVersion =
+            mkMap(mkEntry("min_version", (short) 2), mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithLowerMaxVersion));
+            () -> SupportedVersionRange.fromMap(invalidWithLowerMaxVersion));
 
         // min_version key missing.
-        Map<String, Long> invalidWithMinKeyMissing = mkMap(mkEntry("max_version", 1L));
+        Map<String, Short> invalidWithMinKeyMissing =
+            mkMap(mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithMinKeyMissing));
+            () -> SupportedVersionRange.fromMap(invalidWithMinKeyMissing));
 
         // max_version key missing.
-        Map<String, Long> invalidWithMaxKeyMissing = mkMap(mkEntry("min_version", 1L));
+        Map<String, Short> invalidWithMaxKeyMissing =
+            mkMap(mkEntry("min_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
-            () -> SupportedVersionRange.deserialize(invalidWithMaxKeyMissing));
+            () -> SupportedVersionRange.fromMap(invalidWithMaxKeyMissing));
     }
 
     @Test
     public void testToString() {
-        assertEquals("SupportedVersionRange[1, 1]", new SupportedVersionRange(1, 1).toString());
-        assertEquals("SupportedVersionRange[1, 2]", new SupportedVersionRange(1, 2).toString());
+        assertEquals(
+            "SupportedVersionRange[min_version:1, max_version:1]",
+            new SupportedVersionRange((short) 1, (short) 1).toString());
+        assertEquals(
+            "SupportedVersionRange[min_version:1, max_version:2]",
+            new SupportedVersionRange((short) 1, (short) 2).toString());
     }
 
     @Test
     public void testEquals() {
-        assertTrue(new SupportedVersionRange(1, 1).equals(new SupportedVersionRange(1, 1)));
-        assertFalse(new SupportedVersionRange(1, 1).equals(new SupportedVersionRange(1, 2)));
-        assertFalse(new SupportedVersionRange(1, 1).equals(null));
+        SupportedVersionRange tested = new SupportedVersionRange((short) 1, (short) 1);
+        assertTrue(tested.equals(tested));
+        assertFalse(tested.equals(new SupportedVersionRange((short) 1, (short) 2)));
+        assertFalse(tested.equals(null));
     }
 
     @Test
     public void testMinMax() {
-        SupportedVersionRange versionRange = new SupportedVersionRange(1, 2);
+        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
         assertEquals(2, versionRange.max());
     }

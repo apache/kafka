@@ -22,7 +22,7 @@ import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_6_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -96,7 +96,7 @@ object BrokerInfo {
    */
   def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
     val version = {
-      if (apiVersion >= KAFKA_2_6_IV1)
+      if (apiVersion >= KAFKA_2_7_IV0)
         5
       else if (apiVersion >= KAFKA_0_10_0_IV1)
         4
@@ -149,7 +149,7 @@ object BrokerIdZNode {
     }
 
     if (version >= 5) {
-      jsonMap += (FeaturesKey -> features.serialize)
+      jsonMap += (FeaturesKey -> features.toMap)
     }
     Json.encodeAsBytes(jsonMap.asJava)
   }
@@ -165,11 +165,12 @@ object BrokerIdZNode {
       broker.rack, broker.features)
   }
 
-  def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Long]] = {
+  def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Short]] = {
     FeatureZNode.asJavaMap(brokerInfo
       .get(FeaturesKey)
-      .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
-      .getOrElse(Map()))
+      .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+      .map(theMap => theMap.view.mapValues(_.view.mapValues(_.asInstanceOf[Short]).toMap).toMap)
+      .getOrElse(Map[String, Map[String, Short]]()))
   }
 
   /**
@@ -216,7 +217,6 @@ object BrokerIdZNode {
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
-    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1"
     * }
     *
@@ -228,7 +228,6 @@ object BrokerIdZNode {
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
-    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1",
     *   "features": {"feature": {"min_version": 1, "max_version": 5}}
     * }
@@ -263,7 +262,7 @@ object BrokerIdZNode {
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
         val features = featuresAsJavaMap(brokerInfo)
         BrokerInfo(
-          Broker(id, endpoints, rack, deserializeSupportedFeatures(features)), version, jmxPort)
+          Broker(id, endpoints, rack, fromSupportedFeaturesMap(features)), version, jmxPort)
       case Left(e) =>
         throw new KafkaException(s"Failed to parse ZooKeeper registration for broker $id: " +
           s"${new String(jsonBytes, UTF_8)}", e)
@@ -859,9 +858,9 @@ object FeatureZNode {
 
   def path = "/feature"
 
-  def asJavaMap(scalaMap: Map[String, Map[String, Long]]): util.Map[String, util.Map[String, java.lang.Long]] = {
+  def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
     scalaMap
-      .view.mapValues(_.view.mapValues(scalaLong => java.lang.Long.valueOf(scalaLong)).toMap.asJava)
+      .view.mapValues(_.view.mapValues(scalaShort => java.lang.Short.valueOf(scalaShort)).toMap.asJava)
       .toMap
       .asJava
   }
@@ -877,7 +876,7 @@ object FeatureZNode {
     val jsonMap = collection.mutable.Map(
       VersionKey -> CurrentVersion,
       StatusKey -> featureZNode.status.id,
-      FeaturesKey -> featureZNode.features.serialize)
+      FeaturesKey -> featureZNode.features.toMap)
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
@@ -886,7 +885,7 @@ object FeatureZNode {
    *
    * @param jsonBytes   the contents of the feature ZK node
    *
-   * @return            deserialized FeatureZNode
+   * @return            the FeatureZNode created from jsonBytes
    *
    * @throws IllegalArgumentException   if the Array[Byte] can not be decoded.
    */
@@ -902,12 +901,16 @@ object FeatureZNode {
 
         val featuresMap = featureInfo
           .get(FeaturesKey)
-          .flatMap(_.to[Option[Map[String, Map[String, Long]]]])
+          .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+
         if (featuresMap.isEmpty) {
           throw new IllegalArgumentException("Features map can not be absent in: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
-        val features = asJavaMap(featuresMap.get)
+        val features = asJavaMap(
+          featuresMap
+            .map(theMap => theMap.view.mapValues(_.view.mapValues(_.asInstanceOf[Short]).toMap).toMap)
+            .getOrElse(Map[String, Map[String, Short]]()))
 
         val statusInt = featureInfo
           .get(StatusKey)
@@ -924,10 +927,10 @@ object FeatureZNode {
 
         var finalizedFeatures: Features[FinalizedVersionRange] = null
         try {
-          finalizedFeatures = deserializeFinalizedFeatures(features)
+          finalizedFeatures = fromFinalizedFeaturesMap(features)
         } catch {
           case e: Exception => throw new IllegalArgumentException(
-            "Unable to deserialize finalized features: " + features, e)
+            "Unable to convert to finalized features from map: " + features, e)
         }
         FeatureZNode(status.get, finalizedFeatures)
       case Left(e) =>

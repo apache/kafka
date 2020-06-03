@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package kafka.server
 
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
@@ -8,6 +25,7 @@ import kafka.zookeeper.ZNodeChangeHandler
 import org.apache.kafka.common.internals.FatalExitError
 
 import scala.concurrent.TimeoutException
+import scala.util.control.Exception.ignoring
 
 /**
  * Listens to changes in the ZK feature node, via the ZK client. Whenever a change notification
@@ -73,13 +91,15 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         FinalizedFeatureCache.clear()
       } else {
         val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-        if (featureZNode.status == FeatureZNodeStatus.Disabled) {
-          info(s"Feature ZK node at path: $featureZkNodePath is in disabled status, clearing feature cache.")
-          FinalizedFeatureCache.clear()
-        } else if (featureZNode.status == FeatureZNodeStatus.Enabled) {
-          FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
-        } else {
-          throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
+        featureZNode.status match {
+          case FeatureZNodeStatus.Disabled => {
+            info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
+            FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+          }
+          case FeatureZNodeStatus.Enabled => {
+            FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+          }
+          case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
         }
       }
 
@@ -92,23 +112,12 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      *
      * @param waitTimeMs   the timeout for the wait operation
      *
-     * @throws             RuntimeException if the thread was interrupted during wait
-     *
-     *                     TimeoutException if the wait can not be completed in waitTimeMs
+     * @throws             TimeoutException if the wait can not be completed in waitTimeMs
      *                     milli seconds
      */
     def awaitUpdateOrThrow(waitTimeMs: Long): Unit = {
       maybeNotifyOnce.foreach(notifier => {
-        var success = false
-        try {
-          success = notifier.await(waitTimeMs, TimeUnit.MILLISECONDS)
-        } catch {
-          case e: InterruptedException =>
-            throw new RuntimeException(
-              "Unable to wait for FinalizedFeatureCache update to finish.", e)
-        }
-
-        if (!success) {
+        if (!notifier.await(waitTimeMs, TimeUnit.MILLISECONDS)) {
           throw new TimeoutException(
             s"Timed out after waiting for ${waitTimeMs}ms for FeatureCache to be updated.")
         }
@@ -126,11 +135,12 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
   private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name = name) {
     override def doWork(): Unit = {
       try {
-        queue.take.updateLatestOrThrow()
+        ignoring(classOf[InterruptedException]) {
+          queue.take.updateLatestOrThrow()
+        }
       } catch {
-        case e: InterruptedException => info(s"Change notification queue interrupted", e)
         case e: Exception => {
-          error("Failed to process feature ZK node change event. The broker will exit.", e)
+          error("Failed to process feature ZK node change event. The broker will eventually exit.", e)
           throw new FatalExitError(1)
         }
       }
@@ -178,20 +188,22 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
    * @throws Exception if feature incompatibility check could not be finished in a timely manner
    */
   def initOrThrow(waitOnceForCacheUpdateMs: Long): Unit = {
+    if (waitOnceForCacheUpdateMs <= 0) {
+      throw new IllegalArgumentException(
+        s"Expected waitOnceForCacheUpdateMs > 0, but provided: $waitOnceForCacheUpdateMs")
+    }
+
     thread.start()
     zkClient.registerZNodeChangeHandlerAndCheckExistence(FeatureZNodeChangeHandler)
-
-    if (waitOnceForCacheUpdateMs > 0) {
-      val ensureCacheUpdateOnce = new FeatureCacheUpdater(
-        FeatureZNodeChangeHandler.path, Some(new CountDownLatch(1)))
-      queue.add(ensureCacheUpdateOnce)
-      try {
-        ensureCacheUpdateOnce.awaitUpdateOrThrow(waitOnceForCacheUpdateMs)
-      } catch {
-        case e: Exception => {
-          close()
-          throw e
-        }
+    val ensureCacheUpdateOnce = new FeatureCacheUpdater(
+      FeatureZNodeChangeHandler.path, Some(new CountDownLatch(1)))
+    queue.add(ensureCacheUpdateOnce)
+    try {
+      ensureCacheUpdateOnce.awaitUpdateOrThrow(waitOnceForCacheUpdateMs)
+    } catch {
+      case e: Exception => {
+        close()
+        throw e
       }
     }
   }

@@ -49,13 +49,13 @@
       "fields":  [
         { "name": "Name", "type": "string", "versions": "3+", "mapKey": true,
           "about": "The name of the feature." },
-        { "name": "MinVersion", "type": "int64", "versions": "3+",
+        { "name": "MinVersion", "type": "int16", "versions": "3+",
           "about": "The minimum supported version for the feature." },
-        { "name": "MaxVersion", "type": "int64", "versions": "3+",
+        { "name": "MaxVersion", "type": "int16", "versions": "3+",
           "about": "The maximum supported version for the feature." }
       ]
     },
-    {"name": "FinalizedFeaturesEpoch", "type": "int64", "versions": "3+",
+    {"name": "FinalizedFeaturesEpoch", "type": "int32", "versions": "3+",
       "tag": 1, "taggedVersions": "3+",
       "about": "The monotonically increasing epoch for the finalized features information."},
     { "name":  "FinalizedFeatures", "type": "[]FinalizedFeatureKey",
@@ -64,9 +64,9 @@
       "fields":  [
         {"name": "Name", "type": "string", "versions":  "3+", "mapKey": true,
           "about": "The name of the feature."},
-        {"name":  "MaxVersionLevel", "type": "int64", "versions":  "3+",
+        {"name":  "MaxVersionLevel", "type": "int16", "versions":  "3+",
           "about": "The cluster-wide finalized max version level for the feature."},
-        {"name":  "MinVersionLevel", "type": "int64", "versions":  "3+",
+        {"name":  "MinVersionLevel", "type": "int16", "versions":  "3+",
           "about": "The cluster-wide finalized min version level for the feature."}
       ]
     }

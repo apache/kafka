@@ -46,8 +46,7 @@ object Broker {
  * A Kafka broker.
  *
  * @param id          a broker id
- * @param endPoints   a collection of: end-point and a listener to security protocol map.
- *                    Each end-point is (host, port, listenerName).
+ * @param endPoints   a collection of EndPoint. Each end-point is (host, port, listener name, security protocol).
  * @param rack        an optional rack
  * @param features    optional supported features
  */
@@ -61,7 +60,7 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
     throw new IllegalArgumentException(s"There is more than one end point with the same listener name: ${endPoints.mkString(",")}")
 
   override def toString: String =
-    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull}"
+    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull} : ${features}"
 
   def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
     this(id, Seq(EndPoint(host, port, listenerName, protocol)), None, emptySupportedFeatures)

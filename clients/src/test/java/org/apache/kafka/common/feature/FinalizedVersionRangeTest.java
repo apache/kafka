@@ -36,45 +36,44 @@ import static org.junit.Assert.assertTrue;
 public class FinalizedVersionRangeTest {
 
     @Test
-    public void testSerializeDeserialize() {
-        FinalizedVersionRange versionRange = new FinalizedVersionRange(1, 2);
+    public void testFromToMap() {
+        FinalizedVersionRange versionRange = new FinalizedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
         assertEquals(2, versionRange.max());
 
-        Map<String, Long> serialized = versionRange.serialize();
+        Map<String, Short> versionRangeMap = versionRange.toMap();
         assertEquals(
             mkMap(
                 mkEntry("min_version_level", versionRange.min()),
                 mkEntry("max_version_level", versionRange.max())),
-            serialized
-        );
+            versionRangeMap);
 
-        FinalizedVersionRange deserialized = FinalizedVersionRange.deserialize(serialized);
-        assertEquals(1, deserialized.min());
-        assertEquals(2, deserialized.max());
-        assertEquals(versionRange, deserialized);
+        FinalizedVersionRange newVersionRange = FinalizedVersionRange.fromMap(versionRangeMap);
+        assertEquals(1, newVersionRange.min());
+        assertEquals(2, newVersionRange.max());
+        assertEquals(versionRange, newVersionRange);
     }
 
     @Test
     public void testToString() {
-        assertEquals("FinalizedVersionRange[1, 1]", new FinalizedVersionRange(1, 1).toString());
-        assertEquals("FinalizedVersionRange[1, 2]", new FinalizedVersionRange(1, 2).toString());
+        assertEquals("FinalizedVersionRange[min_version_level:1, max_version_level:1]", new FinalizedVersionRange((short) 1, (short) 1).toString());
+        assertEquals("FinalizedVersionRange[min_version_level:1, max_version_level:2]", new FinalizedVersionRange((short) 1, (short) 2).toString());
     }
 
     @Test
     public void testIsCompatibleWith() {
-        assertFalse(new FinalizedVersionRange(1, 1).isIncompatibleWith(new SupportedVersionRange(1, 1)));
-        assertFalse(new FinalizedVersionRange(2, 3).isIncompatibleWith(new SupportedVersionRange(1, 4)));
-        assertFalse(new FinalizedVersionRange(1, 4).isIncompatibleWith(new SupportedVersionRange(1, 4)));
+        assertFalse(new FinalizedVersionRange((short) 1, (short) 1).isIncompatibleWith(new SupportedVersionRange((short) 1, (short) 1)));
+        assertFalse(new FinalizedVersionRange((short) 2, (short) 3).isIncompatibleWith(new SupportedVersionRange((short) 1, (short) 4)));
+        assertFalse(new FinalizedVersionRange((short) 1, (short) 4).isIncompatibleWith(new SupportedVersionRange((short) 1, (short) 4)));
 
-        assertTrue(new FinalizedVersionRange(1, 4).isIncompatibleWith(new SupportedVersionRange(2, 3)));
-        assertTrue(new FinalizedVersionRange(1, 4).isIncompatibleWith(new SupportedVersionRange(2, 4)));
-        assertTrue(new FinalizedVersionRange(2, 4).isIncompatibleWith(new SupportedVersionRange(2, 3)));
+        assertTrue(new FinalizedVersionRange((short) 1, (short) 4).isIncompatibleWith(new SupportedVersionRange((short) 2, (short) 3)));
+        assertTrue(new FinalizedVersionRange((short) 1, (short) 4).isIncompatibleWith(new SupportedVersionRange((short) 2, (short) 4)));
+        assertTrue(new FinalizedVersionRange((short) 2, (short) 4).isIncompatibleWith(new SupportedVersionRange((short) 2, (short) 3)));
     }
 
     @Test
     public void testMinMax() {
-        FinalizedVersionRange versionRange = new FinalizedVersionRange(1, 2);
+        FinalizedVersionRange versionRange = new FinalizedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
         assertEquals(2, versionRange.max());
     }

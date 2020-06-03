@@ -40,7 +40,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
   private def createListener(expectedCacheContent: Option[FinalizedFeaturesAndEpoch]): FinalizedFeatureChangeListener = {
     val listener = new FinalizedFeatureChangeListener(zkClient)
     assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.empty)
+    assertTrue(FinalizedFeatureCache.isEmpty)
     listener.initOrThrow(15000)
     assertTrue(listener.isListenerInitiated)
     if (expectedCacheContent.isDefined) {
@@ -95,7 +95,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertEquals(deletedVersion, ZkVersion.UnknownVersion)
     assertTrue(mayBeFeatureZNodeDeletedBytes.isEmpty)
     TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.empty
+      FinalizedFeatureCache.isEmpty
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
     assertTrue(listener.isListenerInitiated)
   }
@@ -118,7 +118,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
     assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
     TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.empty
+      FinalizedFeatureCache.isEmpty
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
     assertTrue(listener.isListenerInitiated)
   }
@@ -143,11 +143,11 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     try {
       val listener = new FinalizedFeatureChangeListener(zkClient)
       assertFalse(listener.isListenerInitiated)
-      assertTrue(FinalizedFeatureCache.empty)
+      assertTrue(FinalizedFeatureCache.isEmpty)
       assertThrows(classOf[TimeoutException], () => listener.initOrThrow(5000))
       assertFalse(listener.isListenerInitiated)
       assertTrue(listener.isListenerDead)
-      assertTrue(FinalizedFeatureCache.empty)
+      assertTrue(FinalizedFeatureCache.isEmpty)
     } finally {
       Exit.resetExitProcedure()
     }

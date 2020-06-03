@@ -21,48 +21,46 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Represents an immutable basic version range using 2 attributes: min and max, each of type long.
+ * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
  * The min and max attributes need to satisfy 2 rules:
  *  - they are each expected to be >= 1, as we only consider positive version values to be valid.
  *  - max should be >= min.
  *
- * The class also provides API to serialize/deserialize the version range to/from a map.
+ * The class also provides API to convert the version range to a map.
  * The class allows for configurable labels for the min/max attributes, which can be specialized by
  * sub-classes (if needed).
  */
 class BaseVersionRange {
-    // Non-empty label for the min version key, that's used only for serialization/deserialization purposes.
+    // Non-empty label for the min version key, that's used only to convert to/from a map.
     private final String minKeyLabel;
 
     // The value of the minimum version.
-    private final long minValue;
+    private final short minValue;
 
-    // Non-empty label for the max version key, that's used only for serialization/deserialization purposes.
+    // Non-empty label for the max version key, that's used only to convert to/from a map.
     private final String maxKeyLabel;
 
     // The value of the maximum version.
-    private final long maxValue;
+    private final short maxValue;
 
     /**
      * Raises an exception unless the following condition is met:
      * minValue >= 1 and maxValue >= 1 and maxValue >= minValue.
      *
-     * @param minKeyLabel   Label for the min version key, that's used only for
-     *                      serialization/deserialization purposes.
+     * @param minKeyLabel   Label for the min version key, that's used only to convert to/from a map.
      * @param minValue      The minimum version value.
-     * @param maxKeyLabel   Label for the max version key, that's used only for
-     *                      serialization/deserialization purposes.
+     * @param maxKeyLabel   Label for the max version key, that's used only to convert to/from a map.
      * @param maxValue      The maximum version value.
      *
      * @throws IllegalArgumentException   If any of the following conditions are true:
      *                                     - (minValue < 1) OR (maxValue < 1) OR (maxValue < minValue).
      *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
      */
-    protected BaseVersionRange(String minKeyLabel, long minValue, String maxKeyLabel, long maxValue) {
+    protected BaseVersionRange(String minKeyLabel, short minValue, String maxKeyLabel, short maxValue) {
         if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minValue > 1, maxValue > 1 and maxValue >= minValue, but received" +
+                    "Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received" +
                     " minValue: %d, maxValue: %d", minValue, maxValue));
         }
         if (minKeyLabel.isEmpty()) {
@@ -77,20 +75,20 @@ class BaseVersionRange {
         this.maxValue = maxValue;
     }
 
-    public long min() {
+    public short min() {
         return minValue;
     }
 
-    public long max() {
+    public short max() {
         return maxValue;
     }
 
     public String toString() {
-        return String.format("%s[%d, %d]", this.getClass().getSimpleName(), min(), max());
+        return String.format("%s[%s:%d, %s:%d]", this.getClass().getSimpleName(), this.minKeyLabel, min(), this.maxKeyLabel, max());
     }
 
-    public Map<String, Long> serialize() {
-        return new HashMap<String, Long>() {
+    public Map<String, Short> toMap() {
+        return new HashMap<String, Short>() {
             {
                 put(minKeyLabel, min());
                 put(maxKeyLabel, max());
@@ -119,10 +117,10 @@ class BaseVersionRange {
         return Objects.hash(minKeyLabel, minValue, maxKeyLabel, maxValue);
     }
 
-    public static long valueOrThrow(String key, Map<String, Long> serialized) {
-        final Long value = serialized.get(key);
+    public static short valueOrThrow(String key, Map<String, Short> versionRangeMap) {
+        final Short value = versionRangeMap.get(key);
         if (value == null) {
-            throw new IllegalArgumentException(key + " absent in " + serialized);
+            throw new IllegalArgumentException(key + " absent in " + versionRangeMap);
         }
         return value;
     }

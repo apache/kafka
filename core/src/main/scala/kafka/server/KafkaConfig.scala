@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 import java.util.{Collections, Locale, Properties}
 
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0, KAFKA_2_7_IV0}
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
@@ -159,9 +159,6 @@ object Defaults {
   val ControlledShutdownMaxRetries = 3
   val ControlledShutdownRetryBackoffMs = 5000
   val ControlledShutdownEnable = true
-
-  /** ********* Features configuration ***********/
-  val FeatureChangeListenerCacheUpdateWaitTimeMs = 60000
 
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMs = 6000
@@ -445,8 +442,6 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
-  /** ********* Features configuration ***********/
-  val FeatureChangeListenerCacheUpdateWaitTimeMsProp = "feature.listener.cache.update.wait.ms"
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMsProp = "group.min.session.timeout.ms"
   val GroupMaxSessionTimeoutMsProp = "group.max.session.timeout.ms"
@@ -817,8 +812,6 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
   val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server"
-  /** ********* Feature configuration ***********/
-  val FeatureChangeListenerCacheUpdateWaitTimeMsDoc = "The wait time (milli seconds) for the first finalized feature cache update upon initialization."
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers. Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating, which can overwhelm broker resources."
   val GroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers. Longer timeouts give consumers more time to process messages in between heartbeats at the cost of a longer time to detect failures."
@@ -1102,9 +1095,6 @@ object KafkaConfig {
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
       .define(ControlledShutdownRetryBackoffMsProp, LONG, Defaults.ControlledShutdownRetryBackoffMs, MEDIUM, ControlledShutdownRetryBackoffMsDoc)
       .define(ControlledShutdownEnableProp, BOOLEAN, Defaults.ControlledShutdownEnable, MEDIUM, ControlledShutdownEnableDoc)
-
-      /** ********* Features configuration ***********/
-      .define(FeatureChangeListenerCacheUpdateWaitTimeMsProp, LONG, Defaults.FeatureChangeListenerCacheUpdateWaitTimeMs, LOW, FeatureChangeListenerCacheUpdateWaitTimeMsDoc)
 
       /** ********* Group coordinator configuration ***********/
       .define(GroupMinSessionTimeoutMsProp, INT, Defaults.GroupMinSessionTimeoutMs, MEDIUM, GroupMinSessionTimeoutMsDoc)
@@ -1522,7 +1512,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val controlledShutdownEnable = getBoolean(KafkaConfig.ControlledShutdownEnableProp)
 
   /** ********* Feature configuration ***********/
-  val featureChangeListenerCacheUpdateWaitTimeMs = getLong(KafkaConfig.FeatureChangeListenerCacheUpdateWaitTimeMsProp)
+  def isFeatureVersioningEnabled = interBrokerProtocolVersion >= KAFKA_2_7_IV0
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)

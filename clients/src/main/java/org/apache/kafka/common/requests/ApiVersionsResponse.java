@@ -140,7 +140,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         byte maxMagic,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch) {
+        int finalizedFeaturesEpoch) {
         return apiVersionsResponse(
             throttleTimeMs, maxMagic, latestSupportedFeatures, Optional.of(finalizedFeatures), Optional.of(finalizedFeaturesEpoch));
     }
@@ -150,7 +150,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         byte maxMagic,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Optional<Features<FinalizedVersionRange>> finalizedFeatures,
-        Optional<Long> finalizedFeaturesEpoch) {
+        Optional<Integer> finalizedFeaturesEpoch) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
             return DEFAULT_API_VERSIONS_RESPONSE;
         }
@@ -163,7 +163,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final byte minMagic,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Optional<Features<FinalizedVersionRange>> finalizedFeatures,
-        Optional<Long> finalizedFeaturesEpoch
+        Optional<Integer> finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {
