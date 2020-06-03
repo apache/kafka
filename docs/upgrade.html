@@ -29,6 +29,12 @@
         both support it and fallback to TLSv1.2 otherwise. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-573%3A+Enable+TLSv1.3+by+default">KIP-573</a> for more details.
     </li>
+    <li>Producer, Consumer and AdminClient configuration <code>client.dns.lookup</code>'s default value has been changed from <code>default</code>
+        to <code>use_all_dns_ips</code>. If bootstrap address resolves to multiple IP addresses, it will try to connect to all of them and
+        use the first successful IP. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-602%3A+Change+default+value+for+client.dns.lookup">KIP-602</a>
+        for more details.
+    </li>
 </ul>
 
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
