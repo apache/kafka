@@ -568,7 +568,59 @@ public class StandaloneHerderTest {
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
 
         PowerMock.verifyAll();
+    }
 
+    @Test
+    public void testPatchConnectorConfig() {
+        Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
+
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("name", CONNECTOR_NAME + "_new");
+        connConfigPatch.put("key1", "value1");
+
+        Map<String, String> updatedConfig = new HashMap<>(connConfig);
+        updatedConfig.putAll(connConfigPatch);
+
+        System.out.println();
+
+        Callback<Herder.Created<ConnectorInfo>> patchConnectorConfigCb = PowerMock.createMock(Callback.class);
+        Callback<Map<String, String>> connectorConfigCb = PowerMock.createMock(Callback.class);
+
+        // Create
+        expectAdd(SourceSink.SOURCE);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        expectConfigValidation(connectorMock, true, connConfig);
+
+        // Patch
+        worker.stopConnector(CONNECTOR_NAME);
+        EasyMock.expectLastCall().andReturn(true);
+        expectConfigValidation(connectorMock, false, updatedConfig);
+        worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(updatedConfig), EasyMock.<ConnectorContext>anyObject(),
+                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
+        EasyMock.expectLastCall().andReturn(true);
+        EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
+        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, updatedConfig)))
+                .andReturn(singletonList(taskConfig(SourceSink.SOURCE)));
+        worker.isSinkConnector(CONNECTOR_NAME);
+        EasyMock.expectLastCall().andReturn(false);
+
+        ConnectorInfo updatedConnInfo = new ConnectorInfo(CONNECTOR_NAME, updatedConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
+                ConnectorType.SOURCE);
+        patchConnectorConfigCb.onCompletion(null, new Herder.Created<>(false, updatedConnInfo));
+        EasyMock.expectLastCall();
+
+        // Should get new config
+        connectorConfigCb.onCompletion(null, updatedConfig);
+        EasyMock.expectLastCall();
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
+        herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchConnectorConfigCb);
+        herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
+
+        PowerMock.verifyAll();
     }
 
     @Test(expected = UnsupportedOperationException.class)

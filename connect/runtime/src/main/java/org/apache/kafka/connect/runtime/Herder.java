@@ -94,6 +94,9 @@ public interface Herder {
      */
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
 
+    // TODO document
+    void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback);
+
     /**
      * Delete a connector and its configuration.
      * @param connName name of the connector

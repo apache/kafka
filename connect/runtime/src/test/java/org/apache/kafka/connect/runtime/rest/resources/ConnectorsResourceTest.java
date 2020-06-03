@@ -106,6 +106,17 @@ public class ConnectorsResourceTest {
         CONNECTOR_CONFIG.put("sample_config", "test_config");
     }
 
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCH = new HashMap<>();
+    static {
+        CONNECTOR_CONFIG_PATCH.put("sample_config", "test_config_new");
+        CONNECTOR_CONFIG_PATCH.put("sample_config_2", "test_config_2");
+    }
+
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCHED = new HashMap<>(CONNECTOR_CONFIG);
+    static {
+        CONNECTOR_CONFIG_PATCHED.putAll(CONNECTOR_CONFIG_PATCH);
+    }
+
     private static final Map<String, String> CONNECTOR_CONFIG_CONTROL_SEQUENCES = new HashMap<>();
     static {
         CONNECTOR_CONFIG_CONTROL_SEQUENCES.put("name", CONNECTOR_NAME_CONTROL_SEQUENCES1);
@@ -616,6 +627,56 @@ public class ConnectorsResourceTest {
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig);
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, request);
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws Throwable {
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.patchConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(CONNECTOR_CONFIG_PATCH), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, new Herder.Created<>(false, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG_PATCHED, CONNECTOR_TASK_NAMES,
+                ConnectorType.SINK)));
+
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+        assertEquals(200, response.getStatus());
+        assertEquals(CONNECTOR_CONFIG_PATCHED, ((ConnectorInfo) response.getEntity()).config());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotLeader() throws Throwable {
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.patchConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(CONNECTOR_CONFIG_PATCH), EasyMock.capture(cb));
+        expectAndCallbackNotLeaderException(cb);
+        // Should forward request
+        String forwardUrl = "http://leader:8083/connectors/" + CONNECTOR_NAME + "/config?forward=false";
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(forwardUrl), EasyMock.eq("PATCH"),
+                EasyMock.isNull(), EasyMock.eq(CONNECTOR_CONFIG_PATCH), EasyMock.<TypeReference>anyObject(), EasyMock.anyObject(WorkerConfig.class))
+        ).andReturn(new RestClient.HttpResponse<>(200, new HashMap<String, String>(),
+                new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG_PATCHED, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
+
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+        assertEquals(200, response.getStatus());
+        assertEquals(CONNECTOR_CONFIG_PATCHED, ((ConnectorInfo) response.getEntity()).config());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void testPatchConnectorConfigNotFound() throws Throwable {
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.patchConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(CONNECTOR_CONFIG_PATCH), EasyMock.capture(cb));
+        expectAndCallbackException(cb, new NotFoundException("Connector " + CONNECTOR_NAME + " not found", null));
+
+        PowerMock.replayAll();
+
+        connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+
+        PowerMock.verifyAll();
     }
 
     @Test

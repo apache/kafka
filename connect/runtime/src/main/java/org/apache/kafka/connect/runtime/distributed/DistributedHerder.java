@@ -70,6 +70,7 @@ import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -780,6 +781,51 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 },
                 forwardErrorCallback(callback)
         );
+    }
+
+    @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        log.trace("Submitting connector config write request {}", connName);
+        addRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        if (checkRebalanceNeeded(callback)) {
+                            return null;
+                        }
+
+                        if (!configState.contains(connName)) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                            return null;
+                        }
+
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+
+                        Map<String, String> patchedConfig = new HashMap<>(connectorInfo(connName).config());
+                        patchedConfig.putAll(configPatch);
+
+                        if (maybeAddConfigErrors(validateConnectorConfig(patchedConfig), callback)) {
+                            return null;
+                        }
+
+                        log.trace("Submitting connector config {} {}", connName, configState.connectors());
+                        configBackingStore.putConnectorConfig(connName, patchedConfig);
+
+                        // Note that we use the updated connector config despite the fact that we don't have an updated
+                        // snapshot yet. The existing task info should still be accurate.
+                        ConnectorInfo info = new ConnectorInfo(connName, patchedConfig, configState.tasks(connName),
+                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
+                                connectorTypeForClass(patchedConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+                        callback.onCompletion(null, new Created<>(false, info));
+                        return null;
+                    }
+                },
+                forwardErrorCallback(callback)
+        );
+
     }
 
     @Override

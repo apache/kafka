@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -215,6 +216,37 @@ public class StandaloneHerder extends AbstractHerder {
 
             updateConnectorTasks(connName);
             callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
+        } catch (ConnectException e) {
+            callback.onCompletion(e, null);
+        }
+    }
+
+    @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        try {
+            ConnectorInfo connectorInfo = connectorInfo(connName);
+            if (connectorInfo == null) {
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+                return;
+            }
+
+            Map<String, String> patchedConfig = new HashMap<>(connectorInfo.config());
+            patchedConfig.putAll(configPatch);
+
+            if (maybeAddConfigErrors(validateConnectorConfig(patchedConfig), callback)) {
+                return;
+            }
+
+            worker.stopConnector(connName);
+            configBackingStore.putConnectorConfig(connName, patchedConfig);
+
+            if (!startConnector(connName)) {
+                callback.onCompletion(new ConnectException("Failed to start connector: " + connName), null);
+                return;
+            }
+
+            updateConnectorTasks(connName);
+            callback.onCompletion(null, new Created<>(false, createConnectorInfo(connName)));
         } catch (ConnectException e) {
             callback.onCompletion(e, null);
         }
