@@ -273,6 +273,11 @@ class TransactionMarkerChannelManagerTest {
 
     val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
+    var errors: Errors = null
+    def responseCallback(responseError: Errors): Unit = {
+      errors = responseError
+    }
+
     EasyMock.expect(txnStateManager.appendTransactionToLog(
       EasyMock.eq(transactionalId2),
       EasyMock.eq(coordinatorEpoch),
@@ -285,7 +290,7 @@ class TransactionMarkerChannelManagerTest {
       }).once()
     EasyMock.replay(txnStateManager, metadataCache)
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2, Some(responseCallback))
 
     val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
@@ -301,6 +306,7 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
     assertEquals(None, txnMetadata2.pendingState)
     assertEquals(CompleteCommit, txnMetadata2.state)
+    assertEquals(Errors.NONE, errors)
   }
 
   @Test
@@ -320,6 +326,11 @@ class TransactionMarkerChannelManagerTest {
 
     val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
+    var errors: Errors = null
+    def responseCallback(responseError: Errors): Unit = {
+      errors = responseError
+    }
+
     EasyMock.expect(txnStateManager.appendTransactionToLog(
       EasyMock.eq(transactionalId2),
       EasyMock.eq(coordinatorEpoch),
@@ -332,7 +343,7 @@ class TransactionMarkerChannelManagerTest {
       }).once()
     EasyMock.replay(txnStateManager, metadataCache)
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2, Some(responseCallback))
 
     val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
@@ -348,6 +359,7 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
     assertEquals(None, txnMetadata2.pendingState)
     assertEquals(PrepareCommit, txnMetadata2.state)
+    assertEquals(Errors.NOT_COORDINATOR, errors)
   }
 
   @Test
@@ -379,9 +391,16 @@ class TransactionMarkerChannelManagerTest {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
       })
 
+    var errors: Errors = null
+    var executed: Boolean = false
+    def responseCallback(responseError: Errors): Unit = {
+      errors = responseError
+      executed = true
+    }
+
     EasyMock.replay(txnStateManager, metadataCache)
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2, Some(responseCallback))
 
     val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
@@ -390,6 +409,10 @@ class TransactionMarkerChannelManagerTest {
       requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
         null, null, 0, 0, false, null, null, response))
     }
+
+    // responseCallback should not be executed before retry
+    assertEquals(null, errors)
+    assertEquals(false, executed)
 
     // call this again so that append log will be retried
     channelManager.generateRequests()
@@ -400,6 +423,7 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
     assertEquals(None, txnMetadata2.pendingState)
     assertEquals(CompleteCommit, txnMetadata2.state)
+    assertEquals(Errors.NONE, errors)
   }
 
   private def createPidErrorMap(errors: Errors) = {

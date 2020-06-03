@@ -491,11 +491,8 @@ class TransactionCoordinator(brokerId: Int,
                   responseCallback(err)
 
                 case Right((txnMetadata, newPreSendMetadata)) =>
-                  // we can respond to the client immediately and continue to write the txn markers if
-                  // the log append was successful
-                  responseCallback(Errors.NONE)
-
-                  txnMarkerChannelManager.addTxnMarkersToSend(coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
+                  txnMarkerChannelManager.addTxnMarkersToSend(coordinatorEpoch, txnMarkerResult, txnMetadata,
+                    newPreSendMetadata, Some(responseCallback))
               }
             } else {
               info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +

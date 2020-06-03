@@ -17,6 +17,7 @@
 package kafka.utils
 
 import joptsimple.OptionParser
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{Metric, MetricName}
 
 import scala.collection.mutable
@@ -34,6 +35,19 @@ object ToolsUtils {
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
     if(!isValid)
       CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
+  }
+
+  def maybeResonseCallback(responseCallbackOpt: Option[Errors => Unit],
+                           errors: Errors): Unit = {
+    if (responseCallbackOpt.isDefined) {
+      val responseErrors = errors match {
+        case errors@(Errors.NONE | Errors.NOT_COORDINATOR | Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+          errors
+        case _ =>
+          Errors.UNKNOWN_SERVER_ERROR
+      }
+      responseCallbackOpt.get(responseErrors)
+    }
   }
 
   /**
