@@ -415,16 +415,6 @@ public class ClientStateTest {
     }
 
     @Test
-    public void shouldReturnZeroForAllTasksIfLagNotComputed() {
-        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_1, 0L));
-        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, Task.LATEST_OFFSET));
-        client.addPreviousTasksAndOffsetSums("c3", Collections.singletonMap(TASK_0_3, 500L));
-        assertThat(client.lagFor(TASK_0_1), equalTo(0L));
-        assertThat(client.lagFor(TASK_0_2), equalTo(0L));
-        assertThat(client.lagFor(TASK_0_3), equalTo(0L));
-    }
-
-    @Test
     public void shouldThrowIllegalStateExceptionOnLagForUnknownTask() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 0L);
         final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
