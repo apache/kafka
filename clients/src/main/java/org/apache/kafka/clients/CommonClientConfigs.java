@@ -182,7 +182,7 @@ public class CommonClientConfigs {
         if (clientDnsLookupValue.equals(ClientDnsLookup.DEFAULT.toString()))
             log.warn("Configuration '{}' with value '{}' is deprecated and will be removed in " +
                 "future version. Please use '{}' or another non-deprecated value.",
-                CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT.toString(),
+                CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT,
                 ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 }
