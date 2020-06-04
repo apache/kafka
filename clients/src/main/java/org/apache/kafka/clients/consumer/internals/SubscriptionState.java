@@ -440,12 +440,13 @@ public class SubscriptionState {
      * Enter the offset validation state if the leader for this partition is known to support a usable version of the
      * OffsetsForLeaderEpoch API. If the leader node does not support the API, simply complete the offset validation.
      *
-     * @param apiVersions
-     * @param tp
-     * @param leaderAndEpoch
+     * @param apiVersions supported API versions
+     * @param tp topic partition to validate
+     * @param leaderAndEpoch leader epoch of the topic partition
      * @return true if we enter the offset validation state
      */
-    public synchronized boolean maybeValidatePositionForCurrentLeader(ApiVersions apiVersions, TopicPartition tp,
+    public synchronized boolean maybeValidatePositionForCurrentLeader(ApiVersions apiVersions,
+                                                                      TopicPartition tp,
                                                                       Metadata.LeaderAndEpoch leaderAndEpoch) {
         if (leaderAndEpoch.leader.isPresent()) {
             NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
