@@ -604,9 +604,15 @@ public class TaskManager {
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
 
-            if (offset == Task.LATEST_OFFSET) {
+
+            if (offset == Task.LATEST_OFFSET) { // this condition can only be true for active tasks; never for standby
+                // for this case, the offset of all partitions is set to `LATEST_OFFSET`
+                // and we "forward" the sentinel value directly
                 return Task.LATEST_OFFSET;
             } else {
+                if (offset < 0) {
+                    throw new IllegalStateException("Offset should not be negative.");
+                }
                 offsetSum += offset;
                 if (offsetSum < 0) {
                     log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
