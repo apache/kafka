@@ -603,13 +603,7 @@ public class KafkaAdminClientTest {
                     new DeleteTopicsOptions()).values();
             values.get("myTopic").get();
 
-            try {
-                values.get("myOtherTopic").get();
-                fail("Expected an exception.");
-            } catch (ExecutionException e) {
-                assertTrue("Expected an ExecutionException wrapping an ApiException, but got " + Utils.stackTrace(e),
-                        e.getCause() instanceof ApiException);
-            }
+            TestUtils.assertFutureThrows(values.get("myOtherTopic"), ApiException.class);
         }
     }
 
@@ -3488,13 +3482,7 @@ public class KafkaAdminClientTest {
             logDirs.put(tpr2, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
             assertNull(result.values().get(tpr1).get());
-            try {
-                result.values().get(tpr2).get();
-                fail("Expected an exception.");
-            } catch (ExecutionException e) {
-                assertTrue("Expected an ExecutionException wrapping an ApiException, but got " + Utils.stackTrace(e),
-                        e.getCause() instanceof ApiException);
-            }
+            TestUtils.assertFutureThrows(result.values().get(tpr2), ApiException.class);
         }
     }
 
