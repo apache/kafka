@@ -272,7 +272,7 @@ public class KafkaAdminClientTest {
 
     private static Cluster mockBootstrapCluster() {
         return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
+                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {

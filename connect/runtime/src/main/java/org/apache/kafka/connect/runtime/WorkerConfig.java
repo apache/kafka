@@ -277,7 +277,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
-                        ClientDnsLookup.DEFAULT.toString(),
+                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                         in(ClientDnsLookup.DEFAULT.toString(),
                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
