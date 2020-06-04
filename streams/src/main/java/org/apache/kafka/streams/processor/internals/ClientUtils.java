@@ -104,7 +104,7 @@ public class ClientUtils {
      * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
      */
     public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
-                                                                  final Consumer<byte[], byte[]> mainConsumer) {
+                                                                  final Consumer<byte[], byte[]> consumer) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -112,7 +112,7 @@ public class ClientUtils {
         final Map<TopicPartition, Long> committedOffsets;
         try {
             // those which do not have a committed offset would default to 0
-            committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
+            committedOffsets =  consumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
         } catch (final TimeoutException e) {
             LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
@@ -136,7 +136,7 @@ public class ClientUtils {
      * A helper method that wraps the {@code Future#get} call and rethrows any thrown exception as a StreamsException
      * @throws StreamsException if the admin client request throws an exception
      */
-    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture) {
+    public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture) {
         try {
             return endOffsetsFuture.get();
         } catch (final RuntimeException | InterruptedException | ExecutionException e) {
@@ -150,6 +150,9 @@ public class ClientUtils {
      */
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
                                                                              final Admin adminClient) {
-        return fetchEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
     }
 }

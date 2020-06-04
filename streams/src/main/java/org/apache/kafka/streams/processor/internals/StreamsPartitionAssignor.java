@@ -35,7 +35,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
@@ -74,7 +73,6 @@ import java.util.stream.Collectors;
 import static java.util.Comparator.comparingLong;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
@@ -792,7 +790,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
                 fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());
 
-            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = fetchEndOffsets(endOffsetsFuture);
+            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(
                 changelogsByStatefulTask,
