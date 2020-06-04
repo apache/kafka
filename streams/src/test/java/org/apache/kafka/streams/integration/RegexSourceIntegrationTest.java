@@ -124,7 +124,7 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test-" + topicSuffixGenerator.get(),
                                                                  CLUSTER.bootstrapServers(),
                                                                  STRING_SERDE_CLASSNAME,
                                                                  STRING_SERDE_CLASSNAME,
@@ -142,83 +142,89 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
+        try {
+            final Serde<String> stringSerde = Serdes.String();
 
-        final Serde<String> stringSerde = Serdes.String();
+            final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
+            // we compare lists of subscribed topics and hence requiring the order as well; this is guaranteed
+            // with KIP-429 since we would NOT revoke TEST-TOPIC-1 but only add TEST-TOPIC-2 so the list is always
+            // in the order of "TEST-TOPIC-1, TEST-TOPIC-2". Note if KIP-429 behavior ever changed it may become a flaky test
+            final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
 
-        final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
-        // we compare lists of subscribed topics and hence requiring the order as well; this is guaranteed
-        // with KIP-429 since we would NOT revoke TEST-TOPIC-1 but only add TEST-TOPIC-2 so the list is always
-        // in the order of "TEST-TOPIC-1, TEST-TOPIC-2". Note if KIP-429 behavior ever changed it may become a flaky test
-        final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
+            CLUSTER.createTopic("TEST-TOPIC-1");
 
-        CLUSTER.createTopic("TEST-TOPIC-1");
+            final StreamsBuilder builder = new StreamsBuilder();
 
-        final StreamsBuilder builder = new StreamsBuilder();
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
-        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+            pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+            final List<String> assignedTopics = new CopyOnWriteArrayList<>();
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        }
+                    };
 
-        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
-        final List<String> assignedTopics = new CopyOnWriteArrayList<>();
-        streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
-            @Override
-            public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-                return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
-                    @Override
-                    public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                        super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
-                    }
-                };
+                }
+            });
 
-            }
-        });
+            streams.start();
+            TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
 
-        streams.start();
-        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
+            CLUSTER.createTopic("TEST-TOPIC-2");
 
-        CLUSTER.createTopic("TEST-TOPIC-2");
+            TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
 
-        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
-
-        streams.close();
-        CLUSTER.deleteTopicsAndWait("TEST-TOPIC-1", "TEST-TOPIC-2");
+            streams.close();
+        } finally {
+            CLUSTER.deleteTopicsAndWait("TEST-TOPIC-1", "TEST-TOPIC-2");
+        }
     }
 
     @Test
     public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
-        CLUSTER.createTopic(topic1);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-        pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-        streams = new KafkaStreams(builder.build(), streamsConfiguration);
         final String topic2 = "TEST-TOPIC-2";
-        streams.start();
 
-        CLUSTER.createTopic(topic2);
+        try {
+            CLUSTER.createTopic(topic1);
 
-        final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
-        final KeyValue<String, String> record2 = new KeyValue<>("2", "2");
-        IntegrationTestUtils.produceKeyValuesSynchronously(
+            final StreamsBuilder builder = new StreamsBuilder();
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+            pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+            streams = new KafkaStreams(builder.build(), streamsConfiguration);
+            streams.start();
+
+            CLUSTER.createTopic(topic2);
+
+            final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
+            final KeyValue<String, String> record2 = new KeyValue<>("2", "2");
+            IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic1,
                 Collections.singletonList(record1),
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
                 CLUSTER.time
-        );
-        IntegrationTestUtils.produceKeyValuesSynchronously(
+            );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic2,
                 Collections.singletonList(record2),
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
                 CLUSTER.time
-        );
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
                 TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
                 outputTopic,
                 Arrays.asList(record1, record2)
-        );
+            );
 
-        streams.close();
-        CLUSTER.deleteTopicsAndWait(topic1, topic2);
+            streams.close();
+        } finally {
+            CLUSTER.deleteTopicsAndWait(topic1, topic2);
+        }
     }
 
     private String createTopic(final int suffix) throws InterruptedException {
@@ -229,37 +235,38 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
-
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
         final List<String> expectedSecondAssignment = Collections.singletonList("TEST-TOPIC-B");
-
-        CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
-
-        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
-
         final List<String> assignedTopics = new CopyOnWriteArrayList<>();
-        streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
-            @Override
-            public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-                return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
-                    @Override
-                    public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                        super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
-                    }
-                };
-            }
-        });
+
+        try {
+            CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
+
+            final StreamsBuilder builder = new StreamsBuilder();
+
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
+
+            pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        }
+                    };
+                }
+            });
 
 
-        streams.start();
-        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
-
-        CLUSTER.deleteTopic("TEST-TOPIC-A");
+            streams.start();
+            TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
+        } finally {
+            CLUSTER.deleteTopic("TEST-TOPIC-A");
+        }
 
         TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
     }
