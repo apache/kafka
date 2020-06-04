@@ -495,13 +495,7 @@ public class KafkaAdminClientTest {
                            new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(10000));
             topicsResult.values().get("myTopic").get();
-            try {
-                topicsResult.values().get("myTopic2").get();
-                fail("Expected an exception.");
-            } catch (ExecutionException e) {
-                assertTrue("Expected an ExecutionException wrapping an ApiException, but got " + Utils.stackTrace(e),
-                        e.getCause() instanceof ApiException);
-            }
+            TestUtils.assertFutureThrows(topicsResult.values().get("myTopic2"), ApiException.class);
         }
     }
 
