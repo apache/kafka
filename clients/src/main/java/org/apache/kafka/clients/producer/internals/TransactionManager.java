@@ -379,7 +379,7 @@ public class TransactionManager {
 
             EndTxnHandler handler = new EndTxnHandler(builder);
             enqueueRequest(handler);
-            if (!shouldBumpEpoch()) {
+            if (!epochBumpRequired) {
                 return handler.result;
             }
         }
@@ -553,10 +553,6 @@ public class TransactionManager {
         this.partitionsToRewriteSequences.add(tp);
     }
 
-    private boolean shouldBumpEpoch() {
-        return epochBumpRequired;
-    }
-
     private void bumpIdempotentProducerEpoch() {
         if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
             resetIdempotentProducerId();
@@ -577,7 +573,7 @@ public class TransactionManager {
 
     synchronized void bumpIdempotentEpochAndResetIdIfNeeded() {
         if (!isTransactional()) {
-            if (shouldBumpEpoch()) {
+            if (epochBumpRequired) {
                 bumpIdempotentProducerEpoch();
             }
             if (currentState != State.INITIALIZING && !hasProducerId()) {
@@ -1014,10 +1010,14 @@ public class TransactionManager {
 
             if (!isTransactional()) {
                 // For the idempotent producer, always retry UNKNOWN_PRODUCER_ID errors. If the batch has the current
-                // producer ID and epoch, request a bump of the epoch. Otherwise just retry, as the
+                // producer ID and epoch, request a bump of the epoch. Otherwise just retry the produce.
                 requestEpochBumpForPartition(batch.topicPartition);
                 return true;
             }
+        } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+            // Retry the initProducerId to bump the epoch and continue.
+            requestEpochBumpForPartition(batch.topicPartition);
+            return true;
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
                     (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))) {

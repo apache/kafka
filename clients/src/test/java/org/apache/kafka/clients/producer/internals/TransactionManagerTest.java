@@ -1683,6 +1683,20 @@ public class TransactionManagerTest {
 
         runUntil(responseFuture::isDone);
         assertFalse(transactionManager.hasError());
+
+        transactionManager.beginCommit();
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
+
+        // First we will get an EndTxn for commit.
+        assertNotNull(handler);
+        assertTrue(handler.requestBuilder() instanceof EndTxnRequest.Builder);
+
+        handler = transactionManager.nextRequest(false);
+
+        // Second we will see an InitPid for handling InvalidProducerEpoch.
+        assertNotNull(handler);
+        assertTrue(handler.requestBuilder() instanceof InitProducerIdRequest.Builder);
     }
 
     @Test
