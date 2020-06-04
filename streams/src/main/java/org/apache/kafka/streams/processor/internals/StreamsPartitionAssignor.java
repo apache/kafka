@@ -882,17 +882,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final SortedSet<String> consumers = clientMetadata.consumers;
 
             final Map<String, List<TaskId>> activeTaskAssignment = assignTasksToThreads(
-                    state.statefulActiveTasks(),
-                    state.statelessActiveTasks(),
-                    consumers,
-                    state
+                state.statefulActiveTasks(),
+                state.statelessActiveTasks(),
+                consumers,
+                state
             );
 
             final Map<String, List<TaskId>> standbyTaskAssignment = assignTasksToThreads(
-                    state.standbyTasks(),
-                    Collections.emptySet(),
-                    consumers,
-                    state
+                state.standbyTasks(),
+                Collections.emptySet(),
+                consumers,
+                state
             );
 
             // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance
