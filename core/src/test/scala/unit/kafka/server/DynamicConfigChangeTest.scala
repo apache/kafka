@@ -27,9 +27,9 @@ import org.easymock.EasyMock
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
-import kafka.admin.AdminOperationException
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -196,9 +196,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val logProps = new Properties()
       logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
       adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with AdminOperationException for topic doesn't exist")
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
-      case _: AdminOperationException => // expected
+      case _: UnknownTopicOrPartitionException => // expected
     }
   }
 
