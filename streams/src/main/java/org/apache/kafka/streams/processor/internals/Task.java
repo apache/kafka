@@ -145,12 +145,12 @@ public interface Task {
      *
      * @throws StreamsException fatal error, should close the thread
      */
-    Map<TopicPartition, Long> prepareCloseClean();
+    void prepareCloseClean();
 
     /**
      * Must be idempotent.
      */
-    void closeClean(final Map<TopicPartition, Long> checkpoint);
+    void closeClean();
 
     /**
      * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.

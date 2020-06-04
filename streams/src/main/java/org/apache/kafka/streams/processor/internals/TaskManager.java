@@ -189,7 +189,7 @@ public class TaskManager {
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
-        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Set<Task> tasksToClose = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
@@ -209,11 +209,11 @@ public class TaskManager {
                 tasksToRecycle.add(task);
             } else {
                 try {
-                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
                         .committableOffsetsAndMetadata();
 
-                    checkpointPerTask.put(task, checkpoint);
+                    tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -249,20 +249,17 @@ public class TaskManager {
                 log.error("Failed to batch commit tasks, " +
                     "will close all tasks involved in this commit as dirty by the end", e);
                 dirtyTasks.addAll(additionalTasksForCommitting);
-                dirtyTasks.addAll(checkpointPerTask.keySet());
+                dirtyTasks.addAll(tasksToClose);
 
-                checkpointPerTask.clear();
+                tasksToClose.clear();
                 // Just add first taskId to re-throw by the end.
                 taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
             }
         }
 
-        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
-            final Task task = taskAndCheckpoint.getKey();
-            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
-
+        for (final Task task : tasksToClose) {
             try {
-                completeTaskCloseClean(task, checkpoint);
+                completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
@@ -630,9 +627,9 @@ public class TaskManager {
         task.closeDirty();
     }
 
-    private void completeTaskCloseClean(final Task task, final Map<TopicPartition, Long> checkpoint) {
+    private void completeTaskCloseClean(final Task task) {
         cleanupTask(task);
-        task.closeClean(checkpoint);
+        task.closeClean();
     }
 
     // Note: this MUST be called *before* actually closing the task
@@ -651,16 +648,16 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Set<Task> tasksToClose = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : tasks.values()) {
             if (clean) {
                 try {
-                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
 
-                    checkpointPerTask.put(task, checkpoint);
+                    tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -680,11 +677,9 @@ public class TaskManager {
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
         }
 
-        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
-            final Task task = taskAndCheckpoint.getKey();
-            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
+        for (final Task task : tasksToClose) {
             try {
-                completeTaskCloseClean(task, checkpoint);
+                completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
                 closeTaskDirty(task);

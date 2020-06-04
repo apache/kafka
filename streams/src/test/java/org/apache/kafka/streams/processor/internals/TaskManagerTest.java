@@ -604,7 +604,7 @@ public class TaskManagerTest {
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
         };
@@ -1116,7 +1116,7 @@ public class TaskManagerTest {
         final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
 
@@ -1134,7 +1134,7 @@ public class TaskManagerTest {
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
 
@@ -1452,13 +1452,13 @@ public class TaskManagerTest {
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
         };
@@ -2274,14 +2274,14 @@ public class TaskManagerTest {
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t2 close exception", new RuntimeException());
             }
         };
@@ -2304,14 +2304,14 @@ public class TaskManagerTest {
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
             }
         };
@@ -2333,14 +2333,14 @@ public class TaskManagerTest {
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new KafkaException("Kaboom for t2!", new RuntimeException());
             }
         };
@@ -2704,15 +2704,13 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> prepareCloseClean() {
-            return Collections.emptyMap();
-        }
+        public void prepareCloseClean() {}
 
         @Override
         public void prepareCloseDirty() {}
 
         @Override
-        public void closeClean(final Map<TopicPartition, Long> checkpoint) {
+        public void closeClean() {
             transitionTo(State.CLOSED);
         }
 

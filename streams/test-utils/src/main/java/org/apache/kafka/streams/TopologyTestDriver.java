@@ -1180,8 +1180,8 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-            task.closeClean(checkpoint);
+            task.prepareCloseClean();
+            task.closeClean();
         }
         if (globalStateTask != null) {
             try {

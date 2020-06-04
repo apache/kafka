@@ -1567,8 +1567,8 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        task.closeClean(checkpoint);
+        task.prepareCloseClean();
+        task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
         assertFalse(source1.initialized);
@@ -1642,8 +1642,8 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
         task.initializeIfNeeded();
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        task.closeClean(checkpoint);
+        task.prepareCloseClean();
+        task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
 
@@ -1668,8 +1668,8 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
         task.completeRestoration();
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        task.closeClean(checkpoint);
+        task.prepareCloseClean();
+        task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
 
@@ -1696,8 +1696,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        assertThrows(ProcessorStateException.class, () -> task.closeClean(checkpoint));
+        task.prepareCloseClean();
+        assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -1760,8 +1760,8 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
 
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        assertThrows(ProcessorStateException.class, () -> task.closeClean(checkpoint));
+        task.prepareCloseClean();
+        assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         assertEquals(Task.State.RESTORING, task.state());
 
@@ -1795,11 +1795,11 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        task.closeClean(checkpoint);
+        task.prepareCloseClean();
+        task.closeClean();
 
         // close calls are idempotent since we are already in closed
-        task.closeClean(checkpoint);
+        task.closeClean();
         task.closeDirty();
 
         EasyMock.reset(stateManager);
