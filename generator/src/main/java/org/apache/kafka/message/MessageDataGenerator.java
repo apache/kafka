@@ -1436,8 +1436,8 @@ public final class MessageDataGenerator {
             alwaysEmitBlockScope(type.isString()).
             ifNull(() -> {
                 VersionConditional.forVersions(nullableVersions, possibleVersions).
-                    ifMember(__ -> {
-                        VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
+                    ifMember(presentVersions -> {
+                        VersionConditional.forVersions(fieldFlexibleVersions, presentVersions).
                             ifMember(___ -> {
                                 buffer.printf("_writable.writeUnsignedVarint(0);%n");
                             }).
