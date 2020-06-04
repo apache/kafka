@@ -800,7 +800,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 sourceChangelogEndOffsets,
                 newlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
-        } catch (final StreamsException e) {
+        } catch (final RuntimeException e) {
             allTaskEndOffsetSums = changelogsByStatefulTask.keySet().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
             fetchEndOffsetsSuccessful = false;
         }

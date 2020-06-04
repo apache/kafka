@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -100,6 +101,7 @@ public class ClientUtils {
 
     /**
      * @throws StreamsException if the consumer throws an exception
+     * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
      */
     public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
                                                                   final Consumer<byte[], byte[]> mainConsumer) {
@@ -112,8 +114,11 @@ public class ClientUtils {
             // those which do not have a committed offset would default to 0
             committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+        } catch (final TimeoutException e) {
+            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
+            throw e;
         } catch (final KafkaException e) {
-            LOG.warn("committed offsets request failed.", e);
+            LOG.warn("The committed offsets request failed.", e);
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
 
@@ -131,11 +136,11 @@ public class ClientUtils {
      * A helper method that wraps the {@code Future#get} call and rethrows any thrown exception as a StreamsException
      * @throws StreamsException if the admin client request throws an exception
      */
-    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture)  {
+    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture) {
         try {
             return endOffsetsFuture.get();
         } catch (final RuntimeException | InterruptedException | ExecutionException e) {
-            LOG.warn("listOffsets request failed.", e);
+            LOG.warn("The listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
     }

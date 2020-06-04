@@ -540,6 +540,7 @@ public class StoreChangelogReader implements ChangelogReader {
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
             } catch (final Exception e) {
+
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
         }
@@ -549,13 +550,9 @@ public class StoreChangelogReader implements ChangelogReader {
         final Map<TopicPartition, Long> committedOffsets;
         try {
             committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
-        } catch (final StreamsException e) {
-            if (e.getCause() instanceof TimeoutException) {
-                // if it timed out we just retry next time
-                return Collections.emptyMap();
-            } else {
-                throw e;
-            }
+        } catch (final TimeoutException e) {
+            // if it timed out we just retry next time
+            return Collections.emptyMap();
         }
         lastUpdateOffsetTime = time.milliseconds();
         return committedOffsets;
