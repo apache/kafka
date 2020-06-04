@@ -41,8 +41,8 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -272,8 +272,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
-
+    public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
         final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
@@ -284,26 +283,19 @@ public class RegexSourceIntegrationTest {
         topology.addStateStore(storeBuilder, "my-processor");
 
         streams = new KafkaStreams(topology, streamsConfiguration);
+        streams.start();
 
-        try {
-            streams.start();
+        final TestCondition stateStoreNameBoundToSourceTopic = () -> {
+            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
+            final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
+            return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
+        };
 
-            final TestCondition stateStoreNameBoundToSourceTopic = () -> {
-                final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
-                final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
-                return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
-            };
-
-            TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
-
-        } finally {
-            streams.close();
-        }
+        TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
     }
 
     @Test
     public void testShouldReadFromRegexAndNamedTopics() throws Exception {
-
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
         final String topicATestMessage = "topic-A test";
@@ -353,7 +345,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
-
         KafkaStreams partitionedStreamsLeader = null;
         KafkaStreams partitionedStreamsFollower = null;
         try {
@@ -408,12 +399,10 @@ public class RegexSourceIntegrationTest {
                 partitionedStreamsFollower.close();
             }
         }
-
     }
 
     @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
-
         final String fMessage = "fMessage";
         final String fooMessage = "fooMessage";
         final Serde<String> stringSerde = Serdes.String();
