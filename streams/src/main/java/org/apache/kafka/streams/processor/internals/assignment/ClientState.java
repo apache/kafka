@@ -302,14 +302,19 @@ public class ClientState {
      * @return end offset sum - offset sum
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
-    long lagFor(final TaskId task) {
-        final Long totalLag = taskLagTotals.get(task);
+    public long lagFor(final TaskId task) {
+        final Long totalLag;
+        if (taskLagTotals.isEmpty()) {
+            // If we couldn't compute the task lags due to failure to fetch offsets, just return a flat constant
+            totalLag = 0L;
+        } else {
+            totalLag = taskLagTotals.get(task);
+        }
 
         if (totalLag == null) {
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
-        } else {
-            return totalLag;
         }
+        return totalLag;
     }
 
     public Set<TaskId> statefulActiveTasks() {
@@ -320,18 +325,8 @@ public class ClientState {
         return activeTasks.stream().filter(task -> !isStateful(task)).collect(Collectors.toSet());
     }
 
-    // Return a list of that consumer's previous tasks in increasing lag order
-    public SortedSet<TaskId> previousTasksForConsumer(final String memberId) {
-        final Set<TaskId> prevTasks = consumerToPreviousStatefulTaskIds.get(memberId);
-
-        // If we were unable to fetch the end offsets and could not compute lags, just return in task order
-        if (taskLagTotals.isEmpty()) {
-            return new TreeSet<>(prevTasks);
-        } else {
-            final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(this::lagFor).thenComparing(TaskId::compareTo));
-            prevTasksByLag.addAll(prevTasks);
-            return prevTasksByLag;
-        }
+    public Set<TaskId> previousTasksForConsumer(final String memberId) {
+        return consumerToPreviousStatefulTaskIds.get(memberId);
     }
 
     boolean hasUnfulfilledQuota(final int tasksPerThread) {

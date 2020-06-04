@@ -70,6 +70,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Comparator.comparingLong;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
@@ -1099,7 +1100,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final List<TaskId> threadAssignment = assignment.get(consumer);
 
                 int i = 0;
-                for (final TaskId task : state.previousTasksForConsumer(consumer)) {
+                for (final TaskId task : getPreviousTasksByLag(state, consumer)) {
                     if (unassignedStatefulTasks.contains(task)) {
                         if (i < minStatefulTasksPerThread) {
                             threadAssignment.add(task);
@@ -1177,6 +1178,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         return assignment;
+    }
+
+    private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
+        final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
+        prevTasksByLag.addAll(state.previousTasksForConsumer(consumer));
+        return prevTasksByLag;
     }
 
     private void validateMetadataVersions(final int receivedAssignmentMetadataVersion,
