@@ -1138,7 +1138,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 for (final Map.Entry<TaskId, String> taskEntry : unassignedTaskToPreviousOwner.entrySet()) {
                     final TaskId task = taskEntry.getKey();
                     final String consumer = taskEntry.getValue();
-                    if (consumersToFill.contains(consumer)) {
+                    if (consumersToFill.contains(consumer) && unassignedStatefulTasks.contains(task)) {
                         assignment.get(consumer).add(task);
                         unassignedStatefulTasks.remove(task);
                         // Remove this consumer since we know it is now at minCapacity + 1
