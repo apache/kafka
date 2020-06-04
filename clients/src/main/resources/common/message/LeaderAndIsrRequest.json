@@ -43,6 +43,8 @@
       { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "2+",
         "about": "The state of each partition" }
     ]},
+    // In v1+ requests, LiveLeaders is not populated anymore starting from AK 2.7 as it is
+    // only used by AK 0.8.
     { "name": "LiveLeaders", "type": "[]LeaderAndIsrLiveLeader", "versions": "0+",
       "about": "The current live leaders.", "fields": [
       { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",

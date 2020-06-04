@@ -472,10 +472,18 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         }
         stateChangeLog.info(s"Sending LeaderAndIsr request to broker $broker with $numBecomeLeaders become-leader " +
           s"and ${leaderAndIsrPartitionStates.size - numBecomeLeaders} become-follower partitions")
-        val leaderIds = leaderAndIsrPartitionStates.map(_._2.leader).toSet
-        val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
-          _.node(config.interBrokerListenerName)
+
+        // In v1+ requests, LiveLeaders is not populated anymore starting from AK 2.7 as it is
+        // only used by AK 0.8 (v0).
+        val leaders = if (leaderAndIsrRequestVersion == 0) {
+          val leaderIds = leaderAndIsrPartitionStates.map(_._2.leader).toSet
+          controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
+            _.node(config.interBrokerListenerName)
+          }
+        } else {
+          Set.empty[Node]
         }
+
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)

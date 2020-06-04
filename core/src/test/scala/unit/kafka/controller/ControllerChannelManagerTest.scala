@@ -185,8 +185,16 @@ class ControllerChannelManagerTest {
 
     val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(2)
     assertEquals(1, leaderAndIsrRequests.size)
+    val leaderAndIsrRequest = leaderAndIsrRequests.head
     assertEquals(s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion",
-      expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
+      expectedLeaderAndIsrVersion, leaderAndIsrRequest.version)
+    assertEquals(Seq(partition), leaderAndIsrRequest.partitionStates
+      .asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+    if (expectedLeaderAndIsrVersion == 0) {
+      assertEquals(Set(1), leaderAndIsrRequest.liveLeaders.asScala.map(_.brokerId).toSet)
+    } else {
+      assertTrue(leaderAndIsrRequest.liveLeaders.isEmpty)
+    }
   }
 
   @Test
