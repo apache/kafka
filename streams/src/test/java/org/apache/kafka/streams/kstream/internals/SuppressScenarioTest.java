@@ -138,19 +138,19 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("x", 1L, 3L)
                 )
             );
-            inputTopic.pipeInput("x", "x", 4L);
+            inputTopic.pipeInput("x", "y", 4L);
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("x", 0L, 4L),
-                    new KeyValueTimestamp<>("x", 1L, 4L)
+                    new KeyValueTimestamp<>("y", 1L, 4L)
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("x", 0L, 4L),
-                    new KeyValueTimestamp<>("x", 1L, 4L)
+                    new KeyValueTimestamp<>("y", 1L, 4L)
                 )
             );
         }
@@ -209,12 +209,12 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("tick", "tick", 4L);
+            inputTopic.pipeInput("tick", "tock", 4L);
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("tick", 0L, 4L),
-                    new KeyValueTimestamp<>("tick", 1L, 4L)
+                    new KeyValueTimestamp<>("tock", 1L, 4L)
                 )
             );
             // tick is still buffered, since it was first inserted at time 3, and it is only time 4 right now.
@@ -614,11 +614,11 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopicRight.pipeInput("tick", "tick", 21L);
+            inputTopicRight.pipeInput("tick", "tick1", 21L);
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("tick", "(null,tick)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("tick", "(null,tick1)", 21), // just a testing artifact
                     new KeyValueTimestamp<>("A", "(b,2)", 13L)
                 )
             );
@@ -644,7 +644,6 @@ public class SuppressScenarioTest {
             .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         final Topology topology = builder.build();
-        System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -703,11 +702,11 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopicLeft.pipeInput("tick", "tick", 21L);
+            inputTopicLeft.pipeInput("tick", "tick1", 21L);
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("tick", "(tick,null)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("tick", "(tick1,null)", 21), // just a testing artifact
                     new KeyValueTimestamp<>("A", "(2,b)", 13L)
                 )
             );

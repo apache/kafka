@@ -26,10 +26,9 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
@@ -39,9 +38,10 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
+import scala.jdk.CollectionConverters._
 
 trait PartitionStateStore {
   def fetchTopicConfig(): Properties
@@ -307,17 +307,21 @@ class Partition(val topicPartition: TopicPartition,
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
-    logManager.initializingLog(topicPartition)
-    var maybeLog: Option[Log] = None
-    try {
-      val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig, isNew, isFutureReplica)
+    def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
       }
       val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
       info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
+    }
+
+    logManager.initializingLog(topicPartition)
+    var maybeLog: Option[Log] = None
+    try {
+      val log = logManager.getOrCreateLog(topicPartition, () => fetchLogConfig, isNew, isFutureReplica)
       maybeLog = Some(log)
+      updateHighWatermark(log)
       log
     } finally {
       logManager.finishedInitializingLog(topicPartition, maybeLog, () => fetchLogConfig)
@@ -501,8 +505,8 @@ class Partition(val topicPartition: TopicPartition,
       val leaderEpochStartOffset = leaderLog.logEndOffset
       stateChangeLogger.info(s"Leader $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
         s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
-        s"ISR ${isr.mkString(",")} addingReplicas ${addingReplicas.mkString(",")} removingReplicas ${removingReplicas.mkString(",")}." +
-        s"Previous leader epoch was $leaderEpoch.")
+        s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
+        s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
@@ -533,8 +537,7 @@ class Partition(val topicPartition: TopicPartition,
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
             followerStartOffset = Log.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset,
-            lastSentHighwatermark = 0L)
+            leaderEndOffset = Log.UnknownOffset)
         }
       }
       // we may need to increment high watermark since ISR could be down to 1
@@ -590,7 +593,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Update the follower's state in the leader based on the last fetch request. See
-   * [[kafka.cluster.Replica#updateLogReadResult]] for details.
+   * [[Replica.updateFetchState()]] for details.
    *
    * @return true if the follower's fetch state was updated, false if the followerId is not recognized
    */
@@ -598,8 +601,7 @@ class Partition(val topicPartition: TopicPartition,
                                followerFetchOffsetMetadata: LogOffsetMetadata,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
-                               leaderEndOffset: Long,
-                               lastSentHighwatermark: Long): Boolean = {
+                               leaderEndOffset: Long): Boolean = {
     getReplica(followerId) match {
       case Some(followerReplica) =>
         // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
@@ -609,8 +611,7 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata,
           followerStartOffset,
           followerFetchTimeMs,
-          leaderEndOffset,
-          lastSentHighwatermark)
+          leaderEndOffset)
 
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
@@ -1124,7 +1125,7 @@ class Partition(val topicPartition: TopicPartition,
         if (convertedOffset < 0)
           throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
-        leaderLog.maybeIncrementLogStartOffset(convertedOffset)
+        leaderLog.maybeIncrementLogStartOffset(convertedOffset, ClientRecordDeletion)
         LogDeleteRecordsResult(
           requestedOffset = convertedOffset,
           lowWatermark = lowWatermarkIfLeader)

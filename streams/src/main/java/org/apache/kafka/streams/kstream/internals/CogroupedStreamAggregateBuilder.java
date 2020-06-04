@@ -177,6 +177,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 keySerde,
                 (Serde<VIn>) valueSerde,
                 repartitionTopicNamePrefix,
+                null,
                 (OptimizableRepartitionNodeBuilder<K, VIn>) optimizableRepartitionNodeBuilder);
 
     }

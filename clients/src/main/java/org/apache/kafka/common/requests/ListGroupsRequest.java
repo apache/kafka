@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -45,6 +46,10 @@ public class ListGroupsRequest extends AbstractRequest {
 
         @Override
         public ListGroupsRequest build(short version) {
+            if (!data.statesFilter().isEmpty() && version < 4) {
+                throw new UnsupportedVersionException("The broker only supports ListGroups " +
+                        "v" + version + ", but we need v4 or newer to request groups by states.");
+            }
             return new ListGroupsRequest(data, version);
         }
 
@@ -64,6 +69,10 @@ public class ListGroupsRequest extends AbstractRequest {
     public ListGroupsRequest(Struct struct, short version) {
         super(ApiKeys.LIST_GROUPS, version);
         this.data = new ListGroupsRequestData(struct, version);
+    }
+
+    public ListGroupsRequestData data() {
+        return data;
     }
 
     @Override

@@ -66,6 +66,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -1590,6 +1591,53 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testListOffsetNoUpdateMissingEpoch() {
+        buildFetcher();
+
+        // Set up metadata with no leader epoch
+        subscriptions.assignFromUser(singleton(tp0));
+        MetadataResponse metadataWithNoLeaderEpochs = TestUtils.metadataUpdateWith(
+                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> null);
+        client.updateMetadata(metadataWithNoLeaderEpochs);
+
+        // Return a ListOffsets response with leaderEpoch=1, we should ignore it
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(tp0, Errors.NONE, 1L, 5L, 1));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        // Reset should be satisfied and no metadata update requested
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(metadata.updateRequested());
+        assertFalse(metadata.lastSeenLeaderEpoch(tp0).isPresent());
+    }
+
+    @Test
+    public void testListOffsetUpdateEpoch() {
+        buildFetcher();
+
+        // Set up metadata with leaderEpoch=1
+        subscriptions.assignFromUser(singleton(tp0));
+        MetadataResponse metadataWithLeaderEpochs = TestUtils.metadataUpdateWith(
+                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 1);
+        client.updateMetadata(metadataWithLeaderEpochs);
+
+        // Reset offsets to trigger ListOffsets call
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Now we see a ListOffsets with leaderEpoch=2 epoch, we trigger a metadata update
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP, 1),
+                listOffsetResponse(tp0, Errors.NONE, 1L, 5L, 2));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(metadata.updateRequested());
+        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long) epoch, 2));
     }
 
     @Test
@@ -3278,9 +3326,7 @@ public class FetcherTest {
                 Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
-                    fetchedRecords.entrySet().forEach(entry -> {
-                        TopicPartition tp = entry.getKey();
-                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
+                    fetchedRecords.forEach((tp, records) -> {
                         assertEquals(2, records.size());
                         long nextOffset = nextFetchOffsets.get(tp);
                         assertEquals(nextOffset, records.get(0).offset());
@@ -3556,6 +3602,60 @@ public class FetcherTest {
     }
 
     @Test
+    public void testOffsetValidationRequestGrouping() {
+        buildFetcher();
+        assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
+
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 3,
+            Collections.emptyMap(), singletonMap(topicName, 4),
+            tp -> 5), false, 0L);
+
+        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                metadata.currentLeader(tp).leader, Optional.of(4));
+            subscriptions.seekUnvalidated(tp,
+                new SubscriptionState.FetchPosition(0, Optional.of(4), leaderAndEpoch));
+        }
+
+        Set<TopicPartition> allRequestedPartitions = new HashSet<>();
+
+        for (Node node : metadata.fetch().nodes()) {
+            apiVersions.update(node.idString(), NodeApiVersions.create());
+
+            Set<TopicPartition> expectedPartitions = subscriptions.assignedPartitions().stream()
+                .filter(tp ->
+                    metadata.currentLeader(tp).leader.equals(Optional.of(node)))
+                .collect(Collectors.toSet());
+
+            assertTrue(expectedPartitions.stream().noneMatch(allRequestedPartitions::contains));
+            assertTrue(expectedPartitions.size() > 0);
+            allRequestedPartitions.addAll(expectedPartitions);
+
+            Map<TopicPartition, EpochEndOffset> endOffsets = expectedPartitions.stream().collect(Collectors.toMap(
+                Function.identity(),
+                tp -> new EpochEndOffset(Errors.NONE, 4, 0)
+            ));
+
+            OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(endOffsets);
+            client.prepareResponseFrom(new MockClient.RequestMatcher() {
+                @Override
+                public boolean matches(AbstractRequest body) {
+                    OffsetsForLeaderEpochRequest request = (OffsetsForLeaderEpochRequest) body;
+                    return expectedPartitions.equals(request.epochsByTopicPartition().keySet());
+                }
+            }, response, node);
+        }
+
+        assertEquals(subscriptions.assignedPartitions(), allRequestedPartitions);
+
+        fetcher.validateOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertTrue(subscriptions.assignedPartitions()
+            .stream().noneMatch(subscriptions::awaitingValidation));
+    }
+
+    @Test
     public void testOffsetValidationAwaitsNodeApiVersion() {
         buildFetcher();
         assignFromUser(singleton(tp0));
@@ -3620,18 +3720,35 @@ public class FetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create(
             ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
 
-        // Seek with a position and leader+epoch
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
-                metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+        {
+            // Seek with a position and leader+epoch
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                    metadata.currentLeader(tp0).leader, Optional.of(epochOne));
+            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
-        // Update metadata to epoch=2, enter validation
-        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
-        fetcher.validateOffsetsIfNeeded();
+            // Update metadata to epoch=2, enter validation
+            metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+            fetcher.validateOffsetsIfNeeded();
 
-        // Offset validation is skipped
-        assertFalse(subscriptions.awaitingValidation(tp0));
+            // Offset validation is skipped
+            assertFalse(subscriptions.awaitingValidation(tp0));
+        }
+
+        {
+            // Seek with a position and leader+epoch
+            Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                    metadata.currentLeader(tp0).leader, Optional.of(epochOne));
+            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+
+            // Update metadata to epoch=2, enter validation
+            metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+
+            // Subscription should not stay in AWAITING_VALIDATION in prepareFetchRequest
+            assertEquals(1, fetcher.sendFetches());
+            assertFalse(subscriptions.awaitingValidation(tp0));
+        }
     }
 
     @Test
@@ -3711,7 +3828,7 @@ public class FetcherTest {
                 Optional.of(epochTwo),
                 new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochTwo)));
         subscriptions.position(tp0, nextPosition);
-        subscriptions.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochThree)));
+        subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp0, new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochThree)));
 
         // Prepare offset list response from async validation with epoch=2
         Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
@@ -4012,13 +4129,27 @@ public class FetcherTest {
         };
     }
 
+    private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp, final int leaderEpoch) {
+        // matches any list offset request with the provided timestamp
+        return body -> {
+            ListOffsetRequest req = (ListOffsetRequest) body;
+            return req.partitionTimestamps().equals(Collections.singletonMap(
+                    tp0, new ListOffsetRequest.PartitionData(timestamp, Optional.of(leaderEpoch))));
+        };
+    }
+
     private ListOffsetResponse listOffsetResponse(Errors error, long timestamp, long offset) {
         return listOffsetResponse(tp0, error, timestamp, offset);
     }
 
     private ListOffsetResponse listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
-        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp, offset,
-                Optional.empty());
+        return listOffsetResponse(tp, error, timestamp, offset, null);
+    }
+
+    private ListOffsetResponse listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset,
+                                                  Integer leaderEpoch) {
+        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(
+            error, timestamp, offset, Optional.ofNullable(leaderEpoch));
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
         return new ListOffsetResponse(allPartitionData);

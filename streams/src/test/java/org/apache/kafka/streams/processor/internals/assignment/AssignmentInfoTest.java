@@ -133,6 +133,15 @@ public class AssignmentInfoTest {
     }
 
     @Test
+    public void shouldEncodeAndDecodeVersion7() {
+        final AssignmentInfo info =
+            new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo =
+            new AssignmentInfo(7, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
     public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
         final int usedVersion = 5;
         final int commonlySupportedVersion = 5;
@@ -141,5 +150,24 @@ public class AssignmentInfoTest {
         final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,
             activeAssignment, Collections.emptyMap(), 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void nextRebalanceTimeShouldBeMaxValueByDefault() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldDecodeDefaultNextRebalanceTime() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeNextRebalanceTime() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        info.setNextRebalanceTime(1000L);
+        assertEquals(1000L, AssignmentInfo.decode(info.encode()).nextRebalanceMs());
     }
 }

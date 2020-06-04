@@ -102,176 +102,23 @@ public class ThreadMetricsTest {
     }
 
     @Test
-    public void shouldGetPunctuateRatioSensor() {
-        final String operation = "punctuate-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on punctuating active tasks";
+    public void shouldGetProcessRecordsSensor() {
+        final String operation = "process-records";
+        final String avgDescription = "The average number of records processed within an iteration";
+        final String maxDescription = "The maximum number of records processed within an iteration";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addValueMetricToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            ratioDescription
-        );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.punctuateRatioSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetPollRatioSensor() {
-        final String operation = "poll-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on polling records from consumer";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addValueMetricToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            ratioDescription
-        );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.pollRatioSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetCommitRatioSensor() {
-        final String operation = "commit-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on committing all tasks";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addValueMetricToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            ratioDescription
-        );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.commitRatioSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetCreateTaskSensor() {
-        final String operation = "task-created";
-        final String totalDescription = "The total number of newly created tasks";
-        final String rateDescription = "The average per-second number of newly created tasks";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            rateDescription,
-            totalDescription
-        );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.createTaskSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetCloseTaskSensor() {
-        final String operation = "task-closed";
-        final String totalDescription = "The total number of closed tasks";
-        final String rateDescription = "The average per-second number of closed tasks";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            rateDescription,
-            totalDescription
-        );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetCommitSensor() {
-        final String operation = "commit";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-        final String totalDescription = "The total number of calls to commit";
-        final String rateDescription = "The average per-second number of calls to commit";
-        final String avgLatencyDescription = "The average commit latency";
-        final String maxLatencyDescription = "The maximum commit latency";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operation,
-            rateDescription,
-            totalDescription
-        );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             threadLevelGroup,
             tagMap,
-            operationLatency,
-            avgLatencyDescription,
-            maxLatencyDescription);
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
-        final Sensor sensor = ThreadMetrics.commitSensor(THREAD_ID, streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetPollSensor() {
-        final String operation = "poll";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-        final String totalDescription = "The total number of calls to poll";
-        final String rateDescription = "The average per-second number of calls to poll";
-        final String avgLatencyDescription = "The average poll latency";
-        final String maxLatencyDescription = "The maximum poll latency";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
             operation,
-            rateDescription,
-            totalDescription
-        );
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedSensor,
-            threadLevelGroup,
-            tagMap,
-            operationLatency,
-            avgLatencyDescription,
-            maxLatencyDescription
+            avgDescription,
+            maxDescription
         );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
-        final Sensor sensor = ThreadMetrics.pollSensor(THREAD_ID, streamsMetrics);
+        final Sensor sensor = ThreadMetrics.processRecordsSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
@@ -325,6 +172,168 @@ public class ThreadMetricsTest {
     }
 
     @Test
+    public void shouldGetPollRatioSensor() {
+        final String operation = "poll-ratio";
+        final String ratioDescription = "The fraction of time the thread spent on polling records from consumer";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            ratioDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.pollRatioSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetPollRecordsSensor() {
+        final String operation = "poll-records";
+        final String avgDescription = "The average number of records polled from consumer within an iteration";
+        final String maxDescription = "The maximum number of records polled from consumer within an iteration";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            avgDescription,
+            maxDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.pollRecordsSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetPollSensor() {
+        final String operation = "poll";
+        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
+        final String totalDescription = "The total number of calls to poll";
+        final String rateDescription = "The average per-second number of calls to poll";
+        final String avgLatencyDescription = "The average poll latency";
+        final String maxLatencyDescription = "The maximum poll latency";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operationLatency,
+            avgLatencyDescription,
+            maxLatencyDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.pollSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetCommitSensor() {
+        final String operation = "commit";
+        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
+        final String totalDescription = "The total number of calls to commit";
+        final String rateDescription = "The average per-second number of calls to commit";
+        final String avgLatencyDescription = "The average commit latency";
+        final String maxLatencyDescription = "The maximum commit latency";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operationLatency,
+            avgLatencyDescription,
+            maxLatencyDescription);
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.commitSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetCommitRatioSensor() {
+        final String operation = "commit-ratio";
+        final String ratioDescription = "The fraction of time the thread spent on committing all tasks";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            ratioDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.commitRatioSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetCommitOverTasksSensor() {
+        final String operation = "commit";
+        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
+        final String totalDescription =
+            "The total number of calls to commit over all tasks assigned to one stream thread";
+        final String rateDescription =
+            "The average per-second number of calls to commit over all tasks assigned to one stream thread";
+        final String avgLatencyDescription =
+            "The average commit latency over all tasks assigned to one stream thread";
+        final String maxLatencyDescription =
+            "The maximum commit latency over all tasks assigned to one stream thread";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetPunctuateSensor() {
         final String operation = "punctuate";
         final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
@@ -359,6 +368,27 @@ public class ThreadMetricsTest {
     }
 
     @Test
+    public void shouldGetPunctuateRatioSensor() {
+        final String operation = "punctuate-ratio";
+        final String ratioDescription = "The fraction of time the thread spent on punctuating active tasks";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addValueMetricToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            ratioDescription
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.punctuateRatioSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetSkipRecordSensor() {
         final String operation = "skipped-records";
         final String totalDescription = "The total number of skipped records";
@@ -383,25 +413,49 @@ public class ThreadMetricsTest {
     }
 
     @Test
-    public void shouldGetCommitOverTasksSensor() {
-        final String operation = "commit";
-        final String totalDescription =
-            "The total number of calls to commit over all tasks assigned to one stream thread";
-        final String rateDescription =
-            "The average per-second number of calls to commit over all tasks assigned to one stream thread";
-        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
-        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
+    public void shouldGetCreateTaskSensor() {
+        final String operation = "task-created";
+        final String totalDescription = "The total number of newly created tasks";
+        final String rateDescription = "The average per-second number of newly created tasks";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            TASK_LEVEL_GROUP,
+            threadLevelGroup,
             tagMap,
             operation,
             rateDescription,
             totalDescription
         );
+
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
-        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
+        final Sensor sensor = ThreadMetrics.createTaskSensor(THREAD_ID, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetCloseTaskSensor() {
+        final String operation = "task-closed";
+        final String totalDescription = "The total number of closed tasks";
+        final String rateDescription = "The average per-second number of closed tasks";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));

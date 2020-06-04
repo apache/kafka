@@ -171,6 +171,16 @@ public interface Task {
     void closeDirty();
 
     /**
+     * Updates input partitions and topology after rebalance
+     */
+    void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology);
+
+    /**
+     * Attempt a clean close but do not close the underlying state
+     */
+    void closeAndRecycleState();
+
+    /**
      * Revive a closed task to a created one; should never throw an exception
      */
     void revive();
@@ -202,7 +212,7 @@ public interface Task {
 
     default void recordProcessBatchTime(final long processBatchTime) {}
 
-    default void recordProcessTimeRatio(final long allTaskProcessMs) {}
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
 
     default boolean process(final long wallClockTime) {
         return false;

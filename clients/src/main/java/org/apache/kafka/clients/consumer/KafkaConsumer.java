@@ -44,8 +44,10 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -612,27 +614,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
-     * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}.
-     * <p>
-     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
-     *
-     * @param configs The consumer configs
-     * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     */
-    public KafkaConsumer(Map<String, Object> configs,
-                         Deserializer<K> keyDeserializer,
-                         Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-            keyDeserializer,
-            valueDeserializer);
-    }
-
-    /**
      * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}.
@@ -662,12 +643,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
-             keyDeserializer, valueDeserializer);
+        this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
+    /**
+     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
+     * <p>
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     *
+     * @param configs The consumer configs
+     * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
+     *            won't be called in the consumer when the deserializer is passed in directly.
+     * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
+     *            won't be called in the consumer when the deserializer is passed in directly.
+     */
     @SuppressWarnings("unchecked")
-    private KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+    public KafkaConsumer(Map<String, Object> configs,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer) {
+        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -868,10 +864,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 .tags(metricsTags);
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
-        JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
-        return new Metrics(metricConfig, reporters, time);
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        return new Metrics(metricConfig, reporters, time, metricsContext);
     }
 
     /**
@@ -1015,8 +1013,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         maybeThrowInvalidGroupIdException();
-        if (pattern == null)
-            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
+        if (pattern == null || pattern.toString().equals(""))
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
 
         acquireAndEnsureOpen();
         try {

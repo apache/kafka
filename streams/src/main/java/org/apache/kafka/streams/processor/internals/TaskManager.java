@@ -155,9 +155,6 @@ public class TaskManager {
             final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
 
-            // this call is idempotent so even if the task is only CREATED we can still call it
-            changelogReader.remove(task.changelogPartitions());
-
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
@@ -183,8 +180,14 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
-        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
+        final Set<Task> tasksToRecycle = new HashSet<>();
+
+        builder.addSubscribedTopicsFromAssignment(
+            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            logPrefix
+        );
 
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
@@ -194,62 +197,63 @@ public class TaskManager {
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
 
-        final Iterator<Task> iterator = tasks.values().iterator();
-        while (iterator.hasNext()) {
-            final Task task = iterator.next();
+        for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
                 if (task.commitNeeded()) {
                     additionalTasksForCommitting.add(task);
                 }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
-            } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
-                cleanupTask(task);
-
+                // check for tasks that were owned previously but have changed active/standby status
+            } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
+                tasksToRecycle.add(task);
+            } else {
                 try {
                     final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
+                        .committableOffsetsAndMetadata();
 
                     checkpointPerTask.put(task, checkpoint);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
                 } catch (final RuntimeException e) {
-                    final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                    final String uncleanMessage = String.format(
+                        "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
+                        task.id());
                     log.error(uncleanMessage, e);
                     taskCloseExceptions.put(task.id(), e);
                     // We've already recorded the exception (which is the point of clean).
                     // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                    task.prepareCloseDirty();
                     dirtyTasks.add(task);
                 }
-
-                iterator.remove();
             }
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            for (final Task task : additionalTasksForCommitting) {
-                task.prepareCommit();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                }
-            }
-
             try {
+                for (final Task task : additionalTasksForCommitting) {
+                    task.prepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
+                }
+
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
                 for (final Task task : additionalTasksForCommitting) {
                     task.postCommit();
                 }
             } catch (final RuntimeException e) {
-                log.error("Failed to commit tasks that are " +
-                    "prepared to close clean, will close them as dirty instead", e);
+                log.error("Failed to batch commit tasks, " +
+                    "will close all tasks involved in this commit as dirty by the end", e);
+                dirtyTasks.addAll(additionalTasksForCommitting);
                 dirtyTasks.addAll(checkpointPerTask.keySet());
+
                 checkpointPerTask.clear();
                 // Just add first taskId to re-throw by the end.
                 taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
@@ -258,23 +262,46 @@ public class TaskManager {
 
         for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
             final Task task = taskAndCheckpoint.getKey();
+            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
+
             try {
-                task.closeClean(checkpointPerTask.get(task));
+                completeTaskCloseClean(task, checkpoint);
+                cleanUpTaskProducer(task, taskCloseExceptions);
+                tasks.remove(task.id());
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
                 log.error(uncleanMessage, e);
                 taskCloseExceptions.put(task.id(), e);
                 // We've already recorded the exception (which is the point of clean).
                 // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                task.closeDirty();
-            } finally {
-                cleanUpTaskProducer(task, taskCloseExceptions);
+                dirtyTasks.add(task);
+            }
+        }
+
+        for (final Task oldTask : tasksToRecycle) {
+            final Task newTask;
+            try {
+                if (oldTask.isActive()) {
+                    final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
+                    newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
+                } else {
+                    final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
+                    newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
+                }
+                tasks.remove(oldTask.id());
+                addNewTask(newTask);
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", oldTask.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.put(oldTask.id(), e);
+                dirtyTasks.add(oldTask);
             }
         }
 
         for (final Task task : dirtyTasks) {
-            task.closeDirty();
+            closeTaskDirty(task);
             cleanUpTaskProducer(task, taskCloseExceptions);
+            tasks.remove(task.id());
         }
 
         if (!taskCloseExceptions.isEmpty()) {
@@ -310,10 +337,6 @@ public class TaskManager {
             }
         }
 
-        builder.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
-            logPrefix
-        );
     }
 
     private void cleanUpTaskProducer(final Task task,
@@ -327,6 +350,21 @@ public class TaskManager {
                 taskCloseExceptions.putIfAbsent(task.id(), e);
             }
         }
+    }
+
+    private void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
+        final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
+        if (requiresUpdate) {
+            log.trace("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
+            for (final TopicPartition inputPartition : task.inputPartitions()) {
+                partitionToTask.remove(inputPartition);
+            }
+            for (final TopicPartition topicPartition : topicPartitions) {
+                partitionToTask.put(topicPartition, task);
+            }
+            task.update(topicPartitions, builder.buildSubtopology(task.id().topicGroupId));
+        }
+        task.resume();
     }
 
     private void addNewTask(final Task task) {
@@ -370,7 +408,9 @@ public class TaskManager {
         }
 
         if (allRunning && !restoringTasks.isEmpty()) {
+
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
+
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
@@ -458,23 +498,17 @@ public class TaskManager {
         final Iterator<Task> iterator = tasks.values().iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
-            final Set<TopicPartition> inputPartitions = task.inputPartitions();
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
-                cleanupTask(task);
-                task.prepareCloseDirty();
-                task.closeDirty();
+                closeTaskDirty(task);
                 iterator.remove();
+
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                 } catch (final RuntimeException e) {
                     log.warn("Error closing task producer for " + task.id() + " while handling lostAll", e);
                 }
-            }
-
-            for (final TopicPartition inputPartition : inputPartitions) {
-                partitionToTask.remove(inputPartition);
             }
         }
 
@@ -522,6 +556,10 @@ public class TaskManager {
      * assigned the task as a result of the rebalance). This method should be idempotent.
      */
     private void tryToLockAllNonEmptyTaskDirectories() {
+        // Always clear the set at the beginning as we're always dealing with the
+        // current set of actually-locked tasks.
+        lockedTaskDirectories.clear();
+
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
@@ -585,13 +623,21 @@ public class TaskManager {
         return offsetSum;
     }
 
+    private void closeTaskDirty(final Task task) {
+        task.prepareCloseDirty();
+        cleanupTask(task);
+        task.closeDirty();
+    }
+
+    private void completeTaskCloseClean(final Task task, final Map<TopicPartition, Long> checkpoint) {
+        cleanupTask(task);
+        task.closeClean(checkpoint);
+    }
+
+    // Note: this MUST be called *before* actually closing the task
     private void cleanupTask(final Task task) {
-        // 1. remove the changelog partitions from changelog reader;
-        // 2. remove the input partitions from the materialized map;
-        // 3. remove the task metrics from the metrics registry
-        if (!task.changelogPartitions().isEmpty()) {
-            changelogReader.remove(task.changelogPartitions());
-        }
+        // 1. remove the input partitions from the materialized map;
+        // 2. remove the task metrics from the metrics registry
 
         for (final TopicPartition inputPartition : task.inputPartitions()) {
             partitionToTask.remove(inputPartition);
@@ -608,8 +654,6 @@ public class TaskManager {
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : tasks.values()) {
-            cleanupTask(task);
-
             if (clean) {
                 try {
                     final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
@@ -621,16 +665,13 @@ public class TaskManager {
                     }
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
-                    task.prepareCloseDirty();
-                    task.closeDirty();
+                    closeTaskDirty(task);
                 } catch (final RuntimeException e) {
                     firstException.compareAndSet(null, e);
-                    task.prepareCloseDirty();
-                    task.closeDirty();
+                    closeTaskDirty(task);
                 }
             } else {
-                task.prepareCloseDirty();
-                task.closeDirty();
+                closeTaskDirty(task);
             }
         }
 
@@ -640,11 +681,12 @@ public class TaskManager {
 
         for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
             final Task task = taskAndCheckpoint.getKey();
+            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
             try {
-                task.closeClean(checkpointPerTask.get(task));
+                completeTaskCloseClean(task, checkpoint);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
-                task.closeDirty();
+                closeTaskDirty(task);
             }
         }
 
@@ -730,17 +772,17 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
+    // For testing only.
+    int commitAll() {
+        return commit(tasks.values());
+    }
+
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commitAll() {
-        return commitInternal(tasks.values());
-    }
-
-    private int commitInternal(final Collection<Task> tasks) {
-
+    int commit(final Collection<Task> tasks) {
         if (rebalanceInProgress) {
             return -1;
         } else {
@@ -756,7 +798,9 @@ public class TaskManager {
                 }
             }
 
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            }
 
             for (final Task task : tasks) {
                 if (task.commitNeeded()) {
@@ -779,7 +823,7 @@ public class TaskManager {
         } else {
             for (final Task task : activeTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    return commitInternal(activeTaskIterable());
+                    return commit(activeTaskIterable());
                 }
             }
             return 0;
@@ -830,7 +874,7 @@ public class TaskManager {
                 }
                 now = time.milliseconds();
                 totalProcessed += processed;
-                task.recordProcessBatchTime(then - now);
+                task.recordProcessBatchTime(now - then);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
@@ -844,9 +888,9 @@ public class TaskManager {
         return totalProcessed;
     }
 
-    void recordTaskProcessRatio(final long totalProcessLatencyMs) {
+    void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {
         for (final Task task : activeTaskIterable()) {
-            task.recordProcessTimeRatio(totalProcessLatencyMs);
+            task.recordProcessTimeRatioAndBufferSize(totalProcessLatencyMs, now);
         }
     }
 

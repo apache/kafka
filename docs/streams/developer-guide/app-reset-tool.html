@@ -56,7 +56,8 @@
         <dl class="docutils">
             <dt>Prerequisites</dt>
             <dd><ul class="first last">
-                <li><p class="first">All instances of your application must be stopped. Otherwise, the application may enter an invalid state, crash, or produce incorrect results. You can verify whether the consumer group with ID <code class="docutils literal"><span class="pre">application.id</span></code> is still active by using <code class="docutils literal"><span class="pre">bin/kafka-consumer-groups</span></code>.</p>
+                <li><p class="first">All instances of your application must be stopped. Otherwise, the application may enter an invalid state, crash, or produce incorrect results. You can verify whether the consumer group with ID <code class="docutils literal"><span class="pre">application.id</span></code> is still active by using <code class="docutils literal"><span class="pre">bin/kafka-consumer-groups</span></code>.
+                    When long session timeout has been configured, active members could take longer to get expired on the broker thus blocking the reset job to complete. Use the <code class="docutils literal"><span class="pre">--force</span></code> option could remove those left-over members immediately. Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.</p>
                 </li>
                 <li><p class="first">Use this tool with care and double-check its parameters: If you provide wrong parameter values (e.g., typos in <code class="docutils literal"><span class="pre">application.id</span></code>) or specify parameters inconsistently (e.g., specify the wrong input topics for the application), this tool might invalidate the application&#8217;s state or even impact other applications, consumer groups, or your Kafka topics.</p>
                 </li>
@@ -117,6 +118,9 @@
                                         bootstrap.servers, as the reset tool
                                         would no longer access Zookeeper
                                         directly.
+--force                               Force removing members of the consumer group
+                                      (intended to remove left-over members if
+                                      long session timeout was configured).
 </pre></div>
             </div>
             <p>Consider the following as reset-offset scenarios for <code>input-topics</code>:</p>
