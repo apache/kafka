@@ -145,6 +145,23 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return true;
     }
 
+
+    /**
+     * This constrainedAssign optimizes the assignment algorithm when all consumers were subscribed to same set of topics.
+     * The method includes the following steps:
+     *
+     * 1. Reassign as many previously owned partitions as possible
+     * 2. Fill remaining members up to minQuota
+     * 3. If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+     *    from the over-full consumers at max capacity
+     * 4. Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+     *    should just distribute one partition each to all consumers at min capacity
+     *
+     * @param partitionsPerTopic          The number of partitions for each subscribed topic
+     * @param consumerToOwnedPartitions   Each consumer's previously owned and still-subscribed partitions
+     *
+     * @return Map from each member to the list of partitions assigned to them.
+     */
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
         SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
@@ -152,8 +169,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
         // Each consumer should end up in exactly one of the below
+        // the consumers not yet at capacity
         List<String> unfilledMembers = new LinkedList<>();
+        // the members with exactly maxQuota partitions assigned
         Queue<String> maxCapacityMembers = new LinkedList<>();
+        // the members with exactly minQuota partitions assigned
         Queue<String> minCapacityMembers = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
@@ -164,6 +184,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
             consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
 
+        // step 1: Reassign as many previously owned partitions as possible
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
@@ -195,6 +216,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Collections.sort(unfilledMembers);
         Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
 
+        // step 2: Fill remaining members up to minQuota
         while (!unfilledMembers.isEmpty() && !unassignedPartitions.isEmpty()) {
             Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
 
@@ -220,7 +242,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        // If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+        // step 3: If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
         // from the over-full consumers at max capacity
         for (String consumer : unfilledMembers) {
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
@@ -240,7 +262,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             minCapacityMembers.add(consumer);
         }
 
-        // Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+        // step 4: Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
         // should just distribute one partition each to all consumers at min capacity
         for (TopicPartition unassignedPartition : unassignedPartitions) {
             String underCapacityConsumer = minCapacityMembers.poll();
@@ -269,6 +291,21 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return allPartitions;
     }
 
+    /**
+     * This generalAssign algorithm guarantees the assignment that is as balanced as possible.
+     * This method includes the following steps:
+     *
+     * 1. Preserving all the existing partition assignments
+     * 2. Removing all the partition assignments that have become invalid due to the change that triggers the reassignment
+     * 3. Assigning the unassigned partitions in a way that balances out the overall assignments of partitions to consumers
+     * 4. Further balancing out the resulting assignment by finding the partitions that can be reassigned
+     *    to another consumer towards an overall more balanced assignment.
+     *
+     * @param partitionsPerTopic         The number of partitions for each subscribed topic.
+     * @param subscriptions              Map from the member id to their respective topic subscription
+     *
+     * @return Map from each member to the list of partitions assigned to them.
+     */
     private Map<String, List<TopicPartition>> generalAssign(Map<String, Integer> partitionsPerTopic,
                                                             Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
