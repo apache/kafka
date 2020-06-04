@@ -127,7 +127,11 @@ object ConsumerGroupCommand extends Logging {
   private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
-  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
+  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int){
+    def coordinatorString:String ={
+      s"${coordinator.host}:${coordinator.port} (${coordinator.idString})"
+    }
+  }
 
   private[admin] sealed trait CsvRecord
   private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
@@ -293,19 +297,16 @@ object ConsumerGroupCommand extends Logging {
     private def printStates(states: Map[String, GroupState]): Unit = {
       val stateProps =  states.filter{case(groupId,state)=>shouldPrintMemberState(groupId, Some(state.state), Some(1))}
         .map{case (_,state)=>
-          val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
-          (state.group,coordinator,state.assignmentStrategy,state.state,state.numMembers)
+          (state.group,state.coordinatorString,state.assignmentStrategy,state.state,state.numMembers)
         }
       val hasAllGroups = opts.options.has(opts.allGroupsOpt)
+      val offset =  Math.max(25,stateProps.maxBy{_._2.length}._2.length)
       if(stateProps.nonEmpty && hasAllGroups){
-        val headerLengthOffset = Math.max(25,stateProps.maxBy{_._2.length}._2.length)
-        print(s"\n%${-headerLengthOffset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print(s"\n%${-offset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
       }
       stateProps.foreach{ case(group,coordinator,assignmentStrategy,state,numMembers)=>
-        val offset = -Math.max(25,coordinator.length)
-        if(!hasAllGroups) print(s"\n%${offset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print(s"\n%${offset}s %-25s %-20s %-15s %s".format(group, coordinator, assignmentStrategy, state, numMembers))
-        println()
+        if(!hasAllGroups) print(s"\n%${-offset}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print(s"\n%${-offset}s %-25s %-20s %-15s %s\n".format(group, coordinator, assignmentStrategy, state, numMembers))
       }
     }
 
