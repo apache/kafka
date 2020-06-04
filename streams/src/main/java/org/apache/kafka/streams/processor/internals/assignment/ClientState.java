@@ -301,14 +301,7 @@ public class ClientState {
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
     public long lagFor(final TaskId task) {
-        final Long totalLag;
-        if (taskLagTotals.isEmpty()) {
-            // If we couldn't compute the task lags due to failure to fetch offsets, just return a flat constant
-            totalLag = 0L;
-        } else {
-            totalLag = taskLagTotals.get(task);
-        }
-
+        final Long totalLag = taskLagTotals.get(task);
         if (totalLag == null) {
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
         }

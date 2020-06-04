@@ -76,6 +76,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndO
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -767,7 +768,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(endOffsets, changelogsByStatefulTask, allNewlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException e) {
-            allTaskEndOffsetSums = null;
+            allTaskEndOffsetSums = changelogsByStatefulTask.keySet().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
             fetchEndOffsetsSuccessful = false;
         }
 
@@ -776,9 +777,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ClientState state = entry.getValue().state;
             state.initializePrevTasks(taskForPartition);
 
-            if (fetchEndOffsetsSuccessful) {
-                state.computeTaskLags(uuid, allTaskEndOffsetSums);
-            }
+            state.computeTaskLags(uuid, allTaskEndOffsetSums);
             clientStates.put(uuid, state);
         }
         return fetchEndOffsetsSuccessful;
