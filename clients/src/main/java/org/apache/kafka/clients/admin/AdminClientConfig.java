@@ -205,8 +205,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        CommonClientConfigs.postProcessCheckClientDnsLookupValue(this);
-
+        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
