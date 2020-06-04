@@ -693,8 +693,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             return null;
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
@@ -782,8 +782,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             throw new NoSuchElementException("Empty topic: " + topic);
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
