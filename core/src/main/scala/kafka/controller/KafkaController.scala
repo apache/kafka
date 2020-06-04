@@ -439,10 +439,10 @@ class KafkaController(val config: KafkaConfig,
     val (newOfflineReplicasForDeletion, newOfflineReplicasNotForDeletion) =
       newOfflineReplicas.partition(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
 
-    val partitionsWithoutLeader = controllerContext.partitionsWithoutLeaders()
+    val partitionsWithOfflineLeader = controllerContext.partitionsWithOfflineLeader()
 
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the newOfflineReplicas
-    partitionStateMachine.handleStateChanges(partitionsWithoutLeader.toSeq, OfflinePartition)
+    partitionStateMachine.handleStateChanges(partitionsWithOfflineLeader.toSeq, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // trigger OfflineReplica state change for those newly offline replicas
@@ -458,7 +458,7 @@ class KafkaController(val config: KafkaConfig,
 
     // If replica failure did not require leader re-election, inform brokers of the offline brokers
     // Note that during leader re-election, brokers update their metadata
-    if (partitionsWithoutLeader.isEmpty) {
+    if (partitionsWithOfflineLeader.isEmpty) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
   }
@@ -1162,7 +1162,7 @@ class KafkaController(val config: KafkaConfig,
     replicaStateMachine.handleStateChanges(partitionsFollowedByBroker.map(partition =>
       PartitionAndReplica(partition, id)).toSeq, OfflineReplica)
     trace(s"All leaders = ${controllerContext.partitionsLeadershipInfo.mkString(",")}")
-    controllerContext.partitionLeadsOnBroker(id)
+    controllerContext.partitionLeadersOnBroker(id)
   }
 
   private def processUpdateMetadataResponseReceived(updateMetadataResponse: UpdateMetadataResponse, brokerId: Int): Unit = {

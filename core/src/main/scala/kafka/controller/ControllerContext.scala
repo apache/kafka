@@ -421,17 +421,17 @@ class ControllerContext {
   }
 
   def partitionsWithLeaders(): Set[TopicPartition] = {
-    partitionLeadershipInfo.keySet
+    partitionLeadershipInfo.keys.filter(tp => !isTopicQueuedUpForDeletion(tp.topic)).toSet
   }
 
-  def partitionsWithoutLeaders(): Set[TopicPartition] = {
+  def partitionsWithOfflineLeader(): Set[TopicPartition] = {
     partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
       !isReplicaOnline(leaderIsrAndControllerEpoch.leaderAndIsr.leader, topicPartition) &&
         !isTopicQueuedUpForDeletion(topicPartition.topic)
     }.keySet
   }
 
-  def partitionLeadsOnBroker(brokerId: Int): Set[TopicPartition] = {
+  def partitionLeadersOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
       !isTopicQueuedUpForDeletion(topicPartition.topic) &&
         leaderIsrAndControllerEpoch.leaderAndIsr.leader == brokerId &&
