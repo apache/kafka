@@ -29,6 +29,12 @@
         both support it and fallback to TLSv1.2 otherwise. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-573%3A+Enable+TLSv1.3+by+default">KIP-573</a> for more details.
     </li>
+    <li>The default value for the <code>client.dns.lookup</code> configuration has been changed from <code>default</code>
+        to <code>use_all_dns_ips</code>. If a hostname resolves to multiple IP addresses, clients and brokers will now
+        attempt to connect to each IP in sequence until the connection is successfully established. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-602%3A+Change+default+value+for+client.dns.lookup">KIP-602</a>
+        for more details.
+    </li>
 </ul>
 
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
