@@ -398,8 +398,8 @@ public class KTableTransformValuesTest {
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
         inputTopic.pipeInput("A", "ignored", 5L);
-        inputTopic.pipeInput("A", "ignored", 15L);
-        inputTopic.pipeInput("A", "ignored", 10L);
+        inputTopic.pipeInput("A", "ignored1", 15L);
+        inputTopic.pipeInput("A", "ignored2", 10L);
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "0", 15),

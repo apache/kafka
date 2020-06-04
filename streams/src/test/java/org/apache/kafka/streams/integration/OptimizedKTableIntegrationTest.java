@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -33,7 +35,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,12 +44,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyQueryMetadata;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -59,6 +59,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 @Category(IntegrationTest.class)
 public class OptimizedKTableIntegrationTest {
@@ -69,6 +70,9 @@ public class OptimizedKTableIntegrationTest {
 
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @Rule
+    public final TestName testName = new TestName();
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
@@ -105,9 +109,7 @@ public class OptimizedKTableIntegrationTest {
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
         final TrackingStateRestoreListener listener = new TrackingStateRestoreListener();
 
-        kafkaStreamsList.forEach(kafkaStreams -> {
-            kafkaStreams.setGlobalStateRestoreListener(listener);
-        });
+        kafkaStreamsList.forEach(kafkaStreams -> kafkaStreams.setGlobalStateRestoreListener(listener));
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         produceValueRange(key, 0, batch1NumMessages);
@@ -115,11 +117,8 @@ public class OptimizedKTableIntegrationTest {
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-            .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
-
-        final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-            .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore()));
+        final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
 
         final boolean kafkaStreams1WasFirstActive;
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
@@ -134,8 +133,8 @@ public class OptimizedKTableIntegrationTest {
 
         // Assert that no restore has occurred, ensures that when we check later that the restore
         // notification actually came from after the rebalance.
-        assertThat(listener.startOffset, is(equalTo(0L)));
-        assertThat(listener.totalNumRestored, is(equalTo(0L)));
+        assertTrue(listener.allStartOffsetsAtZero());
+        assertThat(listener.totalNumRestored(), is(equalTo(0L)));
 
         // Assert that the current value in store reflects all messages being processed
         assertThat(kafkaStreams1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
@@ -159,8 +158,10 @@ public class OptimizedKTableIntegrationTest {
         // Assert that all messages in the second batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        // Assert that the current value in store reflects all messages being processed
-        assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
+        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
+            // Assert that the current value in store reflects all messages being processed
+            assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
+        });
     }
 
     private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
@@ -184,49 +185,23 @@ public class OptimizedKTableIntegrationTest {
         return streams;
     }
 
-    private class TrackingStateRestoreListener implements StateRestoreListener {
-        long startOffset = -1L;
-        long endOffset = -1L;
-        long totalNumRestored = 0L;
-
-        @Override
-        public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
-            startOffset = startingOffset;
-            endOffset = endingOffset;
-        }
-
-        @Override
-        public void onBatchRestored(final TopicPartition topicPartition,
-                                    final String storeName,
-                                    final long batchEndOffset,
-                                    final long numRestored) {
-            totalNumRestored += numRestored;
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-
-        }
-    }
 
     private Properties streamsConfiguration() {
-        final String applicationId = "streamsApp";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(++port));
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         return config;
     }
 }

@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
@@ -99,7 +99,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       s"${response.errorCounts().keySet().asScala.mkString(", ")},",
       response.errorCounts().keySet().asScala.find(_.code() > 0).isEmpty)
 
-    request.data().topics().asScala.foreach { case topic =>
+    request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
           new MetadataRequest.Builder(List(topic.name()).asJava, true).build()).topicMetadata.asScala

@@ -45,7 +45,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   ValueTransformerSupplierWithKeyAsJava
 }
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream KStream]] and delegates method calls to the
@@ -218,7 +218,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * import Serdes._
    *
    * //..
-   * val clicksPerRegion: KTable[String, Long] = //..
+   * val clicksPerRegion: KStream[String, Long] = //..
    *
    * // Implicit serdes in scope will generate an implicit Produced instance, which
    * // will be passed automatically to the call of through below
@@ -232,9 +232,52 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param produced the instance of Produced that gives the serdes and `StreamPartitioner`
    * @return a [[KStream]] that contains the exact same (and potentially repartitioned) records as this [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#through`
+   * @deprecated use `repartition()` instead
    */
+  @deprecated("use `repartition()` instead", "2.6.0")
   def through(topic: String)(implicit produced: Produced[K, V]): KStream[K, V] =
     new KStream(inner.through(topic, produced))
+
+  /**
+   * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Repartitioned` instance
+   * for configuration of the `Serde key serde`, `Serde value serde`, `StreamPartitioner`, number of partitions, and
+   * topic name part.
+   * <p>
+   * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
+   * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
+   * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+   * `StreamsConfig` via parameter APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG`,
+   * "&lt;name&gt;" is either provided via `Repartitioned#as(String)` or an internally
+   * generated name, and "-repartition" is a fixed suffix.
+   * <p>
+   * The user can either supply the `Repartitioned` instance as an implicit in scope or she can also provide implicit
+   * key and value serdes that will be converted to a `Repartitioned` instance implicitly.
+   * <p>
+   * {{{
+   * Example:
+   *
+   * // brings implicit serdes in scope
+   * import Serdes._
+   *
+   * //..
+   * val clicksPerRegion: KStream[String, Long] = //..
+   *
+   * // Implicit serdes in scope will generate an implicit Produced instance, which
+   * // will be passed automatically to the call of through below
+   * clicksPerRegion.repartition
+   *
+   * // Similarly you can create an implicit Repartitioned and it will be passed implicitly
+   * // to the repartition call
+   * }}}
+   *
+   * @param repartitioned the `Repartitioned` instance used to specify `Serdes`, `StreamPartitioner`` which determines
+   *                      how records are distributed among partitions of the topic,
+   *                      part of the topic name, and number of partitions for a repartition topic.
+   * @return a [[KStream]] that contains the exact same repartitioned records as this [[KStream]]
+   * @see `org.apache.kafka.streams.kstream.KStream#repartition`
+   */
+  def repartition(implicit repartitioned: Repartitioned[K, V]): KStream[K, V] =
+    new KStream(inner.repartition(repartitioned))
 
   /**
    * Materialize this stream to a topic using the `Produced` instance for

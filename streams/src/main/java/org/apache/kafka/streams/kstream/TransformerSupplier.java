@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+
 /**
  * A {@code TransformerSupplier} interface which can create one or more {@link Transformer} instances.
  *
@@ -30,7 +32,7 @@ package org.apache.kafka.streams.kstream;
  * @see ValueTransformerSupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  */
-public interface TransformerSupplier<K, V, R> {
+public interface TransformerSupplier<K, V, R> extends ConnectedStoreProvider {
 
     /**
      * Return a new {@link Transformer} instance.

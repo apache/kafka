@@ -109,8 +109,8 @@ public class MetadataResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (MetadataResponseTopic metadata : data.topics())
-            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode()));
+        data.topics().forEach(metadata ->
+            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode())));
         return errorCounts;
     }
 
@@ -476,6 +476,27 @@ public class MetadataResponse extends AbstractResponse {
     public static MetadataResponse prepareResponse(Collection<Node> brokers, String clusterId, int controllerId,
                                                    List<TopicMetadata> topicMetadata) {
         return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
+    }
+
+    public static MetadataResponse prepareResponse(int throttleTimeMs, List<MetadataResponseTopic> topicMetadataList,
+                                                   Collection<Node> brokers, String clusterId, int controllerId,
+                                                   int clusterAuthorizedOperations) {
+        MetadataResponseData responseData = new MetadataResponseData();
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        brokers.forEach(broker ->
+            responseData.brokers().add(new MetadataResponseBroker()
+                .setNodeId(broker.id())
+                .setHost(broker.host())
+                .setPort(broker.port())
+                .setRack(broker.rack()))
+        );
+
+        responseData.setClusterId(clusterId);
+        responseData.setControllerId(controllerId);
+        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
+
+        topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
+        return new MetadataResponse(responseData);
     }
 
     @Override

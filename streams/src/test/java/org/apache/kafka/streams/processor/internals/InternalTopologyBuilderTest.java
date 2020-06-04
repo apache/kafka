@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Arrays;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,7 +25,6 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -35,6 +33,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -63,7 +62,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("store", false);
+    private final StoreBuilder<?> storeBuilder = new MockKeyValueStoreBuilder("store", false);
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -96,7 +95,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
         builder.initializeSubscription();
 
-        assertEquals(Arrays.asList("test-topic"), builder.sourceTopicCollection());
+        assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
@@ -148,31 +147,31 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testAddProcessorWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         try {
-            builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+            builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
             fail("Should throw TopologyException with processor name conflict");
         } catch (final TopologyException expected) { /* ok */ }
     }
 
     @Test(expected = TopologyException.class)
     public void testAddProcessorWithWrongParent() {
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
     }
 
     @Test(expected = TopologyException.class)
     public void testAddProcessorWithSelfParent() {
-        builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "processor");
     }
 
     @Test(expected = TopologyException.class)
     public void testAddProcessorWithEmptyParents() {
-        builder.addProcessor("processor", new MockProcessorSupplier());
+        builder.addProcessor("processor", new MockProcessorSupplier<>());
     }
 
     @Test(expected = NullPointerException.class)
     public void testAddProcessorWithNullParents() {
-        builder.addProcessor("processor", new MockProcessorSupplier(), (String) null);
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), (String) null);
     }
 
     @Test
@@ -238,7 +237,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
-        builder.addInternalTopic("topic-3");
+        builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
         builder.initializeSubscription();
 
         assertFalse(builder.usesPatternSubscription());
@@ -255,7 +254,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addSource(null, "source-4", null, null, null, sourcePattern);
 
-        builder.addInternalTopic("topic-3");
+        builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
@@ -276,7 +275,7 @@ public class InternalTopologyBuilderTest {
                 null,
                 "globalTopic",
                 "global-processor",
-                new MockProcessorSupplier());
+                new MockProcessorSupplier<>());
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
@@ -297,7 +296,7 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<>());
         builder.initializeSubscription();
 
         assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
@@ -372,10 +371,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void testAddStateStoreWithDuplicates() {
+    public void shouldNotAllowToAddStoresWithSameName() {
         builder.addStateStore(storeBuilder);
+        final StoreBuilder otherBuilder = new MockKeyValueStoreBuilder("store", false);
         try {
-            builder.addStateStore(storeBuilder);
+            builder.addStateStore(otherBuilder);
             fail("Should throw TopologyException with store name conflict");
         } catch (final TopologyException expected) { /* ok */ }
     }
@@ -385,33 +385,49 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(storeBuilder);
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
 
-        assertEquals(0, builder.build().stateStores().size());
+        assertEquals(0, builder.buildTopology().stateStores().size());
 
         builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
 
-        final List<StateStore> suppliers = builder.build().stateStores();
+        final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
     }
 
     @Test
+    public void shouldAllowAddingSameStoreBuilderMultipleTimes() {
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-2", storeBuilder.name());
+
+        assertEquals(1, builder.buildTopology().stateStores().size());
+    }
+
+    @Test
     public void testTopicGroups() {
         builder.setApplicationId("X");
-        builder.addInternalTopic("topic-1x");
+        builder.addInternalTopic("topic-1x", InternalTopicProperties.empty());
         builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addSource(null, "source-4", null, null, null, "topic-4");
         builder.addSource(null, "source-5", null, null, null, "topic-5");
 
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
 
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-2", "processor-1");
         builder.copartitionSources(asList("source-1", "source-2"));
 
-        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
+        builder.addProcessor("processor-3", new MockProcessorSupplier<>(), "source-3", "source-4");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
@@ -437,17 +453,18 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-4", null, null, null, "topic-4");
         builder.addSource(null, "source-5", null, null, null, "topic-5");
 
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store-1", false), "processor-1", "processor-2");
 
-        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
-        builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
+        builder.addProcessor("processor-3", new MockProcessorSupplier<>(), "source-3");
+        builder.addProcessor("processor-4", new MockProcessorSupplier<>(), "source-4");
         builder.addStateStore(new MockKeyValueStoreBuilder("store-2", false), "processor-3", "processor-4");
 
-        builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
+        builder.addProcessor("processor-5", new MockProcessorSupplier<>(), "source-5");
         builder.addStateStore(new MockKeyValueStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
+        builder.buildTopology();
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
@@ -480,14 +497,14 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-4", null, null, null, "topic-4");
         builder.addSource(null, "source-5", null, null, null, "topic-5");
 
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
-        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-2", "processor-1");
+        builder.addProcessor("processor-3", new MockProcessorSupplier<>(), "source-3", "source-4");
 
         builder.setApplicationId("X");
-        final ProcessorTopology topology0 = builder.build(0);
-        final ProcessorTopology topology1 = builder.build(1);
-        final ProcessorTopology topology2 = builder.build(2);
+        final ProcessorTopology topology0 = builder.buildSubtopology(0);
+        final ProcessorTopology topology1 = builder.buildSubtopology(1);
+        final ProcessorTopology topology2 = builder.buildSubtopology(2);
 
         assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
         assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
@@ -511,9 +528,9 @@ public class InternalTopologyBuilderTest {
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
-        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-2");
+        builder.addProcessor("processor-3", new MockProcessorSupplier<>(), "source-3");
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
@@ -540,7 +557,16 @@ public class InternalTopologyBuilderTest {
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
-        builder.addGlobalStore(new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
+        builder.addGlobalStore(
+            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            "globalSource",
+            null,
+            null,
+            null,
+            "globalTopic",
+            "global-processor",
+            new MockProcessorSupplier<>()
+        );
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
     }
@@ -587,7 +613,12 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() {
-        builder.addInternalTopic(null);
+        builder.addInternalTopic(null, InternalTopicProperties.empty());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullInternalTopicProperties() {
+        builder.addInternalTopic("topic", null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -600,9 +631,9 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(null);
     }
 
-    private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
+    private Set<String> nodeNames(final Collection<ProcessorNode<?, ?>> nodes) {
         final Set<String> nodeNames = new HashSet<>();
-        for (final ProcessorNode node : nodes) {
+        for (final ProcessorNode<?, ?> node : nodes) {
             nodeNames.add(node.name());
         }
         return nodeNames;
@@ -611,7 +642,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() {
         builder.addSource(null, "source", null, null, null, "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
@@ -621,7 +652,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() {
         builder.addSource(null, "source", null, null, null, "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
@@ -631,9 +662,9 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldCorrectlyMapStateStoreToInternalTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("internal-topic");
+        builder.addInternalTopic("internal-topic", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "internal-topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
@@ -644,7 +675,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddInternalTopicConfigForWindowStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(
             Stores.windowStoreBuilder(
                 Stores.persistentWindowStore("store1", ofSeconds(30L), ofSeconds(10L), false),
@@ -659,6 +690,7 @@ public class InternalTopologyBuilderTest {
                 ),
                 "processor"
         );
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
@@ -681,8 +713,9 @@ public class InternalTopologyBuilderTest {
     public void shouldAddInternalTopicConfigForNonWindowStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
+        builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
@@ -696,8 +729,9 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddInternalTopicConfigForRepartitionTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("foo");
+        builder.addInternalTopic("foo", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "foo");
+        builder.buildTopology();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
@@ -708,7 +742,6 @@ public class InternalTopologyBuilderTest {
         assertTrue(topicConfig instanceof RepartitionTopicConfig);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() {
         builder.addSource(null, "source-1", null, null, null, "topic-foo");
@@ -734,7 +767,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -742,7 +775,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -750,9 +783,9 @@ public class InternalTopologyBuilderTest {
     public void shouldSortProcessorNodesCorrectly() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
-        builder.addProcessor("processor2", new MockProcessorSupplier(), "source1", "source2");
-        builder.addProcessor("processor3", new MockProcessorSupplier(), "processor2");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
+        builder.addProcessor("processor2", new MockProcessorSupplier<>(), "source1", "source2");
+        builder.addProcessor("processor3", new MockProcessorSupplier<>(), "processor2");
         builder.addSink("sink1", "topic2", null, null, null, "processor1", "processor3");
 
         assertEquals(1, builder.describe().subtopologies().size());
@@ -790,11 +823,10 @@ public class InternalTopologyBuilderTest {
         assertEquals(1, node.size);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() {
         builder.addSource(null, "ingest", null, null, null, Pattern.compile("topic-\\d+"));
-        builder.addProcessor("my-processor", new MockProcessorSupplier(), "ingest");
+        builder.addProcessor("my-processor", new MockProcessorSupplier<>(), "ingest");
         builder.addStateStore(storeBuilder, "my-processor");
 
         final Set<String> updatedTopics = new HashSet<>();
@@ -816,19 +848,18 @@ public class InternalTopologyBuilderTest {
         assertFalse(topics.contains("topic-A"));
     }
 
-    @SuppressWarnings("unchecked")
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
         builder.addGlobalStore(
-            (StoreBuilder<KeyValueStore>) storeBuilder,
+            storeBuilder,
             sameNameForSourceAndProcessor,
             null,
             null,
             null,
             "anyTopicName",
             sameNameForSourceAndProcessor,
-            new MockProcessorSupplier());
+            new MockProcessorSupplier<>());
     }
 
     @Test
@@ -899,5 +930,62 @@ public class InternalTopologyBuilderTest {
 
         assertThat(base, not(equalTo(differentPattern)));
         assertThat(base, not(equalTo(overlappingPattern)));
+    }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesArePresent() {
+        final int numberOfPartitions = 10;
+        builder.setApplicationId("Z");
+        builder.addInternalTopic("topic-1z", new InternalTopicProperties(numberOfPartitions));
+        builder.addSource(null, "source-1", null, null, null, "topic-1z");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Z-topic-1z"),
+            new RepartitionTopicConfig(
+                "Z-topic-1z",
+                Collections.emptyMap(),
+                numberOfPartitions,
+                true
+            )
+        );
+    }
+
+    @Test
+    public void shouldHandleWhenTopicPropertiesNumberOfPartitionsIsNull() {
+        builder.setApplicationId("T");
+        builder.addInternalTopic("topic-1t", InternalTopicProperties.empty());
+        builder.addSource(null, "source-1", null, null, null, "topic-1t");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("T-topic-1t"),
+            new RepartitionTopicConfig(
+                "T-topic-1t",
+                Collections.emptyMap()
+            )
+        );
+    }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesAreNotPresent() {
+        builder.setApplicationId("Y");
+        builder.addInternalTopic("topic-1y", InternalTopicProperties.empty());
+        builder.addSource(null, "source-1", null, null, null, "topic-1y");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Y-topic-1y"),
+            new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
+        );
     }
 }

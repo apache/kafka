@@ -105,6 +105,35 @@ public class SaslClientAuthenticator implements Authenticator {
     private static final short DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER = -1;
     private static final Random RNG = new Random();
 
+    /**
+     * the reserved range of correlation id for Sasl requests.
+     *
+     * Noted: there is a story about reserved range. The response of LIST_OFFSET is compatible to response of SASL_HANDSHAKE.
+     * Hence, we could miss the schema error when using schema of SASL_HANDSHAKE to parse response of LIST_OFFSET.
+     * For example: the IllegalStateException caused by mismatched correlation id is thrown if following steps happens.
+     * 1) sent LIST_OFFSET
+     * 2) sent SASL_HANDSHAKE
+     * 3) receive response of LIST_OFFSET
+     * 4) succeed to use schema of SASL_HANDSHAKE to parse response of LIST_OFFSET
+     * 5) throw IllegalStateException due to mismatched correlation id
+     * As a simple approach, we force Sasl requests to use a reserved correlation id which is separated from those
+     * used in NetworkClient for Kafka requests. Hence, we can guarantee that every SASL request will throw
+     * SchemaException due to correlation id mismatch during reauthentication
+     */
+    public static final int MAX_RESERVED_CORRELATION_ID = Integer.MAX_VALUE;
+
+    /**
+     * We only expect one request in-flight a time during authentication so the small range is fine.
+     */
+    public static final int MIN_RESERVED_CORRELATION_ID = MAX_RESERVED_CORRELATION_ID - 7;
+
+    /**
+     * @return true if the correlation id is reserved for SASL request. otherwise, false
+     */
+    public static boolean isReserved(int correlationId) {
+        return correlationId >= MIN_RESERVED_CORRELATION_ID;
+    }
+
     private final Subject subject;
     private final String servicePrincipal;
     private final String host;
@@ -133,6 +162,8 @@ public class SaslClientAuthenticator implements Authenticator {
     private RequestHeader currentRequestHeader;
     // Version of SaslAuthenticate request/responses
     private short saslAuthenticateVersion;
+    // Version of SaslHandshake request/responses
+    private short saslHandshakeVersion;
 
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
@@ -176,7 +207,8 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    private SaslClient createSaslClient() {
+    // visible for testing
+    SaslClient createSaslClient() {
         try {
             return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
                 String[] mechs = {mechanism};
@@ -213,13 +245,13 @@ public class SaslClientAuthenticator implements Authenticator {
                 if (apiVersionsResponse == null)
                     break;
                 else {
-                    saslAuthenticateVersion(apiVersionsResponse);
+                    setSaslAuthenticateAndHandshakeVersions(apiVersionsResponse);
                     reauthInfo.apiVersionsResponseReceivedFromBroker = apiVersionsResponse;
                     setSaslState(SaslState.SEND_HANDSHAKE_REQUEST);
                     // Fall through to send handshake request with the latest supported version
                 }
             case SEND_HANDSHAKE_REQUEST:
-                sendHandshakeRequest(reauthInfo.apiVersionsResponseReceivedFromBroker);
+                sendHandshakeRequest(saslHandshakeVersion);
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
             case RECEIVE_HANDSHAKE_RESPONSE:
@@ -236,11 +268,11 @@ public class SaslClientAuthenticator implements Authenticator {
                 setSaslState(SaslState.INTERMEDIATE);
                 break;
             case REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE:
-                saslAuthenticateVersion(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
+                setSaslAuthenticateAndHandshakeVersions(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
                 setSaslState(SaslState.REAUTH_SEND_HANDSHAKE_REQUEST); // Will set immediately
                 // Fall through to send handshake request with the latest supported version
             case REAUTH_SEND_HANDSHAKE_REQUEST:
-                sendHandshakeRequest(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
+                sendHandshakeRequest(saslHandshakeVersion);
                 setSaslState(SaslState.REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE);
                 break;
             case REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE:
@@ -285,9 +317,8 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    private void sendHandshakeRequest(ApiVersionsResponse apiVersionsResponse) throws IOException {
-        SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(
-                apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion());
+    private void sendHandshakeRequest(short version) throws IOException {
+        SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(version);
         send(handshakeRequest.toSend(node, nextRequestHeader(ApiKeys.SASL_HANDSHAKE, handshakeRequest.version())));
     }
 
@@ -325,6 +356,13 @@ public class SaslClientAuthenticator implements Authenticator {
         return reauthInfo.reauthenticationLatencyMs();
     }
 
+    // visible for testing
+    int nextCorrelationId() {
+        if (!isReserved(correlationId))
+            correlationId = MIN_RESERVED_CORRELATION_ID;
+        return correlationId++;
+    }
+
     private RequestHeader nextRequestHeader(ApiKeys apiKey, short version) {
         String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
         short requestApiKey = apiKey.id;
@@ -333,7 +371,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setRequestApiKey(requestApiKey).
                 setRequestApiVersion(version).
                 setClientId(clientId).
-                setCorrelationId(correlationId++),
+                setCorrelationId(nextCorrelationId()),
             apiKey.requestHeaderVersion(version));
         return currentRequestHeader;
     }
@@ -345,11 +383,17 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     // Visible to override for testing
-    protected void saslAuthenticateVersion(ApiVersionsResponse apiVersionsResponse) {
+    protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
         ApiVersionsResponseKey authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
-        if (authenticateVersion != null)
+        if (authenticateVersion != null) {
             this.saslAuthenticateVersion = (short) Math.min(authenticateVersion.maxVersion(),
                     ApiKeys.SASL_AUTHENTICATE.latestVersion());
+        }
+        ApiVersionsResponseKey handshakeVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id);
+        if (handshakeVersion != null) {
+            this.saslHandshakeVersion = (short) Math.min(handshakeVersion.maxVersion(),
+                    ApiKeys.SASL_HANDSHAKE.latestVersion());
+        }
     }
 
     private void setSaslState(SaslState saslState) {

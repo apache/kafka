@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.lang.{Iterable => JIterable}
 
 import org.apache.kafka.streams.processor.ProcessorContext

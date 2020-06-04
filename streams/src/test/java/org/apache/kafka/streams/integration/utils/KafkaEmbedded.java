@@ -123,14 +123,15 @@ public class KafkaEmbedded {
         return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
     }
 
-    /**
-     * Stop the broker.
-     */
     @SuppressWarnings("WeakerAccess")
-    public void stop() {
+    public void stopAsync() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
+                  brokerList(), zookeeperConnect());
         kafka.shutdown();
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public void awaitStoppedAndPurge() {
         kafka.awaitShutdown();
         log.debug("Removing log dir at {} ...", logDir);
         try {

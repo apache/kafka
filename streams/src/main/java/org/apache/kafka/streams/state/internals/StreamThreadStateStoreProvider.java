@@ -59,7 +59,11 @@ public class StreamThreadStateStoreProvider {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
             if (keyTaskId != null) {
-                final T store = validateAndListStores(tasks.get(keyTaskId).getStore(storeName), queryableStoreType, storeName, keyTaskId);
+                final Task task = tasks.get(keyTaskId);
+                if (task == null) {
+                    return Collections.emptyList();
+                }
+                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, keyTaskId);
                 if (store != null) {
                     return Collections.singletonList(store);
                 }

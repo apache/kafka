@@ -29,6 +29,11 @@ import static org.junit.Assert.assertEquals;
 public class InternalTopicConfigTest {
 
     @Test(expected = NullPointerException.class)
+    public void shouldThrowNpeIfTopicConfigIsNull() {
+        new RepartitionTopicConfig("topic", null);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldThrowIfNameIsNull() {
         new RepartitionTopicConfig(null, Collections.emptyMap());
     }

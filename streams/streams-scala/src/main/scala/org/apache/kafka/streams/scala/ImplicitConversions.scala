@@ -35,8 +35,6 @@ import org.apache.kafka.streams.kstream.{
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
 
-import scala.language.implicitConversions
-
 /**
  * Implicit conversions between the Scala wrapper objects and the underlying Java
  * objects.
@@ -96,6 +94,9 @@ object ImplicitConversions {
 
   implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
     Produced.`with`[K, V]
+
+  implicit def repartitionedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Repartitioned[K, V] =
+    Repartitioned.`with`[K, V]
 
   implicit def streamJoinFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
                                                           valueSerde: Serde[V],

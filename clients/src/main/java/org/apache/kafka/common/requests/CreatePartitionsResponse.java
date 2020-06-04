@@ -18,7 +18,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
-import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -52,10 +51,9 @@ public class CreatePartitionsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (CreatePartitionsTopicResult result : data.results()) {
-            Errors error = Errors.forCode(result.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
-        }
+        data.results().forEach(result ->
+            updateErrorCounts(counts, Errors.forCode(result.errorCode()))
+        );
         return counts;
     }
 

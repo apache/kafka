@@ -35,8 +35,8 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
-import scala.collection.JavaConverters._
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * Unit tests for the log cleaning logic
@@ -128,7 +128,7 @@ class LogCleanerTest {
       override def run(): Unit = {
         deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
         log.updateHighWatermark(log.activeSegment.baseOffset)
-        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset)
+        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset, LeaderOffsetIncremented)
         log.updateHighWatermark(log.activeSegment.baseOffset)
         log.deleteOldSegments()
         deleteCompleteLatch.countDown()
@@ -1517,8 +1517,6 @@ class LogCleanerTest {
    */
   @Test
   def testClientHandlingOfCorruptMessageSet(): Unit = {
-    import JavaConverters._
-
     val keys = 1 until 10
     val offset = 50
     val set = keys zip (offset until offset + keys.size)

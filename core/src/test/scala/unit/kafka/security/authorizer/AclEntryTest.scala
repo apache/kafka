@@ -23,15 +23,14 @@ import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Assert, Test}
-import org.scalatestplus.junit.JUnitSuite
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
-class AclEntryTest extends JUnitSuite {
+class AclEntryTest {
 
-  val AclJson = "{\"version\": 1, \"acls\": [{\"host\": \"host1\",\"permissionType\": \"Deny\",\"operation\": \"READ\", \"principal\": \"User:alice\"  },  " +
-    "{  \"host\":  \"*\" ,  \"permissionType\": \"Allow\",  \"operation\":  \"Read\", \"principal\": \"User:bob\"  },  " +
-    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:bob\"}  ]}"
+  val AclJson = """{"version": 1, "acls": [{"host": "host1","permissionType": "Deny","operation": "READ", "principal": "User:alice"  },
+    {  "host":  "*" ,  "permissionType": "Allow",  "operation":  "Read", "principal": "User:bob"  },
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob"}]}"""
 
   @Test
   def testAclJsonConversion(): Unit = {
@@ -40,10 +39,8 @@ class AclEntryTest extends JUnitSuite {
     val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
 
     val acls = Set[AclEntry](acl1, acl2, acl3)
-    val jsonAcls = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)
 
-    Assert.assertEquals(acls, AclEntry.fromBytes(jsonAcls))
+    Assert.assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)))
     Assert.assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
   }
-
 }

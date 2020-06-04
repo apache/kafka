@@ -17,6 +17,7 @@
 
 package kafka.coordinator.group
 
+import java.util.Properties
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import kafka.common.OffsetAndMetadata
@@ -29,7 +30,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -53,19 +54,24 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   private val allOperations = Seq(
       new JoinGroupOperation,
       new SyncGroupOperation,
+      new OffsetFetchOperation,
       new CommitOffsetsOperation,
       new HeartbeatOperation,
       new LeaveGroupOperation
-    )
+  )
+
   private val allOperationsWithTxn = Seq(
     new JoinGroupOperation,
     new SyncGroupOperation,
+    new OffsetFetchOperation,
     new CommitTxnOffsetsOperation,
     new CompleteTxnOperation,
     new HeartbeatOperation,
     new LeaveGroupOperation
   )
 
+  var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
+  var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = _
   var groupCoordinator: GroupCoordinator = _
 
   @Before
@@ -83,8 +89,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     val config = KafkaConfig.fromProps(serverProps)
 
-    val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
+    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
@@ -119,6 +125,34 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   @Test
   def testConcurrentRandomSequence(): Unit = {
     verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
+  }
+
+  @Test
+  def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
+    val groupMaxSize = 1
+    val newProperties = new Properties
+    newProperties.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
+    val config = KafkaConfig.fromProps(serverProps, newProperties)
+
+    if (groupCoordinator != null)
+      groupCoordinator.shutdown()
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory,
+      joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(false)
+
+    val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
+      .members
+    val joinOp = new JoinGroupOperation()
+
+    verifyConcurrentActions(members.toSet.map(joinOp.actionNoVerify))
+
+    val errors = members.map { member =>
+      val joinGroupResult = joinOp.await(member, DefaultRebalanceTimeout)
+      joinGroupResult.error
+    }
+
+    assertEquals(groupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(members.size-groupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
   }
 
   abstract class GroupOperation[R, C] extends Operation {
@@ -176,7 +210,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   class SyncGroupOperation extends GroupOperation[SyncGroupCallbackParams, SyncGroupCallback] {
     override def responseCallback(responsePromise: Promise[SyncGroupCallbackParams]): SyncGroupCallback = {
       val callback: SyncGroupCallback = syncGroupResult =>
-        responsePromise.success(syncGroupResult.memberAssignment, syncGroupResult.error)
+        responsePromise.success(syncGroupResult.error, syncGroupResult.memberAssignment)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: SyncGroupCallback): Unit = {
@@ -189,8 +223,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       }
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
-       val result = await(member, DefaultSessionTimeout)
-       assertEquals(Errors.NONE, result._2)
+      val result = await(member, DefaultSessionTimeout)
+      assertEquals(Errors.NONE, result._1)
+      assertNotNull(result._2)
+      assertEquals(0, result._2.length)
     }
   }
 
@@ -206,6 +242,22 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def awaitAndVerify(member: GroupMember): Unit = {
        val error = await(member, DefaultSessionTimeout)
        assertEquals(Errors.NONE, error)
+    }
+  }
+
+  class OffsetFetchOperation extends GroupOperation[OffsetFetchCallbackParams, OffsetFetchCallback] {
+    override def responseCallback(responsePromise: Promise[OffsetFetchCallbackParams]): OffsetFetchCallback = {
+      val callback: OffsetFetchCallback = (error, offsets) => responsePromise.success(error, offsets)
+      callback
+    }
+    override def runWithCallback(member: GroupMember, responseCallback: OffsetFetchCallback): Unit = {
+      val (error, partitionData) = groupCoordinator.handleFetchOffsets(member.groupId, requireStable = true, None)
+      responseCallback(error, partitionData)
+    }
+    override def awaitAndVerify(member: GroupMember): Unit = {
+      val result = await(member, 500)
+      assertEquals(Errors.NONE, result._1)
+      assertEquals(Map.empty, result._2)
     }
   }
 
@@ -290,10 +342,12 @@ object GroupCoordinatorConcurrencyTest {
 
   type JoinGroupCallbackParams = JoinGroupResult
   type JoinGroupCallback = JoinGroupResult => Unit
-  type SyncGroupCallbackParams = (Array[Byte], Errors)
+  type SyncGroupCallbackParams = (Errors, Array[Byte])
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
   type HeartbeatCallback = Errors => Unit
+  type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
+  type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult

@@ -44,6 +44,9 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     CLEAN_NODE_ENABLED = True
 
     logs = {
+        "streams_config": {
+            "path": CONFIG_FILE,
+            "collect_default": True},
         "streams_log": {
             "path": LOG_FILE,
             "collect_default": True},
@@ -302,16 +305,18 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
-    def __init__(self, test_context, kafka, command, num_threads = 3):
+    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', num_threads = 3):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
                                                           "org.apache.kafka.streams.tests.StreamsSmokeTest",
                                                           command)
         self.NUM_THREADS = num_threads
+        self.PROCESSING_GUARANTEE = processing_guarantee
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
                       streams_property.NUM_THREADS: self.NUM_THREADS}
 
         cfg = KafkaConfig(**properties)
@@ -322,11 +327,20 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     clean_node_enabled = True
 
-    def __init__(self, test_context, kafka, command):
+    def __init__(self, test_context, kafka, processing_guarantee, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
+        self.PROCESSING_GUARANTEE = processing_guarantee
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE}
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
     def clean_node(self, node):
         if self.clean_node_enabled:
@@ -359,35 +373,30 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
         return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka, num_threads = 3):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", num_threads)
-
-class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
-
+    def __init__(self, test_context, kafka, processing_guarantee, num_threads = 3):
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, num_threads)
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "not-required", "run")
 
 
 class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
+    def __init__(self, test_context, kafka, processing_guarantee):
+        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process")
 
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
+    def __init__(self, test_context, kafka, processing_guarantee):
+        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process-complex")
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify")
 
 
 class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify-complex")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
@@ -396,11 +405,11 @@ class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
 
 
 class StreamsBrokerCompatibilityService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, eosEnabled):
+    def __init__(self, test_context, kafka, processingMode):
         super(StreamsBrokerCompatibilityService, self).__init__(test_context,
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
-                                                                eosEnabled)
+                                                                processingMode)
 
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
@@ -459,6 +468,9 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         properties['reduce.topic'] = self.REDUCE_TOPIC
         properties['join.topic'] = self.JOIN_TOPIC
 
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
+
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
@@ -471,6 +483,10 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
                                                                  "")
         self.UPGRADE_FROM = None
         self.UPGRADE_TO = None
+        self.extra_properties = {}
+
+    def set_config(self, key, value):
+        self.extra_properties[key] = value
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
@@ -482,8 +498,10 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         self.UPGRADE_TO = upgrade_to
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+        properties = self.extra_properties.copy()
+        properties[streams_property.STATE_DIR] = self.PERSISTENT_ROOT
+        properties[streams_property.KAFKA_SERVERS] = self.kafka.bootstrap_servers()
+
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
         if self.UPGRADE_TO == "future_version":
@@ -556,6 +574,8 @@ class StaticMemberTestService(StreamsTestBaseService):
                       consumer_property.SESSION_TIMEOUT_MS: 60000}
 
         properties['input.topic'] = self.INPUT_TOPIC
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        properties['internal.task.assignor.class'] = "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

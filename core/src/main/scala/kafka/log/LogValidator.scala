@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -366,16 +366,6 @@ private[log] object LogValidator extends Logging {
       else None
     }
 
-    def validateOffset(batchIndex: Int, record: Record, expectedOffset: Long): Option[ApiRecordError] = {
-      // inner records offset should always be continuous
-      if (record.offset != expectedOffset) {
-        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-        Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
-          s"Inner record $record inside the compressed record batch does not have " +
-            s"incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition.")))
-      } else None
-    }
-
     // No in place assignment situation 1
     var inPlaceAssignment = sourceCodec == targetCodec
 
@@ -414,7 +404,8 @@ private[log] object LogValidator extends Logging {
 
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
-        for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+        var batchIndex = 0
+        for (record <- recordsIterator.asScala) {
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           val recordError = validateRecordCompression(batchIndex, record).orElse {
             validateRecord(batch, topicPartition, record, batchIndex, now,
@@ -422,8 +413,15 @@ private[log] object LogValidator extends Logging {
               if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
                 if (record.timestamp > maxTimestamp)
                   maxTimestamp = record.timestamp
-                validateOffset(batchIndex, record, expectedOffset)
-              } else None
+
+                // Some older clients do not implement the V1 internal offsets correctly.
+                // Historically the broker handled this by rewriting the batches rather
+                // than rejecting the request. We must continue this handling here to avoid
+                // breaking these clients.
+                if (record.offset != expectedOffset)
+                  inPlaceAssignment = false
+              }
+              None
             }
           }
 
@@ -433,6 +431,7 @@ private[log] object LogValidator extends Logging {
               uncompressedSizeInBytes += record.sizeInBytes()
               validatedRecords += record
           }
+         batchIndex += 1
         }
         processRecordErrors(recordErrors)
       } finally {

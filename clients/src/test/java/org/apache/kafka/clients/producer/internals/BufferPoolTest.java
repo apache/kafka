@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -51,7 +51,7 @@ import static org.mockito.Mockito.verify;
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
-    private final long maxBlockTimeMs = 2000;
+    private final long maxBlockTimeMs = 10;
     private final String metricGroup = "TestMetrics";
 
     @After
@@ -116,50 +116,54 @@ public class BufferPoolTest {
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
         final CountDownLatch latch = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                pool.deallocate(buffer);
+        Thread thread = new Thread(() -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        };
+            pool.deallocate(buffer);
+        });
         thread.start();
         return latch;
     }
 
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
-        Thread thread = new Thread() {
-            public void run() {
-                Time.SYSTEM.sleep(delayMs);
-                pool.deallocate(buffer);
-            }
-        };
+        Thread thread = new Thread(() -> {
+            Time.SYSTEM.sleep(delayMs);
+            pool.deallocate(buffer);
+        });
         thread.start();
     }
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
         final CountDownLatch completed = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    pool.allocate(size, maxBlockTimeMs);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } finally {
-                    completed.countDown();
-                }
+        Thread thread = new Thread(() -> {
+            try {
+                pool.allocate(size, maxBlockTimeMs);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                completed.countDown();
             }
-        };
+        });
         thread.start();
         return completed;
     }
 
     /**
-     * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
-     * And verify that the allocation attempt finishes soon after the maxBlockTimeMs.
+     * Test if BufferExhausted exception is thrown when there is not enough memory to allocate and the elapsed
+     * time is greater than the max specified block time.
+     */
+    @Test(expected = BufferExhaustedException.class)
+    public void testBufferExhaustedExceptionIsThrown() throws Exception {
+        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        pool.allocate(1, maxBlockTimeMs);
+        pool.allocate(2, maxBlockTimeMs);
+    }
+
+    /**
+     * Verify that a failed allocation attempt due to not enough memory finishes soon after the maxBlockTimeMs.
      */
     @Test
     public void testBlockTimeout() throws Exception {
@@ -177,14 +181,14 @@ public class BufferPoolTest {
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         // Thread scheduling sometimes means that deallocation varies by this point
-        assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 8 && pool.availableMemory() <= 10);
+        assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 7 && pool.availableMemory() <= 10);
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
-        assertTrue("TimeoutException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
-        assertTrue("TimeoutException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
+        assertTrue("BufferExhaustedException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
+        assertTrue("BufferExhaustedException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
     }
 
     /**
@@ -197,7 +201,7 @@ public class BufferPoolTest {
         try {
             pool.allocate(2, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 2");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         assertEquals(0, pool.queued());
@@ -272,7 +276,7 @@ public class BufferPoolTest {
             try {
                 pool.allocate(2, maxBlockTimeMs);
                 fail("The buffer allocated more memory than its maximum value 2");
-            } catch (TimeoutException e) {
+            } catch (BufferExhaustedException e) {
                 // this is good
             } catch (InterruptedException e) {
                 // this can be neglected
@@ -362,6 +366,7 @@ public class BufferPoolTest {
             this.pool = pool;
         }
 
+        @Override
         public void run() {
             try {
                 for (int i = 0; i < iterations; i++) {
@@ -403,12 +408,10 @@ public class BufferPoolTest {
         BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
-        CountDownLatch completed = new CountDownLatch(numWorkers);
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
         Callable<Void> work = new Callable<Void>() {
                 public Void call() throws Exception {
                     assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
-                    completed.countDown();
                     return null;
                 }
             };
@@ -416,12 +419,12 @@ public class BufferPoolTest {
             executor.submit(work);
         }
 
-        assertEquals("Allocation shouldn't have happened yet, waiting on memory", numWorkers, completed.getCount());
+        TestUtils.waitForCondition(() -> pool.queued() == numWorkers, "Awaiting " + numWorkers + " workers to be blocked on allocation");
 
         // Close the buffer pool. This should notify all waiters.
         pool.close();
 
-        completed.await(15, TimeUnit.SECONDS);
+        TestUtils.waitForCondition(() -> pool.queued() == 0, "Awaiting " + numWorkers + " workers to be interrupted from allocation");
 
         pool.deallocate(buffer);
     }

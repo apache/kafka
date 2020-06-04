@@ -106,7 +106,9 @@ public final class StreamsTestUtils {
         kafkaStreams.start();
         assertThat(
             "KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.",
-            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS), equalTo(true));
+            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS),
+            equalTo(true)
+        );
     }
 
     public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
