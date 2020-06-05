@@ -767,9 +767,12 @@ public abstract class AbstractStickyAssignorTest {
                 Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
                 Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
 
+                int moreLoaded = len > otherLen ? i : j;
+                int lessLoaded = len > otherLen ? j : i;
+
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
                 for (String topic: map.keySet()) {
-                    assertFalse("Error: Some partitions can be moved from c" + i + " to c" + j
+                    assertFalse("Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
                             + " to achieve a better balance"
                             + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
                             + " partitions."
