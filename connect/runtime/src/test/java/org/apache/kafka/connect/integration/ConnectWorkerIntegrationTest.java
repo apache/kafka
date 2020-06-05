@@ -238,7 +238,7 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not start in time.");
 
-        // Wait for the connector to be stopped
+        // Expect that the connector has started again
         assertTrue("Failed to stop connector and tasks after coordinator failure within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
