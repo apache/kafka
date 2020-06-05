@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Collections;
@@ -131,6 +133,10 @@ public class ProcessorTopology {
         return false;
     }
 
+    public void updateSourceTopics(final Set<String> topics) {
+
+    }
+
     private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
@@ -167,11 +173,21 @@ public class ProcessorTopology {
      * @return A string representation of this instance.
      */
     public String toString(final String indent) {
+        final Map<SourceNode<?, ?>, List<String>> sourceToTopics = new HashMap<>();
+        for (final Map.Entry<String, SourceNode<?, ?>> sourceNodeEntry : sourcesByTopic.entrySet()) {
+            final String topic = sourceNodeEntry.getKey();
+            final SourceNode<?, ?> source = sourceNodeEntry.getValue();
+            sourceToTopics.computeIfAbsent(source, s -> new ArrayList<>());
+            sourceToTopics.get(source).add(topic);
+        }
+
         final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (final SourceNode<?, ?> source : sourcesByTopic.values()) {
-            sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
+        for (final Map.Entry<SourceNode<?, ?>, List<String>> sourceNodeEntry : sourceToTopics.entrySet()) {
+            final SourceNode<?, ?> source  = sourceNodeEntry.getKey();
+            final List<String> topics = sourceNodeEntry.getValue();
+            sb.append(source.toString(indent + "\t", topics)).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();
     }

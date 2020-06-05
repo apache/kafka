@@ -118,8 +118,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
+    public void update(final Set<TopicPartition> topicPartitions) {
         this.inputPartitions = topicPartitions;
-        this.topology = processorTopology;
     }
 }

@@ -495,11 +495,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
-        super.update(topicPartitions, processorTopology);
+    public void update(final Set<TopicPartition> topicPartitions) {
+        super.update(topicPartitions);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
-        if (state() != State.RESTORING) { // if task is RESTORING then topology will be initialized in completeRestoration
-            initializeTopology();
+        switch (state()) {
+            case CREATED:
+            case RESTORING:
+            case RUNNING:
+            case SUSPENDED:
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while updating active task " + id);
         }
     }
 
@@ -512,18 +517,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
         switch (state()) {
             case CREATED:
-            case RUNNING:
             case RESTORING:
+            case RUNNING:
             case SUSPENDED:
                 stateMgr.recycle();
                 recordCollector.close();
                 break;
-
             case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
-
+                throw new IllegalStateException("Illegal state " + state() + " while recycling active task " + id);
             default:
-                throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
+                throw new IllegalStateException("Unknown state " + state() + " while recycling active task " + id);
         }
 
         partitionGroup.close();
