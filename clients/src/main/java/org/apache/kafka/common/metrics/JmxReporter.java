@@ -332,6 +332,14 @@ public class JmxReporter implements MetricsReporter {
             if (!mbeans.isEmpty()) {
                 throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
             }
+
+            // prevent prefix from getting reset back to empty for backwards compatibility
+            // with the deprecated JmxReporter(String prefix) constructor, in case contextChange gets called
+            // via one of the Metrics() constructor with a default empty MetricsContext()
+            if (namespace.isEmpty()) {
+                return;
+            }
+
             prefix = namespace;
         }
     }
