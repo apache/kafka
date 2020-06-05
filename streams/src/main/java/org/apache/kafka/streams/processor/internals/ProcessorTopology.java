@@ -154,6 +154,10 @@ public class ProcessorTopology {
         for (final Map.Entry<String, List<String>> sourceEntry : sourceTopicsByName.entrySet()) {
             final String nodeName = sourceEntry.getKey();
             for (final String topic : sourceEntry.getValue()) {
+                if (sourceNodesByTopic.containsKey(topic)) {
+                    throw new IllegalStateException("Topic " + topic + " was already registered to source node "
+                        + sourceNodesByTopic.get(topic).name());
+                }
                 sourceNodesByTopic.put(topic, sourceNodesByName.get(nodeName));
             }
         }
