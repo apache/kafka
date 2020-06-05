@@ -1185,7 +1185,8 @@ class GroupCoordinator(val brokerId: Int,
           for (member <- group.allMemberMetadata) {
             val joinResult = JoinGroupResult(
               members = if (group.isLeader(member.memberId)) {
-                info(s"Reply the group leader with the following dynamic members' metadata: ${group.allDynamicMembers}" +
+                info(s"Group ${group.groupId} replies the leader with " +
+                  s"the following dynamic members' metadata: ${group.allDynamicMembers}" +
                   s"and static members' metadata: ${group.allStaticMembers}")
                 group.currentMemberMetadata
               } else {
