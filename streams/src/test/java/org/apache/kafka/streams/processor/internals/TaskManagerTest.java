@@ -694,7 +694,6 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertEquals(newPartitionsSet, task00.inputPartitions());
-        assertEquals(task00, taskManager.taskForInputPartition(t1p1));
         verify(activeTaskCreator, consumer, changeLogReader);
     }
 
