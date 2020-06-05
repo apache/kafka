@@ -174,7 +174,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, describeGroupError)
 
     // ListGroups
-    val (listGroupsError, _) = groupCoordinator.handleListGroups()
+    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set())
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, listGroupsError)
 
     // DeleteGroups
@@ -3208,10 +3208,10 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups()
+    val (error, groups) = groupCoordinator.handleListGroups(Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer"), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
   }
 
   @Test
@@ -3220,10 +3220,56 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups()
+    val (error, groups) = groupCoordinator.handleListGroups(Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer"), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
+  }
+
+  @Test
+  def testListGroupsWithStates(): Unit = {
+    val allStates = Set(PreparingRebalance, CompletingRebalance, Stable, Dead, Empty).map(s => s.toString)
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    // Member joins the group
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    assertEquals(Errors.NONE, joinGroupResult.error)
+
+    // The group should be in CompletingRebalance
+    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString))
+    assertEquals(Errors.NONE, error)
+    assertEquals(1, groups.size)
+    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString))
+    assertEquals(Errors.NONE, error2)
+    assertEquals(0, groups2.size)
+
+    // Member syncs
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, syncGroupResult.error)
+
+    // The group is now stable
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString))
+    assertEquals(Errors.NONE, error3)
+    assertEquals(1, groups3.size)
+    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString))
+    assertEquals(Errors.NONE, error4)
+    assertEquals(0, groups4.size)
+
+    // Member leaves
+    EasyMock.reset(replicaManager)
+    val leaveGroupResults = singleLeaveGroup(groupId, assignedMemberId)
+    verifyLeaveGroupResult(leaveGroupResults)
+
+    // The group is now empty
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString))
+    assertEquals(Errors.NONE, error5)
+    assertEquals(1, groups5.size)
+    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString))
+    assertEquals(Errors.NONE, error6)
+    assertEquals(0, groups6.size)
   }
 
   @Test

@@ -156,6 +156,36 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
+  "repartition" should "repartition a KStream" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val repartitionName = "repartition"
+    val sinkTopic = "sink"
+
+    builder.stream[String, String](sourceTopic).repartition(Repartitioned.`with`(repartitionName)).to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
+
+    testInput.pipeInput("1", "value1")
+    val kv1 = testOutput.readKeyValue
+    kv1.key shouldBe "1"
+    kv1.value shouldBe "value1"
+
+    testInput.pipeInput("2", "value2")
+    val kv2 = testOutput.readKeyValue
+    kv2.key shouldBe "2"
+    kv2.value shouldBe "value2"
+
+    testOutput.isEmpty shouldBe true
+
+    // appId == "test"
+    testDriver.producedTopicNames() contains "test-" + repartitionName + "-repartition"
+
+    testDriver.close()
+  }
+
   "join 2 KStreams" should "join correctly records" in {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
@@ -185,7 +215,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
   "transform a KStream" should "transform correctly records" in {
     class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
-      override def init(context: ProcessorContext[Object, Object]): Unit = {}
+      override def init(context: ProcessorContext): Unit = {}
       override def transform(key: String, value: String): KeyValue[String, String] =
         new KeyValue(s"$key-transformed", s"$value-transformed")
       override def close(): Unit = {}
@@ -217,7 +247,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
   "flatTransform a KStream" should "flatTransform correctly records" in {
     class TestTransformer extends Transformer[String, String, Iterable[KeyValue[String, String]]] {
-      override def init(context: ProcessorContext[Object, Object]): Unit = {}
+      override def init(context: ProcessorContext): Unit = {}
       override def transform(key: String, value: String): Iterable[KeyValue[String, String]] =
         Array(new KeyValue(s"$key-transformed", s"$value-transformed"))
       override def close(): Unit = {}
@@ -249,7 +279,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
   "flatTransformValues a KStream" should "correctly flatTransform values in records" in {
     class TestTransformer extends ValueTransformer[String, Iterable[String]] {
-      override def init(context: ProcessorContext[Void, Void]): Unit = {}
+      override def init(context: ProcessorContext): Unit = {}
       override def transform(value: String): Iterable[String] =
         Array(s"$value-transformed")
       override def close(): Unit = {}
@@ -282,7 +312,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
   "flatTransformValues with key in a KStream" should "correctly flatTransformValues in records" in {
     class TestTransformer extends ValueTransformerWithKey[String, String, Iterable[String]] {
-      override def init(context: ProcessorContext[Void, Void]): Unit = {}
+      override def init(context: ProcessorContext): Unit = {}
       override def transform(key: String, value: String): Iterable[String] =
         Array(s"$value-transformed-$key")
       override def close(): Unit = {}

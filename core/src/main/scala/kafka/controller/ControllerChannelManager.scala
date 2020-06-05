@@ -153,7 +153,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
-        ClientDnsLookup.DEFAULT,
+        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         false,
         new ApiVersions,
@@ -400,7 +400,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val leaderEpoch = if (controllerContext.isTopicQueuedUpForDeletion(topicPartition.topic)) {
       LeaderAndIsr.EpochDuringDelete
     } else {
-      controllerContext.partitionLeadershipInfo.get(topicPartition)
+      controllerContext.partitionLeadershipInfo(topicPartition)
         .map(_.leaderAndIsr.leaderEpoch)
         .getOrElse(LeaderAndIsr.NoEpoch)
     }
@@ -420,7 +420,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                          partitions: collection.Set[TopicPartition]): Unit = {
 
     def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
-      controllerContext.partitionLeadershipInfo.get(partition) match {
+      controllerContext.partitionLeadershipInfo(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
           val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))
@@ -550,25 +550,20 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
       else 0
 
-    def stopReplicaPartitionDeleteResponseCallback(brokerId: Int)(response: AbstractResponse): Unit = {
+    def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)
+                        (response: AbstractResponse): Unit = {
       val stopReplicaResponse = response.asInstanceOf[StopReplicaResponse]
-      val partitionErrorsForDeletingTopics = stopReplicaResponse.partitionErrors.asScala.iterator.filter { pe =>
-        controllerContext.isTopicDeletionInProgress(pe.topicName)
-      }.map(pe => new TopicPartition(pe.topicName, pe.partitionIndex) -> Errors.forCode(pe.errorCode)).toMap
-
+      val partitionErrorsForDeletingTopics = mutable.Map.empty[TopicPartition, Errors]
+      stopReplicaResponse.partitionErrors.forEach { pe =>
+        val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
+        if (controllerContext.isTopicDeletionInProgress(pe.topicName) &&
+            isPartitionDeleted(tp)) {
+          partitionErrorsForDeletingTopics += tp -> Errors.forCode(pe.errorCode)
+        }
+      }
       if (partitionErrorsForDeletingTopics.nonEmpty)
-        sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error, partitionErrorsForDeletingTopics))
-    }
-
-    def sendStopReplicaRequest(brokerId: Int,
-                               brokerEpoch: Long,
-                               deletePartitions: Boolean,
-                               topicStates: mutable.Map[String, StopReplicaTopicState]): Unit = {
-      val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
-        stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
-        deletePartitions, topicStates.values.toBuffer.asJava)
-      val callback = stopReplicaPartitionDeleteResponseCallback(brokerId) _
-      sendRequest(brokerId, stopReplicaRequestBuilder, callback)
+        sendEvent(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error,
+          partitionErrorsForDeletingTopics))
     }
 
     stopReplicaRequestMap.foreach { case (brokerId, partitionStates) =>
@@ -590,7 +585,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
           stateChangeLog.info(s"Sending StopReplica request for ${partitionStates.size} " +
             s"replicas to broker $brokerId")
-          sendStopReplicaRequest(brokerId, brokerEpoch, false, stopReplicaTopicState)
+          val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
+            stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
+            false, stopReplicaTopicState.values.toBuffer.asJava)
+          sendRequest(brokerId, stopReplicaRequestBuilder,
+            responseCallback(brokerId, tp => partitionStates.get(tp).exists(_.deletePartition)))
         } else {
           var numPartitionStateWithDelete = 0
           var numPartitionStateWithoutDelete = 0
@@ -613,13 +612,19 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           if (topicStatesWithDelete.nonEmpty) {
             stateChangeLog.info(s"Sending StopReplica request (delete = true) for " +
               s"$numPartitionStateWithDelete replicas to broker $brokerId")
-            sendStopReplicaRequest(brokerId, brokerEpoch, true, topicStatesWithDelete)
+            val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
+              stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
+              true, topicStatesWithDelete.values.toBuffer.asJava)
+            sendRequest(brokerId, stopReplicaRequestBuilder, responseCallback(brokerId, _ => true))
           }
 
           if (topicStatesWithoutDelete.nonEmpty) {
             stateChangeLog.info(s"Sending StopReplica request (delete = false) for " +
               s"$numPartitionStateWithoutDelete replicas to broker $brokerId")
-            sendStopReplicaRequest(brokerId, brokerEpoch, false, topicStatesWithoutDelete)
+            val stopReplicaRequestBuilder = new StopReplicaRequest.Builder(
+              stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
+              false, topicStatesWithoutDelete.values.toBuffer.asJava)
+            sendRequest(brokerId, stopReplicaRequestBuilder)
           }
         }
       }

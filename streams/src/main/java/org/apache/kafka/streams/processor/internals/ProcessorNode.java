@@ -87,7 +87,7 @@ public class ProcessorNode<K, V> {
         childByName.put(child.name, child);
     }
 
-    public void init(final InternalProcessorContext<Object, Object> context) {
+    public void init(final InternalProcessorContext context) {
         try {
             internalProcessorContext = context;
             initSensors();
@@ -159,6 +159,10 @@ public class ProcessorNode<K, V> {
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
         maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
+    }
+
+    public boolean isTerminalNode() {
+        return children.isEmpty();
     }
 
     /**

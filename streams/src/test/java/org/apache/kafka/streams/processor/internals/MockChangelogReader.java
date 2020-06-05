@@ -64,7 +64,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void remove(final Collection<TopicPartition> partitions) {
+    public void unregister(final Collection<TopicPartition> partitions, final boolean triggerOnRestoreEnd) {
         restoringPartitions.removeAll(partitions);
 
         for (final TopicPartition partition : partitions) {

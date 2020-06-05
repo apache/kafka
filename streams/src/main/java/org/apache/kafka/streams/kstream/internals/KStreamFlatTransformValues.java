@@ -22,6 +22,9 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn> {
 
@@ -36,17 +39,22 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
         return new KStreamFlatTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return valueTransformerSupplier.stores();
+    }
+
     public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> implements Processor<KIn, VIn> {
 
         private final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer;
-        private ProcessorContext<Object, Object> context;
+        private ProcessorContext context;
 
         KStreamFlatTransformValuesProcessor(final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final ProcessorContext<Object, Object> context) {
+        public void init(final ProcessorContext context) {
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
             this.context = context;
         }

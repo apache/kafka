@@ -163,6 +163,9 @@ public class StreamsConfigTest {
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 99L);
+        props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 9);
+        props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
         props.put(StreamsConfig.RETRIES_CONFIG, 10);
@@ -173,6 +176,9 @@ public class StreamsConfigTest {
 
         assertEquals(42, returnedProps.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
         assertEquals(1, returnedProps.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        assertEquals(99L, returnedProps.get(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        assertEquals(9, returnedProps.get(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
+        assertEquals(99_999L, returnedProps.get(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         assertEquals(
             StreamsPartitionAssignor.class.getName(),
             returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG)
@@ -399,9 +405,11 @@ public class StreamsConfigTest {
     @Test
     public void shouldOverrideStreamsDefaultProducerConfigs() {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), "30000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
+        assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
 
     @Test
@@ -935,18 +943,6 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds() {
         props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, -1L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-    }
-
-    @Test
-    public void shouldSetDefaultBalanceFactor() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG), is(1));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionIfBalanceFactorIsOutsideBounds() {
-        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 0);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

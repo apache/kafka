@@ -28,15 +28,18 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, security_protocol="PLAINTEXT"):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, security_protocol="PLAINTEXT", tls_version=None):
         super(KafkaLog4jAppender, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.max_messages = max_messages
         self.security_protocol = security_protocol
-        self.security_config = SecurityConfig(self.context, security_protocol)
+        self.security_config = SecurityConfig(self.context, security_protocol, tls_version=tls_version)
         self.stop_timeout_sec = 30
+
+        for node in self.nodes:
+            node.version = kafka.nodes[0].version
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)

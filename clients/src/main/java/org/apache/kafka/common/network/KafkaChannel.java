@@ -28,7 +28,6 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -471,12 +470,12 @@ public class KafkaChannel implements AutoCloseable {
             return false;
         }
         KafkaChannel that = (KafkaChannel) o;
-        return Objects.equals(id, that.id);
+        return id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return id.hashCode();
     }
 
     @Override

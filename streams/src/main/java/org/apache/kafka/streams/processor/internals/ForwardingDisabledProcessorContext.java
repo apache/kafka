@@ -37,10 +37,15 @@ import java.util.Objects;
 /**
  * {@code ProcessorContext} implementation that will throw on any forward call.
  */
-public final class ForwardingDisabledProcessorContext implements ProcessorContext<Void, Void> {
-    private final ProcessorContext<?, ?> delegate;
+public final class ForwardingDisabledProcessorContext implements ProcessorContext {
+    private final ProcessorContext delegate;
 
-    public ForwardingDisabledProcessorContext(final ProcessorContext<?, ?> delegate) {
+    private static final String EXPLANATION = "ProcessorContext#forward() is not supported from this context, "
+        + "as the framework must ensure the key is not changed (#forward allows changing the key on "
+        + "messages which are sent). Try another function, which doesn't allow the key to be changed "
+        + "(for example - #tranformValues).";
+
+    public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
@@ -96,30 +101,30 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
-                                final Punctuator callback) {
+                                final Punctuator callback) throws IllegalArgumentException {
         return delegate.schedule(interval, type, callback);
     }
 
     @Override
-    public void forward(final Void key, final Void value) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+    public <K, V> void forward(final K key, final V value) {
+        throw new StreamsException(EXPLANATION);
     }
 
     @Override
-    public void forward(final Void key, final Void value, final To to) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Void key, final Void value, final int childIndex) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+    public <K, V> void forward(final K key, final V value, final To to) {
+        throw new StreamsException(EXPLANATION);
     }
 
     @Override
     @Deprecated
-    public void forward(final Void key, final Void value, final String childName) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
+        throw new StreamsException(EXPLANATION);
+    }
+
+    @Override
+    @Deprecated
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        throw new StreamsException(EXPLANATION);
     }
 
     @Override

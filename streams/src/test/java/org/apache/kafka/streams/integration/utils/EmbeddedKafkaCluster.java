@@ -29,7 +29,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -284,8 +283,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
      */
     public void deleteAllTopicsAndWait(final long timeoutMs) throws InterruptedException {
-        final Set<String> topics = JavaConverters.setAsJavaSetConverter(
-            brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
+        final Set<String> topics = getAllTopicsInCluster();
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
@@ -314,8 +312,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>(JavaConverters.setAsJavaSetConverter(
-                brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava());
+            final Set<String> allTopics = getAllTopicsInCluster();
             return !allTopics.removeAll(deletedTopics);
         }
     }
@@ -329,8 +326,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = JavaConverters.setAsJavaSetConverter(
-                brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
+            final Set<String> allTopics = getAllTopicsInCluster();
             return allTopics.equals(remainingTopics);
         }
     }
@@ -348,6 +344,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public Set<String> getAllTopicsInCluster() {
-        return JavaConverters.setAsJavaSetConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false)).asJava();
+        final scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
+        final Set<String> topics = new HashSet<>();
+        while (topicsIterator.hasNext()) {
+            topics.add(topicsIterator.next());
+        }
+        return topics;
     }
 }
