@@ -48,7 +48,7 @@ public class ProcessorTopology {
                              final Map<String, String> storeToChangelogTopic,
                              final Set<String> repartitionTopics) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
-        this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
+        this.sourcesByTopic = new HashMap<>(sourcesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
         this.stateStores = Collections.unmodifiableList(stateStores);
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
