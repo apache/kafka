@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -101,21 +100,6 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public String toString() {
         return toString("");
-    }
-
-    /**
-     * @return a string representation of this node starting with the given indent, useful for debugging.
-     */
-    public String toString(final String indent, final List<String> topics) {
-        final StringBuilder sb = new StringBuilder(super.toString(indent));
-        sb.append(indent).append("\ttopics:\t\t[");
-        for (final String topic : topics) {
-            sb.append(topic);
-            sb.append(", ");
-        }
-        sb.setLength(sb.length() - 2);  // remove the last comma
-        sb.append("]\n");
-        return sb.toString();
     }
 
     public TimestampExtractor getTimestampExtractor() {

@@ -158,7 +158,7 @@ public class ProcessorTopologyTest {
         assertNull(processorTopology.source("topic-2"));
         processorTopology.updateSourceTopics(Collections.singletonMap("source-1", asList("topic-1", "topic-2")));
 
-        assertThat(processorTopology.source("topic-2"), instanceOf(SourceNode.class));
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
     }
 
     @Test
@@ -166,9 +166,9 @@ public class ProcessorTopologyTest {
         topology.addSource("source-1", "topic-1", "topic-2");
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.source("topic-2"), instanceOf(SourceNode.class));
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
 
-        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", asList("topic-1")));
+        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
 
         assertNull(processorTopology.source("topic-2"));
     }
