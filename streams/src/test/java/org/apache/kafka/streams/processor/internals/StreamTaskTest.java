@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashSet;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -1804,6 +1805,20 @@ public class StreamTaskTest {
 
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
+    }
+
+    @Test
+    public void shouldUpdatePartitions() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
+        newPartitions.add(new TopicPartition("newTopic", 0));
+
+        task.update(newPartitions, mkMap(
+            mkEntry(source1.name(), asList(topic1, "newTopic")),
+            mkEntry(source2.name(), singletonList(topic2)))
+        );
+
+        assertThat(task.inputPartitions(), equalTo(newPartitions));
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
