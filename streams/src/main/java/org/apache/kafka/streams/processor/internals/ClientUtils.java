@@ -112,7 +112,7 @@ public class ClientUtils {
         final Map<TopicPartition, Long> committedOffsets;
         try {
             // those which do not have a committed offset would default to 0
-            committedOffsets =  consumer.committed(partitions).entrySet().stream()
+            committedOffsets = consumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
         } catch (final TimeoutException e) {
             LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
