@@ -253,6 +253,10 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
+            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
+        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         expectLockObtainedFor(taskId00);
@@ -260,7 +264,12 @@ public class TaskManagerTest {
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
-        handleAssignment(taskId00Assignment, emptyMap(), emptyMap());
+        final StateMachineTask runningTask = handleAssignment(
+            taskId00Assignment,
+            emptyMap(),
+            emptyMap()
+        ).get(taskId00);
+        runningTask.setChangelogOffsets(changelogOffsets);
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
@@ -2637,11 +2646,17 @@ public class TaskManagerTest {
         public void initializeIfNeeded() {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
+                if (!active) {
+                    transitionTo(State.RUNNING);
+                }
             }
         }
 
         @Override
         public void completeRestoration() {
+            if (state() == State.RUNNING) {
+                return;
+            }
             transitionTo(State.RUNNING);
         }
 

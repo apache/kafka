@@ -176,17 +176,25 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     private void prepareClose(final boolean clean) {
-        if (state() == State.CREATED) {
-            // the task is created and not initialized, do nothing
-            return;
-        }
+        switch (state()) {
+            case CREATED:
+            case CLOSED:
+                log.trace("Skip prepare closing since state is {}", state());
+                return;
 
-        if (state() == State.RUNNING) {
-            if (clean) {
-                stateMgr.flush();
-            }
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+            case RUNNING:
+                if (clean) {
+                    stateMgr.flush();
+                }
+
+                break;
+
+            case RESTORING:
+            case SUSPENDED:
+                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while closing standby task " + id);
         }
     }
 
@@ -226,29 +234,42 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     private void close(final boolean clean) {
-        if (state() == State.CREATED || state() == State.RUNNING) {
-            if (clean) {
-                // since there's no written offsets we can checkpoint with empty map,
-                // and the state current offset would be used to checkpoint
-                stateMgr.checkpoint(Collections.emptyMap());
-                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
-            }
-            executeAndMaybeSwallow(
-                clean,
-                () -> StateManagerUtil.closeStateManager(
-                    log,
-                    logPrefix,
+        switch (state()) {
+            case CREATED:
+            case RUNNING:
+                if (clean) {
+                    // since there's no written offsets we can checkpoint with empty map,
+                    // and the state current offset would be used to checkpoint
+                    stateMgr.checkpoint(Collections.emptyMap());
+                    offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+                }
+                executeAndMaybeSwallow(
                     clean,
-                    eosEnabled,
-                    stateMgr,
-                    stateDirectory,
-                    TaskType.STANDBY
-                ),
-                "state manager close",
-                log
-            );
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+                    () -> StateManagerUtil.closeStateManager(
+                        log,
+                        logPrefix,
+                        clean,
+                        eosEnabled,
+                        stateMgr,
+                        stateDirectory,
+                        TaskType.STANDBY
+                    ),
+                    "state manager close",
+                    log
+                );
+
+                break;
+
+            case CLOSED:
+                log.trace("Skip closing since state is {}", state());
+                return;
+
+            case RESTORING:
+            case SUSPENDED:
+                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while closing standby task " + id);
         }
 
         closeTaskSensor.record();

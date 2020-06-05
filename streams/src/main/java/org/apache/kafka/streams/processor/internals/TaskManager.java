@@ -58,9 +58,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
-import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
-import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 
 public class TaskManager {
     // initialize the task list
@@ -388,30 +385,28 @@ public class TaskManager {
     boolean tryToCompleteRestoration() {
         boolean allRunning = true;
 
-        final List<Task> restoringTasks = new LinkedList<>();
+        final List<Task> activeTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
-            if (task.state() == CREATED) {
-                try {
-                    task.initializeIfNeeded();
-                } catch (final LockException | TimeoutException e) {
-                    // it is possible that if there are multiple threads within the instance that one thread
-                    // trying to grab the task from the other, while the other has not released the lock since
-                    // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
-                    allRunning = false;
-                }
+            try {
+                task.initializeIfNeeded();
+            } catch (final LockException | TimeoutException e) {
+                // it is possible that if there are multiple threads within the instance that one thread
+                // trying to grab the task from the other, while the other has not released the lock since
+                // it did not participate in the rebalance. In this case we can just retry in the next iteration
+                log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
+                allRunning = false;
             }
 
-            if (task.state() == RESTORING) {
-                restoringTasks.add(task);
+            if (task.isActive()) {
+                activeTasks.add(task);
             }
         }
 
-        if (allRunning && !restoringTasks.isEmpty()) {
+        if (allRunning && !activeTasks.isEmpty()) {
 
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
 
-            for (final Task task : restoringTasks) {
+            for (final Task task : activeTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
                         task.completeRestoration();
@@ -529,11 +524,7 @@ public class TaskManager {
         for (final TaskId id : lockedTaskDirectories) {
             final Task task = tasks.get(id);
             if (task != null) {
-                if (task.isActive() && task.state() == RUNNING) {
-                    taskOffsetSums.put(id, Task.LATEST_OFFSET);
-                } else {
-                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
-                }
+                taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
@@ -613,10 +604,20 @@ public class TaskManager {
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
 
-            offsetSum += offset;
-            if (offsetSum < 0) {
-                log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
-                return Long.MAX_VALUE;
+
+            if (offset == Task.LATEST_OFFSET) { // this condition can only be true for active tasks; never for standby
+                // for this case, the offset of all partitions is set to `LATEST_OFFSET`
+                // and we "forward" the sentinel value directly
+                return Task.LATEST_OFFSET;
+            } else {
+                if (offset < 0) {
+                    throw new IllegalStateException("Offset should not be negative.");
+                }
+                offsetSum += offset;
+                if (offsetSum < 0) {
+                    log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
+                    return Long.MAX_VALUE;
+                }
             }
         }
 
