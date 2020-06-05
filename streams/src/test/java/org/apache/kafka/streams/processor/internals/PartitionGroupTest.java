@@ -100,7 +100,7 @@ public class PartitionGroupTest {
     private RecordQueue createQueue1() {
         return new RecordQueue(
                 partition1,
-                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                new MockSourceNode<>(intDeserializer, intDeserializer),
                 timestampExtractor,
                 new LogAndContinueExceptionHandler(),
                 new InternalMockProcessorContext(),
@@ -111,7 +111,7 @@ public class PartitionGroupTest {
     private RecordQueue createQueue2() {
         return new RecordQueue(
                 partition2,
-                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                new MockSourceNode<>(intDeserializer, intDeserializer),
                 timestampExtractor,
                 new LogAndContinueExceptionHandler(),
                 new InternalMockProcessorContext(),

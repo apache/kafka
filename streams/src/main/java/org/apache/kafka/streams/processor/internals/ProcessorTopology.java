@@ -139,7 +139,7 @@ public class ProcessorTopology {
         return false;
     }
 
-    public void updateSourceTopics(Map<String, List<String>> nodeToSourceTopics) {
+    public void updateSourceTopics(final Map<String, List<String>> nodeToSourceTopics) {
         sourcesByTopic.clear();
         for (final Map.Entry<String, List<String>> sourceEntry : nodeToSourceTopics.entrySet()) {
             final String nodeName = sourceEntry.getKey();
