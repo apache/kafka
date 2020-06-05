@@ -25,6 +25,9 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.Iterator;
+import java.util.HashSet;
+import java.util.function.Function;
 
 /**
  * PartitionGroup is used to buffer all co-partitioned records for processing.
@@ -91,6 +94,28 @@ public class PartitionGroup {
             throw new IllegalStateException("Partition " + partition + " not found.");
         }
         return queue.partitionTime();
+    }
+
+    // creates queues for new partitions, removes old queues, saves cached records for previously assigned partitions
+    void updatePartitions(final Set<TopicPartition> newInputPartitions, final Function<TopicPartition, RecordQueue> recordQueueCreator) {
+        final Set<TopicPartition> removedPartitions = new HashSet<>();
+        final Iterator<Map.Entry<TopicPartition, RecordQueue>> queuesIterator = partitionQueues.entrySet().iterator();
+        while (queuesIterator.hasNext()) {
+            final Map.Entry<TopicPartition, RecordQueue> queueEntry = queuesIterator.next();
+            final TopicPartition topicPartition = queueEntry.getKey();
+            if (!newInputPartitions.contains(topicPartition)) {
+                // if partition is removed should delete its queue
+                totalBuffered -= queueEntry.getValue().size();
+                queuesIterator.remove();
+                removedPartitions.add(topicPartition);
+            }
+            newInputPartitions.remove(topicPartition);
+        }
+        for (final TopicPartition newInputPartition : newInputPartitions) {
+            partitionQueues.put(newInputPartition, recordQueueCreator.apply(newInputPartition));
+        }
+        nonEmptyQueuesByTime.removeIf(q -> removedPartitions.contains(q.partition()));
+        allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
 
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {

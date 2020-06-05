@@ -1017,10 +1017,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertTrue(0 == list1.errors().get().size())
       assertTrue(0 == list1.valid().get().size())
       val testTopicName = "test_topic"
+      val testTopicName1 = testTopicName + "1"
+      val testTopicName2 = testTopicName + "2"
       val testNumPartitions = 2
-      client.createTopics(Collections.singleton(
-        new NewTopic(testTopicName, testNumPartitions, 1.toShort))).all().get()
-      waitForTopics(client, List(testTopicName), List())
+
+      client.createTopics(util.Arrays.asList(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+        new NewTopic(testTopicName1, testNumPartitions, 1.toShort),
+        new NewTopic(testTopicName2, testNumPartitions, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName, testTopicName1, testTopicName2), List())
 
       val producer = createProducer()
       try {
@@ -1028,42 +1034,77 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       } finally {
         Utils.closeQuietly(producer, "producer")
       }
+
+      val EMPTY_GROUP_INSTANCE_ID = ""
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
-      val testInstanceId = "test_instance_id"
+      val testInstanceId1 = "test_instance_id_1"
+      val testInstanceId2 = "test_instance_id_2"
       val fakeGroupId = "fake_group_id"
-      val newConsumerConfig = new Properties(consumerConfig)
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
-      val consumer = createConsumer(configOverrides = newConsumerConfig)
-      val latch = new CountDownLatch(1)
-      try {
-        // Start a consumer in a thread that will subscribe to a new group.
-        val consumerThread = new Thread {
-          override def run : Unit = {
-            consumer.subscribe(Collections.singleton(testTopicName))
 
-            try {
-              while (true) {
-                consumer.poll(JDuration.ofSeconds(5))
-                if (!consumer.assignment.isEmpty && latch.getCount > 0L)
-                  latch.countDown()
-                consumer.commitSync()
+      def createProperties(groupInstanceId: String): Properties = {
+        val newConsumerConfig = new Properties(consumerConfig)
+        newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+        newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+        if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {
+          newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+        }
+        newConsumerConfig
+      }
+
+      // contains two static members and one dynamic member
+      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, EMPTY_GROUP_INSTANCE_ID)
+      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
+      val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
+
+      val latch = new CountDownLatch(consumerSet.size)
+      try {
+        def createConsumerThread[K,V](consumer: KafkaConsumer[K,V], topic: String): Thread = {
+          new Thread {
+            override def run : Unit = {
+              consumer.subscribe(Collections.singleton(topic))
+              try {
+                while (true) {
+                  consumer.poll(JDuration.ofSeconds(5))
+                  if (!consumer.assignment.isEmpty && latch.getCount > 0L)
+                    latch.countDown()
+                  consumer.commitSync()
+                }
+              } catch {
+                case _: InterruptException => // Suppress the output to stderr
               }
-            } catch {
-              case _: InterruptException => // Suppress the output to stderr
             }
           }
         }
+
+        // Start consumers in a thread that will subscribe to a new group.
+        val consumerThreads = consumerSet.zip(topicSet).map(zipped => createConsumerThread(zipped._1, zipped._2))
+
         try {
-          consumerThread.start
+          consumerThreads.foreach(_.start())
           assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
-            val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
-            matching.nonEmpty
+            val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
+                group.groupId == testGroupId &&
+                group.state.get == ConsumerGroupState.STABLE)
+            matching.size == 1
           }, s"Expected to be able to list $testGroupId")
+
+          TestUtils.waitUntilTrue(() => {
+            val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.STABLE).asJava)
+            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+                group.groupId == testGroupId &&
+                group.state.get == ConsumerGroupState.STABLE)
+            matching.size == 1
+          }, s"Expected to be able to list $testGroupId in state Stable")
+
+          TestUtils.waitUntilTrue(() => {
+            val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.EMPTY).asJava)
+            val matching = client.listConsumerGroups(options).all.get.asScala.filter(
+                _.groupId == testGroupId)
+            matching.isEmpty
+          }, s"Expected to find zero groups")
 
           val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
@@ -1075,13 +1116,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(1, testGroupDescription.members().size())
-          val member = testGroupDescription.members().iterator().next()
-          assertEquals(testClientId, member.clientId())
-          val topicPartitions = member.assignment().topicPartitions()
-          assertEquals(testNumPartitions, topicPartitions.size())
-          assertEquals(testNumPartitions, topicPartitions.asScala.
-            count(tp => tp.topic().equals(testTopicName)))
+          assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
+          val members = testGroupDescription.members()
+          members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
+          val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
+          topicSet.foreach { topic =>
+            val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
+            assertEquals(testNumPartitions, topicPartitions.size)
+          }
+
           val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP).asJava
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
@@ -1129,16 +1172,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(testGroupId),
             classOf[GroupNotEmptyException])
 
-          // Test delete correct member
+          // Test delete one correct static member
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(testInstanceId))
+            Collections.singleton(new MemberToRemove(testInstanceId1))
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId1))
           assertNull(validMemberFuture.get())
 
-          // The group should contain no member now.
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
           assertEquals(1, describeTestGroupResult.describedGroups().size())
@@ -1147,6 +1189,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertEquals(testGroupId, testGroupDescription.groupId)
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
+          assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
+
+          // Delete all active members remaining (a static member + a dynamic member)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
+          assertNull(removeMembersResult.all().get())
+
+          // The group should contain no members now.
+          testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+              .describedGroups().get(testGroupId).get()
           assertTrue(testGroupDescription.members().isEmpty)
 
           // Consumer group deletion on empty group should succeed
@@ -1155,12 +1207,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
           assertNull(deleteResult.deletedGroups().get(testGroupId).get())
-        } finally {
-          consumerThread.interrupt()
-          consumerThread.join()
-        }
       } finally {
-        Utils.closeQuietly(consumer, "consumer")
+        consumerThreads.foreach {
+          case consumerThread =>
+            consumerThread.interrupt()
+            consumerThread.join()
+        }
+      }
+      } finally {
+        consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")

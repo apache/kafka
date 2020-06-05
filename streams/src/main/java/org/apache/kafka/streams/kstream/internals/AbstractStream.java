@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -107,24 +108,32 @@ public abstract class AbstractStream<K, V> {
     static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
         final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return () -> {
-            final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-            return new ValueTransformerWithKey<K, V, VR>() {
-                @Override
-                public void init(final ProcessorContext context) {
-                    valueTransformer.init(context);
-                }
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+            @Override
+            public ValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+                return new ValueTransformerWithKey<K, V, VR>() {
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        valueTransformer.init(context);
+                    }
 
-                @Override
-                public VR transform(final K readOnlyKey, final V value) {
-                    return valueTransformer.transform(value);
-                }
+                    @Override
+                    public VR transform(final K readOnlyKey, final V value) {
+                        return valueTransformer.transform(value);
+                    }
 
-                @Override
-                public void close() {
-                    valueTransformer.close();
-                }
-            };
+                    @Override
+                    public void close() {
+                        valueTransformer.close();
+                    }
+                };
+            }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return valueTransformerSupplier.stores();
+            }
         };
     }
 

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -42,11 +43,17 @@ import java.util.List;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class PartitionGroupTest {
     private final LogContext logContext = new LogContext();
@@ -57,24 +64,10 @@ public class PartitionGroupTest {
     private final TopicPartition unknownPartition = new TopicPartition("unknown-partition", 0);
     private final String errMessage = "Partition " + unknownPartition + " not found.";
     private final String[] topics = {"topic"};
-    private final TopicPartition partition1 = new TopicPartition(topics[0], 1);
-    private final TopicPartition partition2 = new TopicPartition(topics[0], 2);
-    private final RecordQueue queue1 = new RecordQueue(
-        partition1,
-        new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-        timestampExtractor,
-        new LogAndContinueExceptionHandler(),
-        new InternalMockProcessorContext(),
-        logContext
-    );
-    private final RecordQueue queue2 = new RecordQueue(
-        partition2,
-        new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-        timestampExtractor,
-        new LogAndContinueExceptionHandler(),
-        new InternalMockProcessorContext(),
-        logContext
-    );
+    private final TopicPartition partition1 = createPartition1();
+    private final TopicPartition partition2 = createPartition2();
+    private final RecordQueue queue1 = createQueue1();
+    private final RecordQueue queue2 = createQueue2();
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -82,10 +75,7 @@ public class PartitionGroupTest {
     private final Metrics metrics = new Metrics();
     private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
 
-    private final PartitionGroup group = new PartitionGroup(
-        mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)),
-        getValueSensor(metrics, lastLatenessValue)
-    );
+    private PartitionGroup group;
 
     private static Sensor getValueSensor(final Metrics metrics, final MetricName metricName) {
         final Sensor lastRecordedValue = metrics.sensor(metricName.name());
@@ -93,10 +83,48 @@ public class PartitionGroupTest {
         return lastRecordedValue;
     }
 
+    @Before
+    public void setUp() {
+        group = new PartitionGroup(
+                mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)),
+                getValueSensor(metrics, lastLatenessValue)
+        );
+    }
+
     @Test
     public void testTimeTracking() {
         testFirstBatch();
         testSecondBatch();
+    }
+
+    private RecordQueue createQueue1() {
+        return new RecordQueue(
+                partition1,
+                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                timestampExtractor,
+                new LogAndContinueExceptionHandler(),
+                new InternalMockProcessorContext(),
+                logContext
+        );
+    }
+
+    private RecordQueue createQueue2() {
+        return new RecordQueue(
+                partition2,
+                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                timestampExtractor,
+                new LogAndContinueExceptionHandler(),
+                new InternalMockProcessorContext(),
+                logContext
+        );
+    }
+
+    private TopicPartition createPartition1() {
+        return new TopicPartition(topics[0], 1);
+    }
+
+    private TopicPartition createPartition2() {
+        return new TopicPartition(topics[0], 2);
     }
 
     private void testFirstBatch() {
@@ -106,17 +134,17 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
 
         group.addRawRecords(partition1, list1);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-            new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
 
         group.addRawRecords(partition2, list2);
         // 1:[1, 3, 5]
@@ -165,8 +193,8 @@ public class PartitionGroupTest {
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
 
         group.addRawRecords(partition1, list3);
         // 1:[3, 5, 2, 4]
@@ -271,9 +299,9 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 1, 5, 3 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
 
         group.addRawRecords(partition1, list1);
 
@@ -292,9 +320,9 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-            new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
 
         group.addRawRecords(partition2, list2);
         // 1:[3]
@@ -377,9 +405,9 @@ public class PartitionGroupTest {
     @Test
     public void shouldEmptyPartitionsOnClear() {
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
         group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
         group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
@@ -397,9 +425,9 @@ public class PartitionGroupTest {
     @Test
     public void shouldCleanPartitionsOnClose() {
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
         group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
 
@@ -412,5 +440,91 @@ public class PartitionGroupTest {
 
         // The partition1 should still be able to find.
         assertThat(group.addRawRecords(partition1, list), equalTo(3));
+    }
+
+    @Test
+    public void shouldUpdatePartitionQueuesShrink() {
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+        group.addRawRecords(partition1, list1);
+        final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
+                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+        group.addRawRecords(partition2, list2);
+        assertEquals(list1.size() + list2.size(), group.numBuffered());
+        assertTrue(group.allPartitionsBuffered());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+
+        // shrink list of queues
+        group.updatePartitions(mkSet(createPartition2()), p -> {
+            fail("should not create any queues");
+            return null;
+        });
+
+        assertTrue(group.allPartitionsBuffered());  // because didn't add any new partitions
+        assertEquals(list2.size(), group.numBuffered());
+        assertEquals(1, group.streamTime());
+        assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
+        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+        assertThat(group.partitionTimestamp(partition2), equalTo(2L));
+    }
+
+    @Test
+    public void shouldUpdatePartitionQueuesExpand() {
+        group = new PartitionGroup(
+                mkMap(mkEntry(partition1, queue1)),
+                getValueSensor(metrics, lastLatenessValue)
+        );
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+        group.addRawRecords(partition1, list1);
+
+        assertEquals(list1.size(), group.numBuffered());
+        assertTrue(group.allPartitionsBuffered());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+
+        // expand list of queues
+        group.updatePartitions(mkSet(createPartition1(), createPartition2()), p -> {
+            assertEquals(createPartition2(), p);
+            return createQueue2();
+        });
+
+        assertFalse(group.allPartitionsBuffered());  // because added new partition
+        assertEquals(1, group.numBuffered());
+        assertEquals(1, group.streamTime());
+        assertThat(group.partitionTimestamp(partition1), equalTo(1L));
+        assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
+        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+    }
+
+    @Test
+    public void shouldUpdatePartitionQueuesShrinkAndExpand() {
+        group = new PartitionGroup(
+                mkMap(mkEntry(partition1, queue1)),
+                getValueSensor(metrics, lastLatenessValue)
+        );
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+        group.addRawRecords(partition1, list1);
+        assertEquals(list1.size(), group.numBuffered());
+        assertTrue(group.allPartitionsBuffered());
+        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+
+        // expand and shrink list of queues
+        group.updatePartitions(mkSet(createPartition2()), p -> {
+            assertEquals(createPartition2(), p);
+            return createQueue2();
+        });
+
+        assertFalse(group.allPartitionsBuffered());  // because added new partition
+        assertEquals(0, group.numBuffered());
+        assertEquals(1, group.streamTime());
+        assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
+        assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
+        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
     }
 }

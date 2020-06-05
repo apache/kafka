@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.rocksdb.Options;
-
 public class RocksDBTimestampedSegmentedBytesStoreTest
     extends AbstractRocksDBSegmentedBytesStoreTest<TimestampedSegment> {
 

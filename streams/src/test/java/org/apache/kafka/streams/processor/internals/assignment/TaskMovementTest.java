@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySortedSet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -85,9 +85,17 @@ public class TaskMovementTest {
         final ClientState client2 = getClientStateWithActiveAssignment(asList(TASK_0_1, TASK_1_1));
         final ClientState client3 = getClientStateWithActiveAssignment(asList(TASK_0_2, TASK_1_2));
 
+        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
+            mkEntry(TASK_0_0, emptySortedSet()),
+            mkEntry(TASK_0_1, emptySortedSet()),
+            mkEntry(TASK_0_2, emptySortedSet()),
+            mkEntry(TASK_1_0, emptySortedSet()),
+            mkEntry(TASK_1_1, emptySortedSet()),
+            mkEntry(TASK_1_2, emptySortedSet())
+        );
         assertThat(
             assignActiveTaskMovements(
-                emptyMap(),
+                tasksToCaughtUpClients,
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)

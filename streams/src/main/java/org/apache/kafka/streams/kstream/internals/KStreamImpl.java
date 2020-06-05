@@ -129,6 +129,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     private final boolean repartitionRequired;
 
+    private OptimizableRepartitionNode<K, V> repartitionNode;
+
     KStreamImpl(final String name,
                 final Serde<K> keySerde,
                 final Serde<V> valueSerde,
@@ -983,6 +985,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valSerde;
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        // we still need to create the repartitioned source each time
+        // as it increments the counter which
+        // is needed to maintain topology compatibility
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
             repartitionKeySerde,
@@ -991,8 +996,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             optimizableRepartitionNodeBuilder);
 
-        final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
-        builder.addGraphNode(streamsGraphNode, optimizableRepartitionNode);
+        if (repartitionNode == null || !name.equals(repartitionName)) {
+            repartitionNode = optimizableRepartitionNodeBuilder.build();
+            builder.addGraphNode(streamsGraphNode, repartitionNode);
+        }
 
         return new KStreamImpl<>(
             repartitionedSourceName,
@@ -1000,7 +1007,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionValueSerde,
             Collections.singleton(repartitionedSourceName),
             false,
-            optimizableRepartitionNode,
+            repartitionNode,
             builder);
     }
 

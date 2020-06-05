@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 /**
  * For internal use so we can update the {@link RecordContext} and current
@@ -89,6 +90,21 @@ public interface InternalProcessorContext extends ProcessorContext {
      * @return the type of task (active/standby/global) that this context corresponds to
      */
     TaskType taskType();
+
+    /**
+     * Transition to active task and register a new task and cache to this processor context
+     */
+    void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache);
+
+    /**
+     * Transition to standby task and register a dummy cache to this processor context
+     */
+    void transitionToStandby(final ThreadCache newCache);
+
+    /**
+     * Register a dirty entry flush listener for a particular namespace
+     */
+    void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener);
 
     /**
      * Get a correctly typed state store, given a handle on the original builder.

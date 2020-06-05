@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
@@ -62,7 +63,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaConfigBackingStore.class)
+@PrepareForTest({KafkaConfigBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaConfigBackingStoreTest {
@@ -147,6 +148,10 @@ public class KafkaConfigBackingStoreTest {
 
     @Before
     public void setUp() {
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
+        PowerMock.replay(ConnectUtils.class);
+
         configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, null);
         Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
@@ -157,10 +162,12 @@ public class KafkaConfigBackingStoreTest {
         expectConfigure();
         expectStart(Collections.emptyList(), Collections.emptyMap());
         expectStop();
-
         PowerMock.replayAll();
 
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        settings.put("config.storage.min.insync.replicas", "3");
+        settings.put("config.storage.max.message.bytes", "1001");
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, new DistributedConfig(settings));
 
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
@@ -171,6 +178,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(TOPIC, capturedNewTopic.getValue().name());
         assertEquals(1, capturedNewTopic.getValue().numPartitions());
         assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
+        assertEquals("3", capturedNewTopic.getValue().configs().get("min.insync.replicas"));
+        assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
         configStorage.start();
         configStorage.stop();
 
@@ -977,5 +986,4 @@ public class KafkaConfigBackingStoreTest {
             result.put(field.name(), struct.get(field));
         return result;
     }
-
 }

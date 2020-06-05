@@ -46,7 +46,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
-import org.rocksdb.Options;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -361,11 +360,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     @Test
     public void shouldRestoreToByteStoreForStandbyTask() {
+        context.transitionToStandby(null);
         shouldRestoreToByteStore(TaskType.STANDBY);
     }
 
     private void shouldRestoreToByteStore(final TaskType taskType) {
-        context.setTaskType(taskType);
         bytesStore.init(context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());

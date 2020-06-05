@@ -122,6 +122,18 @@ public class Metrics implements Closeable {
     }
 
     /**
+     * Create a metrics repository with a default config, metric reporters and metric context
+     * Expiration of Sensors is disabled.
+     * @param defaultConfig The default config
+     * @param reporters The metrics reporters
+     * @param time The time instance to use with the metrics
+     * @param metricsContext The metricsContext to initialize metrics reporter with
+     */
+    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, MetricsContext metricsContext) {
+        this(defaultConfig, reporters, time, false, metricsContext);
+    }
+
+    /**
      * Create a metrics repository with a default config, given metric reporters and the ability to expire eligible sensors
      * @param defaultConfig The default config
      * @param reporters The metrics reporters
@@ -129,14 +141,30 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
+        this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext(""));
+    }
+
+    /**
+     * Create a metrics repository with a default config, given metric reporters, the ability to expire eligible sensors
+     * and MetricContext
+     * @param defaultConfig The default config
+     * @param reporters The metrics reporters
+     * @param time The time instance to use with the metrics
+     * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
+     * @param metricsContext The metricsContext to initialize metrics reporter with
+     */
+    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
+                   MetricsContext metricsContext) {
         this.config = defaultConfig;
         this.sensors = new ConcurrentHashMap<>();
         this.metrics = new ConcurrentHashMap<>();
         this.childrenSensors = new ConcurrentHashMap<>();
         this.reporters = Objects.requireNonNull(reporters);
         this.time = time;
-        for (MetricsReporter reporter : reporters)
+        for (MetricsReporter reporter : reporters) {
+            reporter.contextChange(metricsContext);
             reporter.init(new ArrayList<>());
+        }
 
         // Create the ThreadPoolExecutor only if expiration of Sensors is enabled.
         if (enableExpiration) {
