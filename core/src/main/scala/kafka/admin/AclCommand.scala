@@ -112,7 +112,7 @@ object AclCommand extends Logging {
           adminClient.createAcls(aclBindings).all().get()
         }
 
-        listAcls()
+        listAcls(adminClient)
       }
     }
 
@@ -130,30 +130,34 @@ object AclCommand extends Logging {
           }
         }
 
-        listAcls()
+        listAcls(adminClient)
       }
     }
 
     def listAcls(): Unit = {
       withAdminClient(opts) { adminClient =>
-        val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
-        val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
-        val resourceToAcls = getAcls(adminClient, filters)
+        listAcls(adminClient)
+      }
+    }
 
-        if (listPrincipals.isEmpty) {
-          for ((resource, acls) <- resourceToAcls)
+    private def listAcls(adminClient: Admin) = {
+      val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
+      val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
+      val resourceToAcls = getAcls(adminClient, filters)
+
+      if (listPrincipals.isEmpty) {
+        for ((resource, acls) <- resourceToAcls)
+          println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+      } else {
+        listPrincipals.foreach(principal => {
+          println(s"ACLs for principal `$principal`")
+          val filteredResourceToAcls = resourceToAcls.map { case (resource, acls) =>
+            resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+          }.filter { case (_, acls) => acls.nonEmpty }
+
+          for ((resource, acls) <- filteredResourceToAcls)
             println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-        } else {
-          listPrincipals.foreach(principal => {
-            println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
-              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
-            }.filter { case (_, acls) => acls.nonEmpty }
-
-            for ((resource, acls) <- filteredResourceToAcls)
-              println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          })
-        }
+        })
       }
     }
 
