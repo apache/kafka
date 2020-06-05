@@ -324,7 +324,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TOPIC_TRACKING_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ENABLE_DEFAULT,
                         Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
                 .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
-                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC);
+                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                // security support
+                .withClientSslSupport();
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
