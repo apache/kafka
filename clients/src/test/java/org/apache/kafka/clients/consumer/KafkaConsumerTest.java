@@ -606,8 +606,8 @@ public class KafkaConsumerTest {
     }
 
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
-        int leaderEpoch = 1;
-        MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(1, partitionCounts, tp -> leaderEpoch);
+        MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(1, partitionCounts);
+
         mockClient.updateMetadata(initialMetadata);
     }
 

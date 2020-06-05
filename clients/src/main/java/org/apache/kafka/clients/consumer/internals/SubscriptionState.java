@@ -791,13 +791,6 @@ public class SubscriptionState {
                 return false;
             }
 
-            // If the leader id is known but the epoch is unknown, we must either have an older API or the epoch has been
-            // discarded. If so, skip the validation and begin fetching.
-            if (!currentLeaderAndEpoch.epoch.isPresent()) {
-                completeValidation();
-                return false;
-            }
-
             if (position != null && !position.currentLeader.equals(currentLeaderAndEpoch)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 validatePosition(newPosition);
