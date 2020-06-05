@@ -52,6 +52,7 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -124,11 +125,13 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test-" + topicSuffixGenerator.get(),
-                                                                 CLUSTER.bootstrapServers(),
-                                                                 STRING_SERDE_CLASSNAME,
-                                                                 STRING_SERDE_CLASSNAME,
-                                                                 properties);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, new TestName()),
+            CLUSTER.bootstrapServers(),
+            STRING_SERDE_CLASSNAME,
+            STRING_SERDE_CLASSNAME,
+            properties
+        );
     }
 
     @After
