@@ -20,7 +20,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import kafka.admin.AdminOperationException
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
 import kafka.utils._
