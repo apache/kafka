@@ -362,6 +362,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def allStaticMembers = staticMembers.keySet
 
+  def allDynamicMembers = {
+    val dynamicMemberSet = new mutable.HashSet[String]
+    allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
+    staticMembers.values.foreach(memberId => dynamicMemberSet.remove(memberId))
+    dynamicMemberSet.toSet
+  }
+
   def numPending = pendingMembers.size
 
   def numAwaiting: Int = numMembersAwaitingJoin

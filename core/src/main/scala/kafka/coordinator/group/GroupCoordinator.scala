@@ -1150,7 +1150,6 @@ class GroupCoordinator(val brokerId: Int,
       group.notYetRejoinedMembers.filterNot(_.isStaticMember) foreach { failedMember =>
         removeHeartbeatForLeavingMember(group, failedMember)
         group.remove(failedMember.memberId)
-        group.removeStaticMember(failedMember.groupInstanceId)
         // TODO: cut the socket connection to the client
       }
 
@@ -1186,6 +1185,8 @@ class GroupCoordinator(val brokerId: Int,
           for (member <- group.allMemberMetadata) {
             val joinResult = JoinGroupResult(
               members = if (group.isLeader(member.memberId)) {
+                info(s"Reply the group leader with the following dynamic members' metadata: ${group.allDynamicMembers}" +
+                  s"and static members' metadata: ${group.allStaticMembers}")
                 group.currentMemberMetadata
               } else {
                 List.empty
