@@ -310,7 +310,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
                         new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
-                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
+                // security support
+                .withClientSslSupport();
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
