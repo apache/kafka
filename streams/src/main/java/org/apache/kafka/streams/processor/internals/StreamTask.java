@@ -218,17 +218,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void completeRestoration() {
-        if (state() == State.RESTORING) {
-            initializeMetadata();
-            initializeTopology();
-            processorContext.initialize();
-            idleStartTimeMs = RecordQueue.UNKNOWN;
+        switch (state()) {
+            case RUNNING:
+                return;
 
-            transitionTo(State.RUNNING);
+            case RESTORING:
+                initializeMetadata();
+                initializeTopology();
+                processorContext.initialize();
+                idleStartTimeMs = RecordQueue.UNKNOWN;
 
-            log.info("Restored and ready to run");
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
+                transitionTo(State.RUNNING);
+
+                log.info("Restored and ready to run");
+
+                break;
+
+            case CREATED:
+            case SUSPENDED:
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while completing restoration for active task " + id);
         }
     }
 
@@ -247,48 +259,75 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void prepareSuspend() {
-        if (state() == State.CREATED || state() == State.SUSPENDED) {
-            // do nothing
-            log.trace("Skip prepare suspending since state is {}", state());
-        } else if (state() == State.RUNNING) {
-            closeTopology(true);
+        switch (state()) {
+            case CREATED:
+            case SUSPENDED:
+                // do nothing
+                log.trace("Skip prepare suspending since state is {}", state());
 
-            stateMgr.flush();
-            recordCollector.flush();
+                break;
 
-            log.info("Prepare suspending running");
-        } else if (state() == State.RESTORING) {
-            stateMgr.flush();
+            case RESTORING:
+                stateMgr.flush();
+                log.info("Prepare suspending restoring");
 
-            log.info("Prepare suspending restoring");
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
+                break;
+
+            case RUNNING:
+                closeTopology(true);
+
+                stateMgr.flush();
+                recordCollector.flush();
+
+                log.info("Prepare suspending running");
+
+                break;
+
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while suspending active task " + id);
         }
     }
 
     @Override
     public void suspend() {
-        if (state() == State.CREATED || state() == State.SUSPENDED) {
-            // do nothing
-            log.trace("Skip suspending since state is {}", state());
-        } else if (state() == State.RUNNING) {
-            stateMgr.checkpoint(checkpointableOffsets());
-            partitionGroup.clear();
+        switch (state()) {
+            case CREATED:
+            case SUSPENDED:
+                // do nothing
+                log.trace("Skip suspending since state is {}", state());
 
-            transitionTo(State.SUSPENDED);
-            log.info("Suspended running");
-        } else if (state() == State.RESTORING) {
-            // we just checkpoint the position that we've restored up to without
-            // going through the commit process
-            stateMgr.checkpoint(emptyMap());
+                break;
 
-            // we should also clear any buffered records of a task when suspending it
-            partitionGroup.clear();
+            case RUNNING:
+                stateMgr.checkpoint(checkpointableOffsets());
+                partitionGroup.clear();
 
-            transitionTo(State.SUSPENDED);
-            log.info("Suspended restoring");
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
+                transitionTo(State.SUSPENDED);
+                log.info("Suspended running");
+
+                break;
+
+            case RESTORING:
+                // we just checkpoint the position that we've restored up to without
+                // going through the commit process
+                stateMgr.checkpoint(emptyMap());
+
+                // we should also clear any buffered records of a task when suspending it
+                partitionGroup.clear();
+
+                transitionTo(State.SUSPENDED);
+                log.info("Suspended restoring");
+
+                break;
+
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while suspending active task " + id);
         }
     }
 
@@ -315,8 +354,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 break;
 
-            default:
+            case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while resuming active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
     }
 
@@ -332,8 +374,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 break;
 
-            default:
+            case CREATED:
+            case SUSPENDED:
+            case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
     }
 
@@ -362,8 +409,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 break;
 
-            default:
+            case CREATED:
+            case SUSPENDED:
+            case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while post committing active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
     }
 
@@ -466,8 +518,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 stateMgr.recycle();
                 recordCollector.close();
                 break;
-            default:
+
+            case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
         }
 
         partitionGroup.close();
@@ -493,28 +549,42 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private Map<TopicPartition, Long> prepareClose(final boolean clean) {
         final Map<TopicPartition, Long> checkpoint;
 
-        if (state() == State.CREATED) {
-            // the task is created and not initialized, just re-write the checkpoint file
-            checkpoint = Collections.emptyMap();
-        } else if (state() == State.RUNNING) {
-            closeTopology(clean);
+        switch (state()) {
+            case CREATED:
+                // the task is created and not initialized, just re-write the checkpoint file
+                checkpoint = Collections.emptyMap();
 
-            if (clean) {
-                stateMgr.flush();
-                recordCollector.flush();
-                checkpoint = checkpointableOffsets();
-            } else {
+                break;
+
+            case RUNNING:
+                closeTopology(clean);
+
+                if (clean) {
+                    stateMgr.flush();
+                    recordCollector.flush();
+                    checkpoint = checkpointableOffsets();
+                } else {
+                    checkpoint = null; // `null` indicates to not write a checkpoint
+                    executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush", log);
+                }
+
+                break;
+
+            case RESTORING:
+                executeAndMaybeSwallow(clean, stateMgr::flush, "state manager flush", log);
+                checkpoint = Collections.emptyMap();
+
+                break;
+
+            case SUSPENDED:
+            case CLOSED:
+                // not need to checkpoint, since when suspending we've already committed the state
                 checkpoint = null; // `null` indicates to not write a checkpoint
-                executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush", log);
-            }
-        } else if (state() == State.RESTORING) {
-            executeAndMaybeSwallow(clean, stateMgr::flush, "state manager flush", log);
-            checkpoint = Collections.emptyMap();
-        } else if (state() == State.SUSPENDED) {
-            // if `SUSPENDED` do not need to checkpoint, since when suspending we've already committed the state
-            checkpoint = null; // `null` indicates to not write a checkpoint
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while prepare closing active task " + id);
+
+                break;
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while prepare closing active task " + id);
         }
 
         return checkpoint;
@@ -558,8 +628,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 break;
 
+            case CLOSED:
+                log.trace("Skip closing since state is {}", state());
+                return;
+
             default:
-                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+                throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
         }
 
         partitionGroup.close();
