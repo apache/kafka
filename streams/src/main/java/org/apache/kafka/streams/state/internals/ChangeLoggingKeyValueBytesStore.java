@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
@@ -32,7 +30,7 @@ public class ChangeLoggingKeyValueBytesStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
     implements KeyValueStore<Bytes, byte[]> {
 
-    StoreChangeLogger<Bytes, byte[]> changeLogger;
+    InternalProcessorContext context;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
@@ -42,11 +40,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void init(final ProcessorContext context,
                      final StateStore root) {
         super.init(context, root);
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
-        changeLogger = new StoreChangeLogger<>(
-            name(),
-            context,
-            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+        this.context = (InternalProcessorContext) context;
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (wrapped() instanceof MemoryLRUCache) {
@@ -113,6 +107,6 @@ public class ChangeLoggingKeyValueBytesStore
 
     void log(final Bytes key,
              final byte[] value) {
-        changeLogger.logChange(key, value);
+        context.logChange(name(), key, value, context.timestamp());
     }
 }

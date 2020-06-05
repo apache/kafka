@@ -43,9 +43,9 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * The added {@link KGroupedStream grouped KStream} must have the same number of partitions as all existing
      * streams of this {@code CogroupedKStream}.
-     * If this is not the case, you would need to call {@link KStream#through(String)} before
-     * {@link KStream#groupByKey() grouping} the {@link KStream}, using a pre-created topic with the "correct" number of
-     * partitions.
+     * If this is not the case, you would need to call {@link KStream#repartition(Repartitioned)} before
+     * {@link KStream#groupByKey() grouping} the {@link KStream} and specify the "correct" number of
+     * partitions via {@link Repartitioned} parameter.
      * <p>
      * The specified {@link Aggregator} is applied in the actual {@link #aggregate(Initializer) aggregation} step for
      * each input record and computes a new aggregate using the current aggregate (or for the very first record per key

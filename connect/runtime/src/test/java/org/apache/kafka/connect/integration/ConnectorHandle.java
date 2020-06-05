@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -57,7 +59,19 @@ public class ConnectorHandle {
      * @return a non-null {@link TaskHandle}
      */
     public TaskHandle taskHandle(String taskId) {
-        return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId));
+        return taskHandle(taskId, null);
+    }
+
+    /**
+     * Get or create a task handle for a given task id. The task need not be created when this method is called. If the
+     * handle is called before the task is created, the task will bind to the handle once it starts (or restarts).
+     *
+     * @param taskId the task id
+     * @param consumer A callback invoked when a sink task processes a record.
+     * @return a non-null {@link TaskHandle}
+     */
+    public TaskHandle taskHandle(String taskId, Consumer<SinkRecord> consumer) {
+        return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId, consumer));
     }
 
     /**

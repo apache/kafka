@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
@@ -26,8 +27,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
-
-import java.io.IOException;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -47,7 +46,7 @@ final class StateManagerUtil {
     }
 
     /**
-     * @throws StreamsException If the store's change log does not contain the partition
+     * @throws StreamsException If the store's changelog does not contain the partition
      */
     static void registerStateStores(final Logger log,
                                     final String logPrefix,
@@ -74,15 +73,12 @@ final class StateManagerUtil {
 
         final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
 
+        stateMgr.registerStateStores(topology.stateStores(), processorContext);
+        log.debug("Registered state stores");
+
         // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
         // the state stores have been registered; we should not try to load at the state manager construction time.
         // See https://issues.apache.org/jira/browse/KAFKA-8574
-        for (final StateStore store : topology.stateStores()) {
-            processorContext.uninitialize();
-            store.init(processorContext, store);
-            log.trace("Registered state store {}", store.name());
-        }
-
         stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
         log.debug("Initialized state stores");
     }

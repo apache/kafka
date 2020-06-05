@@ -155,9 +155,6 @@ public class TaskManager {
             final TaskId taskId = entry.getKey();
             final Task task = tasks.get(taskId);
 
-            // this call is idempotent so even if the task is only CREATED we can still call it
-            changelogReader.remove(task.changelogPartitions());
-
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
@@ -183,8 +180,14 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new TreeMap<>(activeTasks);
-        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new TreeMap<>(standbyTasks);
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
+        final Set<Task> tasksToRecycle = new HashSet<>();
+
+        builder.addSubscribedTopicsFromAssignment(
+            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            logPrefix
+        );
 
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
@@ -196,15 +199,18 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
                 if (task.commitNeeded()) {
                     additionalTasksForCommitting.add(task);
                 }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
-                task.resume();
+                updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
-            } else /* we previously owned this task, and we don't have it anymore, or it has changed active/standby state */ {
+                // check for tasks that were owned previously but have changed active/standby status
+            } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
+                tasksToRecycle.add(task);
+            } else {
                 try {
                     final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
@@ -272,6 +278,26 @@ public class TaskManager {
             }
         }
 
+        for (final Task oldTask : tasksToRecycle) {
+            final Task newTask;
+            try {
+                if (oldTask.isActive()) {
+                    final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
+                    newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
+                } else {
+                    final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
+                    newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
+                }
+                tasks.remove(oldTask.id());
+                addNewTask(newTask);
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", oldTask.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.put(oldTask.id(), e);
+                dirtyTasks.add(oldTask);
+            }
+        }
+
         for (final Task task : dirtyTasks) {
             closeTaskDirty(task);
             cleanUpTaskProducer(task, taskCloseExceptions);
@@ -311,10 +337,6 @@ public class TaskManager {
             }
         }
 
-        builder.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
-            logPrefix
-        );
     }
 
     private void cleanUpTaskProducer(final Task task,
@@ -328,6 +350,21 @@ public class TaskManager {
                 taskCloseExceptions.putIfAbsent(task.id(), e);
             }
         }
+    }
+
+    private void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
+        final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
+        if (requiresUpdate) {
+            log.trace("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
+            for (final TopicPartition inputPartition : task.inputPartitions()) {
+                partitionToTask.remove(inputPartition);
+            }
+            for (final TopicPartition topicPartition : topicPartitions) {
+                partitionToTask.put(topicPartition, task);
+            }
+            task.update(topicPartitions, builder.buildSubtopology(task.id().topicGroupId));
+        }
+        task.resume();
     }
 
     private void addNewTask(final Task task) {
@@ -371,7 +408,9 @@ public class TaskManager {
         }
 
         if (allRunning && !restoringTasks.isEmpty()) {
+
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
+
             for (final Task task : restoringTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
@@ -464,6 +503,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
+
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                 } catch (final RuntimeException e) {
@@ -516,6 +556,10 @@ public class TaskManager {
      * assigned the task as a result of the rebalance). This method should be idempotent.
      */
     private void tryToLockAllNonEmptyTaskDirectories() {
+        // Always clear the set at the beginning as we're always dealing with the
+        // current set of actually-locked tasks.
+        lockedTaskDirectories.clear();
+
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
@@ -592,12 +636,8 @@ public class TaskManager {
 
     // Note: this MUST be called *before* actually closing the task
     private void cleanupTask(final Task task) {
-        // 1. remove the changelog partitions from changelog reader;
-        // 2. remove the input partitions from the materialized map;
-        // 3. remove the task metrics from the metrics registry
-        if (!task.changelogPartitions().isEmpty()) {
-            changelogReader.remove(task.changelogPartitions());
-        }
+        // 1. remove the input partitions from the materialized map;
+        // 2. remove the task metrics from the metrics registry
 
         for (final TopicPartition inputPartition : task.inputPartitions()) {
             partitionToTask.remove(inputPartition);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.mockito.stubbing.OngoingStubbing;
@@ -59,6 +60,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -680,5 +682,27 @@ public class UtilsTest {
 
         assertThat(diff, is(mkSet("a", "b")));
         assertThat(diff.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testPropsToMap() {
+        assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, 2);
+            Utils.propsToMap(props);
+        });
+        assertValue(false);
+        assertValue(1);
+        assertValue("string");
+        assertValue(1.1);
+        assertValue(Collections.emptySet());
+        assertValue(Collections.emptyList());
+        assertValue(Collections.emptyMap());
+    }
+
+    private static void assertValue(Object value) {
+        Properties props = new Properties();
+        props.put("key", value);
+        assertEquals(Utils.propsToMap(props).get("key"), value);
     }
 }

@@ -179,6 +179,46 @@ public class RegexSourceIntegrationTest {
 
         TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
 
+        streams.close();
+        CLUSTER.deleteTopicsAndWait("TEST-TOPIC-1", "TEST-TOPIC-2");
+    }
+
+    @Test
+    public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
+        final String topic1 = "TEST-TOPIC-1";
+        CLUSTER.createTopic(topic1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+        pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+        streams = new KafkaStreams(builder.build(), streamsConfiguration);
+        final String topic2 = "TEST-TOPIC-2";
+        streams.start();
+
+        CLUSTER.createTopic(topic2);
+
+        final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
+        final KeyValue<String, String> record2 = new KeyValue<>("2", "2");
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                topic1,
+                Collections.singletonList(record1),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+                CLUSTER.time
+        );
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                topic2,
+                Collections.singletonList(record2),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+                CLUSTER.time
+        );
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
+                outputTopic,
+                Arrays.asList(record1, record2)
+        );
+
+        streams.close();
+        CLUSTER.deleteTopicsAndWait(topic1, topic2);
     }
 
     private String createTopic(final int suffix) throws InterruptedException {
@@ -313,7 +353,7 @@ public class RegexSourceIntegrationTest {
             final Serde<String> stringSerde = Serdes.String();
             final StreamsBuilder builderLeader = new StreamsBuilder();
             final StreamsBuilder builderFollower = new StreamsBuilder();
-            final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1,  PARTITIONED_TOPIC_2);
+            final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1, PARTITIONED_TOPIC_2);
 
             final KStream<String, String> partitionedStreamLeader = builderLeader.stream(Pattern.compile("partitioned-\\d"));
             final KStream<String, String> partitionedStreamFollower = builderFollower.stream(Pattern.compile("partitioned-\\d"));
@@ -325,7 +365,7 @@ public class RegexSourceIntegrationTest {
             final List<String> leaderAssignment = new CopyOnWriteArrayList<>();
             final List<String> followerAssignment = new CopyOnWriteArrayList<>();
 
-            partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            partitionedStreamsLeader = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
@@ -337,7 +377,7 @@ public class RegexSourceIntegrationTest {
 
                 }
             });
-            partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            partitionedStreamsFollower = new KafkaStreams(builderFollower.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {

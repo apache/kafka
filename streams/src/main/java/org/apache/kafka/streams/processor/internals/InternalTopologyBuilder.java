@@ -522,8 +522,9 @@ public class InternalTopologyBuilder {
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        if (!allowOverride && stateFactories.containsKey(storeBuilder.name())) {
-            throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
+        final StateStoreFactory<?> stateFactory = stateFactories.get(storeBuilder.name());
+        if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
         }
 
         stateFactories.put(storeBuilder.name(), new StateStoreFactory<>(storeBuilder));

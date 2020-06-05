@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -29,4 +30,11 @@ interface ChangelogRegister {
      * @param stateManager the state manager used for restoring (one per task)
      */
     void register(final TopicPartition partition, final ProcessorStateManager stateManager);
+
+    /**
+     * Unregisters and removes the passed in partitions from the set of changelogs
+     * @param removedPartitions the set of partitions to remove
+     * @param triggerOnRestoreEnd whether to trigger the onRestoreEnd callback
+     */
+    void unregister(final Collection<TopicPartition> removedPartitions, final boolean triggerOnRestoreEnd);
 }

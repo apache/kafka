@@ -613,7 +613,7 @@ class LogTest {
     // Increment the log start offset
     val startOffset = 4
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(startOffset)
+    log.maybeIncrementLogStartOffset(startOffset, ClientRecordDeletion)
     assertTrue(log.logEndOffset > log.logStartOffset)
 
     // Append garbage to a segment below the current log start offset
@@ -1209,7 +1209,7 @@ class LogTest {
     assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(1L)
+    log.maybeIncrementLogStartOffset(1L, ClientRecordDeletion)
 
     // Deleting records should not remove producer state
     assertEquals(2, log.activeProducersWithLastSequence.size)
@@ -1244,7 +1244,7 @@ class LogTest {
     assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(1L)
+    log.maybeIncrementLogStartOffset(1L, ClientRecordDeletion)
     log.deleteOldSegments()
 
     // Deleting records should not remove producer state
@@ -1664,7 +1664,7 @@ class LogTest {
     assertEquals(2, ProducerStateManager.listSnapshotFiles(log.producerStateManager.logDir).size)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(2L)
+    log.maybeIncrementLogStartOffset(2L, ClientRecordDeletion)
 
     // Deleting records should not remove producer state but should delete snapshots
     assertEquals(2, log.activeProducersWithLastSequence.size)
@@ -2078,6 +2078,22 @@ class LogTest {
       case _: RecordTooLargeException => // this is good
     }
   }
+
+  @Test
+  def testMessageSizeCheckInAppendAsFollower(): Unit = {
+    val first = MemoryRecords.withRecords(0, CompressionType.NONE, 0,
+      new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
+    val second = MemoryRecords.withRecords(5, CompressionType.NONE, 0,
+      new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes),
+      new SimpleRecord("More padding boo hoo".getBytes))
+
+    val log = createLog(logDir, LogTest.createLogConfig(maxMessageBytes = second.sizeInBytes - 1))
+
+    log.appendAsFollower(first)
+    // the second record is larger then limit but appendAsFollower does not validate the size.
+    log.appendAsFollower(second)
+  }
+
   /**
    * Append a bunch of messages to a log and then re-open it both with and without recovery and check that the log re-initializes correctly.
    */
@@ -3294,17 +3310,17 @@ class LogTest {
     assertEquals(log.logStartOffset, 0)
     log.updateHighWatermark(log.logEndOffset)
 
-    log.maybeIncrementLogStartOffset(1)
+    log.maybeIncrementLogStartOffset(1, ClientRecordDeletion)
     log.deleteOldSegments()
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 1)
 
-    log.maybeIncrementLogStartOffset(6)
+    log.maybeIncrementLogStartOffset(6, ClientRecordDeletion)
     log.deleteOldSegments()
     assertEquals("should have 2 segments", 2, log.numberOfSegments)
     assertEquals(log.logStartOffset, 6)
 
-    log.maybeIncrementLogStartOffset(15)
+    log.maybeIncrementLogStartOffset(15, ClientRecordDeletion)
     log.deleteOldSegments()
     assertEquals("should have 1 segments", 1, log.numberOfSegments)
     assertEquals(log.logStartOffset, 15)
@@ -3422,7 +3438,7 @@ class LogTest {
     // Three segments should be created
     assertEquals(3, log.logSegments.count(_ => true))
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(recordsPerSegment)
+    log.maybeIncrementLogStartOffset(recordsPerSegment, ClientRecordDeletion)
 
     // The first segment, which is entirely before the log start offset, should be deleted
     // Of the remaining the segments, the first can overlap the log start offset and the rest must have a base offset
@@ -4112,7 +4128,7 @@ class LogTest {
     assertEquals(Some(0L), log.firstUnstableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(5L)
+    log.maybeIncrementLogStartOffset(5L, ClientRecordDeletion)
 
     // the first unstable offset should be lower bounded by the log start offset
     assertEquals(Some(5L), log.firstUnstableOffset)
@@ -4137,7 +4153,7 @@ class LogTest {
     assertEquals(Some(0L), log.firstUnstableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(8L)
+    log.maybeIncrementLogStartOffset(8L, ClientRecordDeletion)
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals(1, log.logSegments.size)
