@@ -145,6 +145,7 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
                          ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
@@ -161,6 +162,7 @@ public class NetworkClient implements KafkaClient {
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -179,6 +181,7 @@ public class NetworkClient implements KafkaClient {
             int socketReceiveBuffer,
             int defaultRequestTimeoutMs,
             long connectionSetupTimeoutMs,
+            long connectionSetupTimeoutMaxMs,
             ClientDnsLookup clientDnsLookup,
             Time time,
             boolean discoverBrokerVersions,
@@ -196,6 +199,7 @@ public class NetworkClient implements KafkaClient {
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -214,6 +218,7 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
                          ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
@@ -230,6 +235,7 @@ public class NetworkClient implements KafkaClient {
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -249,6 +255,7 @@ public class NetworkClient implements KafkaClient {
                           int socketReceiveBuffer,
                           int defaultRequestTimeoutMs,
                           long connectionSetupTimeoutMs,
+                          long connectionSetupTimeoutMaxMs,
                           ClientDnsLookup clientDnsLookup,
                           Time time,
                           boolean discoverBrokerVersions,
@@ -269,7 +276,9 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
+        this.connectionStates = new ClusterConnectionStates(
+                reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -698,8 +707,8 @@ public class NetworkClient implements KafkaClient {
                 foundConnecting = node;
             } else if (canConnect(node, now)) {
                 if (foundCanConnect == null ||
-                        this.connectionStates.failedAttempts(foundCanConnect.idString()) >
-                                this.connectionStates.failedAttempts(node.idString())) {
+                        this.connectionStates.lastConnectAttemptMs(foundCanConnect.idString()) >
+                                this.connectionStates.lastConnectAttemptMs(node.idString())) {
                     foundCanConnect = node;
                 }
             } else {
@@ -813,7 +822,7 @@ public class NetworkClient implements KafkaClient {
     private void handleTimeOutConnections(List<ClientResponse> responses, long now) {
         Set<String> connectingNodes = connectionStates.connectingNodes();
         for (String nodeId: connectingNodes) {
-            if (now - connectionStates.lastConnectAttemptMs(nodeId) > connectionSetupTimeoutMs) {
+            if (connectionStates.isConnectionSetupTimeout(nodeId, now)) {
                 // close connection to the node
                 this.selector.close(nodeId);
                 log.debug("Disconnecting from node {} due to socket connection setup timeout.", nodeId);

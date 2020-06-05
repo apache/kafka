@@ -143,7 +143,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         channelBuilder,
         logContext
       )
-      val networkClient = new NetworkClient(selector, new ManualMetadataUpdater(Seq(brokerNode).asJava), config.brokerId.toString, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, Selectable.USE_DEFAULT_BUFFER_SIZE, config.requestTimeoutMs, 10*1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
+      val networkClient = new NetworkClient(selector, new ManualMetadataUpdater(Seq(brokerNode).asJava), config.brokerId.toString, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, Selectable.USE_DEFAULT_BUFFER_SIZE, config.requestTimeoutMs, 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
       (networkClient, reconfigurableChannelBuilder)
     }
     val threadName = threadNamePrefix match {

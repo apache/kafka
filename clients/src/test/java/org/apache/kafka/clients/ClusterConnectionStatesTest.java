@@ -40,6 +40,8 @@ public class ClusterConnectionStatesTest {
     private final MockTime time = new MockTime();
     private final long reconnectBackoffMs = 10 * 1000;
     private final long reconnectBackoffMax = 60 * 1000;
+    private final long connectionSetupTimeoutMs = 5 * 1000;
+    private final long connectionSetupTimeoutMaxMs = 127 * 1000;
     private final double reconnectBackoffJitter = 0.2;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
@@ -49,7 +51,9 @@ public class ClusterConnectionStatesTest {
 
     @Before
     public void setup() {
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, new LogContext());
+        this.connectionStates = new ClusterConnectionStates(
+                reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext());
     }
 
     @Test

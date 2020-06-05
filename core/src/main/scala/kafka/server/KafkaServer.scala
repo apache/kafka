@@ -477,7 +477,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           channelBuilder,
           logContext
         )
-        new NetworkClient(selector, metadataUpdater, config.brokerId.toString, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, Selectable.USE_DEFAULT_BUFFER_SIZE, config.requestTimeoutMs, 10*1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
+        new NetworkClient(selector, metadataUpdater, config.brokerId.toString, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, Selectable.USE_DEFAULT_BUFFER_SIZE, config.requestTimeoutMs, 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
       }
 
       var shutdownSucceeded: Boolean = false

@@ -73,7 +73,9 @@ public class AdminClientConfig extends AbstractConfig {
 
     /** <code>socket.connections.setup.timeout.ms</code> */
     public static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG;
-    private static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC;
+
+    /** <code>socket.connections.setup.timeout.max.ms</code> */
+    public static final String SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG;
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -157,7 +159,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         Type.LONG,
                                         10 * 1000,
                                         Importance.MEDIUM,
-                                        SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
+                                        CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
+                                .define(SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        127 * 1000,
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,
                                         5 * 60 * 1000,
