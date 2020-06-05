@@ -1096,6 +1096,10 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
+    public Map<String, List<String>> nodeToSourceTopics() {
+        return Collections.unmodifiableMap(nodeToSourceTopics);
+    }
+
     private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
                                                                final Optional<Integer> numberOfPartitions) {
         return numberOfPartitions

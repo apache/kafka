@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -495,17 +496,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions) {
-        super.update(topicPartitions);
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        super.update(topicPartitions, nodeToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
-        switch (state()) {
-            case CREATED:
-            case RESTORING:
-            case RUNNING:
-            case SUSPENDED:
-            default:
-                throw new IllegalStateException("Unknown state " + state() + " while updating active task " + id);
-        }
     }
 
     @Override

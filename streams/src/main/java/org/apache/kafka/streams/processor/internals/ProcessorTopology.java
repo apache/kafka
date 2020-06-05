@@ -29,6 +29,7 @@ import java.util.Set;
 public class ProcessorTopology {
 
     private final List<ProcessorNode<?, ?>> processorNodes;
+    private final Map<String, SourceNode<?, ?>> sourceNodesByName;
     private final Map<String, SourceNode<?, ?>> sourcesByTopic;
     private final Map<String, SinkNode<?, ?>> sinksByTopic;
     private final Set<String> terminalNodes;
@@ -59,6 +60,11 @@ public class ProcessorTopology {
             if (node.isTerminalNode()) {
                 terminalNodes.add(node.name());
             }
+        }
+
+        this.sourceNodesByName = new HashMap<>();
+        for (final SourceNode<?, ?> source : sourcesByTopic.values()) {
+            sourceNodesByName.put(source.name(), source);
         }
     }
 
@@ -133,8 +139,14 @@ public class ProcessorTopology {
         return false;
     }
 
-    public void updateSourceTopics(final Set<String> topics) {
-
+    public void updateSourceTopics(Map<String, List<String>> nodeToSourceTopics) {
+        sourcesByTopic.clear();
+        for (final Map.Entry<String, List<String>> sourceEntry : nodeToSourceTopics.entrySet()) {
+            final String nodeName = sourceEntry.getKey();
+            for (final String topic : sourceEntry.getValue()) {
+                sourcesByTopic.put(topic, sourceNodesByName.get(nodeName));
+            }
+        }
     }
 
     private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
