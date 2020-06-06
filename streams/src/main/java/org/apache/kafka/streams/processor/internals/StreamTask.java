@@ -107,8 +107,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
-    private boolean checkpointNeeded = false;
-    private Map<TopicPartition, Long> checkpoint = Collections.emptyMap();
+    private Map<TopicPartition, Long> checkpoint = null;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -549,7 +548,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void prepareClose(final boolean clean) {
         // Reset any previously scheduled checkpoint.
-        checkpointNeeded = false;
+        checkpoint = null;
 
         switch (state()) {
             case CREATED:
@@ -588,13 +587,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void scheduleCheckpoint(final Map<TopicPartition, Long> checkpoint) {
         this.checkpoint = checkpoint;
-        this.checkpointNeeded = true;
     }
 
     private void writeCheckpointIfNeed() {
-        if (checkpointNeeded) {
+        if (checkpoint != null) {
             stateMgr.checkpoint(checkpoint);
-            checkpointNeeded = false;
+            checkpoint = null;
         }
     }
 
