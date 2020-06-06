@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -24,20 +25,28 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
+
+    public static final class QuietAdminClientConfig extends AdminClientConfig {
+        QuietAdminClientConfig(final StreamsConfig streamsConfig) {
+            // If you just want to look up admin configs, you don't care about the clientId
+            super(streamsConfig.getAdminConfigs("dummy"), false);
+        }
+    }
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -86,25 +95,17 @@ public class ClientUtils {
         return result;
     }
 
-    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsetsWithoutTimeout(final Collection<TopicPartition> partitions,
-                                                                                           final Admin adminClient) {
-        return fetchEndOffsets(partitions, adminClient, null);
-    }
-
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
-                                                                             final Admin adminClient,
-                                                                             final Duration timeout) {
+                                                                             final Admin adminClient) {
         final Map<TopicPartition, ListOffsetsResultInfo> endOffsets;
         try {
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> future =  adminClient.listOffsets(
                 partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
                                                                                         .all();
-            if (timeout == null) {
-                endOffsets = future.get();
-            } else {
-                endOffsets = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            }
-        } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
+            endOffsets = future.get();
+
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            LOG.warn("listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
         return endOffsets;

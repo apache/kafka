@@ -92,7 +92,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       // TODO: Add Kafka Config
       10 * 1000,
       127 * 1000,
-      ClientDnsLookup.DEFAULT,
+      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
       new ApiVersions,

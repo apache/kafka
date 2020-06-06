@@ -21,7 +21,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 
-import kafka.log.{Log, LogSegment}
+import kafka.log.{ClientRecordDeletion, Log, LogSegment}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -78,7 +78,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.flush()
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(3)
+    log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
     log.deleteOldSegments()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)

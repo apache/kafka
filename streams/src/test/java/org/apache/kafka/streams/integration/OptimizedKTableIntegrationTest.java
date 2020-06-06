@@ -22,6 +22,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -34,7 +35,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -46,9 +46,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -109,9 +109,7 @@ public class OptimizedKTableIntegrationTest {
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
         final TrackingStateRestoreListener listener = new TrackingStateRestoreListener();
 
-        kafkaStreamsList.forEach(kafkaStreams -> {
-            kafkaStreams.setGlobalStateRestoreListener(listener);
-        });
+        kafkaStreamsList.forEach(kafkaStreams -> kafkaStreams.setGlobalStateRestoreListener(listener));
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         produceValueRange(key, 0, batch1NumMessages);
@@ -135,8 +133,8 @@ public class OptimizedKTableIntegrationTest {
 
         // Assert that no restore has occurred, ensures that when we check later that the restore
         // notification actually came from after the rebalance.
-        assertThat(listener.startOffset, is(equalTo(0L)));
-        assertThat(listener.totalNumRestored, is(equalTo(0L)));
+        assertTrue(listener.allStartOffsetsAtZero());
+        assertThat(listener.totalNumRestored(), is(equalTo(0L)));
 
         // Assert that the current value in store reflects all messages being processed
         assertThat(kafkaStreams1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
@@ -187,33 +185,6 @@ public class OptimizedKTableIntegrationTest {
         return streams;
     }
 
-    private class TrackingStateRestoreListener implements StateRestoreListener {
-        long startOffset = -1L;
-        long endOffset = -1L;
-        long totalNumRestored = 0L;
-
-        @Override
-        public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
-            startOffset = startingOffset;
-            endOffset = endingOffset;
-        }
-
-        @Override
-        public void onBatchRestored(final TopicPartition topicPartition,
-                                    final String storeName,
-                                    final long batchEndOffset,
-                                    final long numRestored) {
-            totalNumRestored += numRestored;
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-
-        }
-    }
 
     private Properties streamsConfiguration() {
         final String safeTestName = safeUniqueTestName(getClass(), testName);

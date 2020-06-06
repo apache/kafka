@@ -132,7 +132,8 @@ public class EosTestClient extends SmokeTestUtil {
             .to("sum", Produced.with(stringSerde, longSerde));
 
         if (withRepartitioning) {
-            final KStream<String, Integer> repartitionedData = data.through("repartition");
+            data.to("repartition");
+            final KStream<String, Integer> repartitionedData = builder.stream("repartition");
 
             repartitionedData.process(SmokeTestUtil.printProcessorSupplier("repartition"));
 

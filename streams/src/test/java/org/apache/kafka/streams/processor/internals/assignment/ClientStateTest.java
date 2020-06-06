@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -31,6 +32,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -81,6 +84,103 @@ public class ClientStateTest {
     public void shouldHaveReachedCapacityWhenAssignedTasksGreaterThanOrEqualToCapacity() {
         client.assignActive(TASK_0_1);
         assertTrue(client.reachedCapacity());
+    }
+
+    @Test
+    public void shouldRefuseDoubleActiveTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignActive(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseActiveAndStandbyTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignActive(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseDoubleStandbyTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignStandby(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseStandbyAndActiveTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignStandby(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseToUnassignNotAssignedActiveTask() {
+        final ClientState clientState = new ClientState(1);
+        assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseToUnassignNotAssignedStandbyTask() {
+        final ClientState clientState = new ClientState(1);
+        assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseToUnassignActiveTaskAsStandby() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignActive(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
+    }
+
+    @Test
+    public void shouldRefuseToUnassignStandbyTaskAsActive() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignStandby(TASK_0_0);
+        assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
+    }
+
+    @Test
+    public void shouldUnassignActiveTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignActive(TASK_0_0);
+        assertThat(clientState, hasActiveTasks(1));
+        clientState.unassignActive(TASK_0_0);
+        assertThat(clientState, hasActiveTasks(0));
+    }
+
+    @Test
+    public void shouldUnassignStandbyTask() {
+        final ClientState clientState = new ClientState(1);
+        clientState.assignStandby(TASK_0_0);
+        assertThat(clientState, hasStandbyTasks(1));
+        clientState.unassignStandby(TASK_0_0);
+        assertThat(clientState, hasStandbyTasks(0));
+    }
+
+    @Test
+    public void shouldNotModifyActiveView() {
+        final ClientState clientState = new ClientState(1);
+        final Set<TaskId> taskIds = clientState.activeTasks();
+        assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
+        assertThat(clientState, hasActiveTasks(0));
+    }
+
+    @Test
+    public void shouldNotModifyStandbyView() {
+        final ClientState clientState = new ClientState(1);
+        final Set<TaskId> taskIds = clientState.standbyTasks();
+        assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
+        assertThat(clientState, hasStandbyTasks(0));
+    }
+
+    @Test
+    public void shouldNotModifyAssignedView() {
+        final ClientState clientState = new ClientState(1);
+        final Set<TaskId> taskIds = clientState.assignedTasks();
+        assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
+        assertThat(clientState, hasActiveTasks(0));
+        assertThat(clientState, hasStandbyTasks(0));
     }
 
     @Test

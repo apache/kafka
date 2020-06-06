@@ -42,6 +42,9 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
@@ -105,14 +108,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
@@ -144,14 +140,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(anotherTopic, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
@@ -199,14 +188,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
@@ -233,14 +215,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
         connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
@@ -269,14 +244,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
@@ -294,6 +262,21 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    private Map<String, String> defaultSourceConnectorProps(String topic) {
+        // setup up props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPIC_CONFIG, topic);
+        props.put("throughput", String.valueOf(10));
+        props.put("messages.per.poll", String.valueOf(10));
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        return props;
     }
 
     private boolean assertConnectorAndTasksAreUnique() {

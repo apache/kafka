@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
@@ -95,6 +96,28 @@ public class ProcessorNodeMetricsTest {
 
         verifySensor(
             () -> ProcessorNodeMetrics.suppressionEmitSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
+    }
+
+    @Test
+    public void shouldGetIdempotentUpdateSkipSensor() {
+        final String metricNamePrefix = "idempotent-update-skip";
+        final String descriptionOfCount = "The total number of skipped idempotent updates";
+        final String descriptionOfRate = "The average number of skipped idempotent updates per second";
+        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            metricNamePrefix,
+            descriptionOfRate,
+            descriptionOfCount
+        );
+
+        verifySensor(
+            () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
+        );
     }
 
     @Test
@@ -236,6 +259,38 @@ public class ProcessorNodeMetricsTest {
         } else {
             shouldGetProcessAtSourceSensor();
         }
+    }
+
+    @Test
+    public void shouldGetRecordE2ELatencySensor() {
+        final String operation = "record-e2e-latency";
+        final String recordE2ELatencyMinDescription =
+            "The minimum end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        final String recordE2ELatencyMaxDescription =
+            "The maximum end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        final String recordE2ELatencyP99Description =
+            "The 99th percentile end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        final String recordE2ELatencyP90Description =
+            "The 90th percentile end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, operation, RecordingLevel.INFO))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addMinAndMaxAndP99AndP90ToSensor(
+            expectedSensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            operation,
+            recordE2ELatencyMinDescription,
+            recordE2ELatencyMaxDescription,
+            recordE2ELatencyP99Description,
+            recordE2ELatencyP90Description
+        );
+
+        verifySensor(() -> ProcessorNodeMetrics.recordE2ELatencySensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, RecordingLevel.INFO, streamsMetrics));
     }
 
     private void shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(final String metricNamePrefix,

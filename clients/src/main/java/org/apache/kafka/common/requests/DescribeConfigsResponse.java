@@ -56,6 +56,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final String IS_SENSITIVE_KEY_NAME = "is_sensitive";
     private static final String IS_DEFAULT_KEY_NAME = "is_default";
     private static final String READ_ONLY_KEY_NAME = "read_only";
+    private static final String CONFIG_TYPE_KEY_NAME = "config_type";
+    private static final String CONFIG_DOCUMENTATION_KEY_NAME = "config_documentation";
 
     private static final String CONFIG_SYNONYMS_KEY_NAME = "config_synonyms";
     private static final String CONFIG_SOURCE_KEY_NAME = "config_source";
@@ -80,6 +82,16 @@ public class DescribeConfigsResponse extends AbstractResponse {
             new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN),
             new Field(CONFIG_SYNONYMS_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1)));
 
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTRY_V3 = new Schema(
+            new Field(CONFIG_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
+            new Field(READ_ONLY_KEY_NAME, BOOLEAN),
+            new Field(CONFIG_SOURCE_KEY_NAME, INT8),
+            new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN),
+            new Field(CONFIG_SYNONYMS_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1)),
+            new Field(CONFIG_TYPE_KEY_NAME, INT8),
+            new Field(CONFIG_DOCUMENTATION_KEY_NAME, NULLABLE_STRING));
+
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
@@ -94,6 +106,13 @@ public class DescribeConfigsResponse extends AbstractResponse {
             new Field(RESOURCE_NAME_KEY_NAME, STRING),
             new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTRY_V1)));
 
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V3 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTRY_V3)));
+
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
@@ -102,13 +121,22 @@ public class DescribeConfigsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1)));
 
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_V3 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V3)));
+
     /**
      * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
      */
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_V2 = DESCRIBE_CONFIGS_RESPONSE_V1;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1, DESCRIBE_CONFIGS_RESPONSE_V2};
+        return new Schema[]{
+            DESCRIBE_CONFIGS_RESPONSE_V0,
+            DESCRIBE_CONFIGS_RESPONSE_V1,
+            DESCRIBE_CONFIGS_RESPONSE_V2,
+            DESCRIBE_CONFIGS_RESPONSE_V3
+        };
     }
 
     public static class Config {
@@ -136,9 +164,16 @@ public class DescribeConfigsResponse extends AbstractResponse {
         private final ConfigSource source;
         private final boolean readOnly;
         private final Collection<ConfigSynonym> synonyms;
+        private final ConfigType type;
+        private final String documentation;
 
         public ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean readOnly,
-                           Collection<ConfigSynonym> synonyms) {
+            Collection<ConfigSynonym> synonyms) {
+            this(name, value, source, isSensitive, readOnly, synonyms, ConfigType.UNKNOWN, null);
+        }
+
+        public ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean readOnly,
+                           Collection<ConfigSynonym> synonyms, ConfigType type, String documentation) {
 
             this.name = Objects.requireNonNull(name, "name");
             this.value = value;
@@ -146,6 +181,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
             this.isSensitive = isSensitive;
             this.readOnly = readOnly;
             this.synonyms = Objects.requireNonNull(synonyms, "synonyms");
+            this.type = type;
+            this.documentation = documentation;
         }
 
         public String name() {
@@ -171,6 +208,14 @@ public class DescribeConfigsResponse extends AbstractResponse {
         public Collection<ConfigSynonym> synonyms() {
             return synonyms;
         }
+
+        public ConfigType type() {
+            return type;
+        }
+
+        public String documentation() {
+            return documentation;
+        }
     }
 
     public enum ConfigSource {
@@ -194,6 +239,34 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 throw new IllegalArgumentException("id should be positive, id: " + id);
             if (id >= VALUES.length)
                 return UNKNOWN_CONFIG;
+            return VALUES[id];
+        }
+    }
+
+    public enum ConfigType {
+        UNKNOWN((byte) 0),
+        BOOLEAN((byte) 1),
+        STRING((byte) 2),
+        INT((byte) 3),
+        SHORT((byte) 4),
+        LONG((byte) 5),
+        DOUBLE((byte) 6),
+        LIST((byte) 7),
+        CLASS((byte) 8),
+        PASSWORD((byte) 9);
+
+        final byte id;
+        private static final ConfigType[] VALUES = values();
+
+        ConfigType(byte id) {
+            this.id = id;
+        }
+
+        public static ConfigType forId(byte id) {
+            if (id < 0)
+                throw new IllegalArgumentException("id should be positive, id: " + id);
+            if (id >= VALUES.length)
+                return UNKNOWN;
             return VALUES[id];
         }
     }
@@ -248,6 +321,14 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 String configName = configEntriesStruct.getString(CONFIG_NAME_KEY_NAME);
                 String configValue = configEntriesStruct.getString(CONFIG_VALUE_KEY_NAME);
                 boolean isSensitive = configEntriesStruct.getBoolean(IS_SENSITIVE_KEY_NAME);
+                ConfigType type = ConfigType.UNKNOWN;
+                if (configEntriesStruct.hasField(CONFIG_TYPE_KEY_NAME)) {
+                    type = ConfigType.forId(configEntriesStruct.getByte(CONFIG_TYPE_KEY_NAME));
+                }
+                String documentation = null;
+                if (configEntriesStruct.hasField(CONFIG_DOCUMENTATION_KEY_NAME)) {
+                    documentation = configEntriesStruct.getString(CONFIG_DOCUMENTATION_KEY_NAME);
+                }
                 ConfigSource configSource;
                 if (configEntriesStruct.hasField(CONFIG_SOURCE_KEY_NAME))
                     configSource = ConfigSource.forId(configEntriesStruct.getByte(CONFIG_SOURCE_KEY_NAME));
@@ -281,9 +362,10 @@ public class DescribeConfigsResponse extends AbstractResponse {
                         ConfigSource source = ConfigSource.forId(synonymStruct.getByte(CONFIG_SOURCE_KEY_NAME));
                         synonyms.add(new ConfigSynonym(synonymConfigName, synonymConfigValue, source));
                     }
-                } else
+                } else {
                     synonyms = Collections.emptyList();
-                configEntries.add(new ConfigEntry(configName, configValue, configSource, isSensitive, readOnly, synonyms));
+                }
+                configEntries.add(new ConfigEntry(configName, configValue, configSource, isSensitive, readOnly, synonyms, type, documentation));
             }
             Config config = new Config(error, configEntries);
             configs.put(resource, config);
@@ -336,6 +418,10 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 configEntriesStruct.setIfExists(CONFIG_SOURCE_KEY_NAME, configEntry.source.id);
                 configEntriesStruct.setIfExists(IS_DEFAULT_KEY_NAME, configEntry.source == ConfigSource.DEFAULT_CONFIG);
                 configEntriesStruct.set(READ_ONLY_KEY_NAME, configEntry.readOnly);
+                if (configEntriesStruct.hasField(CONFIG_TYPE_KEY_NAME) && configEntry.type != null) {
+                    configEntriesStruct.set(CONFIG_TYPE_KEY_NAME, configEntry.type.id);
+                }
+                configEntriesStruct.setIfExists(CONFIG_DOCUMENTATION_KEY_NAME, configEntry.documentation);
                 configEntryStructs.add(configEntriesStruct);
                 if (configEntriesStruct.hasField(CONFIG_SYNONYMS_KEY_NAME)) {
                     List<Struct> configSynonymStructs = new ArrayList<>(configEntry.synonyms.size());

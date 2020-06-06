@@ -324,7 +324,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   def validateTopicConfig(topic: String, configs: Properties): Unit = {
     Topic.validate(topic)
     if (!zkClient.topicExists(topic))
-      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
+      throw new UnknownTopicOrPartitionException(s"Topic '$topic' does not exist.")
     // remove the topic overrides
     LogConfig.validate(configs)
   }

@@ -42,6 +42,7 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -61,6 +62,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
@@ -289,16 +291,20 @@ public class AbstractHerderTest {
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(TestSourceConnector.class.getName(), result.name());
-        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP, ConnectorConfig.ERROR_GROUP), result.groups());
+        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 13 fields, connector's configs add 2
-        assertEquals(15, result.values().size());
+        Map<String, ConfigInfo> infos = result.values().stream()
+                .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
+        // Base connector config has 14 fields, connector's configs add 2
+        assertEquals(17, infos.size());
         // Missing name should generate an error
-        assertEquals(ConnectorConfig.NAME_CONFIG, result.values().get(0).configValue().name());
-        assertEquals(1, result.values().get(0).configValue().errors().size());
+        assertEquals(ConnectorConfig.NAME_CONFIG,
+                infos.get(ConnectorConfig.NAME_CONFIG).configValue().name());
+        assertEquals(1, infos.get(ConnectorConfig.NAME_CONFIG).configValue().errors().size());
         // "required" config from connector should generate an error
-        assertEquals("required", result.values().get(13).configValue().name());
-        assertEquals(1, result.values().get(13).configValue().errors().size());
+        assertEquals("required", infos.get("required").configValue().name());
+        assertEquals(1, infos.get("required").configValue().errors().size());
 
         verifyAll();
     }
@@ -347,21 +353,97 @@ public class AbstractHerderTest {
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP,
                 ConnectorConfig.ERROR_GROUP,
+                SourceConnectorConfig.TOPIC_CREATION_GROUP,
                 "Transforms: xformA",
                 "Transforms: xformB"
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 13 fields, connector's configs add 2, 2 type fields from the transforms, and
-        // 1 from the valid transformation's config
-        assertEquals(18, result.values().size());
+        Map<String, ConfigInfo> infos = result.values().stream()
+                .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
+        assertEquals(22, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
-        assertEquals("transforms.xformA.type", result.values().get(13).configValue().name());
-        assertTrue(result.values().get(13).configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.subconfig", result.values().get(14).configValue().name());
-        assertEquals("transforms.xformB.type", result.values().get(15).configValue().name());
-        assertFalse(result.values().get(15).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.type",
+                infos.get("transforms.xformA.type").configValue().name());
+        assertTrue(infos.get("transforms.xformA.type").configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.subconfig",
+                infos.get("transforms.xformA.subconfig").configValue().name());
+        assertEquals("transforms.xformB.type", infos.get("transforms.xformB.type").configValue().name());
+        assertFalse(infos.get("transforms.xformB.type").configValue().errors().isEmpty());
+
+        verifyAll();
+    }
+
+    @Test()
+    public void testConfigValidationPredicatesExtendResults() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+
+        // 2 transform aliases defined -> 2 plugin lookups
+        Set<PluginDesc<Transformation>> transformations = new HashSet<>();
+        transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
+        EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
+
+        Set<PluginDesc<Predicate>> predicates = new HashSet<>();
+        predicates.add(new PluginDesc<Predicate>(SamplePredicate.class, "1.0", classLoader));
+        EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
+
+        replayAll();
+
+        // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
+        // class info that should generate an error.
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
+        config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        config.put(ConnectorConfig.TRANSFORMS_CONFIG, "xformA");
+        config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
+        config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.predicate", "predX");
+        config.put(ConnectorConfig.PREDICATES_CONFIG, "predX,predY");
+        config.put(ConnectorConfig.PREDICATES_CONFIG + ".predX.type", SamplePredicate.class.getName());
+        config.put("required", "value"); // connector required config
+        ConfigInfos result = herder.validateConnectorConfig(config);
+        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+
+        // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
+        // the config fields for SourceConnectorConfig, but we expect these to change rarely.
+        assertEquals(TestSourceConnector.class.getName(), result.name());
+        // Each transform also gets its own group
+        List<String> expectedGroups = Arrays.asList(
+                ConnectorConfig.COMMON_GROUP,
+                ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP,
+                ConnectorConfig.ERROR_GROUP,
+                SourceConnectorConfig.TOPIC_CREATION_GROUP,
+                "Transforms: xformA",
+                "Predicates: predX",
+                "Predicates: predY"
+        );
+        assertEquals(expectedGroups, result.groups());
+        assertEquals(2, result.errorCount());
+        Map<String, ConfigInfo> infos = result.values().stream()
+                .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
+        assertEquals(24, infos.size());
+        // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
+        assertEquals("transforms.xformA.type",
+                infos.get("transforms.xformA.type").configValue().name());
+        assertTrue(infos.get("transforms.xformA.type").configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.subconfig",
+                infos.get("transforms.xformA.subconfig").configValue().name());
+        assertEquals("transforms.xformA.predicate",
+                infos.get("transforms.xformA.predicate").configValue().name());
+        assertTrue(infos.get("transforms.xformA.predicate").configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.negate",
+                infos.get("transforms.xformA.negate").configValue().name());
+        assertTrue(infos.get("transforms.xformA.negate").configValue().errors().isEmpty());
+        assertEquals("predicates.predX.type",
+                infos.get("predicates.predX.type").configValue().name());
+        assertEquals("predicates.predX.predconfig",
+                infos.get("predicates.predX.predconfig").configValue().name());
+        assertEquals("predicates.predY.type",
+                infos.get("predicates.predY.type").configValue().name());
+        assertFalse(
+                infos.get("predicates.predY.type").configValue().errors().isEmpty());
 
         verifyAll();
     }
@@ -390,12 +472,14 @@ public class AbstractHerderTest {
         List<String> expectedGroups = Arrays.asList(
             ConnectorConfig.COMMON_GROUP,
             ConnectorConfig.TRANSFORMS_GROUP,
-            ConnectorConfig.ERROR_GROUP
+            ConnectorConfig.PREDICATES_GROUP,
+            ConnectorConfig.ERROR_GROUP,
+            SourceConnectorConfig.TOPIC_CREATION_GROUP
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
-        // Base connector config has 13 fields, connector's configs add 2, and 2 producer overrides
-        assertEquals(17, result.values().size());
+        // Base connector config has 14 fields, connector's configs add 2, and 2 producer overrides
+        assertEquals(19, result.values().size());
         assertTrue(result.values().stream().anyMatch(
             configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
         assertTrue(result.values().stream().anyMatch(
@@ -552,6 +636,30 @@ public class AbstractHerderTest {
 
         @Override
         public void close() {
+
+        }
+    }
+
+    public static class SamplePredicate<R extends ConnectRecord<R>> implements Predicate<R> {
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef()
+                    .define("predconfig", ConfigDef.Type.STRING, "default", ConfigDef.Importance.LOW, "docs");
+        }
+
+        @Override
+        public boolean test(R record) {
+            return false;
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
 
         }
     }

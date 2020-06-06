@@ -100,6 +100,9 @@ public class PluginUtilsTest {
                 "org.apache.kafka.connect.transforms.Transformation")
         );
         assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.transforms.predicates.Predicate")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.Converter")
         );
         assertFalse(PluginUtils.shouldLoadInIsolation(
@@ -117,6 +120,9 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.rest.ConnectRestExtension")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.sink.ErrantRecordReporter"
+        ));
     }
 
     @Test
@@ -127,6 +133,10 @@ public class PluginUtilsTest {
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.transforms.ExtractField$Key")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.transforms.predicates."));
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.transforms.predicates.TopicNameMatches")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.json."));
         assertTrue(PluginUtils.shouldLoadInIsolation(

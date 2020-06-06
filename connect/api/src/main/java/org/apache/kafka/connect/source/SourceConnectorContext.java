@@ -14,17 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.assignment;
+package org.apache.kafka.connect.source;
 
-import java.util.UUID;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedSet;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 
-public interface BalancedAssignor {
+/**
+ * A context to allow a {@link SourceConnector} to interact with the Kafka Connect runtime.
+ */
+public interface SourceConnectorContext extends ConnectorContext {
 
-    Map<UUID, List<TaskId>> assign(final SortedSet<UUID> clients,
-                                   final SortedSet<TaskId> tasks,
-                                   final Map<UUID, Integer> clientsToNumberOfStreamThreads);
+    /**
+     * Returns the {@link OffsetStorageReader} for this SourceConnectorContext.
+     * @return the OffsetStorageReader for this connector.
+     */
+    OffsetStorageReader offsetStorageReader();
 }

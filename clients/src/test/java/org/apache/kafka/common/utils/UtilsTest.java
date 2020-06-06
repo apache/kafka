@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.mockito.stubbing.OngoingStubbing;
@@ -42,10 +43,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
@@ -56,6 +60,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -596,5 +601,108 @@ public class UtilsTest {
 
         assertThat(union, is(mkSet("a", "b", "c", "d", "e")));
         assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> union = union(TreeSet::new, oneSet);
+
+        assertThat(union, is(mkSet("a", "b", "c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = union(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e", "x", "y", "z")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfNone() {
+        final Set<String> union = union(TreeSet::new);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersection() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> intersection = intersection(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(intersection, is(mkSet("c")));
+        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> intersection = intersection(TreeSet::new, oneSet);
+
+        assertThat(intersection, is(mkSet("a", "b", "c")));
+        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet);
+
+        assertThat(union, is(mkSet("c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testDisjointIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testDiff() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> diff = diff(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(diff, is(mkSet("a", "b")));
+        assertThat(diff.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testPropsToMap() {
+        assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, 2);
+            Utils.propsToMap(props);
+        });
+        assertValue(false);
+        assertValue(1);
+        assertValue("string");
+        assertValue(1.1);
+        assertValue(Collections.emptySet());
+        assertValue(Collections.emptyList());
+        assertValue(Collections.emptyMap());
+    }
+
+    private static void assertValue(Object value) {
+        Properties props = new Properties();
+        props.put("key", value);
+        assertEquals(Utils.propsToMap(props).get("key"), value);
     }
 }
