@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -613,8 +614,11 @@ public final class Utils {
      */
     public static Map<String, String> propsToStringMap(Properties props) {
         Map<String, String> result = new HashMap<>();
-        for (Map.Entry<Object, Object> entry : props.entrySet())
-            result.put(entry.getKey().toString(), entry.getValue().toString());
+        Enumeration<?> propNames = props.propertyNames();
+        while (propNames.hasMoreElements()) {
+            String propName = (String) propNames.nextElement();
+            result.put(propName, props.getProperty(propName));
+        }
         return result;
     }
 
@@ -1219,12 +1223,21 @@ public final class Utils {
      */
     public static Map<String, Object> propsToMap(Properties properties) {
         Map<String, Object> map = new HashMap<>(properties.size());
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
-            if (entry.getKey() instanceof String) {
-                String k = (String) entry.getKey();
-                map.put(k, properties.get(k));
-            } else {
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+
+        // Calling propertyNames() will cause a class cast exception if one of the propertyNames is not a String
+        // Doing one single try catch for ClassCastException since this should be the only cause but also covers the
+        // casting of the individual keys.
+        try {
+            Enumeration<?> propNames = properties.propertyNames();
+
+            while (propNames.hasMoreElements()) {
+                String propName = (String) propNames.nextElement();
+                // Using properties.get initially rather than getProperty since there is a history of incorrectly using
+                // the Hashmap functions in Properties and it could be something other than a String.  If its null then
+                // try getProperty which respects the backing defaults
+                Object val = properties.get(propName);
+                if (val == null) val = properties.getProperty(propName);
+                map.put(propName, val);
             }
         }
         return map;

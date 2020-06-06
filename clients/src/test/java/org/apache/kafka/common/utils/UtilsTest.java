@@ -691,6 +691,7 @@ public class UtilsTest {
             props.put(1, 2);
             Utils.propsToMap(props);
         });
+
         assertValue(false);
         assertValue(1);
         assertValue("string");
@@ -698,11 +699,19 @@ public class UtilsTest {
         assertValue(Collections.emptySet());
         assertValue(Collections.emptyList());
         assertValue(Collections.emptyMap());
+
+        // Test respecting defaults
+        Properties defaults = new Properties();
+        defaults.setProperty("defaultKey", "defaultValue");
+        Properties newProps = new Properties(defaults);
+        newProps.setProperty("newKey", "newValue");
+        assertEquals("defaultValue", Utils.propsToMap(newProps).get("defaultKey"));
+        assertEquals("newValue", Utils.propsToMap(newProps).get("newKey"));
     }
 
     private static void assertValue(Object value) {
         Properties props = new Properties();
         props.put("key", value);
-        assertEquals(Utils.propsToMap(props).get("key"), value);
+        assertEquals(value, Utils.propsToMap(props).get("key"));
     }
 }
