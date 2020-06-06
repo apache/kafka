@@ -69,7 +69,24 @@ object TransactionMarkerChannelManager {
       channelBuilder,
       logContext
     )
-    val networkClient = new NetworkClient(selector, new ManualMetadataUpdater(), s"broker-${config.brokerId}-txn-marker-sender", 1, 50, 50, Selectable.USE_DEFAULT_BUFFER_SIZE, config.socketReceiveBufferBytes, config.requestTimeoutMs, 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
+    val networkClient = new NetworkClient(
+      selector,
+      new ManualMetadataUpdater(),
+      s"broker-${config.brokerId}-txn-marker-sender",
+      1,
+      50,
+      50,
+      Selectable.USE_DEFAULT_BUFFER_SIZE,
+      config.socketReceiveBufferBytes,
+      config.requestTimeoutMs,
+      // TODO: Add Kafka Config
+      10 * 1000,
+      127 * 1000,
+      ClientDnsLookup.DEFAULT, time,
+      false,
+      new ApiVersions,
+      logContext
+    )
 
     new TransactionMarkerChannelManager(config,
       metadataCache,

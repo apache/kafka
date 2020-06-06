@@ -271,6 +271,8 @@ object BrokerApiVersionsCommand {
         new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+      val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG)
+      val connectionSetupTimeoutMaxMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
@@ -286,7 +288,23 @@ object BrokerApiVersionsCommand {
         channelBuilder,
         logContext)
 
-      val networkClient = new NetworkClient(selector, metadata, clientId, DefaultMaxInFlightRequestsPerConnection, DefaultReconnectBackoffMs, DefaultReconnectBackoffMax, DefaultSendBufferBytes, DefaultReceiveBufferBytes, requestTimeoutMs, 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, true, new ApiVersions, logContext)
+      val networkClient = new NetworkClient(
+        selector,
+        metadata,
+        clientId,
+        DefaultMaxInFlightRequestsPerConnection,
+        DefaultReconnectBackoffMs,
+        DefaultReconnectBackoffMax,
+        DefaultSendBufferBytes,
+        DefaultReceiveBufferBytes,
+        requestTimeoutMs,
+        connectionSetupTimeoutMs,
+        connectionSetupTimeoutMaxMs,
+        ClientDnsLookup.DEFAULT,
+        time,
+        true,
+        new ApiVersions,
+        logContext)
 
       val highLevelClient = new ConsumerNetworkClient(
         logContext,

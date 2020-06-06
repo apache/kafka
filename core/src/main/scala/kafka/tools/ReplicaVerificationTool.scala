@@ -469,7 +469,25 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       channelBuilder,
       logContext
     )
-    new NetworkClient(selector, new ManualMetadataUpdater(), clientId, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG), consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
+    new NetworkClient(
+      selector,
+      new ManualMetadataUpdater(),
+      clientId,
+      1,
+      0,
+      0,
+      Selectable.USE_DEFAULT_BUFFER_SIZE,
+      consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
+      consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+      // TODO: Kafka Config
+      10 * 1000,
+      127 * 1000,
+      ClientDnsLookup.DEFAULT,
+      time,
+      false,
+      new ApiVersions,
+      logContext
+    )
   }
 
   def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {

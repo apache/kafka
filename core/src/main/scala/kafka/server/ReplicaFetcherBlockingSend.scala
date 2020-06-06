@@ -79,7 +79,25 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       channelBuilder,
       logContext
     )
-    val networkClient = new NetworkClient(selector, new ManualMetadataUpdater(), clientId, 1, 0, 0, Selectable.USE_DEFAULT_BUFFER_SIZE, brokerConfig.replicaSocketReceiveBufferBytes, brokerConfig.requestTimeoutMs, 10 * 1000, 127 * 1000, ClientDnsLookup.DEFAULT, time, false, new ApiVersions, logContext)
+    val networkClient = new NetworkClient(
+      selector,
+      new ManualMetadataUpdater(),
+      clientId,
+      1,
+      0,
+      0,
+      Selectable.USE_DEFAULT_BUFFER_SIZE,
+      brokerConfig.replicaSocketReceiveBufferBytes,
+      brokerConfig.requestTimeoutMs,
+      // TODO: Add Kafka Config
+      10 * 1000,
+      127 * 1000,
+      ClientDnsLookup.DEFAULT,
+      time,
+      false,
+      new ApiVersions,
+      logContext
+    )
     (networkClient, reconfigurableChannelBuilder)
   }
 
