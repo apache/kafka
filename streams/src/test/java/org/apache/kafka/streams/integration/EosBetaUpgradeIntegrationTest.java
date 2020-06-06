@@ -424,7 +424,13 @@ public class EosBetaUpgradeIntegrationTest {
                     .collect(Collectors.toList()),
                 committedState
             );
-            verifyCommitted(expectedCommittedResultAfterRestartFirstClient);
+            try {
+                verifyCommitted(expectedCommittedResultAfterRestartFirstClient);
+            } catch (final AssertionError e) {
+                // Try to verify whether the data was there but not yet committed, or missing altogether
+                verifyUncommitted(expectedCommittedResultAfterRestartFirstClient);
+                throw new AssertionError("Expected committed data was there but uncommitted", e);
+            }
 
             // phase 6: (complete second batch of data; crash: let second client fail on commit)
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
