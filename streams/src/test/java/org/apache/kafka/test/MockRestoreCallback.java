@@ -25,7 +25,6 @@ import java.util.List;
 public class MockRestoreCallback implements StateRestoreCallback {
     public List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
 
-
     @Override
     public void restore(final byte[] key, final byte[] value) {
         restored.add(KeyValue.pair(key, value));

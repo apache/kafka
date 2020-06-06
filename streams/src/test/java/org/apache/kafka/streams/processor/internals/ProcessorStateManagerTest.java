@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -33,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateS
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
+import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -205,6 +207,30 @@ public class ProcessorStateManagerTest {
             IllegalStateException.class,
             () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L))
         );
+    }
+
+    @Test
+    public void shouldRestoreStoreWithRestoreCallback() {
+        final MockRestoreCallback restoreCallback = new MockRestoreCallback();
+
+        final KeyValue<byte[], byte[]> expectedKeyValue = KeyValue.pair(keyBytes, valueBytes);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+
+        try {
+            stateMgr.registerStore(persistentStore, restoreCallback);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadata, notNullValue());
+
+            stateMgr.restore(storeMetadata, singletonList(consumerRecord));
+
+            assertThat(restoreCallback.restored.size(), is(1));
+            assertTrue(restoreCallback.restored.contains(expectedKeyValue));
+
+            assertEquals(Collections.singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
+        } finally {
+            stateMgr.close();
+        }
     }
 
     @Test

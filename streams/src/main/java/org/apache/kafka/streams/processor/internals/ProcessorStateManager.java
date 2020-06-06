@@ -25,6 +25,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -297,6 +298,11 @@ public class ProcessorStateManager implements StateManager {
 
         if (stores.containsKey(storeName)) {
             throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
+        }
+
+        if (stateRestoreCallback instanceof StateRestoreListener) {
+            log.warn("The registered state restore callback is also implementing the state restore listener interface, " +
+                    "which is not expected and would be ignored");
         }
 
         final StateStoreMetadata storeMetadata = isLoggingEnabled(storeName) ?
