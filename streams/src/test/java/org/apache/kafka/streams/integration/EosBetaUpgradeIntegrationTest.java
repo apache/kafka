@@ -276,7 +276,7 @@ public class EosBetaUpgradeIntegrationTest {
             waitForCondition(
                 () -> commitRequested.get() == 4,
                 MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit."
+                "StreamTasks did not request commit."
             );
 
             final Map<Long, Long> committedState = new HashMap<>();
@@ -429,7 +429,8 @@ public class EosBetaUpgradeIntegrationTest {
             } catch (final AssertionError e) {
                 // Try to verify whether the data was there but not yet committed, or missing altogether
                 verifyUncommitted(expectedCommittedResultAfterRestartFirstClient);
-                throw new AssertionError("Expected committed data was there but uncommitted", e);
+                throw new AssertionError("Expected committed data was there but uncommitted, " +
+                    "there were " + commitRequested.get() + " commits requested", e);
             }
 
             // phase 6: (complete second batch of data; crash: let second client fail on commit)
