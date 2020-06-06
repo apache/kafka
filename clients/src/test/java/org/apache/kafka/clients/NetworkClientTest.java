@@ -636,7 +636,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testLeastLoadedNodeProvideDisconnectedNodesPrioritizedByFailedAttempts() {
+    public void testLeastLoadedNodeProvideDisconnectedNodesPrioritizedByLastConnectionTimestamp() {
         int nodeNumber = 3;
         NetworkClient client = createNetworkClientWithMultipleNodes(0, connectionSetupTimeoutMsTest, nodeNumber);
 

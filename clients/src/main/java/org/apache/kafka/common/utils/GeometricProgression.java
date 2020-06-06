@@ -22,6 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * An util class for exponential backoff, backoff, etc...
  * The formula is Term(n) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ n
+ * If scaleFactor is greater or equal than termMax, a constant term of will be provided
  * This class is thread-safe
  */
 public class GeometricProgression {

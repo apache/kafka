@@ -79,9 +79,8 @@ object TransactionMarkerChannelManager {
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,
-      // TODO: Add Kafka Config
-      10 * 1000,
-      127 * 1000,
+      config.connectionSetupTimeoutMs,
+      config.connectionSetupTimeoutMaxMs,
       ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
