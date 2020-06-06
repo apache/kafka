@@ -1239,6 +1239,8 @@ public final class Utils {
                 if (val == null) val = properties.getProperty(propName);
                 map.put(propName, val);
             }
+        } catch (ClassCastException cce) {
+            throw new ConfigException("All property keys must be a string: " + properties.toString(), cce);
         }
         return map;
     }
