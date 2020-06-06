@@ -607,7 +607,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * </pre>
      */
     private void close(final boolean clean) {
-        if (clean && checkpointNeeded) {
+        if (clean) {
             executeAndMaybeSwallow(true, this::writeCheckpointIfNeed, "state manager checkpoint", log);
         }
 
