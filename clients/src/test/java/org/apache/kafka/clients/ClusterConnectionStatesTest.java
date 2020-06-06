@@ -40,7 +40,7 @@ public class ClusterConnectionStatesTest {
     private final MockTime time = new MockTime();
     private final long reconnectBackoffMs = 10 * 1000;
     private final long reconnectBackoffMax = 60 * 1000;
-    private final long connectionSetupTimeoutMs = 5 * 1000;
+    private final long connectionSetupTimeoutMs = 10 * 1000;
     private final long connectionSetupTimeoutMaxMs = 127 * 1000;
     private final double reconnectBackoffJitter = 0.2;
     private final String nodeId1 = "1001";
@@ -324,5 +324,38 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.isPreparingConnection(nodeId1));
         connectionStates.disconnected(nodeId1, time.milliseconds());
         assertFalse(connectionStates.isPreparingConnection(nodeId1));
+    }
+
+    @Test
+    public void testExponentialConnectionSetupTimeout() {
+        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+
+        // Check the exponential timeout growth
+        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(2); n++) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+            assertEquals(connectionSetupTimeoutMs * Math.pow(2, n),
+                    connectionStates.connectionSetupTimeoutMs(nodeId1),
+                    connectionSetupTimeoutMs * Math.pow(2, n) * 0.2);
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        }
+
+        // Check the timeout value upper bound
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertEquals(connectionStates.connectionSetupTimeoutMs(nodeId1), connectionSetupTimeoutMaxMs, connectionSetupTimeoutMaxMs * 0.2);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+
+        // Should reset the timeout value to the init value
+        connectionStates.ready(nodeId1);
+        assertEquals(connectionStates.connectionSetupTimeoutMs(nodeId1), connectionSetupTimeoutMs, connectionSetupTimeoutMs * 0.2);
+        assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+
+        // Check if the connection state transition from ready to disconnected
+        // won't increase the timeout value
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertEquals(connectionStates.connectionSetupTimeoutMs(nodeId1), connectionSetupTimeoutMs, connectionSetupTimeoutMs * 0.2);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
     }
 }

@@ -478,7 +478,7 @@ public class NetworkClientTest {
                 client.connectionFailed(node)
         );
 
-        time.sleep(connectionSetupTimeoutMsTest + 1);
+        time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
         client.poll(0, time.milliseconds());
         assertTrue(
                 "Expected the connection to fail due to the socket connection setup timeout",

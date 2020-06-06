@@ -136,6 +136,7 @@ final class ClusterConnectionStates {
             connectionState.state = ConnectionState.CONNECTING;
             // Move to next resolved address, or if addresses are exhausted, mark node to be re-resolved
             connectionState.moveToNextAddress();
+            connectingNodes.add(id);
             return;
         } else if (connectionState != null) {
             log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
@@ -344,29 +345,35 @@ final class ClusterConnectionStates {
         return state;
     }
 
-    // TODO: Javadoc
+    /**
+     * Get the id set of nodes which are in CONNECTING state
+     */
     public Set<String> connectingNodes() {
         return this.connectingNodes;
     }
 
-    // TODO: Javadoc
+    /**
+     * Get the timestamp of the latest connection attempt of a given node
+     * @param id the connection to fetch the state for
+     */
     public long lastConnectAttemptMs(String id) {
         NodeConnectionState nodeState = this.nodeState.get(id);
         return nodeState == null ? 0 : nodeState.lastConnectAttemptMs;
     }
 
-    private long connectionSetupTimeoutMs(String id) {
+    // Visible for testing
+    long connectionSetupTimeoutMs(String id) {
         NodeConnectionState nodeState = this.nodeState.get(id);
         return nodeState.connectionSetupTimeoutMs;
     }
 
-    // TODO: Javadoc
-    public boolean isConnectionSetupTimeout(String nodeId, long now) {
-        System.out.println("lastConnectAttemptMs = " + lastConnectAttemptMs(nodeId));
-        System.out.println("now = " + now);
-        System.out.println("connectionSetupTimeoutMs = " + connectionSetupTimeoutMs(nodeId));
-        System.out.println("Timeout ? " + (now - lastConnectAttemptMs(nodeId) > connectionSetupTimeoutMs(nodeId)));
-        return now - lastConnectAttemptMs(nodeId) > connectionSetupTimeoutMs(nodeId);
+    /**
+     * Test if the connection to the given node has reached its timeout
+     * @param id the connection to fetch the state for
+     * @param now the current time in ms
+     */
+    public boolean isConnectionSetupTimeout(String id, long now) {
+        return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);
     }
 
     /**

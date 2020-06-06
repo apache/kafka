@@ -113,9 +113,6 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
-    /* timeout for socket channels finish connecting */
-    private final long connectionSetupTimeoutMs;
-
     private final ClientDnsLookup clientDnsLookup;
 
     private final Time time;
@@ -284,7 +281,6 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.randOffset = new Random();
         this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
-        this.connectionSetupTimeoutMs = connectionSetupTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
@@ -818,7 +814,14 @@ public class NetworkClient implements KafkaClient {
         abortedSends.clear();
     }
 
-    // TODO: Javadoc
+    /**
+     * Handle socket channel connection timeout. The timeout will hit iff a connection
+     * stays at the ConnectionState.CONNECTING state longer than the timeout value,
+     * as indicated by ClusterConnectionStates.NodeConnectionState.
+     *
+     * @param responses The list of responses to update
+     * @param now The current time
+     */
     private void handleTimeOutConnections(List<ClientResponse> responses, long now) {
         Set<String> connectingNodes = connectionStates.connectingNodes();
         for (String nodeId: connectingNodes) {
