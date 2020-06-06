@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -86,7 +87,7 @@ public class TaskManager {
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
-    private Set<TaskId> lockedTaskDirectories = new HashSet<>();
+    private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -743,10 +744,6 @@ public class TaskManager {
             .collect(Collectors.toSet());
     }
 
-    Task taskForInputPartition(final TopicPartition partition) {
-        return partitionToTask.get(partition);
-    }
-
     Map<TaskId, Task> tasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -776,6 +773,25 @@ public class TaskManager {
     // For testing only.
     int commitAll() {
         return commit(tasks.values());
+    }
+
+    /**
+     * Take records and add them to each respective task
+     *
+     * @param records Records, can be null
+     */
+    void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
+        for (final TopicPartition partition : records.partitions()) {
+            final Task task = partitionToTask.get(partition);
+
+            if (task == null) {
+                log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
+                    partition, toString(">"));
+                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+            }
+
+            task.addRecords(partition, records.records(partition));
+        }
     }
 
     /**
