@@ -589,17 +589,18 @@ public class SubscriptionStateTest {
         int initialOffsetEpoch = 5;
 
         SubscriptionState.FetchPosition initialPosition = new SubscriptionState.FetchPosition(initialOffset,
-                Optional.of(initialOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
+            Optional.of(initialOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
         state.seekUnvalidated(tp0, initialPosition);
         assertTrue(state.awaitingValidation(tp0));
 
         state.requestOffsetReset(tp0);
 
         Optional<OffsetAndMetadata> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
+            new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
         assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
+        assertEquals(initialPosition, state.position(tp0));
     }
 
     @Test
@@ -653,10 +654,10 @@ public class SubscriptionStateTest {
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {
-        public Collection<TopicPartition> revoked;
+        Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;
-        public int revokedCount = 0;
-        public int assignedCount = 0;
+        int revokedCount = 0;
+        int assignedCount = 0;
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
