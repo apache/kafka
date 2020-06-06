@@ -205,6 +205,8 @@ object BrokerApiVersionsCommand {
   private object AdminClient {
     val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
     val DefaultRequestTimeoutMs = 5000
+    val DefaultSocketConnectionSetupMs = 10 * 1000
+    val DefaultSocketConnectionSetupMaxMs = 127 * 1000
     val DefaultMaxInFlightRequestsPerConnection = 100
     val DefaultReconnectBackoffMs = 50
     val DefaultReconnectBackoffMax = 50
@@ -240,6 +242,18 @@ object BrokerApiVersionsCommand {
           DefaultRequestTimeoutMs,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+        .define(
+          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
+          ConfigDef.Type.LONG,
+          DefaultSocketConnectionSetupMs,
+          ConfigDef.Importance.MEDIUM,
+          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
+        .define(
+          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG,
+          ConfigDef.Type.LONG,
+          DefaultSocketConnectionSetupMaxMs,
+          ConfigDef.Importance.MEDIUM,
+          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_DOC)
         .define(
           CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
           ConfigDef.Type.LONG,
