@@ -1146,11 +1146,16 @@ class GroupCoordinator(val brokerId: Int,
 
   def onCompleteJoin(group: GroupMetadata): Unit = {
     group.inLock {
-      // remove dynamic members who haven't joined the group yet
-      group.notYetRejoinedMembers.filterNot(_.isStaticMember) foreach { failedMember =>
-        removeHeartbeatForLeavingMember(group, failedMember)
-        group.remove(failedMember.memberId)
-        // TODO: cut the socket connection to the client
+      val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
+      if (notYetRejoinedDynamicMembers.nonEmpty) {
+        info(s"Group ${group.groupId} remove dynamic members " +
+          s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
+
+        notYetRejoinedDynamicMembers.values foreach { failedMember =>
+          removeHeartbeatForLeavingMember(group, failedMember)
+          group.remove(failedMember.memberId)
+          // TODO: cut the socket connection to the client
+        }
       }
 
       if (group.is(Dead)) {
@@ -1185,9 +1190,6 @@ class GroupCoordinator(val brokerId: Int,
           for (member <- group.allMemberMetadata) {
             val joinResult = JoinGroupResult(
               members = if (group.isLeader(member.memberId)) {
-                info(s"Group ${group.groupId} replies the leader with " +
-                  s"the following dynamic members' metadata: ${group.allDynamicMembers}" +
-                  s"and static members' metadata: ${group.allStaticMembers}")
                 group.currentMemberMetadata
               } else {
                 List.empty
