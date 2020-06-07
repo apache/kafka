@@ -53,9 +53,11 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import java.security.Security;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(value = Parameterized.class)
 public class SslFactoryTest {
@@ -162,26 +164,51 @@ public class SslFactoryTest {
         assertTrue(engine.getUseClientMode());
     }
 
-    @Test
-    public void staleSslEngineFactoryShouldBeClosed() throws IOException, GeneralSecurityException {
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.SERVER)
-                .createNewTrustStore(trustStoreFile)
+    private Map<String, Object> serverConfig() throws IOException, GeneralSecurityException {
+        return sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(File.createTempFile("truststore", ".jks"))
                 .useClientCert(false)
                 .build();
-        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+    }
+
+    @Test
+    public void newSslEngineFactoryShouldBeClosedWhenValidationFails() throws IOException, GeneralSecurityException {
+        Map<String, Object> sslConfig = serverConfig();
+        sslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        AtomicReference<TestSslUtils.TestSslEngineFactory> sslEngineFactoryRef = new AtomicReference<>();
+        assertThrows(RuntimeException.class, () -> SslFactory.instantiateSslEngineFactory(sslConfig, newSslEngineFactory -> {
+            sslEngineFactoryRef.set((TestSslUtils.TestSslEngineFactory) newSslEngineFactory);
+            throw new RuntimeException("THIS SHOULD FAIL");
+        }));
+        assertTrue(sslEngineFactoryRef.get().closed);
+    }
+
+    @Test
+    public void validateReconfigurationShouldNotChangeInnerConfigs() throws IOException, GeneralSecurityException {
+        Map<String, Object> sslConfig = serverConfig();
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
-        sslFactory.configure(clientSslConfig);
+        sslFactory.configure(sslConfig);
+
+        // validate configs should not change anything
+        Map<String, Object> previousConfig = sslFactory.sslEngineFactoryConfig;
+        sslConfig = serverConfig();
+        sslFactory.validateReconfiguration(sslConfig);
+        assertEquals(previousConfig, sslFactory.sslEngineFactoryConfig);
+    }
+
+    @Test
+    public void staleSslEngineFactoryShouldBeClosed() throws IOException, GeneralSecurityException {
+        Map<String, Object> sslConfig = serverConfig();
+        sslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(sslConfig);
         TestSslUtils.TestSslEngineFactory sslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory);
         assertFalse(sslEngineFactory.closed);
 
-        trustStoreFile = File.createTempFile("truststore", ".jks");
-        clientSslConfig = sslConfigsBuilder(Mode.SERVER)
-                .createNewTrustStore(trustStoreFile)
-                .build();
-        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        sslFactory.reconfigure(clientSslConfig);
+        sslConfig = serverConfig();
+        sslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        sslFactory.reconfigure(sslConfig);
         TestSslUtils.TestSslEngineFactory newSslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertNotEquals(sslEngineFactory, newSslEngineFactory);
         // the older one should be closed

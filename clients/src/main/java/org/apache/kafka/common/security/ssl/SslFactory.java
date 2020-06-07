@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.function.Consumer;
 
 public class SslFactory implements Reconfigurable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
@@ -56,7 +57,8 @@ public class SslFactory implements Reconfigurable, Closeable {
     private final boolean keystoreVerifiableUsingTruststore;
     private String endpointIdentification;
     private SslEngineFactory sslEngineFactory;
-    private Map<String, Object> sslEngineFactoryConfig;
+    // visible for testing
+    Map<String, Object> sslEngineFactoryConfig;
 
     public SslFactory(Mode mode) {
         this(mode, null, false);
@@ -90,16 +92,17 @@ public class SslFactory implements Reconfigurable, Closeable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        SslEngineFactory builder = instantiateSslEngineFactory(nextConfigs);
-        if (keystoreVerifiableUsingTruststore) {
-            try {
-                SslEngineValidator.validate(builder, builder);
-            } catch (Exception e) {
-                throw new ConfigException("A client SSLEngine created with the provided settings " +
-                        "can't connect to a server SSLEngine created with those settings.", e);
+        this.sslEngineFactory = instantiateSslEngineFactory(nextConfigs, newSslEngineFactory -> {
+            if (keystoreVerifiableUsingTruststore) {
+                try {
+                    SslEngineValidator.validate(newSslEngineFactory, newSslEngineFactory);
+                } catch (Exception e) {
+                    throw new ConfigException("A client SSLEngine created with the provided settings " +
+                            "can't connect to a server SSLEngine created with those settings.", e);
+                }
             }
-        }
-        this.sslEngineFactory = builder;
+        });
+        this.sslEngineFactoryConfig = nextConfigs;
     }
 
     @Override
@@ -109,21 +112,32 @@ public class SslFactory implements Reconfigurable, Closeable {
 
     @Override
     public void validateReconfiguration(Map<String, ?> newConfigs) {
-        createNewSslEngineFactory(newConfigs);
+        SslEngineFactory tmp = mayCreateNewSslEngineFactory(newConfigs);
+        Utils.closeQuietly(tmp, "close temporary ssl engine factory");
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
-        SslEngineFactory newSslEngineFactory = createNewSslEngineFactory(newConfigs);
+        SslEngineFactory newSslEngineFactory = mayCreateNewSslEngineFactory(newConfigs);
         if (newSslEngineFactory != this.sslEngineFactory) {
             Utils.closeQuietly(this.sslEngineFactory, "close stale ssl engine factory");
             this.sslEngineFactory = newSslEngineFactory;
+            this.sslEngineFactoryConfig = (Map<String, Object>) newConfigs;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
                     newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
         }
     }
 
-    private SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs) {
+    /**
+     * Instantiate an new ssl engine factory.
+     * @param configs new configs
+     * @param validator custom validator. If the validator throws exception, the configured temporary ssl engine
+     *                  factory is closed automatically
+     * @return new configured ssl engine factory
+     */
+    static SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs,
+                                                        Consumer<SslEngineFactory> validator) {
         @SuppressWarnings("unchecked")
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
                 (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
@@ -134,11 +148,17 @@ public class SslFactory implements Reconfigurable, Closeable {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }
         sslEngineFactory.configure(configs);
-        this.sslEngineFactoryConfig = configs;
-        return sslEngineFactory;
+        boolean pass = false;
+        try {
+            validator.accept(sslEngineFactory);
+            pass = true;
+            return sslEngineFactory;
+        } finally {
+            if (!pass) Utils.closeQuietly(sslEngineFactory, "close temporary ssl engine factory");
+        }
     }
 
-    private SslEngineFactory createNewSslEngineFactory(Map<String, ?> newConfigs) {
+    private SslEngineFactory mayCreateNewSslEngineFactory(Map<String, ?> newConfigs) {
         if (sslEngineFactory == null) {
             throw new IllegalStateException("SslFactory has not been configured.");
         }
@@ -150,37 +170,38 @@ public class SslFactory implements Reconfigurable, Closeable {
         if (!sslEngineFactory.shouldBeRebuilt(nextConfigs)) {
             return sslEngineFactory;
         }
-        try {
-            SslEngineFactory newSslEngineFactory = instantiateSslEngineFactory(nextConfigs);
-            if (sslEngineFactory.keystore() == null) {
-                if (newSslEngineFactory.keystore() != null) {
-                    throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
-                            "which no keystore was configured.");
+
+        return instantiateSslEngineFactory(nextConfigs, newSslEngineFactory -> {
+            try {
+                if (sslEngineFactory.keystore() == null) {
+                    if (newSslEngineFactory.keystore() != null) {
+                        throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
+                                "which no keystore was configured.");
+                    }
+                } else {
+                    if (newSslEngineFactory.keystore() == null) {
+                        throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
+                                "which a keystore was configured.");
+                    }
+                    if (!CertificateEntries.create(sslEngineFactory.keystore()).equals(
+                            CertificateEntries.create(newSslEngineFactory.keystore()))) {
+                        throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
+                    }
                 }
-            } else {
-                if (newSslEngineFactory.keystore() == null) {
-                    throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
-                            "which a keystore was configured.");
+                if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
+                    throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
+                            "truststore was configured.");
                 }
-                if (!CertificateEntries.create(sslEngineFactory.keystore()).equals(
-                        CertificateEntries.create(newSslEngineFactory.keystore()))) {
-                    throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
+                if (keystoreVerifiableUsingTruststore) {
+                    if (sslEngineFactory.truststore() != null || sslEngineFactory.keystore() != null) {
+                        SslEngineValidator.validate(sslEngineFactory, newSslEngineFactory);
+                    }
                 }
+            } catch (Exception e) {
+                log.debug("Validation of dynamic config update of SSLFactory failed.", e);
+                throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
             }
-            if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
-                throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
-                        "truststore was configured.");
-            }
-            if (keystoreVerifiableUsingTruststore) {
-                if (sslEngineFactory.truststore() != null || sslEngineFactory.keystore() != null) {
-                    SslEngineValidator.validate(sslEngineFactory, newSslEngineFactory);
-                }
-            }
-            return newSslEngineFactory;
-        } catch (Exception e) {
-            log.debug("Validation of dynamic config update of SSLFactory failed.", e);
-            throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
-        }
+        });
     }
 
     public SSLEngine createSslEngine(String peerHost, int peerPort) {
