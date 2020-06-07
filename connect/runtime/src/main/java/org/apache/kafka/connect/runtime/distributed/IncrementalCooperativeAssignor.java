@@ -355,13 +355,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     // visible for testing
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
-                                         List<WorkerLoad> completeWorkerAssignment) {
-        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment, Collections.emptyMap());
-    }
-
-    // visible for testing
-    protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
-                                         ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment,
                                          Map<String, ExtendedWorkerState> memberConfigs) {
         if (lostAssignments.isEmpty()) {
@@ -373,7 +366,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Found the following connectors and tasks missing from previous assignments: "
                 + lostAssignments);
 
-        if (previousMembers.size() == memberConfigs.size()) {
+        if (previousMembers.size() == memberConfigs.size() && scheduledRebalance <= 0) {
             log.debug("Group size is same between rebalances. Lost assignments are probably due to lost SyncGroup "
                     + "responses. Treating lost tasks as new tasks");
             newSubmissions.connectors().addAll(lostAssignments.connectors());
