@@ -19,15 +19,14 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -107,7 +106,7 @@ public final class Sensor {
            long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
         super();
         this.registry = registry;
-        this.name = Utils.notNull(name);
+        this.name = Objects.requireNonNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
         this.metrics = new LinkedHashMap<>();
         this.stats = new ArrayList<>();
@@ -117,7 +116,7 @@ public final class Sensor {
         this.lastRecordTime = time.milliseconds();
         this.recordingLevel = recordingLevel;
         this.metricLock = new Object();
-        checkForest(new HashSet<Sensor>());
+        checkForest(new HashSet<>());
     }
 
     /* Validate that this sensor doesn't end up referencing itself */
@@ -140,20 +139,21 @@ public final class Sensor {
     }
 
     /**
-     * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
-     */
-    public void record() {
-        if (shouldRecord()) {
-            record(1.0);
-        }
-    }
-
-    /**
      * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
      */
     public boolean shouldRecord() {
         return this.recordingLevel.shouldRecord(config.recordLevel().id);
     }
+
+    /**
+     * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
+     */
+    public void record() {
+        if (shouldRecord()) {
+            recordInternal(1.0d, time.milliseconds(), true);
+        }
+    }
+
     /**
      * Record a value with this sensor
      * @param value The value to record
@@ -162,7 +162,7 @@ public final class Sensor {
      */
     public void record(double value) {
         if (shouldRecord()) {
-            record(value, time.milliseconds());
+            recordInternal(value, time.milliseconds(), true);
         }
     }
 
@@ -175,24 +175,30 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        record(value, timeMs, true);
+        if (shouldRecord()) {
+            recordInternal(value, timeMs, true);
+        }
     }
 
     public void record(double value, long timeMs, boolean checkQuotas) {
         if (shouldRecord()) {
-            this.lastRecordTime = timeMs;
-            synchronized (this) {
-                synchronized (metricLock()) {
-                    // increment all the stats
-                    for (Stat stat : this.stats)
-                        stat.record(config, value, timeMs);
-                }
-                if (checkQuotas)
-                    checkQuotas(timeMs);
-            }
-            for (Sensor parent : parents)
-                parent.record(value, timeMs, checkQuotas);
+            recordInternal(value, timeMs, checkQuotas);
         }
+    }
+
+    private void recordInternal(double value, long timeMs, boolean checkQuotas) {
+        this.lastRecordTime = timeMs;
+        synchronized (this) {
+            synchronized (metricLock()) {
+                // increment all the stats
+                for (Stat stat : this.stats)
+                    stat.record(config, value, timeMs);
+            }
+            if (checkQuotas)
+                checkQuotas(timeMs);
+        }
+        for (Sensor parent : parents)
+            parent.record(value, timeMs, checkQuotas);
     }
 
     /**
@@ -210,8 +216,7 @@ public final class Sensor {
                 if (quota != null) {
                     double value = metric.measurableValue(timeMs);
                     if (!quota.acceptable(value)) {
-                        throw new QuotaViolationException(metric.metricName(), value,
-                            quota.bound());
+                        throw new QuotaViolationException(metric, value, quota.bound());
                     }
                 }
             }
@@ -238,7 +243,7 @@ public final class Sensor {
         if (hasExpired())
             return false;
 
-        this.stats.add(Utils.notNull(stat));
+        this.stats.add(Objects.requireNonNull(stat));
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
@@ -276,8 +281,8 @@ public final class Sensor {
         } else {
             final KafkaMetric metric = new KafkaMetric(
                 metricLock(),
-                Utils.notNull(metricName),
-                Utils.notNull(stat),
+                Objects.requireNonNull(metricName),
+                Objects.requireNonNull(stat),
                 config == null ? this.config : config,
                 time
             );
@@ -289,6 +294,15 @@ public final class Sensor {
     }
 
     /**
+     * Return if metrics were registered with this sensor.
+     *
+     * @return true if metrics were registered, false otherwise
+     */
+    public synchronized boolean hasMetrics() {
+        return !metrics.isEmpty();
+    }
+
+    /**
      * Return true if the Sensor is eligible for removal due to inactivity.
      *        false otherwise
      */
@@ -297,7 +311,7 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return unmodifiableList(new LinkedList<>(this.metrics.values()));
+        return unmodifiableList(new ArrayList<>(this.metrics.values()));
     }
 
     /**

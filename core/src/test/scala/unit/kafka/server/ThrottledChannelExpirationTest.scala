@@ -28,6 +28,7 @@ import kafka.network.RequestChannel.{EndThrottlingResponse, Response, StartThrot
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.MetricConfig
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
@@ -55,7 +56,7 @@ class ThrottledChannelExpirationTest {
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT)
+      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
       requestChannelMetrics))
   }
@@ -68,13 +69,13 @@ class ThrottledChannelExpirationTest {
   }
 
   @Before
-  def beforeMethod() {
+  def beforeMethod(): Unit = {
     numCallbacksForStartThrottling = 0
     numCallbacksForEndThrottling = 0
   }
 
   @Test
-  def testCallbackInvocationAfterExpiration() {
+  def testCallbackInvocationAfterExpiration(): Unit = {
     val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
 
     val delayQueue = new DelayQueue[ThrottledChannel]()
@@ -107,7 +108,7 @@ class ThrottledChannelExpirationTest {
   }
 
   @Test
-  def testThrottledChannelDelay() {
+  def testThrottledChannelDelay(): Unit = {
     val t1: ThrottledChannel = new ThrottledChannel(request, time, 10, callback)
     val t2: ThrottledChannel = new ThrottledChannel(request, time, 20, callback)
     val t3: ThrottledChannel = new ThrottledChannel(request, time, 20, callback)

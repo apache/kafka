@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
@@ -40,25 +39,24 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp
- * @see UsePreviousTimeOnInvalidTimestamp
+ * @see UsePartitionTimeOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
-@InterfaceStability.Evolving
 abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
 
     /**
      * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}.
      *
      * @param record a data record
-     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the embedded metadata timestamp of the given {@link ConsumerRecord}
      */
     @Override
-    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            return onInvalidTimestamp(record, timestamp, previousTimestamp);
+            return onInvalidTimestamp(record, timestamp, partitionTime);
         }
 
         return timestamp;
@@ -69,10 +67,10 @@ abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
-     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return a new timestamp for the record (if negative, record will not be processed but dropped silently)
      */
     public abstract long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
                                             final long recordTimestamp,
-                                            final long previousTimestamp);
+                                            final long partitionTime);
 }

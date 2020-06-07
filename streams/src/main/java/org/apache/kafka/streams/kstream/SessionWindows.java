@@ -108,7 +108,6 @@ public final class SessionWindows {
      *
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         return with(ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix));
@@ -135,14 +134,14 @@ public final class SessionWindows {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that arrive more than {@code afterWindowEnd}
      * after the end of its window.
-     *
+     * <p>
      * Note that new events may change the boundaries of session windows, so aggressive
-     * close times can lead to surprising results in which a too-late event is rejected and then
+     * close times can lead to surprising results in which an out-of-order event is rejected and then
      * a subsequent event moves the window boundary forward.
      *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */
@@ -163,7 +162,6 @@ public final class SessionWindows {
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public long gracePeriodMs() {
-
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - gapMs) if you want to be super accurate.

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +49,10 @@ public class Connect {
     public void start() {
         try {
             log.info("Kafka Connect starting");
-            Runtime.getRuntime().addShutdownHook(shutdownHook);
+            Exit.addShutdownHook("connect-shutdown-hook", shutdownHook);
 
             herder.start();
+            rest.initializeResources(herder);
 
             log.info("Kafka Connect started");
         } finally {
@@ -85,6 +87,10 @@ public class Connect {
     // Visible for testing
     public URI restUrl() {
         return rest.serverUrl();
+    }
+
+    public URI adminUrl() {
+        return rest.adminUrl();
     }
 
     private class ShutdownHook extends Thread {

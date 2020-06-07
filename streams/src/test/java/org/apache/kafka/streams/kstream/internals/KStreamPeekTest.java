@@ -25,7 +25,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -39,7 +39,6 @@ import static org.junit.Assert.fail;
 public class KStreamPeekTest {
 
     private final String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -50,10 +49,11 @@ public class KStreamPeekTest {
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
             final List<KeyValue<Integer, String>> expected = new ArrayList<>();
             for (int key = 0; key < 32; key++) {
                 final String value = "V" + key;
-                driver.pipeInput(recordFactory.create(topicName, key, value));
+                inputTopic.pipeInput(key, value);
                 expected.add(new KeyValue<>(key, value));
             }
 
@@ -75,11 +75,6 @@ public class KStreamPeekTest {
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {
-        return new ForeachAction<K, V>() {
-            @Override
-            public void apply(final K key, final V value) {
-                into.add(new KeyValue<>(key, value));
-            }
-        };
+        return (key, value) -> into.add(new KeyValue<>(key, value));
     }
 }

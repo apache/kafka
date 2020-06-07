@@ -16,30 +16,14 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.List;
-
-import org.apache.kafka.common.metrics.MetricConfig;
-
 /**
  * A {@link SampledStat} that maintains the sum of what it has seen.
+ * This is a sampled version of {@link CumulativeSum}.
+ *
+ * See also {@link WindowedCount} if you want to increment the value by 1 on each recording.
+ *
+ * @deprecated since 2.4 . Use {@link WindowedSum} instead
  */
-public class Sum extends SampledStat {
-
-    public Sum() {
-        super(0);
-    }
-
-    @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value += value;
-    }
-
-    @Override
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double total = 0.0;
-        for (Sample sample : samples)
-            total += sample.value;
-        return total;
-    }
-
+@Deprecated
+public class Sum extends WindowedSum {
 }

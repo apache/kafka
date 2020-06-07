@@ -67,7 +67,7 @@ class ConsumerGroupCommandTest(Test):
         self.start_consumer()
         consumer_node = self.consumer.nodes[0]
         wait_until(lambda: self.consumer.alive(consumer_node),
-                   timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
+                   timeout_sec=20, backoff_sec=.2, err_msg="Consumer was too slow to start")
         kafka_node = self.kafka.nodes[0]
         if security_protocol is not SecurityConfig.PLAINTEXT:
             prop_file = str(self.kafka.security_config.client_config())

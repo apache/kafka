@@ -22,12 +22,12 @@ import kafka.admin.DelegationTokenCommand.DelegationTokenCommandOptions
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionException
 
@@ -37,9 +37,9 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: org.apache.kafka.clients.admin.AdminClient = null
+  var adminClient: Admin = null
 
-  override def numBrokers = 1
+  override def brokerCount = 1
 
   @Before
   override def setUp(): Unit = {
@@ -48,11 +48,11 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
       enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
-    props.foreach(propertyOverrides)
+    props.foreach(brokerPropertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 
@@ -61,13 +61,13 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = org.apache.kafka.clients.admin.AdminClient.create(createAdminConfig)
+    adminClient = Admin.create(createAdminConfig)
     val renewer1 = "User:renewer1"
     val renewer2 = "User:renewer2"
 

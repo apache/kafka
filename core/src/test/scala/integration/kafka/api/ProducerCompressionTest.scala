@@ -19,7 +19,7 @@ package kafka.api.test
 
 import java.util.{Collection, Collections, Properties}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters
@@ -42,14 +42,14 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
   private var server: KafkaServer = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
@@ -60,7 +60,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
    * Compressed messages should be able to sent and consumed correctly
    */
   @Test
-  def testCompression() {
+  def testCompression(): Unit = {
 
     val producerProps = new Properties()
     val bootstrapServers = TestUtils.getBrokerListStrFromServers(Seq(server))

@@ -58,7 +58,7 @@ public class CommonClientConfigsTest {
     }
 
     @Test
-    public void testExponentialBackoffDefaults() throws Exception {
+    public void testExponentialBackoffDefaults() {
         TestConfig defaultConf = new TestConfig(Collections.emptyMap());
         assertEquals(Long.valueOf(50L),
                 defaultConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));

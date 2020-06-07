@@ -132,6 +132,13 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), window);
     }
 
+    public static <K> Windowed<K> from(final Windowed<Bytes> keyBytes,
+                                       final Deserializer<K> keyDeserializer,
+                                       final String topic) {
+        final K key = keyDeserializer.deserialize(topic, keyBytes.key().get());
+        return new Windowed<>(key, keyBytes.window());
+    }
+
     public static <K> byte[] toBinary(final Windowed<K> sessionKey,
                                       final Serializer<K> serializer,
                                       final String topic) {

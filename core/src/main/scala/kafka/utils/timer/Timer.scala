@@ -16,7 +16,7 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{DelayQueue, Executors, ThreadFactory, TimeUnit}
+import java.util.concurrent.{DelayQueue, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -58,10 +58,8 @@ class SystemTimer(executorName: String,
                   startMs: Long = Time.SYSTEM.hiResClockMs) extends Timer {
 
   // timeout timer
-  private[this] val taskExecutor = Executors.newFixedThreadPool(1, new ThreadFactory() {
-    def newThread(runnable: Runnable): Thread =
-      KafkaThread.nonDaemon("executor-"+executorName, runnable)
-  })
+  private[this] val taskExecutor = Executors.newFixedThreadPool(1,
+    (runnable: Runnable) => KafkaThread.nonDaemon("executor-" + executorName, runnable))
 
   private[this] val delayQueue = new DelayQueue[TimerTaskList]()
   private[this] val taskCounter = new AtomicInteger(0)
@@ -122,7 +120,7 @@ class SystemTimer(executorName: String,
 
   def size: Int = taskCounter.get
 
-  override def shutdown() {
+  override def shutdown(): Unit = {
     taskExecutor.shutdown()
   }
 

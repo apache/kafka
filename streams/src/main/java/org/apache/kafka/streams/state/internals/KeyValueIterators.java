@@ -46,9 +46,6 @@ class KeyValueIterators {
             throw new NoSuchElementException();
         }
 
-        @Override
-        public void remove() {
-        }
     }
 
     private static class EmptyWindowStoreIterator<V> extends EmptyKeyValueIterator<Long, V>

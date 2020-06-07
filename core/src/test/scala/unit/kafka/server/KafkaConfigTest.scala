@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
+import kafka.log.LogConfig
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
@@ -35,7 +36,7 @@ import org.scalatest.Assertions.intercept
 class KafkaConfigTest {
 
   @Test
-  def testLogRetentionTimeHoursProvided() {
+  def testLogRetentionTimeHoursProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeHoursProp, "1")
 
@@ -44,7 +45,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionTimeMinutesProvided() {
+  def testLogRetentionTimeMinutesProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeMinutesProp, "30")
 
@@ -53,7 +54,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionTimeMsProvided() {
+  def testLogRetentionTimeMsProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeMillisProp, "1800000")
 
@@ -62,7 +63,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionTimeNoConfigProvided() {
+  def testLogRetentionTimeNoConfigProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
 
     val cfg = KafkaConfig.fromProps(props)
@@ -70,7 +71,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionTimeBothMinutesAndHoursProvided() {
+  def testLogRetentionTimeBothMinutesAndHoursProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeMinutesProp, "30")
     props.put(KafkaConfig.LogRetentionTimeHoursProp, "1")
@@ -80,7 +81,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionTimeBothMinutesAndMsProvided() {
+  def testLogRetentionTimeBothMinutesAndMsProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRetentionTimeMillisProp, "1800000")
     props.put(KafkaConfig.LogRetentionTimeMinutesProp, "10")
@@ -90,7 +91,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionUnlimited() {
+  def testLogRetentionUnlimited(): Unit = {
     val props1 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
     val props2 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
     val props3 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
@@ -144,7 +145,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertiseDefaults() {
+  def testAdvertiseDefaults(): Unit = {
     val port = "9999"
     val hostName = "fake-host"
 
@@ -160,7 +161,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertiseConfigured() {
+  def testAdvertiseConfigured(): Unit = {
     val advertisedHostName = "routable-host"
     val advertisedPort = "1234"
 
@@ -177,7 +178,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertisePortDefault() {
+  def testAdvertisePortDefault(): Unit = {
     val advertisedHostName = "routable-host"
     val port = "9999"
 
@@ -194,7 +195,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertiseHostNameDefault() {
+  def testAdvertiseHostNameDefault(): Unit = {
     val hostName = "routable-host"
     val advertisedPort = "9999"
 
@@ -211,7 +212,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testDuplicateListeners() {
+  def testDuplicateListeners(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -255,7 +256,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testBadListenerProtocol() {
+  def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -354,7 +355,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testCaseInsensitiveListenerProtocol() {
+  def testCaseInsensitiveListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -369,7 +370,7 @@ class KafkaConfigTest {
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
-  def testListenerDefaults() {
+  def testListenerDefaults(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -398,7 +399,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testVersionConfiguration() {
+  def testVersionConfiguration(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
@@ -432,7 +433,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testUncleanLeaderElectionDefault() {
+  def testUncleanLeaderElectionDefault(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -440,7 +441,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testUncleanElectionDisabled() {
+  def testUncleanElectionDisabled(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, String.valueOf(false))
     val serverConfig = KafkaConfig.fromProps(props)
@@ -449,7 +450,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testUncleanElectionEnabled() {
+  def testUncleanElectionEnabled(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, String.valueOf(true))
     val serverConfig = KafkaConfig.fromProps(props)
@@ -458,7 +459,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testUncleanElectionInvalid() {
+  def testUncleanElectionInvalid(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "invalid")
 
@@ -468,7 +469,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRollTimeMsProvided() {
+  def testLogRollTimeMsProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRollTimeMillisProp, "1800000")
 
@@ -477,7 +478,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRollTimeBothMsAndHoursProvided() {
+  def testLogRollTimeBothMsAndHoursProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.LogRollTimeMillisProp, "1800000")
     props.put(KafkaConfig.LogRollTimeHoursProp, "1")
@@ -487,7 +488,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRollTimeNoConfigProvided() {
+  def testLogRollTimeNoConfigProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
 
     val cfg = KafkaConfig.fromProps(props)
@@ -495,7 +496,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testDefaultCompressionType() {
+  def testDefaultCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -503,7 +504,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testValidCompressionType() {
+  def testValidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("compression.type", "gzip")
     val serverConfig = KafkaConfig.fromProps(props)
@@ -512,7 +513,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testInvalidCompressionType() {
+  def testInvalidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
     intercept[IllegalArgumentException] {
@@ -521,7 +522,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testInvalidInterBrokerSecurityProtocol() {
+  def testInvalidInterBrokerSecurityProtocol(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
     props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
@@ -531,7 +532,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testEqualAdvertisedListenersProtocol() {
+  def testEqualAdvertisedListenersProtocol(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
@@ -539,7 +540,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testInvalidAdvertisedListenersProtocol() {
+  def testInvalidAdvertisedListenersProtocol(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
@@ -573,7 +574,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testFromPropsInvalid() {
+  def testFromPropsInvalid(): Unit = {
     def getBaseProperties(): Properties = {
       val validRequiredProperties = new Properties()
       validRequiredProperties.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
@@ -590,6 +591,20 @@ class KafkaConfigTest {
         case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
         case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ZkSslClientEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
+        case KafkaConfig.ZkClientCnxnSocketProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslProtocolProp =>  //ignore string
+        case KafkaConfig.ZkSslEnabledProtocolsProp =>  //ignore string
+        case KafkaConfig.ZkSslCipherSuitesProp =>  //ignore string
+        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => //ignore string
+        case KafkaConfig.ZkSslCrlEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
+        case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -635,6 +650,7 @@ class KafkaConfigTest {
         case KafkaConfig.LogCleanerEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
         case KafkaConfig.LogCleanerDeleteRetentionMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerMinCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.LogCleanerMaxCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerMinCleanRatioProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogIndexSizeMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "3")
         case KafkaConfig.LogFlushIntervalMessagesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -654,6 +670,7 @@ class KafkaConfigTest {
         case KafkaConfig.ReplicaFetchWaitMaxMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaFetchMinBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaFetchResponseMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.ReplicaSelectorClassProp => // Ignore string
         case KafkaConfig.NumReplicaFetchersProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.FetchPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
@@ -738,6 +755,9 @@ class KafkaConfigTest {
         case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
         case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
 
+        // Security config
+        case KafkaConfig.securityProviderClassProp =>
+
         // Password encoder configs
         case KafkaConfig.PasswordEncoderSecretProp =>
         case KafkaConfig.PasswordEncoderOldSecretProp =>
@@ -759,6 +779,88 @@ class KafkaConfigTest {
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
+  }
+
+  @Test
+  def testDynamicLogConfigs(): Unit = {
+    def getBaseProperties(): Properties = {
+      val validRequiredProperties = new Properties()
+      validRequiredProperties.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+      validRequiredProperties
+    }
+
+    val props = getBaseProperties()
+    val config = KafkaConfig.fromProps(props)
+
+    def assertDynamic(property: String, value: Any, accessor: () => Any): Unit = {
+      val initial = accessor()
+      props.put(property, value.toString)
+      config.updateCurrentConfig(new KafkaConfig(props))
+      assertNotEquals(initial, accessor())
+    }
+
+    // Test dynamic log config values can be correctly passed through via KafkaConfig to LogConfig
+    // Every log config prop must be explicitly accounted for here.
+    // A value other than the default value for this config should be set to ensure that we can check whether
+    // the value is dynamically updatable.
+    LogConfig.TopicConfigSynonyms.foreach { case (logConfig, kafkaConfigProp) =>
+      logConfig match {
+        case LogConfig.CleanupPolicyProp =>
+          assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
+        case LogConfig.CompressionTypeProp =>
+          assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
+        case LogConfig.SegmentBytesProp =>
+          assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
+        case LogConfig.SegmentMsProp =>
+          assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)
+        case LogConfig.DeleteRetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10002L, () => config.logCleanerDeleteRetentionMs)
+        case LogConfig.FileDeleteDelayMsProp =>
+          assertDynamic(kafkaConfigProp, 10003L, () => config.logDeleteDelayMs)
+        case LogConfig.FlushMessagesProp =>
+          assertDynamic(kafkaConfigProp, 10004L, () => config.logFlushIntervalMessages)
+        case LogConfig.FlushMsProp =>
+          assertDynamic(kafkaConfigProp, 10005L, () => config.logFlushIntervalMs)
+        case LogConfig.MaxCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10006L, () => config.logCleanerMaxCompactionLagMs)
+        case LogConfig.IndexIntervalBytesProp =>
+          assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
+        case LogConfig.MaxMessageBytesProp =>
+          assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case LogConfig.MessageDownConversionEnableProp =>
+          assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
+        case LogConfig.MessageTimestampDifferenceMaxMsProp =>
+          assertDynamic(kafkaConfigProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
+        case LogConfig.MessageTimestampTypeProp =>
+          assertDynamic(kafkaConfigProp, "LogAppendTime", () => config.logMessageTimestampType.name)
+        case LogConfig.MinCleanableDirtyRatioProp =>
+          assertDynamic(kafkaConfigProp, 0.01, () => config.logCleanerMinCleanRatio)
+        case LogConfig.MinCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10010L, () => config.logCleanerMinCompactionLagMs)
+        case LogConfig.MinInSyncReplicasProp =>
+          assertDynamic(kafkaConfigProp, 4, () => config.minInSyncReplicas)
+        case LogConfig.PreAllocateEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.logPreAllocateEnable)
+        case LogConfig.RetentionBytesProp =>
+          assertDynamic(kafkaConfigProp, 10011L, () => config.logRetentionBytes)
+        case LogConfig.RetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10012L, () => config.logRetentionTimeMillis)
+        case LogConfig.SegmentIndexBytesProp =>
+          assertDynamic(kafkaConfigProp, 10013, () => config.logIndexSizeMaxBytes)
+        case LogConfig.SegmentJitterMsProp =>
+          assertDynamic(kafkaConfigProp, 10014L, () => config.logRollTimeJitterMillis)
+        case LogConfig.UncleanLeaderElectionEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
+        case LogConfig.MessageFormatVersionProp =>
+        // not dynamically updatable
+        case LogConfig.FollowerReplicationThrottledReplicasProp =>
+        // topic only config
+        case LogConfig.LeaderReplicationThrottledReplicasProp =>
+        // topic only config
+        case prop =>
+          fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
+      }
+    }
   }
 
   @Test
@@ -811,7 +913,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testNonroutableAdvertisedListeners() {
+  def testNonroutableAdvertisedListeners(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
@@ -819,7 +921,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testMaxConnectionsPerIpProp() {
+  def testMaxConnectionsPerIpProp(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.MaxConnectionsPerIpProp, "0")
     assertFalse(isValidKafkaConfig(props))
@@ -829,7 +931,7 @@ class KafkaConfigTest {
     assertFalse(isValidKafkaConfig(props))
   }
 
-  private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
+  private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*): Unit = {
     values.foreach((value) => {
       val props = validRequiredProps
       props.setProperty(name, value.toString)

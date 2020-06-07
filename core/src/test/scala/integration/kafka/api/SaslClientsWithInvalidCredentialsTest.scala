@@ -17,8 +17,8 @@ import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import scala.collection.JavaConverters._
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import scala.jdk.CollectionConverters._
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -39,7 +39,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   val consumerCount = 1
   val producerCount = 1
-  val serverCount = 1
+  val brokerCount = 1
 
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
   this.serverConfig.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
@@ -50,7 +50,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   val numPartitions = 1
   val tp = new TopicPartition(topic, 0)
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
@@ -62,7 +62,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
-    createTopic(topic, numPartitions, serverCount)
+    createTopic(topic, numPartitions, brokerCount)
   }
 
   @After
@@ -72,7 +72,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testProducerWithAuthenticationFailure() {
+  def testProducerWithAuthenticationFailure(): Unit = {
     val producer = createProducer()
     verifyAuthenticationException(sendOneRecord(producer, maxWaitMs = 10000))
     verifyAuthenticationException(producer.partitionsFor(topic))
@@ -82,7 +82,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testTransactionalProducerWithAuthenticationFailure() {
+  def testTransactionalProducerWithAuthenticationFailure(): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
 
@@ -96,21 +96,21 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testConsumerWithAuthenticationFailure() {
+  def testConsumerWithAuthenticationFailure(): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   @Test
-  def testManualAssignmentConsumerWithAuthenticationFailure() {
+  def testManualAssignmentConsumerWithAuthenticationFailure(): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   @Test
-  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() {
+  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -118,7 +118,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     verifyAuthenticationException(consumer.poll(Duration.ofMillis(1000)))
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
@@ -129,16 +129,16 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testKafkaAdminClientWithAuthenticationFailure() {
+  def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val adminClient = AdminClient.create(props)
+    val adminClient = Admin.create(props)
 
     def describeTopic(): Unit = {
       try {
         val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
         assertEquals(1, response.size)
-        response.asScala.foreach { case (topic, description) =>
+        response.forEach { (topic, description) =>
           assertEquals(numPartitions, description.partitions.size)
         }
       } catch {
@@ -157,7 +157,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testConsumerGroupServiceWithAuthenticationFailure() {
+  def testConsumerGroupServiceWithAuthenticationFailure(): Unit = {
     val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
 
     val consumer = createConsumer()
@@ -168,7 +168,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testConsumerGroupServiceWithAuthenticationSuccess() {
+  def testConsumerGroupServiceWithAuthenticationSuccess(): Unit = {
     createClientCredential()
     val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
 
@@ -176,7 +176,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     consumer.subscribe(List(topic).asJava)
 
     verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
-    assertEquals(1, consumerGroupService.listGroups.size)
+    assertEquals(1, consumerGroupService.listConsumerGroups.size)
     consumerGroupService.close()
   }
 

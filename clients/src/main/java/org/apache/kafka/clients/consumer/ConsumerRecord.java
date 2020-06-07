@@ -157,6 +157,8 @@ public class ConsumerRecord<K, V> {
                           Optional<Integer> leaderEpoch) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
+        if (headers == null)
+            throw new IllegalArgumentException("Headers cannot be null");
 
         this.topic = topic;
         this.partition = partition;
@@ -173,7 +175,7 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * The topic this record is received from
+     * The topic this record is received from (never null)
      */
     public String topic() {
         return this.topic;
@@ -187,7 +189,7 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * The headers
+     * The headers (never null)
      */
     public Headers headers() {
         return headers;

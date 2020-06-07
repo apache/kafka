@@ -19,27 +19,32 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Set;
 
 /**
  * The result of the {@link KafkaAdminClient#describeCluster()} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeClusterResult {
     private final KafkaFuture<Collection<Node>> nodes;
     private final KafkaFuture<Node> controller;
     private final KafkaFuture<String> clusterId;
+    private final KafkaFuture<Set<AclOperation>> authorizedOperations;
 
     DescribeClusterResult(KafkaFuture<Collection<Node>> nodes,
                           KafkaFuture<Node> controller,
-                          KafkaFuture<String> clusterId) {
+                          KafkaFuture<String> clusterId,
+                          KafkaFuture<Set<AclOperation>> authorizedOperations) {
         this.nodes = nodes;
         this.controller = controller;
         this.clusterId = clusterId;
+        this.authorizedOperations = authorizedOperations;
     }
 
     /**
@@ -63,5 +68,13 @@ public class DescribeClusterResult {
      */
     public KafkaFuture<String> clusterId() {
         return clusterId;
+    }
+
+    /**
+     * Returns a future which yields authorized operations.  The future value will be non-null if the
+     * broker supplied this information, and null otherwise.
+     */
+    public KafkaFuture<Set<AclOperation>> authorizedOperations() {
+        return authorizedOperations;
     }
 }

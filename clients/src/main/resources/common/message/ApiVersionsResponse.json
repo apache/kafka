@@ -18,14 +18,23 @@
   "type": "response",
   "name": "ApiVersionsResponse",
   // Version 1 adds throttle time to the response.
+  //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-2",
+  //
+  // Version 3 is the first flexible version. Tagged fields are only supported in the body but
+  // not in the header. The length of the header must not change in order to guarantee the
+  // backward compatibility.
+  //
+  // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
+  // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code." },
     { "name": "ApiKeys", "type": "[]ApiVersionsResponseKey", "versions": "0+",
       "about": "The APIs supported by the broker.", "fields": [
-      { "name": "Index", "type": "int16", "versions": "0+", "mapKey": true,
+      { "name": "ApiKey", "type": "int16", "versions": "0+", "mapKey": true,
         "about": "The API index." },
       { "name": "MinVersion", "type": "int16", "versions": "0+",
         "about": "The minimum supported version, inclusive." },

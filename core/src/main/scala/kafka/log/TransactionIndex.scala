@@ -42,24 +42,30 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile var file: File) extends Logging {
+class TransactionIndex(val startOffset: Long, @volatile private var _file: File) extends Logging {
+
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
-  if (file.exists)
+  if (_file.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
     lastOffset.foreach { offset =>
       if (offset >= abortedTxn.lastOffset)
-        throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially")
+        throw new IllegalArgumentException(s"The last offset of appended transactions must increase sequentially, but " +
+          s"${abortedTxn.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
     }
     lastOffset = Some(abortedTxn.lastOffset)
-    Utils.writeFully(channel, abortedTxn.buffer.duplicate())
+    Utils.writeFully(channel(), abortedTxn.buffer.duplicate())
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
+
+  def file: File = _file
+
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Delete this index.
@@ -73,7 +79,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     Files.deleteIfExists(file.toPath)
   }
 
-  private def channel: FileChannel = {
+  private def channel(): FileChannel = {
     maybeChannel match {
       case Some(channel) => channel
       case None => openChannel()
@@ -105,7 +111,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     try {
       if (file.exists)
         Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    } finally file = f
+    } finally _file = f
   }
 
   def truncateTo(offset: Long): Unit = {
@@ -113,7 +119,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     var newLastOffset: Option[Long] = None
     for ((abortedTxn, position) <- iterator(() => buffer)) {
       if (abortedTxn.lastOffset >= offset) {
-        channel.truncate(position)
+        channel().truncate(position)
         lastOffset = newLastOffset
         return
       }
@@ -138,8 +144,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
               val abortedTxn = new AbortedTxn(buffer)
               if (abortedTxn.version > AbortedTxn.CurrentVersion)
-                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
-                  s"current version is ${AbortedTxn.CurrentVersion}")
+                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version} " +
+                  s"in transaction index ${file.getAbsolutePath}, current version is ${AbortedTxn.CurrentVersion}")
               val nextEntry = (abortedTxn, position)
               position += AbortedTxn.TotalSize
               nextEntry
@@ -147,7 +153,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
               case e: IOException =>
                 // We received an unexpected error reading from the index file. We propagate this as an
                 // UNKNOWN error to the consumer, which will cause it to retry the fetch.
-                throw new KafkaException(s"Failed to read from the transaction index $file", e)
+                throw new KafkaException(s"Failed to read from the transaction index ${file.getAbsolutePath}", e)
             }
           }
         }
@@ -187,8 +193,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
       if (abortedTxn.lastOffset < startOffset)
-        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn is less than start offset " +
-          s"$startOffset")
+        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn in index " +
+          s"${file.getAbsolutePath} is less than start offset $startOffset")
     }
   }
 

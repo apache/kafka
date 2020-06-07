@@ -17,13 +17,12 @@
 package org.apache.kafka.common;
 
 import java.util.Map;
-
-import org.apache.kafka.common.utils.Utils;
+import java.util.Objects;
 
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
  * <p>
- * This class captures the following parameters
+ * This class captures the following parameters:
  * <pre>
  *  <b>name</b> The name of the metric
  *  <b>group</b> logical group name of the metrics to which this metric belongs.
@@ -32,7 +31,7 @@ import org.apache.kafka.common.utils.Utils;
  * </pre>
  * group, tags parameters can be used to create unique metric names while reporting in JMX or any custom reporting.
  * <p>
- * Ex: standard JMX MBean can be constructed like  <b>domainName:type=group,key1=val1,key2=val2</b>
+ * Ex: standard JMX MBean can be constructed like <b>domainName:type=group,key1=val1,key2=val2</b>
  * <p>
  *
  * Usage looks something like this:
@@ -78,10 +77,10 @@ public final class MetricName {
      * @param tags        additional key/value attributes of the metric
      */
     public MetricName(String name, String group, String description, Map<String, String> tags) {
-        this.name = Utils.notNull(name);
-        this.group = Utils.notNull(group);
-        this.description = Utils.notNull(description);
-        this.tags = Utils.notNull(tags);
+        this.name = Objects.requireNonNull(name);
+        this.group = Objects.requireNonNull(group);
+        this.description = Objects.requireNonNull(description);
+        this.tags = Objects.requireNonNull(tags);
     }
 
     public String name() {

@@ -20,9 +20,10 @@ import kafka.common.KafkaException
 import org.apache.kafka.common.acl.AclPermissionType
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.fail
 
-class PermissionTypeTest extends JUnitSuite {
+@deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")
+class PermissionTypeTest {
 
   @Test
   def testFromString(): Unit = {

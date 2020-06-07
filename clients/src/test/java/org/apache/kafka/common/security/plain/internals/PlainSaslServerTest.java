@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
@@ -67,6 +68,45 @@ public class PlainSaslServerTest {
     @Test(expected = SaslAuthenticationException.class)
     public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
         saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A));
+    }
+
+    @Test
+    public void emptyTokens() {
+        Exception e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("", "", "")));
+        assertEquals("Authentication failed: username not specified", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("", "", "p")));
+        assertEquals("Authentication failed: username not specified", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("", "u", "")));
+        assertEquals("Authentication failed: password not specified", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("a", "", "")));
+        assertEquals("Authentication failed: username not specified", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("a", "", "p")));
+        assertEquals("Authentication failed: username not specified", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("a", "u", "")));
+        assertEquals("Authentication failed: password not specified", e.getMessage());
+
+        String nul = "\u0000";
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(
+                String.format("%s%s%s%s%s%s", "a", nul, "u", nul, "p", nul).getBytes(StandardCharsets.UTF_8)));
+        assertEquals("Invalid SASL/PLAIN response: expected 3 tokens, got 4", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(
+                String.format("%s%s%s", "", nul, "u").getBytes(StandardCharsets.UTF_8)));
+        assertEquals("Invalid SASL/PLAIN response: expected 3 tokens, got 2", e.getMessage());
     }
 
     private byte[] saslMessage(String authorizationId, String userName, String password) {

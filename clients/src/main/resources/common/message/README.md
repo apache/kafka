@@ -69,29 +69,34 @@ Field Types
 -----------
 There are several primitive field types available.
 
-* "boolean": either true or false.  This takes up 1 byte on the wire.
+* "boolean": either true or false.
 
-* "int8": an 8-bit integer.  This also takes up 1 byte on the wire.
+* "int8": an 8-bit integer.
 
-* "int16": a 16-bit integer.  This takes up 2 bytes on the wire.
+* "int16": a 16-bit integer.
 
-* "int32": a 32-bit integer.  This takes up 4 bytes on the wire.
+* "int32": a 32-bit integer.
 
-* "int64": a 64-bit integer.  This takes up 8 bytes on the wire.
+* "int64": a 64-bit integer.
 
-* "string": a string.  This must be less than 64kb in size when serialized as UTF-8.  This takes up 2 bytes on the wire, plus the length of the string when serialized to UTF-8.
+* "float64": is a double-precision floating point number (IEEE 754).
 
-* "bytes": binary data.  This takes up 4 bytes on the wire, plus the length of the bytes.
+* "string": a UTF-8 string.
+
+* "bytes": binary data.
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
 example, []Foo declares an array of "Foo" objects.  Array fields have their own
 array of fields, which specifies what is in the contained objects.
 
+For information about how fields are serialized, see the [Kafka Protocol
+Guide](https://kafka.apache.org/protocol.html).
+
 Nullable Fields
 ---------------
-Booleans and ints can never be null.  However, fields that are strings, bytes,
-or arrays may optionally be "nullable."  When a field is "nullable," that
+Booleans, ints, and floats can never be null.  However, fields that are strings,
+bytes, or arrays may optionally be "nullable."  When a field is "nullable," that
 simply means that we are prepared to serialize and deserialize null entries for
 that field.
 
@@ -103,6 +108,39 @@ becomes nullable in a later version.
 If a field is declared as non-nullable, and it is present in the message
 version you are using, you should set it to a non-null value before serializing
 the message.  Otherwise, you will get a runtime error.
+
+Tagged Fields
+-------------
+Tagged fields are an extension to the Kafka protocol which allows optional data
+to be attached to messages.  Tagged fields can appear at the root level of
+messages, or within any structure in the message.
+
+Unlike mandatory fields, tagged fields can be added to message versions that
+already exists.  Older servers will ignore new tagged fields which they do not
+understand.
+
+In order to make a field tagged, set a "tag" for the field, and also set up
+tagged versions for the field.  The taggedVersions you specify should be
+open-ended-- that is, they should specify a start version, but not an end
+version.
+
+You can remove support for a tagged field from a specific version of a message,
+but you can't reuse a tag once it has been used for something else.  Once tags
+have been used for something, they can't be used for anything else, without
+breaking compatibilty.
+
+Note that tagged fields can only be added to "flexible" message versions.
+
+Flexible Versions
+-----------------
+Kafka serialization has been improved over time to be more flexible and
+efficient.  Message versions that contain these improvements are referred to as
+"flexible versions."
+
+In flexible verisons, variable-length fields such as strings, arrays, and bytes
+fields are serialized in a more efficient way that saves space.  The new
+serialization types start with compact.  For example COMPACT_STRING is a more
+efficient form of STRING.
 
 Serializing Messages
 --------------------
@@ -136,6 +174,8 @@ been set:
 
 * Integer fields default to 0.
 
+* Floats default to 0.
+
 * Booleans default to false.
 
 * Strings default to the empty string.
@@ -144,24 +184,26 @@ been set:
 
 * Array fields default to empty.
 
-Null is never used as a default for any field.
+You can specify "null" as a default value for a string field by specifing the
+literal string "null".  Note that you can only specify null as a default if all
+versions of the field are nullable.
 
 Custom Default Values
 ---------------------
-You may set a custom default for fields that are integers, booleans, or strings.
-Just add a "default" entry in the JSON object.  The custom default overrides the
-normal default for the type.  So for example, you could make a boolean field
-default to true rather than false, and so forth.
+You may set a custom default for fields that are integers, booleans, floats, or
+strings.  Just add a "default" entry in the JSON object.  The custom default
+overrides the normal default for the type.  So for example, you could make a
+boolean field default to true rather than false, and so forth.
 
 Note that the default must be valid for the field type.  So the default for an
-int16 field must by an integer that fits in 16 bits, and so forth.  You may
+int16 field must be an integer that fits in 16 bits, and so forth.  You may
 specify hex or octal values, as long as they are prefixed with 0x or 0.  It is
 currently not possible to specify a custom default for bytes or array fields.
 
 Custom defaults are useful when an older message version lacked some
 information.  For example, if an older request lacked a timeout field, you may
 want to specify that the server should assume that the timeout for such a
-request is 5000 ms (or some other arbitrary value.) 
+request is 5000 ms (or some other arbitrary value).
 
 Ignorable Fields
 ----------------
@@ -185,7 +227,7 @@ Hash Sets
 ---------
 One very common pattern in Kafka is to load array elements from a message into
 a Map or Set for easier access.  The message protocol makes this easier with
-the "mapKey" concept.  
+the "mapKey" concept.
 
 If some of the elements of an array are annotated with "mapKey": true, the
 entire array will be treated as a linked hash set rather than a list.  Elements

@@ -20,15 +20,16 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
 import java.util.Set;
+
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
 class GroupedStreamAggregateBuilder<K, V> {
 
@@ -36,10 +37,11 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final boolean repartitionRequired;
-    private final String userName;
-    private final Set<String> sourceNodes;
+    private final String userProvidedRepartitionTopicName;
+    private final Set<String> subTopologySourceNodes;
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
+    private StreamsGraphNode repartitionNode;
 
     final Initializer<Long> countInitializer = () -> 0L;
 
@@ -50,7 +52,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final GroupedInternal<K, V> groupedInternal,
                                   final boolean repartitionRequired,
-                                  final Set<String> sourceNodes,
+                                  final Set<String> subTopologySourceNodes,
                                   final String name,
                                   final StreamsGraphNode streamsGraphNode) {
 
@@ -58,30 +60,38 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.keySerde = groupedInternal.keySerde();
         this.valueSerde = groupedInternal.valueSerde();
         this.repartitionRequired = repartitionRequired;
-        this.sourceNodes = sourceNodes;
+        this.subTopologySourceNodes = subTopologySourceNodes;
         this.name = name;
         this.streamsGraphNode = streamsGraphNode;
-        this.userName = groupedInternal.name();
+        this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    <KR, VR> KTable<KR, VR> build(final String functionName,
-                                  final StoreBuilder<? extends StateStore> storeBuilder,
+    <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
+                                  final StoreBuilder<?> storeBuilder,
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valSerde) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
-        final String aggFunctionName = builder.newProcessorName(functionName);
+        final String aggFunctionName = functionName.name();
 
-        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
-
-        final String sourceName = repartitionIfRequired(userName != null ? userName : storeBuilder.name(), repartitionNodeBuilder);
-
+        String sourceName = this.name;
         StreamsGraphNode parentNode = streamsGraphNode;
 
-        if (!sourceName.equals(this.name)) {
-            final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
+        if (repartitionRequired) {
+            final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeBuilder.name();
+            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
+
+            // First time through we need to create a repartition node.
+            // Any subsequent calls to GroupedStreamAggregateBuilder#build we check if
+            // the user has provided a name for the repartition topic, is so we re-use
+            // the existing repartition node, otherwise we create a new one.
+            if (repartitionNode == null || userProvidedRepartitionTopicName == null) {
+                repartitionNode = repartitionNodeBuilder.build();
+            }
+
             builder.addGraphNode(parentNode, repartitionNode);
             parentNode = repartitionNode;
         }
@@ -90,8 +100,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                storeBuilder,
-                repartitionRequired
+                storeBuilder
             );
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
@@ -99,7 +108,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
                                 valSerde,
-                                sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
+                                sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
@@ -108,16 +117,17 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     /**
-     * @return the new sourceName if repartitioned. Otherwise the name of this stream
+     * @return the new sourceName of the repartitioned source
      */
-    private String repartitionIfRequired(final String repartitionTopicNamePrefix,
-                                         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
-        if (!repartitionRequired) {
-            return this.name;
-        }
-        // if repartition required the operation
-        // captured needs to be set in the graph
-        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, repartitionTopicNamePrefix, optimizableRepartitionNodeBuilder);
+    private String createRepartitionSource(final String repartitionTopicNamePrefix,
+                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
+
+        return KStreamImpl.createRepartitionedSource(builder,
+                                                     keySerde,
+                                                     valueSerde,
+                                                     repartitionTopicNamePrefix,
+                                                     null,
+                                                     optimizableRepartitionNodeBuilder);
 
     }
 }

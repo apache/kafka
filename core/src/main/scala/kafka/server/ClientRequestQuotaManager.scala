@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
@@ -36,7 +36,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
 
-  def recordExempt(value: Double) {
+  def recordExempt(value: Double): Unit = {
     exemptSensor.record(value)
   }
 
@@ -46,17 +46,12 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     * @param request client request
     * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
     */
-  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
-    if (request.apiRemoteCompleteTimeNanos == -1) {
-      // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeNanos = time.nanoseconds
-    }
-
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, timeMs: Long): Int = {
     if (quotasEnabled) {
       request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
         getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
       recordAndGetThrottleTimeMs(request.session, request.header.clientId,
-        nanosToPercentage(request.requestThreadTimeNanos), time.milliseconds())
+        nanosToPercentage(request.requestThreadTimeNanos), timeMs)
     } else {
       0
     }
@@ -69,8 +64,8 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  override protected def throttleTime(clientMetric: KafkaMetric): Long = {
-    math.min(super.throttleTime(clientMetric), maxThrottleTimeMs)
+  override protected def throttleTime(quotaValue: Double, quotaBound: Double, windowSize: Long): Long = {
+    math.min(super.throttleTime(quotaValue, quotaBound, windowSize), maxThrottleTimeMs)
   }
 
   override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {

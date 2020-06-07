@@ -19,9 +19,7 @@ package org.apache.kafka.common.record;
 import net.jpountz.xxhash.XXHashFactory;
 
 import org.hamcrest.CoreMatchers;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
@@ -37,9 +35,11 @@ import java.util.List;
 import java.util.Random;
 
 import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
@@ -70,9 +70,6 @@ public class KafkaLZ4Test {
                    '}';
         }
     }
-
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
 
     @Parameters(name = "{index} useBrokenFlagDescriptorChecksum={0}, ignoreFlagDescriptorChecksum={1}, blockChecksum={2}, close={3}, payload={4}")
     public static Collection<Object[]> data() {
@@ -111,12 +108,10 @@ public class KafkaLZ4Test {
     }
 
     @Test
-    public void testHeaderPrematureEnd() throws Exception {
-        thrown.expect(IOException.class);
-        thrown.expectMessage(KafkaLZ4BlockInputStream.PREMATURE_EOS);
-
-        final ByteBuffer buffer = ByteBuffer.allocate(2);
-        makeInputStream(buffer);
+    public void testHeaderPrematureEnd() {
+        ByteBuffer buffer = ByteBuffer.allocate(2);
+        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+        assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
     }
 
     private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer) throws IOException {
@@ -125,43 +120,41 @@ public class KafkaLZ4Test {
 
     @Test
     public void testNotSupported() throws Exception {
-        thrown.expect(IOException.class);
-        thrown.expectMessage(KafkaLZ4BlockInputStream.NOT_SUPPORTED);
-
         byte[] compressed = compressedBytes();
         compressed[0] = 0x00;
-
-        makeInputStream(ByteBuffer.wrap(compressed));
+        ByteBuffer buffer = ByteBuffer.wrap(compressed);
+        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+        assertEquals(KafkaLZ4BlockInputStream.NOT_SUPPORTED, e.getMessage());
     }
 
     @Test
     public void testBadFrameChecksum() throws Exception {
-        if (!ignoreFlagDescriptorChecksum) {
-            thrown.expect(IOException.class);
-            thrown.expectMessage(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH);
-        }
-
         byte[] compressed = compressedBytes();
         compressed[6] = (byte) 0xFF;
+        ByteBuffer buffer = ByteBuffer.wrap(compressed);
 
-        makeInputStream(ByteBuffer.wrap(compressed));
+        if (ignoreFlagDescriptorChecksum) {
+            makeInputStream(buffer);
+        } else {
+            IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+            assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
+        }
     }
 
     @Test
     public void testBadBlockSize() throws Exception {
-        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum)) return;
-
-        thrown.expect(IOException.class);
-        thrown.expectMessage(CoreMatchers.containsString("exceeded max"));
+        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum))
+            return;
 
         byte[] compressed = compressedBytes();
-        final ByteBuffer buffer = ByteBuffer.wrap(compressed).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.wrap(compressed).order(ByteOrder.LITTLE_ENDIAN);
 
         int blockSize = buffer.getInt(7);
         blockSize = (blockSize & LZ4_FRAME_INCOMPRESSIBLE_MASK) | (1 << 24 & ~LZ4_FRAME_INCOMPRESSIBLE_MASK);
         buffer.putInt(7, blockSize);
 
-        testDecompression(buffer);
+        IOException e = assertThrows(IOException.class, () -> testDecompression(buffer));
+        assertThat(e.getMessage(), CoreMatchers.containsString("exceeded max"));
     }
 
 

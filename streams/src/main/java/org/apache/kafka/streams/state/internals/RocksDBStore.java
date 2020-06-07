@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -27,11 +28,14 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -40,10 +44,12 @@ import org.rocksdb.CompressionType;
 import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Statistics;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -62,10 +68,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
+
 /**
  * A persistent key-value store based on RocksDB.
  */
-public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
+public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
@@ -86,10 +94,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     RocksDB db;
     RocksDBAccessor dbAccessor;
 
-    // the following option objects will be created in the constructor and closed in the close() method
+    // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
     WriteOptions wOptions;
     FlushOptions fOptions;
+    private Cache cache;
+    private BloomFilter filter;
+
+    private RocksDBConfigSetter configSetter;
+
+    private final RocksDBMetricsRecorder metricsRecorder;
+    private boolean isStatisticsRegistered = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -98,16 +113,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     protected volatile boolean open = false;
 
-    RocksDBStore(final String name) {
-        this(name, DB_FILE_DIR);
+    RocksDBStore(final String name,
+                 final String metricsScope) {
+        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name));
     }
 
     RocksDBStore(final String name,
-                 final String parentDir) {
+                 final String parentDir,
+                 final RocksDBMetricsRecorder metricsRecorder) {
         this.name = name;
         this.parentDir = parentDir;
+        this.metricsRecorder = metricsRecorder;
     }
-
 
     @SuppressWarnings("unchecked")
     void openDB(final ProcessorContext context) {
@@ -118,9 +135,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-        tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
+        cache = new LRUCache(BLOCK_CACHE_SIZE);
+        tableConfig.setBlockCache(cache);
         tableConfig.setBlockSize(BLOCK_SIZE);
-        tableConfig.setFilter(new BloomFilter());
+
+        filter = new BloomFilter();
+        tableConfig.setFilter(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
@@ -151,7 +171,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
         if (configSetterClass != null) {
-            final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
+            configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
@@ -168,8 +188,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             throw new ProcessorStateException(fatal);
         }
 
+        // Setup metrics before the database is opened, otherwise the metrics are not updated
+        // with the measurements from Rocks DB
+        maybeSetUpMetricsRecorder(configs);
+
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
+    }
+
+    private void maybeSetUpMetricsRecorder(final Map<String, Object> configs) {
+        if (userSpecifiedOptions.statistics() == null &&
+            RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+
+            isStatisticsRegistered = true;
+            // metrics recorder will clean up statistics object
+            final Statistics statistics = new Statistics();
+            userSpecifiedOptions.setStatistics(statistics);
+            metricsRecorder.addStatistics(name, statistics);
+        }
     }
 
     void openRocksDB(final DBOptions dbOptions,
@@ -186,10 +222,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
+    @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
         internalProcessorContext = context;
+        metricsRecorder.init((StreamsMetricsImpl) context.metrics(), context.taskId());
         openDB(context);
         batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
@@ -284,6 +322,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                                                               final Bytes to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
+
+        if (from.compareTo(to) > 0) {
+            log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
         validateStoreOpen();
 
         final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to);
@@ -344,7 +390,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+    @Override
+    public void toggleDbForBulkLoading(final boolean prepareForBulkload) {
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
             final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
@@ -359,7 +406,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         openDB(internalProcessorContext);
     }
 
-    void write(final WriteBatch batch) throws RocksDBException {
+    @Override
+    public void addToBatch(final KeyValue<byte[], byte[]> record,
+                           final WriteBatch batch) throws RocksDBException {
+        dbAccessor.addToBatch(record.key, record.value, batch);
+    }
+
+    @Override
+    public void write(final WriteBatch batch) throws RocksDBException {
         db.write(wOptions, batch);
     }
 
@@ -371,16 +425,38 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         open = false;
         closeOpenIterators();
+
+        if (configSetter != null) {
+            configSetter.close(name, userSpecifiedOptions);
+            configSetter = null;
+        }
+
+        maybeRemoveStatisticsFromMetricsRecorder();
+
+        // Important: do not rearrange the order in which the below objects are closed!
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
         dbAccessor.close();
+        db.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
-        db.close();
+        filter.close();
+        cache.close();
 
+        dbAccessor = null;
         userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
         db = null;
+        filter = null;
+        cache = null;
+    }
+
+    private void maybeRemoveStatisticsFromMetricsRecorder() {
+        if (isStatisticsRegistered) {
+            metricsRecorder.removeStatistics(name);
+            isStatisticsRegistered = false;
+        }
     }
 
     private void closeOpenIterators() {
@@ -395,8 +471,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             }
         }
     }
-
-
 
     interface RocksDBAccessor {
 
@@ -426,6 +500,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                     final WriteBatch batch) throws RocksDBException;
+
+        void addToBatch(final byte[] key,
+                        final byte[] value,
+                        final WriteBatch batch) throws RocksDBException;
 
         void close();
 
@@ -464,11 +542,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                                  final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                if (entry.value == null) {
-                    batch.delete(columnFamily, entry.key.get());
-                } else {
-                    batch.put(columnFamily, entry.key.get(), entry.value);
-                }
+                addToBatch(entry.key.get(), entry.value, batch);
             }
         }
 
@@ -514,11 +588,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                            final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(columnFamily, record.key);
-                } else {
-                    batch.put(columnFamily, record.key, record.value);
-                }
+                addToBatch(record.key, record.value, batch);
+            }
+        }
+
+        @Override
+        public void addToBatch(final byte[] key,
+                               final byte[] value,
+                               final WriteBatch batch) throws RocksDBException {
+            if (value == null) {
+                batch.delete(columnFamily, key);
+            } else {
+                batch.put(columnFamily, key, value);
             }
         }
 
@@ -528,6 +609,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
             try {
                 db.compactRange(columnFamily, true, 1, 0);

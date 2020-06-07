@@ -96,6 +96,13 @@ public class ConfigTransformerTest {
     }
 
     @Test
+    public void testReplaceMultipleVariablesWithoutPathInValue() throws Exception {
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "first ${test:testKey}; second ${test:testKey}"));
+        Map<String, String> data = result.data();
+        assertEquals("first testResultNoPath; second testResultNoPath", data.get(MY_KEY));
+    }
+
+    @Test
     public void testNullConfigValue() throws Exception {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, null));
         Map<String, String> data = result.data();

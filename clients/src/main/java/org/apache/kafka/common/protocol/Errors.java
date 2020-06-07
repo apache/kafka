@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -60,8 +62,12 @@ import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.ElectionNotNeededException;
+import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
@@ -72,6 +78,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -182,10 +189,8 @@ public enum Errors {
             RebalanceInProgressException::new),
     INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid.",
             InvalidCommitOffsetSizeException::new),
-    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.",
-            TopicAuthorizationException::new),
-    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.",
-            GroupAuthorizationException::new),
+    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.", TopicAuthorizationException::new),
+    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.", GroupAuthorizationException::new),
     CLUSTER_AUTHORIZATION_FAILED(31, "Cluster authorization failed.",
             ClusterAuthorizationException::new),
     INVALID_TIMESTAMP(32, "The timestamp of the message is out of acceptable range.",
@@ -287,22 +292,34 @@ public enum Errors {
             ListenerNotFoundException::new),
     TOPIC_DELETION_DISABLED(73, "Topic deletion is disabled.",
             TopicDeletionDisabledException::new),
-    FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
+    FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker.",
             FencedLeaderEpochException::new),
-    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
+    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker.",
             UnknownLeaderEpochException::new),
     UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
             UnsupportedCompressionTypeException::new),
-    STALE_BROKER_EPOCH(77, "Broker epoch has changed",
+    STALE_BROKER_EPOCH(77, "Broker epoch has changed.",
             StaleBrokerEpochException::new),
     OFFSET_NOT_AVAILABLE(78, "The leader high watermark has not caught up from a recent leader " +
-            "election so the offsets cannot be guaranteed to be monotonically increasing",
+            "election so the offsets cannot be guaranteed to be monotonically increasing.",
             OffsetNotAvailableException::new),
-    MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering a consumer group",
+    MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering a consumer group.",
             MemberIdRequiredException::new),
-    PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
+    PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available.",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new);
+    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
+    FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
+            "another consumer with the same group.instance.id has registered with a different member.id.",
+            FencedInstanceIdException::new),
+    ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available.",
+            EligibleLeadersNotAvailableException::new),
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition.", ElectionNotNeededException::new),
+    NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
+            NoReassignmentInProgressException::new),
+    GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
+        GroupSubscribedToTopicException::new),
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence will be rejected.", InvalidRecordException::new),
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

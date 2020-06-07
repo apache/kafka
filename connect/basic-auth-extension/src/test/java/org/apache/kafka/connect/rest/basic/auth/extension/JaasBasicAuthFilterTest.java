@@ -17,12 +17,19 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.ChoiceCallback;
+import javax.ws.rs.HttpMethod;
+import javax.ws.rs.core.UriInfo;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -51,6 +58,9 @@ public class JaasBasicAuthFilterTest {
     private JaasBasicAuthFilter jaasBasicAuthFilter = new JaasBasicAuthFilter();
     private String previousJaasConfig;
     private Configuration previousConfiguration;
+
+    @MockStrict
+    private UriInfo uriInfo;
 
     @Before
     public void setup() {
@@ -137,10 +147,54 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
     }
 
-    private void setMock(String authorization, String username, String password, boolean exceptionCase) {
-        String authHeader = authorization + " " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
+    @Test
+    public void testPostWithoutAppropriateCredential() throws IOException {
+        EasyMock.expect(requestContext.getMethod()).andReturn(HttpMethod.POST);
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo);
+        EasyMock.expect(uriInfo.getPath()).andReturn("connectors/connName/tasks");
+
+        PowerMock.replayAll();
+        jaasBasicAuthFilter.filter(requestContext);
+        EasyMock.verify(requestContext);
+    }
+
+    @Test
+    public void testPostNotChangingConnectorTask() throws IOException {
+        EasyMock.expect(requestContext.getMethod()).andReturn(HttpMethod.POST);
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo);
+        EasyMock.expect(uriInfo.getPath()).andReturn("local:randomport/connectors/connName");
+        String authHeader = "Basic" + Base64.getEncoder().encodeToString(("user" + ":" + "password").getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
+        requestContext.abortWith(EasyMock.anyObject(Response.class));
+        EasyMock.expectLastCall();
+        PowerMock.replayAll();
+        jaasBasicAuthFilter.filter(requestContext);
+        EasyMock.verify(requestContext);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testUnsupportedCallback() throws Exception {
+        String authHeader = authHeader("basic", "user", "pwd");
+        CallbackHandler callbackHandler = new JaasBasicAuthFilter.BasicAuthCallBackHandler(authHeader);
+        Callback unsupportedCallback = new ChoiceCallback(
+            "You take the blue pill... the story ends, you wake up in your bed and believe whatever you want to believe. " 
+                + "You take the red pill... you stay in Wonderland, and I show you how deep the rabbit hole goes.",
+            new String[] {"blue pill", "red pill"},
+            1,
+            true
+        );
+        callbackHandler.handle(new Callback[] {unsupportedCallback});
+    }
+
+    private String authHeader(String authorization, String username, String password) {
+        return authorization + " " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
+    }
+
+    private void setMock(String authorization, String username, String password, boolean exceptionCase) {
+        EasyMock.expect(requestContext.getMethod()).andReturn(HttpMethod.GET);
+        EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
+            .andReturn(authHeader(authorization, username, password));
         if (exceptionCase) {
             requestContext.abortWith(EasyMock.anyObject(Response.class));
             EasyMock.expectLastCall();
@@ -152,7 +206,6 @@ public class JaasBasicAuthFilterTest {
         File jaasConfigFile = File.createTempFile("ks-jaas-", ".conf");
         jaasConfigFile.deleteOnExit();
         previousJaasConfig = System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
-
         List<String> lines;
         lines = new ArrayList<>();
         lines.add(loginModule + " { org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule required ");

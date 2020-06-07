@@ -15,20 +15,21 @@
 package kafka.server
 
 import java.net.Socket
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.{ListGroupsRequest,ListGroupsResponse}
+import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.protocol.Errors
-
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.junit.After
 import java.util.concurrent.atomic.AtomicInteger
+
+import org.apache.kafka.common.message.ListGroupsRequestData
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters
@@ -36,14 +37,14 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
 
-  override def propertyOverrides(properties: Properties): Unit = {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // need a quota prop to register a "throttle-time" metrics after server startup
@@ -53,7 +54,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.set(0)
     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.set(0)
     
@@ -61,15 +62,17 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @Test
-  def testBothReportersAreInvoked() {
+  def testBothReportersAreInvoked(): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)
     socket.setSoTimeout(10000)
 
     try {
       TestUtils.retry(10000) {
-        val error = new ListGroupsResponse(requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder())).error()
-        assertEquals(Errors.NONE, error)
+        val listGroupsRequest = new ListGroupsRequest.Builder(new ListGroupsRequestData).build()
+        val listGroupsResponse = sendAndReceive[ListGroupsResponse](listGroupsRequest, socket)
+        val errors = listGroupsResponse.errorCounts()
+        assertEquals(Collections.singletonMap(Errors.NONE, 1), errors)
         assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)
       }
@@ -85,28 +88,28 @@ object KafkaMetricReporterExceptionHandlingTest {
 
   class GoodReporter extends MetricsReporter {
 
-    def configure(configs: java.util.Map[String, _]) {
+    def configure(configs: java.util.Map[String, _]): Unit = {
     }
 
-    def init(metrics: java.util.List[KafkaMetric]) {
+    def init(metrics: java.util.List[KafkaMetric]): Unit = {
     }
 
-    def metricChange(metric: KafkaMetric) {
+    def metricChange(metric: KafkaMetric): Unit = {
       if (metric.metricName.group == "Request") {
         goodReporterRegistered.incrementAndGet
       }
     }
 
-    def metricRemoval(metric: KafkaMetric) {
+    def metricRemoval(metric: KafkaMetric): Unit = {
     }
 
-    def close() {
+    def close(): Unit = {
     }
   }
 
   class BadReporter extends GoodReporter {
 
-    override def metricChange(metric: KafkaMetric) {
+    override def metricChange(metric: KafkaMetric): Unit = {
       if (metric.metricName.group == "Request") {
         badReporterRegistered.incrementAndGet
         throw new RuntimeException(metric.metricName.toString)

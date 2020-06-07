@@ -19,12 +19,13 @@
   "name": "AlterReplicaLogDirsResponse",
   // Starting in version 1, on quota violation brokers send out responses before throttling.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Results", "type": "[]AlterReplicaLogDirTopicResult", "versions": "0+",
       "about": "The results for each topic.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "[]AlterReplicaLogDirPartitionResult", "versions": "0+",
         "about": "The results for each partition.", "fields": [

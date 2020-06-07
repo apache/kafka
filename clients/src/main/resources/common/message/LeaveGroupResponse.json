@@ -18,12 +18,28 @@
   "type": "response",
   "name": "LeaveGroupResponse",
   // Version 1 adds the throttle time.
+  //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-2",
+  //
+  // Starting in version 3, we will make leave group request into batch mode and add group.instance.id.
+  //
+  // Version 4 is the first flexible version.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error." }
+      "about": "The error code, or 0 if there was no error." },
+
+    { "name": "Members", "type": "[]MemberResponse", "versions": "3+",
+      "about": "List of leaving member responses.", "fields": [
+      { "name": "MemberId", "type": "string", "versions": "3+",
+        "about": "The member ID to remove from the group." },
+      { "name": "GroupInstanceId", "type": "string", "versions": "3+", "nullableVersions": "3+",
+        "about": "The group instance ID to remove from the group." },
+      { "name": "ErrorCode", "type": "int16", "versions": "3+",
+        "about": "The error code, or 0 if there was no error." }
+    ]}
   ]
 }

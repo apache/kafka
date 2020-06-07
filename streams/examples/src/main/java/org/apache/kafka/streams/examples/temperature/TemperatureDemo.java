@@ -43,11 +43,11 @@ import java.util.concurrent.CountDownLatch;
  *
  * Before running this example you must create the input topic for temperature values in the following way :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
  *
  * and at same time the output topic for filtered values :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
  * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
  *

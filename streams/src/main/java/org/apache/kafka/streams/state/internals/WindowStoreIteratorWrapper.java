@@ -20,39 +20,33 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-class WindowStoreIteratorWrapper<K, V> {
+class WindowStoreIteratorWrapper {
 
     private final KeyValueIterator<Bytes, byte[]> bytesIterator;
-    private final StateSerdes<K, V> serdes;
     private final long windowSize;
 
     WindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                               final StateSerdes<K, V> serdes,
                                final long windowSize) {
         this.bytesIterator = bytesIterator;
-        this.serdes = serdes;
         this.windowSize = windowSize;
     }
 
-    public WindowStoreIterator<V> valuesIterator() {
-        return new WrappedWindowStoreIterator<>(bytesIterator, serdes);
+    public WindowStoreIterator<byte[]> valuesIterator() {
+        return new WrappedWindowStoreIterator(bytesIterator);
     }
 
-    public KeyValueIterator<Windowed<K>, V> keyValueIterator() {
-        return new WrappedKeyValueIterator<>(bytesIterator, serdes, windowSize);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> keyValueIterator() {
+        return new WrappedKeyValueIterator(bytesIterator, windowSize);
     }
 
-    private static class WrappedWindowStoreIterator<V> implements WindowStoreIterator<V> {
+    private static class WrappedWindowStoreIterator implements WindowStoreIterator<byte[]> {
         final KeyValueIterator<Bytes, byte[]> bytesIterator;
-        final StateSerdes<?, V> serdes;
 
         WrappedWindowStoreIterator(
-            final KeyValueIterator<Bytes, byte[]> bytesIterator, final StateSerdes<?, V> serdes) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator) {
             this.bytesIterator = bytesIterator;
-            this.serdes = serdes;
         }
 
         @Override
@@ -66,16 +60,10 @@ class WindowStoreIteratorWrapper<K, V> {
         }
 
         @Override
-        public KeyValue<Long, V> next() {
+        public KeyValue<Long, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
             final long timestamp = WindowKeySchema.extractStoreTimestamp(next.key.get());
-            final V value = serdes.valueFrom(next.value);
-            return KeyValue.pair(timestamp, value);
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
+            return KeyValue.pair(timestamp, next.value);
         }
 
         @Override
@@ -84,25 +72,20 @@ class WindowStoreIteratorWrapper<K, V> {
         }
     }
 
-    private static class WrappedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
+    private static class WrappedKeyValueIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
         final KeyValueIterator<Bytes, byte[]> bytesIterator;
-        final StateSerdes<K, V> serdes;
         final long windowSize;
 
         WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                                final StateSerdes<K, V> serdes,
                                 final long windowSize) {
             this.bytesIterator = bytesIterator;
-            this.serdes = serdes;
             this.windowSize = windowSize;
         }
 
         @Override
-        public Windowed<K> peekNextKey() {
+        public Windowed<Bytes> peekNextKey() {
             final byte[] nextKey = bytesIterator.peekNextKey().get();
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(nextKey);
-            final K key = WindowKeySchema.extractStoreKey(nextKey, serdes);
-            return new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize));
+            return WindowKeySchema.fromStoreBytesKey(nextKey, windowSize);
         }
 
         @Override
@@ -111,21 +94,9 @@ class WindowStoreIteratorWrapper<K, V> {
         }
 
         @Override
-        public KeyValue<Windowed<K>, V> next() {
+        public KeyValue<Windowed<Bytes>, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(next.key.get());
-            final K key = WindowKeySchema.extractStoreKey(next.key.get(), serdes);
-            final V value = serdes.valueFrom(next.value);
-            return KeyValue.pair(
-                new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize)),
-                value
-            );
-
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
+            return KeyValue.pair(WindowKeySchema.fromStoreBytesKey(next.key.get(), windowSize), next.value);
         }
 
         @Override

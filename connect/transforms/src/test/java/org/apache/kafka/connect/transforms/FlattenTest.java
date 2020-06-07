@@ -183,6 +183,46 @@ public class FlattenTest {
     }
 
     @Test
+    public void testOptionalStruct() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        SchemaBuilder builder = SchemaBuilder.struct().optional();
+        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
+        Schema schema = builder.build();
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
+            "topic", 0,
+            schema, null));
+
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
+        assertNull(transformed.value());
+    }
+
+    @Test
+    public void testOptionalNestedStruct() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        SchemaBuilder builder = SchemaBuilder.struct().optional();
+        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
+        Schema supportedTypesSchema = builder.build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("B", supportedTypesSchema);
+        Schema oneLevelNestedSchema = builder.build();
+
+        Struct oneLevelNestedStruct = new Struct(oneLevelNestedSchema);
+        oneLevelNestedStruct.put("B", null);
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
+            "topic", 0,
+            oneLevelNestedSchema, oneLevelNestedStruct));
+
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
+        Struct transformedStruct = (Struct) transformed.value();
+        assertNull(transformedStruct.get("B.opt_int32"));
+    }
+
+    @Test
     public void testOptionalFieldMap() {
         xformValue.configure(Collections.<String, String>emptyMap());
 
@@ -256,5 +296,30 @@ public class FlattenTest {
         // the parent didn't specify the default explicitly, we should still be using the field's normal default
         Schema transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build();
         assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema());
+    }
+
+    @Test
+    public void tombstoneEventWithoutSchemaShouldPassThrough() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, null);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(null, transformedRecord.valueSchema());
+    }
+
+    @Test
+    public void tombstoneEventWithSchemaShouldPassThrough() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                simpleStructSchema, null);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
 }

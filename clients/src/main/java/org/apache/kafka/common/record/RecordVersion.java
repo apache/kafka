@@ -34,6 +34,15 @@ public enum RecordVersion {
         this.value = (byte) value;
     }
 
+    /**
+     * Check whether this version precedes another version.
+     *
+     * @return true only if the magic value is less than the other's
+     */
+    public boolean precedes(RecordVersion other) {
+        return this.value < other.value;
+    }
+
     public static RecordVersion lookup(byte value) {
         if (value < 0 || value >= VALUES.length)
             throw new IllegalArgumentException("Unknown record version: " + value);

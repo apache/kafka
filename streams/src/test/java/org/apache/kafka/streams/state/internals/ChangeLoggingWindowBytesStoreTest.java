@@ -17,14 +17,11 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -33,33 +30,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static java.time.Instant.ofEpochMilli;
-import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingWindowBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<Object, Object> sent = new HashMap<>();
-    private final NoOpRecordCollector collector = new NoOpRecordCollector() {
-        @Override
-        public <K, V> void send(final String topic,
-                                final K key,
-                                final V value,
-                                final Headers headers,
-                                final Integer partition,
-                                final Long timestamp,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valueSerializer) {
-            sent.put(key, value);
-        }
-    };
+    private final MockRecordCollector collector = new MockRecordCollector();
 
-    private final byte[] value1 = {0};
-    private final Bytes bytesKey = Bytes.wrap(value1);
+    private final byte[] value = {0};
+    private final Bytes bytesKey = Bytes.wrap(value);
 
     @Mock(type = MockType.NICE)
     private WindowStore<Bytes, byte[]> inner;
@@ -84,21 +64,30 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldLogPuts() {
-        inner.put(bytesKey, value1, 0);
+        inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
 
         init();
 
-        store.put(bytesKey, value1);
+        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)));
-        EasyMock.verify(inner);
+        EasyMock.reset(context);
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        context.logChange(store.name(), key, value, 0L);
+
+        EasyMock.replay(context);
+        store.put(bytesKey, value);
+
+        EasyMock.verify(inner, context);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        EasyMock.expect(inner.fetch(bytesKey, 0, 10)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock
+            .expect(inner.fetch(bytesKey, 0, 10))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
         init();
 
@@ -108,7 +97,9 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        EasyMock.expect(inner.fetch(bytesKey, bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock
+            .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
 
         init();
 
@@ -117,19 +108,29 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true);
-        inner.put(bytesKey, value1, 0);
+
+        inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
 
         init();
-        store.put(bytesKey, value1);
-        store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)));
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)));
+        final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
+        final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
 
-        EasyMock.verify(inner);
+        EasyMock.reset(context);
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        context.logChange(store.name(), key1, value, 0L);
+        context.logChange(store.name(), key2, value, 0L);
+
+        EasyMock.replay(context);
+
+        store.put(bytesKey, value);
+        store.put(bytesKey, value);
+
+        EasyMock.verify(inner, context);
     }
 
 }

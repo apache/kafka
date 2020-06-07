@@ -53,7 +53,7 @@
           <span id="streams-developer-guide-maven"></span><h2>Libraries and Maven artifacts</h2>
           <p>This section lists the Kafka Streams related libraries that are available for writing your Kafka Streams applications.</p>
           <p>You can define dependencies on the following libraries for your Kafka Streams applications.</p>
-          <table border="1" class="non-scrolling-table docutils">
+          <table border="1" class="datatable">
               <colgroup>
                   <col width="14%" />
                   <col width="19%" />
@@ -81,7 +81,7 @@
               <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
                   <td><code class="docutils literal"><span class="pre">kafka-streams-scala</span></code></td>
                   <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
-                  <td>(Optional) Kafka Streams DSL for Scala library to write Scala Kafka Streams applications.  When not using SBT you will need to suffix the artifact ID with the correct version of Scala your application is using (<code class="docutils literal"><span class="pre">_2.11</code></span>, <code class="docutils literal"><span class="pre">_2.12</code></span>)</td>
+                  <td>(Optional) Kafka Streams DSL for Scala library to write Scala Kafka Streams applications.  When not using SBT you will need to suffix the artifact ID with the correct version of Scala your application is using (<code class="docutils literal"><span class="pre">_2.12</code></span>, <code class="docutils literal"><span class="pre">_2.13</code></span>)</td>
               </tr>
               </tbody>
           </table>
@@ -154,7 +154,7 @@
       </div>
       <p>If there are other instances of this stream processing application running elsewhere (e.g., on another machine), Kafka
         Streams transparently re-assigns tasks from the existing instances to the new instance that you just started.
-        For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Stream Partitions and Tasks</span></a> and <a class="reference internal" href="../architecture.html#streams-architecture-threads"><span class="std std-ref">Threading Model</span></a>.</p>
+        For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Stream Partitions and Tasks</span></a> and <a class="reference internal" href="../architecture.html#streams_architecture_threads"><span class="std std-ref">Threading Model</span></a>.</p>
       <p>To catch any unexpected exceptions, you can set an <code class="docutils literal"><span class="pre">java.lang.Thread.UncaughtExceptionHandler</span></code> before you start the
         application.  This handler is called whenever a stream thread is terminated by an unexpected exception:</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Java 8+, using lambda expressions</span>
@@ -208,7 +208,7 @@
 </div>
 
       <div class="section" id="testing-a-streams-app">
-          <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</a></h2>
+          <h2><a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline">Testing a Streams application</a></h2>
           Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
       </div>
 </div>

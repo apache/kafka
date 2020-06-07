@@ -34,4 +34,9 @@ public abstract class SinkConnector extends Connector {
      */
     public static final String TOPICS_CONFIG = "topics";
 
+    @Override
+    protected SinkConnectorContext context() {
+        return (SinkConnectorContext) context;
+    }
+
 }

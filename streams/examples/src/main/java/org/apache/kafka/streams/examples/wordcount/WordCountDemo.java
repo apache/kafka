@@ -44,7 +44,10 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class WordCountDemo {
 
-    public static void main(final String[] args) {
+    public static final String INPUT_TOPIC = "streams-plaintext-input";
+    public static final String OUTPUT_TOPIC = "streams-wordcount-output";
+
+    static Properties getStreamsConfig() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -56,10 +59,11 @@ public final class WordCountDemo {
         // Note: To re-run the demo, you need to use the offset reset tool:
         // https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Application+Reset+Tool
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return props;
+    }
 
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> source = builder.stream("streams-plaintext-input");
+    static void createWordCountStream(final StreamsBuilder builder) {
+        final KStream<String, String> source = builder.stream(INPUT_TOPIC);
 
         final KTable<String, Long> counts = source
             .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" ")))
@@ -67,8 +71,14 @@ public final class WordCountDemo {
             .count();
 
         // need to override value serde to Long type
-        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
+        counts.toStream().to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
+    }
 
+    public static void main(final String[] args) {
+        final Properties props = getStreamsConfig();
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        createWordCountStream(builder);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 

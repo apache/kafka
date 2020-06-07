@@ -16,20 +16,25 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -39,20 +44,28 @@ import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.powermock.api.easymock.PowerMock;
-import org.powermock.reflect.Whitebox;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.runners.Parameterized.Parameter;
+import static org.junit.runners.Parameterized.Parameters;
 
+@RunWith(value = Parameterized.class)
 public class WorkerCoordinatorTest {
 
     private static final String LEADER_URL = "leaderUrl:8083";
@@ -79,43 +92,64 @@ public class WorkerCoordinatorTest {
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     @Mock private KafkaConfigBackingStore configStorage;
+    private GroupRebalanceConfig rebalanceConfig;
     private WorkerCoordinator coordinator;
 
     private ClusterConfigState configState1;
     private ClusterConfigState configState2;
     private ClusterConfigState configStateSingleTaskConnectors;
 
+    // Arguments are:
+    // - Protocol type
+    // - Expected metadata size
+    @Parameters
+    public static Iterable<?> mode() {
+        return Arrays.asList(new Object[][]{
+                {ConnectProtocolCompatibility.EAGER, 1},
+                {ConnectProtocolCompatibility.COMPATIBLE, 2}});
+    }
+
+    @Parameter
+    public ConnectProtocolCompatibility compatibility;
+
+    @Parameter(1)
+    public int expectedMetadataSize;
+
     @Before
     public void setup() {
-        LogContext loggerFactory = new LogContext();
+        LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
-        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
+        this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
-
-        this.coordinator = new WorkerCoordinator(
-                loggerFactory,
-                consumerClient,
-                groupId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeatIntervalMs,
-                metrics,
-                "consumer" + groupId,
-                time,
-                retryBackoffMs,
-                LEADER_URL,
-                configStorage,
-                rebalanceListener);
+        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                                                        rebalanceTimeoutMs,
+                                                        heartbeatIntervalMs,
+                                                        groupId,
+                                                        Optional.empty(),
+                                                        retryBackoffMs,
+                                                        true);
+        this.coordinator = new WorkerCoordinator(rebalanceConfig,
+                                                 logContext,
+                                                 consumerClient,
+                                                 metrics,
+                                                 "consumer" + groupId,
+                                                 time,
+                                                 LEADER_URL,
+                                                 configStorage,
+                                                 rebalanceListener,
+                                                 compatibility,
+                                                 0);
 
         configState1 = new ClusterConfigState(
                 1L,
+                null,
                 Collections.singletonMap(connectorId1, 1),
                 Collections.singletonMap(connectorId1, (Map<String, String>) new HashMap<String, String>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
@@ -138,6 +172,7 @@ public class WorkerCoordinatorTest {
         configState2TaskConfigs.put(taskId2x0, new HashMap<String, String>());
         configState2 = new ClusterConfigState(
                 2L,
+                null,
                 configState2ConnectorTaskCounts,
                 configState2ConnectorConfigs,
                 configState2TargetStates,
@@ -163,6 +198,7 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<String, String>());
         configStateSingleTaskConnectors = new ClusterConfigState(
                 2L,
+                null,
                 configStateSingleTaskConnectorsConnectorTaskCounts,
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
@@ -185,12 +221,15 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        List<ProtocolMetadata> serialized = coordinator.metadata();
-        assertEquals(1, serialized.size());
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
+        assertEquals(expectedMetadataSize, serialized.size());
 
-        ProtocolMetadata defaultMetadata = serialized.get(0);
-        assertEquals(WorkerCoordinator.DEFAULT_SUBPROTOCOL, defaultMetadata.name());
-        ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(defaultMetadata.metadata());
+        Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        assertTrue(protocolIterator.hasNext());
+        JoinGroupRequestData.JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
+        assertEquals(compatibility.protocol(), defaultMetadata.name());
+        ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(
+                ByteBuffer.wrap(defaultMetadata.metadata()));
         assertEquals(1, state.offset());
 
         PowerMock.verifyAll();
@@ -204,7 +243,7 @@ public class WorkerCoordinatorTest {
 
         final String consumerId = "leader";
 
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
@@ -216,9 +255,9 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
@@ -244,7 +283,7 @@ public class WorkerCoordinatorTest {
 
         final String memberId = "member";
 
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
@@ -253,9 +292,9 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(memberId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().isEmpty();
+                return sync.data.memberId().equals(memberId) &&
+                        sync.data.generationId() == 1 &&
+                        sync.data.assignments().isEmpty();
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
@@ -285,7 +324,7 @@ public class WorkerCoordinatorTest {
 
         final String memberId = "member";
 
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // config mismatch results in assignment error
@@ -294,9 +333,9 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(memberId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().isEmpty();
+                return sync.data.memberId().equals(memberId) &&
+                        sync.data.generationId() == 1 &&
+                        sync.data.assignments().isEmpty();
             }
         };
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", 10L,
@@ -316,7 +355,7 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // join the group once
@@ -363,11 +402,17 @@ public class WorkerCoordinatorTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)));
-        configs.put("member", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+        );
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+        );
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // configState1 has 1 connector, 1 task
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -399,11 +444,18 @@ public class WorkerCoordinatorTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)));
-        configs.put("member", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+        );
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+        );
+
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -435,11 +487,18 @@ public class WorkerCoordinatorTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)));
-        configs.put("member", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+        );
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+        );
+
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -460,38 +519,53 @@ public class WorkerCoordinatorTest {
         PowerMock.verifyAll();
     }
 
-
-    private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new FindCoordinatorResponse(error, node);
-    }
-
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
                                            Map<String, Long> configOffsets, Errors error) {
-        Map<String, ByteBuffer> metadata = new HashMap<>();
+        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, Long> configStateEntry : configOffsets.entrySet()) {
             // We need a member URL, but it doesn't matter for the purposes of this test. Just set it to the member ID
             String memberUrl = configStateEntry.getKey();
             long configOffset = configStateEntry.getValue();
             ByteBuffer buf = ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(memberUrl, configOffset));
-            metadata.put(configStateEntry.getKey(), buf);
+            metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
+                    .setMemberId(configStateEntry.getKey())
+                    .setMetadata(buf.array())
+            );
         }
-        return new JoinGroupResponse(error, generationId, WorkerCoordinator.DEFAULT_SUBPROTOCOL, memberId, memberId, metadata);
+        return new JoinGroupResponse(
+                new JoinGroupResponseData().setErrorCode(error.code())
+                .setGenerationId(generationId)
+                .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                .setLeader(memberId)
+                .setMemberId(memberId)
+                .setMembers(metadata)
+        );
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error, generationId, WorkerCoordinator.DEFAULT_SUBPROTOCOL, memberId, leaderId,
-                Collections.<String, ByteBuffer>emptyMap());
+        return new JoinGroupResponse(
+                new JoinGroupResponseData().setErrorCode(error.code())
+                        .setGenerationId(generationId)
+                        .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                        .setLeader(leaderId)
+                        .setMemberId(memberId)
+                        .setMembers(Collections.emptyList())
+        );
     }
 
     private SyncGroupResponse syncGroupResponse(short assignmentError, String leader, long configOffset, List<String> connectorIds,
                                      List<ConnectorTaskId> taskIds, Errors error) {
         ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(assignmentError, leader, LEADER_URL, configOffset, connectorIds, taskIds);
         ByteBuffer buf = ConnectProtocol.serializeAssignment(assignment);
-        return new SyncGroupResponse(error, buf);
+        return new SyncGroupResponse(
+                new SyncGroupResponseData()
+                        .setErrorCode(error.code())
+                        .setAssignment(Utils.toArray(buf))
+        );
     }
 
     private static class MockRebalanceListener implements WorkerRebalanceListener {
-        public ConnectProtocol.Assignment assignment = null;
+        public ExtendedAssignment assignment = null;
 
         public String revokedLeader;
         public Collection<String> revokedConnectors;
@@ -501,13 +575,16 @@ public class WorkerCoordinatorTest {
         public int assignedCount = 0;
 
         @Override
-        public void onAssigned(ConnectProtocol.Assignment assignment, int generation) {
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
             this.assignment = assignment;
             assignedCount++;
         }
 
         @Override
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
+            if (connectors.isEmpty() && tasks.isEmpty()) {
+                return;
+            }
             this.revokedLeader = leader;
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
