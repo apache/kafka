@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -153,12 +152,10 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public Map<TopicPartition, Long> prepareCloseClean() {
+    public void prepareCloseClean() {
         prepareClose(true);
 
         log.info("Prepared clean close");
-
-        return Collections.emptyMap();
     }
 
     @Override
@@ -199,8 +196,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void closeClean(final Map<TopicPartition, Long> checkpoint) {
-        Objects.requireNonNull(checkpoint);
+    public void closeClean() {
         close(true);
 
         log.info("Closed clean");

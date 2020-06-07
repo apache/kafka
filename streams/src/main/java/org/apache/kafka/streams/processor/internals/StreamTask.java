@@ -107,6 +107,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
+    private Map<TopicPartition, Long> checkpoint = null;
+
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
@@ -465,17 +467,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public Map<TopicPartition, Long> prepareCloseClean() {
-        final Map<TopicPartition, Long> checkpoint = prepareClose(true);
+    public void prepareCloseClean() {
+        prepareClose(true);
 
         log.info("Prepared clean close");
-
-        return checkpoint;
     }
 
     @Override
-    public void closeClean(final Map<TopicPartition, Long> checkpoint) {
-        close(true, checkpoint);
+    public void closeClean() {
+        close(true);
 
         log.info("Closed clean");
     }
@@ -489,7 +489,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeDirty() {
-        close(false, null);
+
+        close(false);
 
         log.info("Closed dirty");
     }
@@ -505,11 +506,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
-        final Map<TopicPartition, Long> checkpoint = prepareClose(true);
+        prepareClose(true);
 
-        if (checkpoint != null) {
-            stateMgr.checkpoint(checkpoint);
-        }
+        writeCheckpointIfNeed();
+
         switch (state()) {
             case CREATED:
             case RUNNING:
@@ -546,14 +546,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                 otherwise, just close open resources
      * @throws TaskMigratedException if the task producer got fenced (EOS)
      */
-    private Map<TopicPartition, Long> prepareClose(final boolean clean) {
-        final Map<TopicPartition, Long> checkpoint;
+    private void prepareClose(final boolean clean) {
+        // Reset any previously scheduled checkpoint.
+        checkpoint = null;
 
         switch (state()) {
             case CREATED:
                 // the task is created and not initialized, just re-write the checkpoint file
-                checkpoint = Collections.emptyMap();
-
+                scheduleCheckpoint(emptyMap());
                 break;
 
             case RUNNING:
@@ -562,9 +562,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (clean) {
                     stateMgr.flush();
                     recordCollector.flush();
-                    checkpoint = checkpointableOffsets();
+                    scheduleCheckpoint(checkpointableOffsets());
                 } else {
-                    checkpoint = null; // `null` indicates to not write a checkpoint
                     executeAndMaybeSwallow(false, stateMgr::flush, "state manager flush", log);
                 }
 
@@ -572,22 +571,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RESTORING:
                 executeAndMaybeSwallow(clean, stateMgr::flush, "state manager flush", log);
-                checkpoint = Collections.emptyMap();
+                scheduleCheckpoint(emptyMap());
 
                 break;
 
             case SUSPENDED:
             case CLOSED:
                 // not need to checkpoint, since when suspending we've already committed the state
-                checkpoint = null; // `null` indicates to not write a checkpoint
-
                 break;
 
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while prepare closing active task " + id);
         }
+    }
 
-        return checkpoint;
+    private void scheduleCheckpoint(final Map<TopicPartition, Long> checkpoint) {
+        this.checkpoint = checkpoint;
+    }
+
+    private void writeCheckpointIfNeed() {
+        if (checkpoint != null) {
+            stateMgr.checkpoint(checkpoint);
+            checkpoint = null;
+        }
     }
 
     /**
@@ -598,9 +604,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *  3. finally release the state manager lock
      * </pre>
      */
-    private void close(final boolean clean, final Map<TopicPartition, Long> checkpoint) {
-        if (clean && checkpoint != null) {
-            executeAndMaybeSwallow(clean, () -> stateMgr.checkpoint(checkpoint), "state manager checkpoint", log);
+    private void close(final boolean clean) {
+        if (clean) {
+            executeAndMaybeSwallow(true, this::writeCheckpointIfNeed, "state manager checkpoint", log);
         }
 
         switch (state()) {
