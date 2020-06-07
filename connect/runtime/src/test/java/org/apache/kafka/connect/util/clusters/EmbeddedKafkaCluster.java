@@ -174,7 +174,9 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
         try {
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         } catch (Exception e) {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);

@@ -366,6 +366,51 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
+        Map<ConfigResource, KafkaFuture<Config>> topicConfigs = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (ConfigResource requestedResource : resources) {
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                topicConfigs.put(requestedResource, future);
+            }
+
+            --timeoutNextRequests;
+            return new DescribeConfigsResult(topicConfigs);
+        }
+
+        for (ConfigResource requestedResource : resources) {
+            if (requestedResource.type() != ConfigResource.Type.TOPIC) {
+                continue;
+            }
+            for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
+                String topicName = topicDescription.getKey();
+                if (topicName.equals(requestedResource.name()) && !topicDescription.getValue().markedForDeletion) {
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                        Collection<ConfigEntry> entries = new ArrayList<>();
+                        topicMetadata.configs.forEach((k, v) -> entries.add(new ConfigEntry(k, v)));
+                        future.complete(new Config(entries));
+                        topicConfigs.put(requestedResource, future);
+                        break;
+                    }
+                }
+            }
+            if (!topicConfigs.containsKey(requestedResource)) {
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new UnknownTopicOrPartitionException("Resource " + requestedResource + " not found."));
+                topicConfigs.put(requestedResource, future);
+            }
+        }
+
+        return new DescribeConfigsResult(topicConfigs);
+    }
+
+    @Override
     synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
 

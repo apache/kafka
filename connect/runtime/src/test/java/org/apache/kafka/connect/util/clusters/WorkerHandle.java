@@ -58,6 +58,15 @@ public class WorkerHandle {
     }
 
     /**
+     * Determine if this worker is running.
+     *
+     * @return true if the worker is running, or false otherwise
+     */
+    public boolean isRunning() {
+        return worker.isRunning();
+    }
+
+    /**
      * Get the workers's name corresponding to this handle.
      *
      * @return the worker's name
