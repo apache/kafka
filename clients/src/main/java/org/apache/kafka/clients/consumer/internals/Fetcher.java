@@ -1339,7 +1339,7 @@ public class Fetcher<K, V> implements Closeable {
             log.info("{}, resetting offset", errorMessage);
             subscriptions.requestOffsetReset(topicPartition);
         } else {
-            log.info("{}, raising error to the application", errorMessage);
+            log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
             throw new OffsetOutOfRangeException(errorMessage,
                 Collections.singletonMap(topicPartition, fetchPosition.offset));
         }

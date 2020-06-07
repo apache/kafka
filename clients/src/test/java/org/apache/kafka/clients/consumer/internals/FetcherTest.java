@@ -3859,14 +3859,14 @@ public class FetcherTest {
         if (offsetResetStrategy == OffsetResetStrategy.NONE) {
             LogTruncationException thrown =
                 assertThrows(LogTruncationException.class, () -> fetcher.validateOffsetsIfNeeded());
-            assertEquals(initialOffset, thrown.offsetOutOfRangePartitions().get(tp0).longValue());
+            assertEquals(singletonMap(tp0, initialOffset), thrown.offsetOutOfRangePartitions());
 
             if (epochEndOffset.hasUndefinedEpochOrOffset()) {
-                assertFalse(thrown.divergentOffsets().containsKey(tp0));
+                assertEquals(Collections.emptyMap(), thrown.divergentOffsets());
             } else {
                 OffsetAndMetadata expectedDivergentOffset = new OffsetAndMetadata(
                     epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()), "");
-                assertEquals(expectedDivergentOffset, thrown.divergentOffsets().get(tp0));
+                assertEquals(singletonMap(tp0, expectedDivergentOffset), thrown.divergentOffsets());
             }
             assertTrue(subscriptions.awaitingValidation(tp0));
         } else {

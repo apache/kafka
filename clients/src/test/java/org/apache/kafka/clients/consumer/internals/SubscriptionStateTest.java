@@ -573,9 +573,9 @@ public class SubscriptionStateTest {
                 Optional.of(updateOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
         state.seekUnvalidated(tp0, updatePosition);
 
-        Optional<LogTruncation> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
-        assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
+        assertEquals(Optional.empty(), truncationOpt);
         assertTrue(state.awaitingValidation(tp0));
         assertEquals(updatePosition, state.position(tp0));
     }
@@ -596,9 +596,9 @@ public class SubscriptionStateTest {
 
         state.requestOffsetReset(tp0);
 
-        Optional<LogTruncation> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
             new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
-        assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
+        assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
         assertNull(state.position(tp0));
@@ -620,9 +620,9 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, initialPosition);
         assertTrue(state.awaitingValidation(tp0));
 
-        Optional<LogTruncation> divergentOffsetMetadata = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(divergentOffsetEpoch, divergentOffset));
-        assertEquals(Optional.empty(), divergentOffsetMetadata);
+        assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
 
         SubscriptionState.FetchPosition updatedPosition = new SubscriptionState.FetchPosition(divergentOffset,
