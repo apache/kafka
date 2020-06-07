@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -349,6 +350,88 @@ public class TopicAdminTest {
             config.entries().forEach(entry -> {
                 assertEquals(newTopic.configs().get(entry.name()), entry.value());
             });
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenBrokerVersionIsUnsupported() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithUnsupportedVersion(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenClusterAuthorizationError() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithClusterAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenTopicAuthorizationError() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithTopicAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnTrueWhenTopicHasCorrectPolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertTrue(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeletePolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            ConfigException e = assertThrows(ConfigException.class, () -> {
+                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            });
+            assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeleteAndCompactPolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete,compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            ConfigException e = assertThrows(ConfigException.class, () -> {
+                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            });
+            assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
         }
     }
 

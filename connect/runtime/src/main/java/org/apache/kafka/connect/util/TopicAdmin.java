@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -380,6 +381,43 @@ public class TopicAdmin implements AutoCloseable {
             }
         });
         return existingTopics;
+    }
+
+    /**
+     * Verify the named topic uses only compaction for the cleanup policy.
+     *
+     * @param topic             the name of the topic
+     * @param workerTopicConfig the name of the worker configuration that specifies the topic name
+     * @return true if the admin client could be used to verify the topic setting, or false if
+     *         the verification could not be performed, likely because the admin client principal
+     *         did not have the required permissions or because the broker was older than 0.11.0.0
+     * @throws ConfigException if the actual topic setting did not match the required setting
+     */
+    public boolean verifyTopicCleanupPolicyOnlyCompact(String topic, String workerTopicConfig,
+            String topicPurpose) {
+        Set<String> cleanupPolicies = topicCleanupPolicy(topic);
+        if (cleanupPolicies == null || cleanupPolicies.isEmpty()) {
+            log.debug("Unable to use admin client to verify the cleanup policy of '{}' "
+                      + "topic is '{}', either because the broker is an older "
+                      + "version or because the Kafka principal used for Connect "
+                      + "internal topics does not have the required permission to "
+                      + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+            return false;
+        }
+        String cleanupPolicyStr = String.join(",", cleanupPolicies);
+        log.debug("Found cleanup policy for '{}' topic is '{}'", topic, cleanupPolicyStr);
+        Set<String> expectedPolicies = Collections.singleton(TopicConfig.CLEANUP_POLICY_COMPACT);
+        String expectedPolicyStr = String.join(",", expectedPolicies);
+        if (cleanupPolicies != null && !cleanupPolicies.equals(expectedPolicies)) {
+            String msg = String.format("Topic '%s' supplied via the '%s' property is required "
+                                       + "to have '%s=%s' to guarantee consistency and durability of "
+                                       + "%s, but found '%s'. "
+                                       + "Correct the topic before restarting Connect.",
+                    topic, workerTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr,
+                    topicPurpose, cleanupPolicyStr);
+            throw new ConfigException(msg);
+        }
+        return true;
     }
 
     /**

@@ -498,21 +498,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     if (!newTopics.contains(topic)) {
                         // It already existed, so check that the topic cleanup policy is compact only and not delete
                         log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                        Set<String> cleanupPolicies = admin.topicCleanupPolicy(topic);
-                        String cleanupPolicyStr = String.join(",", cleanupPolicies);
-                        log.debug("Found cleanup policy for '{}' topic is '{}'", topic, cleanupPolicyStr);
-                        Set<String> expectedPolicies = Collections.singleton(TopicConfig.CLEANUP_POLICY_COMPACT);
-                        String expectedPolicyStr = String.join(",", expectedPolicies);
-                        if (cleanupPolicies != null && !cleanupPolicies.equals(expectedPolicies)) {
-                            String msg = String.format("Topic '%s' supplied via the '%s' property is required "
-                                                       + "to have '%s=%s' to guarantee consistency and durability of "
-                                                       + "connector configurations, but found '%s'. "
-                                                       + "Correct the topic before restarting Connect.",
-                                    topic, DistributedConfig.CONFIG_TOPIC_CONFIG,
-                                    TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr,
-                                    cleanupPolicyStr);
-                            throw new ConfigException(msg);
-                        }
+                        admin.verifyTopicCleanupPolicyOnlyCompact(topic,
+                                DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
                     }
                 }
             }
