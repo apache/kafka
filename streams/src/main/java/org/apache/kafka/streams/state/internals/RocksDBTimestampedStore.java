@@ -22,6 +22,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -42,16 +44,23 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueWithUnknownTimestamp;
+import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 
 /**
  * A persistent key-(value-timestamp) store based on RocksDB.
  */
-public class RocksDBTimestampedStore extends RocksDBStore {
+public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
 
-    RocksDBTimestampedStore(final String name) {
-        super(name);
+    RocksDBTimestampedStore(final String name,
+                            final String metricsScope) {
+        super(name, metricsScope);
+    }
+
+    RocksDBTimestampedStore(final String name,
+                            final String parentDir,
+                            final RocksDBMetricsRecorder metricsRecorder) {
+        super(name, parentDir, metricsRecorder);
     }
 
     @Override
@@ -64,19 +73,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
         try {
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-
-            final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
-
-            final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
-            noTimestampsIter.seekToFirst();
-            if (noTimestampsIter.isValid()) {
-                log.info("Opening store {} in upgrade mode", name);
-                dbAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, columnFamilies.get(1));
-            } else {
-                log.info("Opening store {} in regular mode", name);
-                dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1));
-            }
-            noTimestampsIter.close();
+            setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
         } catch (final RocksDBException e) {
             if ("Column family not found: : keyValueWithTimestamp".equals(e.getMessage())) {
                 try {
@@ -85,14 +82,27 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                 } catch (final RocksDBException fatal) {
                     throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), fatal);
                 }
-                log.info("Opening store {} in upgrade mode", name);
-                dbAccessor = new DualColumnFamilyAccessor(columnFamilies.get(0), columnFamilies.get(1));
+                setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
             } else {
                 throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
             }
         }
     }
 
+    private void setDbAccessor(final ColumnFamilyHandle noTimestampColumnFamily,
+                               final ColumnFamilyHandle withTimestampColumnFamily) {
+        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
+        noTimestampsIter.seekToFirst();
+        if (noTimestampsIter.isValid()) {
+            log.info("Opening store {} in upgrade mode", name);
+            dbAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, withTimestampColumnFamily);
+        } else {
+            log.info("Opening store {} in regular mode", name);
+            dbAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
+            noTimestampColumnFamily.close();
+        }
+        noTimestampsIter.close();
+    }
 
 
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
@@ -142,13 +152,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                                  final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                if (entry.value == null) {
-                    batch.delete(oldColumnFamily, entry.key.get());
-                    batch.delete(newColumnFamily, entry.key.get());
-                } else {
-                    batch.delete(oldColumnFamily, entry.key.get());
-                    batch.put(newColumnFamily, entry.key.get(), entry.value);
-                }
+                addToBatch(entry.key.get(), entry.value, batch);
             }
         }
 
@@ -161,7 +165,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
             final byte[] plainValue = db.get(oldColumnFamily, key);
             if (plainValue != null) {
-                final byte[] valueWithUnknownTimestamp = getValueWithUnknownTimestamp(plainValue);
+                final byte[] valueWithUnknownTimestamp = convertToTimestampedFormat(plainValue);
                 // this does only work, because the changelog topic contains correct data already
                 // for other format changes, we cannot take this short cut and can only migrate data
                 // from old to new store on put()
@@ -181,7 +185,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
             final byte[] plainValue = db.get(oldColumnFamily, key);
             if (plainValue != null) {
-                return getValueWithUnknownTimestamp(plainValue);
+                return convertToTimestampedFormat(plainValue);
             }
 
             return null;
@@ -223,13 +227,20 @@ public class RocksDBTimestampedStore extends RocksDBStore {
         public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                            final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(oldColumnFamily, record.key);
-                    batch.delete(newColumnFamily, record.key);
-                } else {
-                    batch.delete(oldColumnFamily, record.key);
-                    batch.put(newColumnFamily, record.key, record.value);
-                }
+                addToBatch(record.key, record.value, batch);
+            }
+        }
+
+        @Override
+        public void addToBatch(final byte[] key,
+                               final byte[] value,
+                               final WriteBatch batch) throws RocksDBException {
+            if (value == null) {
+                batch.delete(oldColumnFamily, key);
+                batch.delete(newColumnFamily, key);
+            } else {
+                batch.delete(oldColumnFamily, key);
+                batch.put(newColumnFamily, key, value);
             }
         }
 
@@ -240,6 +251,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
             try {
                 db.compactRange(oldColumnFamily, true, 1, 0);
@@ -313,12 +325,12 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                 }
             } else {
                 if (nextWithTimestamp == null) {
-                    next = KeyValue.pair(new Bytes(nextNoTimestamp), getValueWithUnknownTimestamp(iterNoTimestamp.value()));
+                    next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
                     nextNoTimestamp = null;
                     iterNoTimestamp.next();
                 } else {
                     if (comparator.compare(nextNoTimestamp, nextWithTimestamp) <= 0) {
-                        next = KeyValue.pair(new Bytes(nextNoTimestamp), getValueWithUnknownTimestamp(iterNoTimestamp.value()));
+                        next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
                         nextNoTimestamp = null;
                         iterNoTimestamp.next();
                     } else {
@@ -330,11 +342,6 @@ public class RocksDBTimestampedStore extends RocksDBStore {
             }
 
             return next;
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
         }
 
         @Override

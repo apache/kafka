@@ -18,15 +18,20 @@
   "type": "response",
   "name": "DeleteTopicsResponse",
   // Version 1 adds the throttle time.
+  //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
+  //
   // Starting in version 3, a TOPIC_DELETION_DISABLED error code may be returned.
-  "validVersions": "0-3",
+  //
+  // Version 4 is the first flexible version.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
-    { "name": "throttleTimeMs", "type": "int32", "versions": "1+",
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Responses", "type": "[]DeletableTopicResult", "versions": "0+",
-      "about": "The results for each topic.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      "about": "The results for each topic we tried to delete.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name" },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." }

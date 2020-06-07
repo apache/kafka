@@ -18,8 +18,12 @@
   "type": "request",
   "name": "FindCoordinatorRequest",
   // Version 1 adds KeyType.
+  //
   // Version 2 is the same as version 1.
-  "validVersions": "0-2",
+  //
+  // Version 3 is the first flexible version.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "Key", "type": "string", "versions": "0+",
       "about": "The coordinator key." },

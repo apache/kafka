@@ -19,13 +19,27 @@ package org.apache.kafka.common.errors;
 public class GroupAuthorizationException extends AuthorizationException {
     private final String groupId;
 
-    public GroupAuthorizationException(String groupId) {
-        super("Not authorized to access group: " + groupId);
+    public GroupAuthorizationException(String message, String groupId) {
+        super(message);
         this.groupId = groupId;
     }
 
+    public GroupAuthorizationException(String message) {
+        this(message, null);
+    }
+
+    /**
+     * Return the group ID that failed authorization. May be null if it is not known
+     * in the context the exception was raised in.
+     *
+     * @return nullable groupId
+     */
     public String groupId() {
         return groupId;
+    }
+
+    public static GroupAuthorizationException forGroupId(String groupId) {
+        return new GroupAuthorizationException("Not authorized to access group: " + groupId, groupId);
     }
 
 }

@@ -17,15 +17,20 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Set;
 
 /**
- * Options for {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
+ * Options for {@link Admin#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * @deprecated Since 2.4.0. Use {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  */
 @InterfaceStability.Evolving
+@Deprecated
 public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
 }

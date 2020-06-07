@@ -27,6 +27,7 @@ import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
@@ -35,8 +36,8 @@ import scala.collection._
 class LogCleanerLagIntegrationTest(compressionCodecName: String) extends AbstractLogCleanerIntegrationTest with Logging {
   val msPerHour = 60 * 60 * 1000
 
-  val compactionLag = 1 * msPerHour
-  assertTrue("compactionLag must be divisible by 2 for this test", compactionLag % 2 == 0)
+  val minCompactionLag = 1 * msPerHour
+  assertTrue("compactionLag must be divisible by 2 for this test", minCompactionLag % 2 == 0)
 
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val cleanerBackOffMs = 200L
@@ -50,7 +51,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
   def cleanerTest(): Unit = {
     cleaner = makeCleaner(partitions = topicPartitions,
       backOffMs = cleanerBackOffMs,
-      compactionLag = compactionLag,
+      minCompactionLagMs = minCompactionLag,
       segmentSize = segmentSize)
     val log = cleaner.logs.get(topicPartitions(0))
 
@@ -69,13 +70,13 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
 
     // T0 < t < T1
     // advance to a time still less than one compaction lag from start
-    time.sleep(compactionLag/2)
+    time.sleep(minCompactionLag/2)
     Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
     assertEquals("There should be no cleaning until the compaction lag has passed", startSizeBlock0, log.size)
 
     // t = T1 > T0 + compactionLag
     // advance to time a bit more than one compaction lag from start
-    time.sleep(compactionLag/2 + 1)
+    time.sleep(minCompactionLag/2 + 1)
     val T1 = time.milliseconds
 
     // write another block of data
@@ -98,8 +99,6 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    import JavaConverters._
-
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt

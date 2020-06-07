@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
@@ -62,8 +63,12 @@ public final class WorkerUtils {
      */
     public static void abort(Logger log, String what, Throwable exception,
             KafkaFutureImpl<String> doneFuture) throws KafkaException {
-        log.warn("{} caught an exception: ", what, exception);
-        doneFuture.complete(exception.getMessage());
+        log.warn("{} caught an exception", what, exception);
+        if (exception.getMessage() == null || exception.getMessage().isEmpty()) {
+            doneFuture.complete(exception.getClass().getCanonicalName());
+        } else {
+            doneFuture.complete(exception.getMessage());
+        }
         throw new KafkaException(exception);
     }
 
@@ -126,7 +131,7 @@ public final class WorkerUtils {
         // this method wraps the call to createTopics() that takes admin client, so that we can
         // unit test the functionality with MockAdminClient. The exception is caught and
         // re-thrown so that admin client is closed when the method returns.
-        try (AdminClient adminClient
+        try (Admin adminClient
                  = createAdminClient(bootstrapServers, commonClientConf, adminClientConf)) {
             createTopics(log, adminClient, topics, failOnExisting);
         } catch (Exception e) {
@@ -143,7 +148,7 @@ public final class WorkerUtils {
      * @throws Throwable if creation of one or more topics fails (except for the cases above).
      */
     static void createTopics(
-        Logger log, AdminClient adminClient,
+        Logger log, Admin adminClient,
         Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
         if (topics.isEmpty()) {
             log.warn("Request to create topics has an empty topic list.");
@@ -156,7 +161,7 @@ public final class WorkerUtils {
                 log.warn("Topic(s) {} already exist.", topicsExists);
                 throw new TopicExistsException("One or more topics already exist.");
             } else {
-                verifyTopics(log, adminClient, topicsExists, topics);
+                verifyTopics(log, adminClient, topicsExists, topics, 3, 2500);
             }
         }
     }
@@ -169,7 +174,7 @@ public final class WorkerUtils {
      * @return                Collection of topics names that already exist.
      * @throws Throwable if creation of one or more topics fails (except for topic exists case).
      */
-    private static Collection<String> createTopics(Logger log, AdminClient adminClient,
+    private static Collection<String> createTopics(Logger log, Admin adminClient,
                                                    Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
         int tries = 0;
@@ -236,17 +241,20 @@ public final class WorkerUtils {
      * @param topicsToVerify     List of topics to verify
      * @param topicsInfo         Map of topic name to topic description, which includes topics in
      *                           'topicsToVerify' list.
+     * @param retryCount         The number of times to retry the fetching of the topics
+     * @param retryBackoffMs     The amount of time, in milliseconds, to wait in between retries
      * @throws UnknownTopicOrPartitionException If at least one topic contained in 'topicsInfo'
-     * does not exist
+     * does not exist after retrying.
      * @throws RuntimeException  If one or more topics have different number of partitions than
      * described in 'topicsInfo'
      */
-    private static void verifyTopics(
-        Logger log, AdminClient adminClient,
-        Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo) throws Throwable {
-        DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
-        Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
+    static void verifyTopics(
+        Logger log, Admin adminClient,
+        Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
+
+        Map<String, TopicDescription> topicDescriptionMap = topicDescriptions(topicsToVerify, adminClient,
+                retryCount, retryBackoffMs);
+
         for (TopicDescription desc: topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
             // 'topics' map
@@ -261,6 +269,28 @@ public final class WorkerUtils {
         }
     }
 
+    private static Map<String, TopicDescription> topicDescriptions(Collection<String> topicsToVerify,
+                                                                   Admin adminClient,
+                                                                   int retryCount, long retryBackoffMs)
+            throws ExecutionException, InterruptedException {
+        UnknownTopicOrPartitionException lastException = null;
+        for (int i = 0; i < retryCount; i++) {
+            try {
+                DescribeTopicsResult topicsResult = adminClient.describeTopics(
+                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
+                return topicsResult.all().get();
+            } catch (ExecutionException exception) {
+                if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
+                    lastException = (UnknownTopicOrPartitionException) exception.getCause();
+                    Thread.sleep(retryBackoffMs);
+                } else {
+                    throw exception;
+                }
+            }
+        }
+        throw lastException;
+    }
+
     /**
      * Returns list of existing, not internal, topics/partitions that match given pattern and
      * where partitions are in range [startPartition, endPartition]
@@ -270,7 +300,7 @@ public final class WorkerUtils {
      * @throws Throwable      If failed to get list of existing topics
      */
     static Collection<TopicPartition> getMatchingTopicPartitions(
-        AdminClient adminClient, String topicRegex, int startPartition, int endPartition)
+        Admin adminClient, String topicRegex, int startPartition, int endPartition)
         throws Throwable {
         final Pattern topicNamePattern = Pattern.compile(topicRegex);
 
@@ -302,7 +332,7 @@ public final class WorkerUtils {
         return out;
     }
 
-    private static AdminClient createAdminClient(
+    private static Admin createAdminClient(
         String bootstrapServers,
         Map<String, String> commonClientConf, Map<String, String> adminClientConf) {
         Properties props = new Properties();
@@ -311,6 +341,6 @@ public final class WorkerUtils {
         // first add common client config, and then admin client config to properties, possibly
         // over-writing default or common properties.
         addConfigsToProperties(props, commonClientConf, adminClientConf);
-        return AdminClient.create(props);
+        return Admin.create(props);
     }
 }

@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ConfigEntry {
@@ -37,6 +37,8 @@ public class ConfigEntry {
     private final boolean isSensitive;
     private final boolean isReadOnly;
     private final List<ConfigSynonym> synonyms;
+    private final ConfigType type;
+    private final String documentation;
 
     /**
      * Create a configuration entry with the provided values.
@@ -65,7 +67,9 @@ public class ConfigEntry {
              isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
              isSensitive,
              isReadOnly,
-             Collections.<ConfigSynonym>emptyList());
+             Collections.<ConfigSynonym>emptyList(),
+             ConfigType.UNKNOWN,
+             null);
     }
 
     /**
@@ -79,7 +83,7 @@ public class ConfigEntry {
      * @param synonyms Synonym configs in order of precedence
      */
     ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
-                List<ConfigSynonym> synonyms) {
+                List<ConfigSynonym> synonyms, ConfigType type, String documentation) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -87,6 +91,8 @@ public class ConfigEntry {
         this.isSensitive = isSensitive;
         this.isReadOnly = isReadOnly;
         this.synonyms = synonyms;
+        this.type = type;
+        this.documentation = documentation;
     }
 
     /**
@@ -141,6 +147,20 @@ public class ConfigEntry {
         return  synonyms;
     }
 
+    /**
+     * Return the config data type.
+     */
+    public ConfigType type() {
+        return type;
+    }
+
+    /**
+     * Return the config documentation.
+     */
+    public String documentation() {
+        return documentation;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o)
@@ -183,12 +203,28 @@ public class ConfigEntry {
                 ")";
     }
 
+    /**
+     * Data type of configuration entry.
+     */
+    public enum ConfigType {
+        UNKNOWN,
+        BOOLEAN,
+        STRING,
+        INT,
+        SHORT,
+        LONG,
+        DOUBLE,
+        LIST,
+        CLASS,
+        PASSWORD
+    }
 
     /**
      * Source of configuration entries.
      */
     public enum ConfigSource {
         DYNAMIC_TOPIC_CONFIG,           // dynamic topic config that is configured for a specific topic
+        DYNAMIC_BROKER_LOGGER_CONFIG,   // dynamic broker logger config that is configured for a specific broker
         DYNAMIC_BROKER_CONFIG,          // dynamic broker config that is configured for a specific broker
         DYNAMIC_DEFAULT_BROKER_CONFIG,  // dynamic broker config that is configured as default for all brokers in the cluster
         STATIC_BROKER_CONFIG,           // static broker config provided as broker properties at start up (e.g. server.properties file)

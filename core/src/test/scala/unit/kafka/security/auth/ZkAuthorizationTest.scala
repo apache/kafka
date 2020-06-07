@@ -32,11 +32,12 @@ import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.ReplicaAssignment
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
@@ -44,7 +45,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   val authProvider = "zookeeper.authProvider.1"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
@@ -52,7 +53,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
@@ -65,14 +66,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   @Test
   def testIsZkSecurityEnabled(): Unit = {
-    assertTrue(JaasUtils.isZkSecurityEnabled())
+    assertTrue(JaasUtils.isZkSaslEnabled())
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    assertFalse(JaasUtils.isZkSecurityEnabled())
+    assertFalse(JaasUtils.isZkSaslEnabled())
     try {
       Configuration.setConfiguration(null)
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
-      JaasUtils.isZkSecurityEnabled()
+      JaasUtils.isZkSaslEnabled()
       fail("Should have thrown an exception")
     } catch {
       case _: KafkaException => // Expected
@@ -130,7 +131,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
 
     // Test that can update persistent nodes
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
-    zkClient.setTopicAssignment(topic1, updatedAssignment)
+    zkClient.setTopicAssignment(topic1, updatedAssignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
   }
 

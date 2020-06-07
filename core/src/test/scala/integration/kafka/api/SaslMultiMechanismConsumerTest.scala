@@ -19,7 +19,7 @@ import org.junit.{After, Before, Test}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
@@ -44,7 +44,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   @Test
-  def testMultipleBrokerMechanisms() {
+  def testMultipleBrokerMechanisms(): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 

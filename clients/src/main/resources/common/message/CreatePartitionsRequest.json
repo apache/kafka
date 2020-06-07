@@ -18,17 +18,19 @@
   "type": "request",
   "name": "CreatePartitionsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
       "about": "Each topic that we want to create new partitions inside.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Count", "type": "int32", "versions": "0+",
         "about": "The new partition count." },
       { "name": "Assignments", "type": "[]CreatePartitionsAssignment", "versions": "0+", "nullableVersions": "0+", 
         "about": "The new partition assignments.", "fields": [
-        { "name": "BrokerIds", "type": "[]int32", "versions": "0+",
+        { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The assigned broker IDs." }
       ]}
     ]},

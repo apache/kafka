@@ -95,6 +95,9 @@ public class ConsumerNetworkClient implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
+    public int defaultRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
 
     /**
      * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
@@ -159,11 +162,8 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timer);
-            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
-            if (ex != null)
-                throw ex;
-        } while (this.metadata.version() == version && timer.notExpired());
-        return this.metadata.version() > version;
+        } while (this.metadata.updateVersion() == version && timer.notExpired());
+        return this.metadata.updateVersion() > version;
     }
 
     /**
@@ -295,6 +295,8 @@ public class ConsumerNetworkClient implements Closeable {
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
         firePendingCompletedRequests();
+
+        metadata.maybeThrowAnyException();
     }
 
     /**
@@ -302,6 +304,27 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void pollNoWakeup() {
         poll(time.timer(0), null, true);
+    }
+
+    /**
+     * Poll for network IO in best-effort only trying to transmit the ready-to-send request
+     * Do not check any pending requests or metadata errors so that no exception should ever
+     * be thrown, also no wakeups be triggered and no interrupted exception either.
+     */
+    public void transmitSends() {
+        Timer timer = time.timer(0);
+
+        // do not try to handle any disconnects, prev request failures, metadata exception etc;
+        // just try once and return immediately
+        lock.lock();
+        try {
+            // send all the requests we can send now
+            trySend(timer.currentTimeMs());
+
+            client.poll(0, timer.currentTimeMs());
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -460,7 +483,8 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    private long trySend(long now) {
+    // Visible for testing
+    long trySend(long now) {
         long pollDelayMs = maxPollTimeoutMs;
 
         // send any requests that can be sent now
@@ -474,6 +498,9 @@ public class ConsumerNetworkClient implements Closeable {
                 if (client.ready(node, now)) {
                     client.send(request, now);
                     iterator.remove();
+                } else {
+                    // try next node when current node is not ready
+                    break;
                 }
             }
         }

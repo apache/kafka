@@ -18,12 +18,21 @@
   "type": "request",
   "name": "JoinGroupRequest",
   // Version 1 adds RebalanceTimeoutMs.
+  //
   // Version 2 and 3 are the same as version 1.
+  //
   // Starting from version 4, the client needs to issue a second request to join group
+  //
+  // Starting from version 5, we add a new field called groupInstanceId to indicate member identity across restarts.
   // with assigned id.
-  "validVersions": "0-4",
+  //
+  // Version 6 is the first flexible version.
+  //
+  // Version 7 is the same as version 6.
+  "validVersions": "0-7",
+  "flexibleVersions": "6+",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },
     { "name": "SessionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "The coordinator considers the consumer dead if it receives no heartbeat after this timeout in milliseconds." },
@@ -33,6 +42,9 @@
       "about": "The maximum time in milliseconds that the coordinator will wait for each member to rejoin when rebalancing the group." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member id assigned by the group coordinator." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "5+", 
+      "nullableVersions": "5+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
     { "name": "ProtocolType", "type": "string", "versions": "0+",
       "about": "The unique name the for class of protocols implemented by the group we want to join." },
     { "name": "Protocols", "type": "[]JoinGroupRequestProtocol", "versions": "0+",

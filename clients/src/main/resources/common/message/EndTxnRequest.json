@@ -19,10 +19,11 @@
   "name": "EndTxnRequest",
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0+",
+    { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The ID of the transaction to end." },
-    { "name": "ProducerId", "type": "int64", "versions": "0+",
+    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
       "about": "The producer ID." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "The current epoch associated with the producer." },

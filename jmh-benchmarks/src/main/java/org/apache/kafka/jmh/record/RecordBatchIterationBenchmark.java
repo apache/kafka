@@ -16,15 +16,24 @@
  */
 package org.apache.kafka.jmh.record;
 
+import kafka.api.ApiVersion;
+import kafka.common.LongRef;
+import kafka.log.AppendOrigin;
+import kafka.log.LogValidator;
+import kafka.message.CompressionCodec;
+import kafka.server.BrokerTopicStats;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.Time;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -50,27 +59,32 @@ import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 public class RecordBatchIterationBenchmark {
 
     private final Random random = new Random(0);
-    private final int batchCount = 5000;
-    private final int maxBatchSize = 10;
+    private final int batchCount = 100;
 
     public enum Bytes {
         RANDOM, ONES
     }
 
-    @Param(value = {"LZ4", "SNAPPY", "NONE"})
+    @Param(value = {"1", "2", "10", "50", "200", "500"})
+    private int maxBatchSize = 200;
+
+    @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
 
     @Param(value = {"1", "2"})
     private byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
-    private int messageSize = 100;
+    private int messageSize = 1000;
 
     @Param(value = {"RANDOM", "ONES"})
     private Bytes bytes = Bytes.RANDOM;
 
+    @Param(value = {"NO_CACHING", "CREATE"})
+    private String bufferSupplierStr;
+
     // zero starting offset is much faster for v1 batches, but that will almost never happen
-    private final int startingOffset = 42;
+    private int startingOffset;
 
     // Used by measureSingleMessage
     private ByteBuffer singleBatchBuffer;
@@ -79,10 +93,24 @@ public class RecordBatchIterationBenchmark {
     private ByteBuffer[] batchBuffers;
     private int[] batchSizes;
     private BufferSupplier bufferSupplier;
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
 
     @Setup
     public void init() {
-        bufferSupplier = BufferSupplier.create();
+        brokerTopicStats = new BrokerTopicStats();
+
+        // For v0 batches a zero starting offset is much faster but that will almost never happen.
+        // For v2 batches we use starting offset = 0 as these batches are relative to the base
+        // offset and measureValidation will mutate these batches between iterations
+        startingOffset = messageVersion == 2 ? 0 : 42;
+
+        if (bufferSupplierStr.equals("NO_CACHING")) {
+            bufferSupplier = BufferSupplier.NO_CACHING;
+        } else if (bufferSupplierStr.equals("CREATE")) {
+            bufferSupplier = BufferSupplier.create();
+        } else {
+            throw new IllegalArgumentException("Unsupported buffer supplier " + bufferSupplierStr);
+        }
         singleBatchBuffer = createBatch(1);
 
         batchBuffers = new ByteBuffer[batchCount];
@@ -120,6 +148,19 @@ public class RecordBatchIterationBenchmark {
     }
 
     @Benchmark
+    public void measureValidation(Blackhole bh) throws IOException {
+        MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
+        LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
+                new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
+                CompressionCodec.getCompressionCodec(compressionType.id),
+                CompressionCodec.getCompressionCodec(compressionType.id),
+                false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
+                new AppendOrigin.Client$(),
+                ApiVersion.latestVersion(),
+                brokerTopicStats);
+    }
+
+    @Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
         for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
             try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
@@ -130,6 +171,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
@@ -142,4 +184,17 @@ public class RecordBatchIterationBenchmark {
         }
     }
 
+    @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
+    @Benchmark
+    public void measureSkipIteratorForVariableBatchSize(Blackhole bh) throws IOException {
+        for (int i = 0; i < batchCount; ++i) {
+            for (MutableRecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(bufferSupplier)) {
+                    while (iterator.hasNext())
+                        bh.consume(iterator.next());
+                }
+            }
+        }
+    }
 }

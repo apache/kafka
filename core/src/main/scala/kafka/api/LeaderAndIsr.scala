@@ -21,7 +21,9 @@ object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
   val NoLeader: Int = -1
+  val NoEpoch: Int = -1
   val LeaderDuringDelete: Int = -2
+  val EpochDuringDelete: Int = -2
 
   def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
 
@@ -39,6 +41,10 @@ case class LeaderAndIsr(leader: Int,
   def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
 
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
+
+  def leaderOpt: Option[Int] = {
+    if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
+  }
 
   override def toString: String = {
     s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"

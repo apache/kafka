@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -173,7 +175,7 @@ public class DefaultRecordBatchTest {
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidRecordSize() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -233,7 +235,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidCrc() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -376,10 +378,42 @@ public class DefaultRecordBatchTest {
     }
 
     @Test
+    public void testSkipKeyValueIteratorCorrectness() {
+        Header[] headers = {new RecordHeader("k1", "v1".getBytes()), new RecordHeader("k2", "v2".getBytes())};
+
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+            CompressionType.LZ4, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()),
+            new SimpleRecord(1000L, "abc".getBytes(), "0".getBytes()),
+            new SimpleRecord(9999L, "abc".getBytes(), "0".getBytes(), headers)
+            );
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+            assertEquals(Arrays.asList(
+                new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
+                new PartialDefaultRecord(9, (byte) 0, 1L, 2L, -1, 1, 1),
+                new PartialDefaultRecord(9, (byte) 0, 2L, 3L, -1, 1, 1),
+                new PartialDefaultRecord(12, (byte) 0, 3L, 1000L, -1, 3, 1),
+                new PartialDefaultRecord(25, (byte) 0, 4L, 9999L, -1, 3, 1)
+                ),
+                Utils.toList(streamingIterator)
+            );
+        }
+    }
+
+    @Test
     public void testIncrementSequence() {
         assertEquals(10, DefaultRecordBatch.incrementSequence(5, 5));
         assertEquals(0, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE, 1));
         assertEquals(4, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE - 5, 10));
+    }
+
+    @Test
+    public void testDecrementSequence() {
+        assertEquals(0, DefaultRecordBatch.decrementSequence(5, 5));
+        assertEquals(Integer.MAX_VALUE, DefaultRecordBatch.decrementSequence(0, 1));
     }
 
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,

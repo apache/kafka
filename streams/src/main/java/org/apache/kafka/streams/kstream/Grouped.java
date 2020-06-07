@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
-
 
 import org.apache.kafka.common.serialization.Serde;
 
@@ -29,12 +27,11 @@ import org.apache.kafka.common.serialization.Serde;
  * @param <K> the key type
  * @param <V> the value type
  */
-public class Grouped<K, V> {
+public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
 
-    protected final  Serde<K> keySerde;
+    protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
     protected final String name;
-
 
     private Grouped(final String name,
                     final Serde<K> keySerde,
@@ -71,7 +68,7 @@ public class Grouped<K, V> {
      * @see KStream#groupBy(KeyValueMapper, Grouped)
      * @see KTable#groupBy(KeyValueMapper, Grouped)
      */
-    public static <K> Grouped keySerde(final Serde<K> keySerde) {
+    public static <K, V> Grouped<K, V> keySerde(final Serde<K> keySerde) {
         return new Grouped<>(null, keySerde, null);
     }
 
@@ -85,7 +82,7 @@ public class Grouped<K, V> {
      * @see KStream#groupBy(KeyValueMapper, Grouped)
      * @see KTable#groupBy(KeyValueMapper, Grouped)
      */
-    public static <V> Grouped valueSerde(final Serde<V> valueSerde) {
+    public static <K, V> Grouped<K, V> valueSerde(final Serde<V> valueSerde) {
         return new Grouped<>(null, null, valueSerde);
     }
 
@@ -128,9 +125,10 @@ public class Grouped<K, V> {
      * Perform the grouping operation with the name for a repartition topic if required.  Note
      * that Kafka Streams does not always create repartition topics for grouping operations.
      *
-     * @param name the name used as part of the repartition topic name if required
+     * @param name the name used for the processor name and as part of the repartition topic name if required
      * @return a new {@link Grouped} instance configured with the name
      * */
+    @Override
     public Grouped<K, V> withName(final String name) {
         return new Grouped<>(name, keySerde, valueSerde);
     }

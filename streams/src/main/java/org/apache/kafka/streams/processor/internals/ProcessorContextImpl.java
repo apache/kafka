@@ -16,54 +16,95 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.KeyValue;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.streams.state.internals.WrappedStateStore.AbstractStateStore;
 
 import java.time.Duration;
 import java.util.List;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+    // the below are null for standby tasks
+    private StreamTask streamTask;
+    private RecordCollector collector;
 
-    private final StreamTask task;
-    private final RecordCollector collector;
-    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    ProcessorContextImpl(final TaskId id,
-                         final StreamTask task,
-                         final StreamsConfig config,
-                         final RecordCollector collector,
-                         final ProcessorStateManager stateMgr,
-                         final StreamsMetricsImpl metrics,
-                         final ThreadCache cache) {
+    final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
+
+    public ProcessorContextImpl(final TaskId id,
+                                final StreamsConfig config,
+                                final ProcessorStateManager stateMgr,
+                                final StreamsMetricsImpl metrics,
+                                final ThreadCache cache) {
         super(id, config, metrics, stateMgr, cache);
-        this.task = task;
-        this.collector = collector;
     }
 
-    public ProcessorStateManager getStateMgr() {
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        if (stateManager.taskType() != TaskType.ACTIVE) {
+            throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
+                                                "type was " + stateManager.taskType());
+        }
+        this.streamTask = streamTask;
+        this.collector = recordCollector;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        if (stateManager.taskType() != TaskType.STANDBY) {
+            throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
+                                                "type was " + stateManager.taskType());
+        }
+        this.streamTask = null;
+        this.collector = null;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cacheNameToFlushListener.put(namespace, listener);
+        cache.addDirtyEntryFlushListener(namespace, listener);
+    }
+
+    private void addAllFlushListenersToNewCache() {
+        for (final Map.Entry<String, DirtyEntryFlushListener> cacheEntry : cacheNameToFlushListener.entrySet()) {
+            cache.addDirtyEntryFlushListener(cacheEntry.getKey(), cacheEntry.getValue());
+        }
+    }
+
+    public ProcessorStateManager stateManager() {
         return (ProcessorStateManager) stateManager;
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
+        storeToChangelogTopic.put(store.name(), ProcessorStateManager.storeChangelogTopic(applicationId(), store.name()));
+        super.register(store, stateRestoreCallback);
     }
 
     @Override
@@ -71,27 +112,38 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return collector;
     }
 
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        throwUnsupportedOperationExceptionIfStandby("logChange");
+        // Sending null headers to changelog topics (KIP-244)
+        collector.send(
+            storeToChangelogTopic.get(storeName),
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER);
+    }
+
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
+     * @throws UnsupportedOperationException if the current streamTask type is standby
      */
-    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
+        throwUnsupportedOperationExceptionIfStandby("getStateStore");
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
         }
 
-        final StateStore global = stateManager.getGlobalStore(name);
-        if (global != null) {
-            if (global instanceof KeyValueStore) {
-                return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
-            } else if (global instanceof WindowStore) {
-                return new WindowStoreReadOnlyDecorator((WindowStore) global);
-            } else if (global instanceof SessionStore) {
-                return new SessionStoreReadOnlyDecorator((SessionStore) global);
-            }
-
-            return global;
+        final StateStore globalStore = stateManager.getGlobalStore(name);
+        if (globalStore != null) {
+            return getReadOnlyStore(globalStore);
         }
 
         if (!currentNode().stateStores.contains(name)) {
@@ -100,45 +152,40 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 "make sure to connect the added store to the processor by providing the processor name to " +
                 "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
                 "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
-                "to connect the store to the corresponding operator. If you do not add stores manually, " +
+                "to connect the store to the corresponding operator, or they can provide a StoreBuilder by implementing " +
+                "the stores() method on the Supplier itself. If you do not add stores manually, " +
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
         final StateStore store = stateManager.getStore(name);
-        if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
-        } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
-        } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
-        }
-
-        return store;
+        return getReadWriteStore(store);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key,
                                final V value) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(key, value, SEND_TO_ALL);
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
+    @Deprecated
     public <K, V> void forward(final K key,
                                final V value,
                                final int childIndex) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(
             key,
             value,
-            To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+            To.child((currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
+    @Deprecated
     public <K, V> void forward(final K key,
                                final V value,
                                final String childName) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
         forward(key, value, To.child(childName));
     }
 
@@ -147,20 +194,29 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public <K, V> void forward(final K key,
                                final V value,
                                final To to) {
-        toInternal.update(to);
-        if (toInternal.hasTimestamp()) {
-            recordContext.setTimestamp(toInternal.timestamp());
-        }
-        final ProcessorNode previousNode = currentNode();
+        throwUnsupportedOperationExceptionIfStandby("forward");
+        final ProcessorNode<?, ?> previousNode = currentNode();
+        final ProcessorRecordContext previousContext = recordContext;
+
         try {
+            toInternal.update(to);
+            if (toInternal.hasTimestamp()) {
+                recordContext = new ProcessorRecordContext(
+                    toInternal.timestamp(),
+                    recordContext.offset(),
+                    recordContext.partition(),
+                    recordContext.topic(),
+                    recordContext.headers());
+            }
+
             final String sendTo = toInternal.child();
             if (sendTo == null) {
-                final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
-                for (final ProcessorNode child : children) {
-                    forward(child, key, value);
+                final List<ProcessorNode<?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?> child : children) {
+                    forward((ProcessorNode<K, V>) child, key, value);
                 }
             } else {
-                final ProcessorNode child = currentNode().getChild(sendTo);
+                final ProcessorNode<K, V> child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
@@ -168,421 +224,95 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 forward(child, key, value);
             }
         } finally {
+            recordContext = previousContext;
             setCurrentNode(previousNode);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <K, V> void forward(final ProcessorNode child,
+    private <K, V> void forward(final ProcessorNode<K, V> child,
                                 final K key,
                                 final V value) {
         setCurrentNode(child);
         child.process(key, value);
+        if (child.isTerminalNode()) {
+            streamTask.maybeRecordE2ELatency(timestamp(), child.name());
+        }
     }
 
     @Override
     public void commit() {
-        task.requestCommit();
+        throwUnsupportedOperationExceptionIfStandby("commit");
+        streamTask.requestCommit();
     }
 
     @Override
     @Deprecated
-    public Cancellable schedule(final long interval,
+    public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
-        if (interval < 1) {
+        throwUnsupportedOperationExceptionIfStandby("schedule");
+        if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return task.schedule(interval, type, callback);
+        return streamTask.schedule(intervalMs, type, callback);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
+        throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }
 
-    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
-        this.streamTimeSupplier = streamTimeSupplier;
+    @Override
+    public String topic() {
+        throwUnsupportedOperationExceptionIfStandby("topic");
+        return super.topic();
     }
 
     @Override
-    public long streamTime() {
-        return streamTimeSupplier.get();
+    public int partition() {
+        throwUnsupportedOperationExceptionIfStandby("partition");
+        return super.partition();
     }
 
-    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends AbstractStateStore {
-        static final String ERROR_MESSAGE = "Global store is read only";
-
-        private StateStoreReadOnlyDecorator(final T inner) {
-            super(inner);
-        }
-
-        @SuppressWarnings("unchecked")
-        T getInner() {
-            return (T) wrappedStore();
-        }
-
-        @Override
-        public void flush() {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void close() {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
+    @Override
+    public long offset() {
+        throwUnsupportedOperationExceptionIfStandby("offset");
+        return super.offset();
     }
 
-    private static class KeyValueStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<KeyValueStore<K, V>>
-        implements KeyValueStore<K, V> {
-
-        private KeyValueStoreReadOnlyDecorator(final KeyValueStore<K, V> inner) {
-            super(inner);
-        }
-
-        @Override
-        public V get(final K key) {
-            return getInner().get(key);
-        }
-
-        @Override
-        public KeyValueIterator<K, V> range(final K from,
-                                            final K to) {
-            return getInner().range(from, to);
-        }
-
-        @Override
-        public KeyValueIterator<K, V> all() {
-            return getInner().all();
-        }
-
-        @Override
-        public long approximateNumEntries() {
-            return getInner().approximateNumEntries();
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public V putIfAbsent(final K key,
-                             final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void putAll(final List entries) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public V delete(final K key) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
+    @Override
+    public long timestamp() {
+        throwUnsupportedOperationExceptionIfStandby("timestamp");
+        return super.timestamp();
     }
 
-    private static class WindowStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<WindowStore<K, V>>
-        implements WindowStore<K, V> {
-
-        private WindowStoreReadOnlyDecorator(final WindowStore<K, V> inner) {
-            super(inner);
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public V fetch(final K key,
-                       final long time) {
-            return getInner().fetch(key, time);
-        }
-
-        @Deprecated
-        @Override
-        public WindowStoreIterator<V> fetch(final K key,
-                                            final long timeFrom,
-                                            final long timeTo) {
-            return getInner().fetch(key, timeFrom, timeTo);
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                      final K to,
-                                                      final long timeFrom,
-                                                      final long timeTo) {
-            return getInner().fetch(from, to, timeFrom, timeTo);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> all() {
-            return getInner().all();
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return getInner().fetchAll(timeFrom, timeTo);
-        }
+    @Override
+    public ProcessorNode<?, ?> currentNode() {
+        throwUnsupportedOperationExceptionIfStandby("currentNode");
+        return super.currentNode();
     }
 
-    private static class SessionStoreReadOnlyDecorator<K, AGG>
-        extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>>
-        implements SessionStore<K, AGG> {
-
-        private SessionStoreReadOnlyDecorator(final SessionStore<K, AGG> inner) {
-            super(inner);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
-            return getInner().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                               final K keyTo,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
-            return getInner().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
-        public void remove(final Windowed sessionKey) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void put(final Windowed<K> sessionKey,
-                        final AGG aggregate) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return getInner().fetchSession(key, startTime, endTime);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return getInner().fetch(key);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return getInner().fetch(from, to);
-        }
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        throwUnsupportedOperationExceptionIfStandby("setRecordContext");
+        super.setRecordContext(recordContext);
     }
 
-    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends AbstractStateStore {
-        static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
-
-        private StateStoreReadWriteDecorator(final T inner) {
-            super(inner);
-        }
-
-        @SuppressWarnings("unchecked")
-        T wrapped() {
-            return (T) super.wrappedStore();
-        }
-
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void close() {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
+    @Override
+    public ProcessorRecordContext recordContext() {
+        throwUnsupportedOperationExceptionIfStandby("recordContext");
+        return super.recordContext();
     }
 
-    private static class KeyValueStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<KeyValueStore<K, V>>
-        implements KeyValueStore<K, V> {
-
-        private KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
-            super(inner);
-        }
-
-        @Override
-        public V get(final K key) {
-            return wrapped().get(key);
-        }
-
-        @Override
-        public KeyValueIterator<K, V> range(final K from,
-                                            final K to) {
-            return wrapped().range(from, to);
-        }
-
-        @Override
-        public KeyValueIterator<K, V> all() {
-            return wrapped().all();
-        }
-
-        @Override
-        public long approximateNumEntries() {
-            return wrapped().approximateNumEntries();
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value) {
-            wrapped().put(key, value);
-        }
-
-        @Override
-        public V putIfAbsent(final K key,
-                             final V value) {
-            return wrapped().putIfAbsent(key, value);
-        }
-
-        @Override
-        public void putAll(final List<KeyValue<K, V>> entries) {
-            wrapped().putAll(entries);
-        }
-
-        @Override
-        public V delete(final K key) {
-            return wrapped().delete(key);
-        }
-    }
-
-    private static class WindowStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<WindowStore<K, V>>
-        implements WindowStore<K, V> {
-
-        private WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
-            super(inner);
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value) {
-            wrapped().put(key, value);
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
-            wrapped().put(key, value, windowStartTimestamp);
-        }
-
-        @Override
-        public V fetch(final K key,
-                       final long time) {
-            return wrapped().fetch(key, time);
-        }
-
-        @Deprecated
-        @Override
-        public WindowStoreIterator<V> fetch(final K key,
-                                            final long timeFrom,
-                                            final long timeTo) {
-            return wrapped().fetch(key, timeFrom, timeTo);
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                      final K to,
-                                                      final long timeFrom,
-                                                      final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> all() {
-            return wrapped().all();
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return wrapped().fetchAll(timeFrom, timeTo);
-        }
-    }
-
-    private static class SessionStoreReadWriteDecorator<K, AGG>
-        extends StateStoreReadWriteDecorator<SessionStore<K, AGG>>
-        implements SessionStore<K, AGG> {
-
-        private SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
-            super(inner);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
-            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                               final K keyTo,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
-            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
-        public void remove(final Windowed<K> sessionKey) {
-            wrapped().remove(sessionKey);
-        }
-
-        @Override
-        public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-            wrapped().put(sessionKey, aggregate);
-        }
-
-        @Override
-        public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return wrapped().fetchSession(key, startTime, endTime);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return wrapped().fetch(key);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return wrapped().fetch(from, to);
+    private void throwUnsupportedOperationExceptionIfStandby(final String operationName) {
+        if (taskType() == TaskType.STANDBY) {
+            throw new UnsupportedOperationException(
+                "this should not happen: " + operationName + "() is not supported in standby tasks.");
         }
     }
 }

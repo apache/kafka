@@ -22,25 +22,71 @@ import org.junit.Test;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class ClusterTest {
+
+    private final static Node[] NODES = new Node[] {
+        new Node(0, "localhost", 99),
+        new Node(1, "localhost", 100),
+        new Node(2, "localhost", 101),
+        new Node(11, "localhost", 102)
+    };
+
+    private final static String TOPIC_A = "topicA";
+    private final static String TOPIC_B = "topicB";
+    private final static String TOPIC_C = "topicC";
+    private final static String TOPIC_D = "topicD";
+    private final static String TOPIC_E = "topicE";
 
     @Test
     public void testBootstrap() {
         String ipAddress = "140.211.11.105";
         String hostName = "www.example.com";
         Cluster cluster = Cluster.bootstrap(Arrays.asList(
-                new InetSocketAddress(ipAddress, 9002),
-                new InetSocketAddress(hostName, 9002)
+            new InetSocketAddress(ipAddress, 9002),
+            new InetSocketAddress(hostName, 9002)
         ));
         Set<String> expectedHosts = Utils.mkSet(ipAddress, hostName);
         Set<String> actualHosts = new HashSet<>();
         for (Node node : cluster.nodes())
             actualHosts.add(node.host());
         assertEquals(expectedHosts, actualHosts);
+    }
+
+    @Test
+    public void testReturnUnmodifiableCollections() {
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
+            new PartitionInfo(TOPIC_A, 1, null, NODES, NODES),
+            new PartitionInfo(TOPIC_A, 2, NODES[2], NODES, NODES),
+            new PartitionInfo(TOPIC_B, 0, null, NODES, NODES),
+            new PartitionInfo(TOPIC_B, 1, NODES[0], NODES, NODES),
+            new PartitionInfo(TOPIC_C, 0, null, NODES, NODES),
+            new PartitionInfo(TOPIC_D, 0, NODES[1], NODES, NODES),
+            new PartitionInfo(TOPIC_E, 0, NODES[0], NODES, NODES)
+        );
+        Set<String> unauthorizedTopics = Utils.mkSet(TOPIC_C);
+        Set<String> invalidTopics = Utils.mkSet(TOPIC_D);
+        Set<String> internalTopics = Utils.mkSet(TOPIC_E);
+        Cluster cluster = new Cluster("clusterId", asList(NODES), allPartitions, unauthorizedTopics,
+            invalidTopics, internalTopics, NODES[1]);
+
+        assertThrows(UnsupportedOperationException.class, () -> cluster.invalidTopics().add("foo"));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.internalTopics().add("foo"));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.unauthorizedTopics().add("foo"));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.topics().add("foo"));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.nodes().add(NODES[3]));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.partitionsForTopic(TOPIC_A).add(
+            new PartitionInfo(TOPIC_A, 3, NODES[0], NODES, NODES)));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.availablePartitionsForTopic(TOPIC_B).add(
+            new PartitionInfo(TOPIC_B, 2, NODES[0], NODES, NODES)));
+        assertThrows(UnsupportedOperationException.class, () -> cluster.partitionsForNode(NODES[1].id()).add(
+            new PartitionInfo(TOPIC_B, 2, NODES[1], NODES, NODES)));
     }
 
 }

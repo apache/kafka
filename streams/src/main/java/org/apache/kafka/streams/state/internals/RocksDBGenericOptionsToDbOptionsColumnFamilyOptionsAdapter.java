@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.rocksdb.AbstractCompactionFilter;
+import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractComparator;
 import org.rocksdb.AbstractSlice;
 import org.rocksdb.AccessHint;
@@ -41,6 +43,8 @@ import org.rocksdb.SstFileManager;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WALRecoveryMode;
+import org.rocksdb.WriteBufferManager;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
@@ -52,9 +56,11 @@ import java.util.List;
  *
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
-class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
+
+    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
                                                                final ColumnFamilyOptions columnFamilyOptions) {
@@ -484,6 +490,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public Options setWalTtlSeconds(final long walTtlSeconds) {
+        LOG.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
         dbOptions.setWalTtlSeconds(walTtlSeconds);
         return this;
     }
@@ -1334,13 +1341,22 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public Options setCompactionOptionsFIFO(final CompactionOptionsFIFO compactionOptionsFIFO) {
+        logWarning(LOG);
         columnFamilyOptions.setCompactionOptionsFIFO(compactionOptionsFIFO);
         return this;
     }
 
     @Override
     public CompactionOptionsFIFO compactionOptionsFIFO() {
+        logWarning(LOG);
         return columnFamilyOptions.compactionOptionsFIFO();
+    }
+
+    public static void logWarning(final org.slf4j.Logger log) {
+        log.warn("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
+            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
+            + "(or `org.rocksdb.ColumnFamilyOptions`).");
     }
 
     @Override
@@ -1355,8 +1371,30 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
+    public Options setWriteBufferManager(final WriteBufferManager writeBufferManager) {
+        dbOptions.setWriteBufferManager(writeBufferManager);
+        return this;
+    }
+
+    @Override
+    public WriteBufferManager writeBufferManager() {
+        return dbOptions.writeBufferManager();
+    }
+
+    public Options setCompactionFilter(final AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter) {
+        columnFamilyOptions.setCompactionFilter(compactionFilter);
+        return this;
+    }
+
+    public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
+        columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
+        return this;
+    }
+
+    @Override
     public void close() {
-        columnFamilyOptions.close();
+        // ColumnFamilyOptions should be closed last
         dbOptions.close();
+        columnFamilyOptions.close();
     }
 }

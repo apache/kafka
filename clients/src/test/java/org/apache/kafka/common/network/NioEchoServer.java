@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
@@ -39,6 +40,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -116,10 +118,13 @@ public class NioEchoServer extends Thread {
                     credentialCache.createCache(mechanism, ScramCredential.class);
             }
         }
+        LogContext logContext = new LogContext();
         if (channelBuilder == null)
-            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache, time);
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
+                    securityProtocol, config, credentialCache, tokenCache, time, logContext);
         this.metrics = new Metrics();
-        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
+                "MetricGroup", channelBuilder, logContext);
         acceptorThread = new AcceptorThread();
         this.time = time;
     }
@@ -158,8 +163,10 @@ public class NioEchoServer extends Thread {
         waitForMetrics("failed-reauthentication", failedReauthentications,
                 EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("successful-authentication-no-reauth", 0, EnumSet.of(MetricType.TOTAL));
-        waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
-                EnumSet.of(MetricType.MAX, MetricType.AVG));
+        if (!(time instanceof MockTime)) {
+            waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
+                    EnumSet.of(MetricType.MAX, MetricType.AVG));
+        }
     }
 
     public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {
@@ -216,7 +223,7 @@ public class NioEchoServer extends Thread {
                         selector.close(channel.id());
                 }
 
-                List<NetworkReceive> completedReceives = selector.completedReceives();
+                Collection<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
                     if (!maybeBeginServerReauthentication(channel, rcv, time)) {
@@ -312,6 +319,7 @@ public class NioEchoServer extends Thread {
         public AcceptorThread() throws IOException {
             setName("acceptor");
         }
+        @Override
         public void run() {
             try {
                 java.nio.channels.Selector acceptSelector = java.nio.channels.Selector.open();

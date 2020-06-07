@@ -24,6 +24,7 @@ import org.junit.rules.Timeout;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class MessageGeneratorTest {
     @Rule
@@ -55,5 +56,17 @@ public class MessageGeneratorTest {
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("FooBarBaz"));
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("fooBarBaz"));
         assertEquals("fortran", MessageGenerator.toSnakeCase("FORTRAN"));
+    }
+
+    @Test
+    public void stripSuffixTest() throws Exception {
+        assertEquals("FooBa", MessageGenerator.stripSuffix("FooBar", "r"));
+        assertEquals("", MessageGenerator.stripSuffix("FooBar", "FooBar"));
+        assertEquals("Foo", MessageGenerator.stripSuffix("FooBar", "Bar"));
+        try {
+            MessageGenerator.stripSuffix("FooBar", "Baz");
+            fail("expected exception");
+        } catch (RuntimeException e) {
+        }
     }
 }

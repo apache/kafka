@@ -76,7 +76,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter.
             EC_NULL_ARG: Call to equals(null)
             NP_ALWAYS_NULL: Null pointer dereference
-            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code -->
+            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code
+            IC_INIT_CIRCULARITY: Initialization circularity
+            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
         <Source name="~.*\.scala" />
         <Or>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
@@ -96,12 +98,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="EC_NULL_ARG"/>
             <Bug pattern="NP_ALWAYS_NULL"/>
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
+            <Bug pattern="IC_INIT_CIRCULARITY"/>
+            <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
         </Or>
     </Match>
 
     <Match>
-        <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
-        <Class name="kafka.utils.NetworkClientBlockingOps"/>
+        <!-- Suppression for the equals() for extension methods. -->
+        <Class name="kafka.api.package$ElectLeadersRequestOps"/>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
@@ -110,6 +114,79 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Source name="Json.scala"/>
         <Package name="kafka.utils"/>
         <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
+    </Match>
+
+    <Match>
+        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
+        <Class name="kafka.log.Log"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
+        <Class name="kafka.tools.StateChangeLogMerger$"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <Match>
+        <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
+        <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+        <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AdminUtils.scala"/>
+        <Package name="kafka.admin"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="ControllerContext.scala"/>
+        <Package name="kafka.controller"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
+        <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="ReplicaManager.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="LogManager.scala"/>
+        <Package name="kafka.log"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="DelayedElectLeader.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AdminZkClient.scala"/>
+        <Package name="kafka.zk"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="KafkaApis.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
     <Match>
@@ -149,13 +226,20 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="org.apache.kafka.jmh.cache.generated"/>
             <Package name="org.apache.kafka.jmh.common.generated"/>
             <Package name="org.apache.kafka.jmh.record.generated"/>
+            <Package name="org.apache.kafka.jmh.partition.generated"/>
             <Package name="org.apache.kafka.jmh.producer.generated"/>
+            <Package name="org.apache.kafka.jmh.fetchsession.generated"/>
+            <Package name="org.apache.kafka.jmh.fetcher.generated"/>
+            <Package name="org.apache.kafka.jmh.server.generated"/>
         </Or>
     </Match>
 
     <Match>
         <!-- Suppress warnings about generated schema arrays. -->
-        <Package name="org.apache.kafka.common.message"/>
+        <Or>
+            <Package name="org.apache.kafka.common.message"/>
+            <Package name="org.apache.kafka.streams.internals.generated"/>
+        </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
     </Match>
 
@@ -208,6 +292,25 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
         <Class name="org.apache.kafka.common.utils.Utils"/>
         <Method name="murmur2"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3$IncrementalHash32"/>
         <Or>
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
@@ -331,5 +434,22 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
+
+    <Match>
+        <!-- Suppress a warning about ignoring return value because this is intentional. -->
+        <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
+        <Method name="get"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.acl.generated"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
 
 </FindBugsFilter>

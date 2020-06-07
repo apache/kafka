@@ -98,16 +98,16 @@ if __name__ == "__main__":
 
     print "<h1>Release Notes - Kafka - Version %s</h1>" % version
     print """<p>Below is a summary of the JIRA issues addressed in the %(version)s release of Kafka. For full documentation of the
-    release, a guide to get started, and information about the project, see the <a href="http://kafka.apache.org/">Kafka
+    release, a guide to get started, and information about the project, see the <a href="https://kafka.apache.org/">Kafka
     project site</a>.</p>
 
     <p><b>Note about upgrades:</b> Please carefully review the
-    <a href="http://kafka.apache.org/%(minor)s/documentation.html#upgrade">upgrade documentation</a> for this release thoroughly
+    <a href="https://kafka.apache.org/%(minor)s/documentation.html#upgrade">upgrade documentation</a> for this release thoroughly
     before upgrading your cluster. The upgrade notes discuss any critical information about incompatibilities and breaking
     changes, performance changes, and any other changes that might impact your production deployment of Kafka.</p>
 
     <p>The documentation for the most recent release can be found at
-    <a href="http://kafka.apache.org/documentation.html">http://kafka.apache.org/documentation.html</a>.</p>""" % { 'version': version, 'minor': minor_version_dotless }
+    <a href="https://kafka.apache.org/documentation.html">https://kafka.apache.org/documentation.html</a>.</p>""" % { 'version': version, 'minor': minor_version_dotless }
     for itype, issues in by_group:
         print "<h2>%s</h2>" % itype
         print "<ul>"

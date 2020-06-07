@@ -17,13 +17,15 @@
 package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import scala.collection.Seq
 
 import kafka.server.Constants._
 import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate
@@ -84,7 +86,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param quota
     */
-  def updateQuota(quota: Quota) {
+  def updateQuota(quota: Quota): Unit = {
     inWriteLock(lock) {
       this.quota = quota
       //The metric could be expired by another thread, so use a local variable and null check.
@@ -105,7 +107,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       sensor().checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
+        trace(s"$replicationType: Quota violated for sensor (${sensor().name}), metric: (${qve.metric.metricName}), " +
+          s"metric-value: (${qve.value}), bound: (${qve.bound})")
         return true
     }
     false
@@ -130,13 +133,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param value
     */
-  def record(value: Long) {
-    try {
-      sensor().record(value)
-    } catch {
-      case qve: QuotaViolationException =>
-        trace(s"Record: Quota violated, but ignored, for sensor (${sensor.name}), metric: (${qve.metricName}), value : (${qve.value}), bound: (${qve.bound}), recordedValue ($value)")
-    }
+  def record(value: Long): Unit = {
+    sensor().record(value.toDouble, time.milliseconds(), false)
   }
 
   /**
@@ -147,7 +145,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param partitions the set of throttled partitions
     * @return
     */
-  def markThrottled(topic: String, partitions: Seq[Int]) {
+  def markThrottled(topic: String, partitions: Seq[Int]): Unit = {
     throttledPartitions.put(topic, partitions)
   }
 
@@ -157,7 +155,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def markThrottled(topic: String) {
+  def markThrottled(topic: String): Unit = {
     markThrottled(topic, AllReplicas)
   }
 
@@ -167,7 +165,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def removeThrottle(topic: String) {
+  def removeThrottle(topic: String): Unit = {
     throttledPartitions.remove(topic)
   }
 

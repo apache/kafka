@@ -83,10 +83,6 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
                     return it.next();
                 }
 
-                @Override
-                public void remove() {
-                    throw new UnsupportedOperationException();
-                }
             }
         );
     }

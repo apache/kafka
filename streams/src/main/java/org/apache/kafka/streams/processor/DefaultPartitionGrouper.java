@@ -36,7 +36,10 @@ import java.util.Set;
  * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on
  * joined topics, and by using the serialization and Producer's default partitioner.
+ *
+ * @deprecated since 2.4 release; will be removed in 3.0.0 via KAFKA-7785
  */
+@Deprecated
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultPartitionGrouper.class);

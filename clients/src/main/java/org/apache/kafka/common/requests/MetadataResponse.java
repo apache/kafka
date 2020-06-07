@@ -19,30 +19,30 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.MetadataResponseData;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Possible topic-level error codes:
@@ -57,254 +57,40 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
  */
 public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
+    public static final int NO_LEADER_ID = -1;
+    public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
-    private static final Field.ComplexArray BROKERS = new Field.ComplexArray("brokers",
-            "Host and port information for all brokers.");
-    private static final Field.ComplexArray TOPIC_METADATA = new Field.ComplexArray("topic_metadata",
-            "Metadata for requested topics");
+    private final MetadataResponseData data;
+    private volatile Holder holder;
+    private final boolean hasReliableLeaderEpochs;
 
-    // cluster level fields
-    private static final Field.NullableStr CLUSTER_ID = new Field.NullableStr("cluster_id",
-            "The cluster id that this broker belongs to.");
-    private static final Field.Int32 CONTROLLER_ID = new Field.Int32("controller_id",
-            "The broker id of the controller broker.");
-
-    // broker level fields
-    private static final Field.Int32 NODE_ID = new Field.Int32("node_id", "The broker id.");
-    private static final Field.Str HOST = new Field.Str("host", "The hostname of the broker.");
-    private static final Field.Int32 PORT = new Field.Int32("port", "The port on which the broker accepts requests.");
-    private static final Field.NullableStr RACK = new Field.NullableStr("rack", "The rack of the broker.");
-
-    // topic level fields
-    private static final Field.ComplexArray PARTITION_METADATA = new Field.ComplexArray("partition_metadata",
-            "Metadata for each partition of the topic.");
-    private static final Field.Bool IS_INTERNAL = new Field.Bool("is_internal",
-            "Indicates if the topic is considered a Kafka internal topic");
-
-    // partition level fields
-    private static final Field.Int32 LEADER = new Field.Int32("leader",
-            "The id of the broker acting as leader for this partition.");
-    private static final Field.Array REPLICAS = new Field.Array("replicas", INT32,
-            "The set of all nodes that host this partition.");
-    private static final Field.Array ISR = new Field.Array("isr", INT32,
-            "The set of nodes that are in sync with the leader for this partition.");
-    private static final Field.Array OFFLINE_REPLICAS = new Field.Array("offline_replicas", INT32,
-            "The set of offline replicas of this partition.");
-
-    private static final Field METADATA_BROKER_V0 = BROKERS.withFields(
-            NODE_ID,
-            HOST,
-            PORT);
-
-    private static final Field PARTITION_METADATA_V0 = PARTITION_METADATA.withFields(
-            ERROR_CODE,
-            PARTITION_ID,
-            LEADER,
-            REPLICAS,
-            ISR);
-
-    private static final Field TOPIC_METADATA_V0 = TOPIC_METADATA.withFields(
-            ERROR_CODE,
-            TOPIC_NAME,
-            PARTITION_METADATA_V0);
-
-    private static final Schema METADATA_RESPONSE_V0 = new Schema(
-            METADATA_BROKER_V0,
-            TOPIC_METADATA_V0);
-
-    // V1 adds fields for the rack of each broker, the controller id, and whether or not the topic is internal
-    private static final Field METADATA_BROKER_V1 = BROKERS.withFields(
-            NODE_ID,
-            HOST,
-            PORT,
-            RACK);
-
-    private static final Field TOPIC_METADATA_V1 = TOPIC_METADATA.withFields(
-            ERROR_CODE,
-            TOPIC_NAME,
-            IS_INTERNAL,
-            PARTITION_METADATA_V0);
-
-    private static final Schema METADATA_RESPONSE_V1 = new Schema(
-            METADATA_BROKER_V1,
-            CONTROLLER_ID,
-            TOPIC_METADATA_V1);
-
-    // V2 added a field for the cluster id
-    private static final Schema METADATA_RESPONSE_V2 = new Schema(
-            METADATA_BROKER_V1,
-            CLUSTER_ID,
-            CONTROLLER_ID,
-            TOPIC_METADATA_V1);
-
-    // V3 adds the throttle time to the response
-    private static final Schema METADATA_RESPONSE_V3 = new Schema(
-            THROTTLE_TIME_MS,
-            METADATA_BROKER_V1,
-            CLUSTER_ID,
-            CONTROLLER_ID,
-            TOPIC_METADATA_V1);
-
-    private static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
-
-    // V5 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
-    private static final Field PARTITION_METADATA_V5 = PARTITION_METADATA.withFields(
-            ERROR_CODE,
-            PARTITION_ID,
-            LEADER,
-            REPLICAS,
-            ISR,
-            OFFLINE_REPLICAS);
-
-    private static final Field TOPIC_METADATA_V5 = TOPIC_METADATA.withFields(
-            ERROR_CODE,
-            TOPIC_NAME,
-            IS_INTERNAL,
-            PARTITION_METADATA_V5);
-
-    private static final Schema METADATA_RESPONSE_V5 = new Schema(
-            THROTTLE_TIME_MS,
-            METADATA_BROKER_V1,
-            CLUSTER_ID,
-            CONTROLLER_ID,
-            TOPIC_METADATA_V5);
-
-    // V6 bump used to indicate that on quota violation brokers send out responses before throttling.
-    private static final Schema METADATA_RESPONSE_V6 = METADATA_RESPONSE_V5;
-
-    // V7 adds the leader epoch to the partition metadata
-    private static final Field PARTITION_METADATA_V7 = PARTITION_METADATA.withFields(
-            ERROR_CODE,
-            PARTITION_ID,
-            LEADER,
-            LEADER_EPOCH,
-            REPLICAS,
-            ISR,
-            OFFLINE_REPLICAS);
-
-    private static final Field TOPIC_METADATA_V7 = TOPIC_METADATA.withFields(
-            ERROR_CODE,
-            TOPIC_NAME,
-            IS_INTERNAL,
-            PARTITION_METADATA_V7);
-
-    private static final Schema METADATA_RESPONSE_V7 = new Schema(
-            THROTTLE_TIME_MS,
-            METADATA_BROKER_V1,
-            CLUSTER_ID,
-            CONTROLLER_ID,
-            TOPIC_METADATA_V7);
-
-    public static Schema[] schemaVersions() {
-        return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,
-            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5, METADATA_RESPONSE_V6, METADATA_RESPONSE_V7};
+    public MetadataResponse(MetadataResponseData data) {
+        this(data, true);
     }
 
-    private final int throttleTimeMs;
-    private final Collection<Node> brokers;
-    private final Node controller;
-    private final List<TopicMetadata> topicMetadata;
-    private final String clusterId;
-
-    /**
-     * Constructor for all versions.
-     */
-    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata) {
-        this(DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
+    public MetadataResponse(Struct struct, short version) {
+        // Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker
+        // does not propagate leader epoch information accurately while a reassignment is in
+        // progress. Relying on a stale epoch can lead to FENCED_LEADER_EPOCH errors which
+        // can prevent consumption throughout the course of a reassignment. It is safer in
+        // this case to revert to the behavior in previous protocol versions which checks
+        // leader status only.
+        this(new MetadataResponseData(struct, version), version >= 9);
     }
 
-    public MetadataResponse(int throttleTimeMs, List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.brokers = brokers;
-        this.controller = getControllerNode(controllerId, brokers);
-        this.topicMetadata = topicMetadata;
-        this.clusterId = clusterId;
+    private MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        this.data = data;
+        this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
 
-    public MetadataResponse(Struct struct) {
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        Map<Integer, Node> brokers = new HashMap<>();
-        Object[] brokerStructs = struct.get(BROKERS);
-        for (Object brokerStruct : brokerStructs) {
-            Struct broker = (Struct) brokerStruct;
-            int nodeId = broker.get(NODE_ID);
-            String host = broker.get(HOST);
-            int port = broker.get(PORT);
-            // This field only exists in v1+
-            // When we can't know if a rack exists in a v0 response we default to null
-            String rack = broker.getOrElse(RACK, null);
-            brokers.put(nodeId, new Node(nodeId, host, port, rack));
-        }
-
-        // This field only exists in v1+
-        // When we can't know the controller id in a v0 response we default to NO_CONTROLLER_ID
-        int controllerId = struct.getOrElse(CONTROLLER_ID, NO_CONTROLLER_ID);
-
-        // This field only exists in v2+
-        this.clusterId = struct.getOrElse(CLUSTER_ID, null);
-
-        List<TopicMetadata> topicMetadata = new ArrayList<>();
-        Object[] topicInfos = struct.get(TOPIC_METADATA);
-        for (Object topicInfoObj : topicInfos) {
-            Struct topicInfo = (Struct) topicInfoObj;
-            Errors topicError = Errors.forCode(topicInfo.get(ERROR_CODE));
-            String topic = topicInfo.get(TOPIC_NAME);
-            // This field only exists in v1+
-            // When we can't know if a topic is internal or not in a v0 response we default to false
-            boolean isInternal = topicInfo.getOrElse(IS_INTERNAL, false);
-            List<PartitionMetadata> partitionMetadata = new ArrayList<>();
-
-            Object[] partitionInfos = topicInfo.get(PARTITION_METADATA);
-            for (Object partitionInfoObj : partitionInfos) {
-                Struct partitionInfo = (Struct) partitionInfoObj;
-                Errors partitionError = Errors.forCode(partitionInfo.get(ERROR_CODE));
-                int partition = partitionInfo.get(PARTITION_ID);
-                int leader = partitionInfo.get(LEADER);
-                Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionInfo, LEADER_EPOCH);
-                Node leaderNode = leader == -1 ? null : brokers.get(leader);
-
-                Object[] replicas = partitionInfo.get(REPLICAS);
-                List<Node> replicaNodes = convertToNodes(brokers, replicas);
-
-                Object[] isr = partitionInfo.get(ISR);
-                List<Node> isrNodes = convertToNodes(brokers, isr);
-
-                Object[] offlineReplicas = partitionInfo.getOrEmpty(OFFLINE_REPLICAS);
-                List<Node> offlineNodes = convertToNodes(brokers, offlineReplicas);
-
-                partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, leaderEpoch,
-                        replicaNodes, isrNodes, offlineNodes));
-            }
-
-            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadata));
-        }
-
-        this.brokers = brokers.values();
-        this.controller = getControllerNode(controllerId, brokers.values());
-        this.topicMetadata = topicMetadata;
-    }
-
-    private List<Node> convertToNodes(Map<Integer, Node> brokers, Object[] brokerIds) {
-        List<Node> nodes = new ArrayList<>(brokerIds.length);
-        for (Object brokerId : brokerIds)
-            if (brokers.containsKey(brokerId))
-                nodes.add(brokers.get(brokerId));
-            else
-                nodes.add(new Node((int) brokerId, "", -1));
-        return nodes;
-    }
-
-    private Node getControllerNode(int controllerId, Collection<Node> brokers) {
-        for (Node broker : brokers) {
-            if (broker.id() == controllerId)
-                return broker;
-        }
-        return null;
+    @Override
+    protected Struct toStruct(short version) {
+        return data.toStruct(version);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     /**
@@ -313,9 +99,9 @@ public class MetadataResponse extends AbstractResponse {
      */
     public Map<String, Errors> errors() {
         Map<String, Errors> errors = new HashMap<>();
-        for (TopicMetadata metadata : topicMetadata) {
-            if (metadata.error != Errors.NONE)
-                errors.put(metadata.topic(), metadata.error);
+        for (MetadataResponseTopic metadata : data.topics()) {
+            if (metadata.errorCode() != Errors.NONE.code())
+                errors.put(metadata.name(), Errors.forCode(metadata.errorCode()));
         }
         return errors;
     }
@@ -323,8 +109,8 @@ public class MetadataResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (TopicMetadata metadata : topicMetadata)
-            updateErrorCounts(errorCounts, metadata.error);
+        data.topics().forEach(metadata ->
+            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode())));
         return errorCounts;
     }
 
@@ -333,34 +119,11 @@ public class MetadataResponse extends AbstractResponse {
      */
     public Set<String> topicsByError(Errors error) {
         Set<String> errorTopics = new HashSet<>();
-        for (TopicMetadata metadata : topicMetadata) {
-            if (metadata.error == error)
-                errorTopics.add(metadata.topic());
+        for (MetadataResponseTopic metadata : data.topics()) {
+            if (metadata.errorCode() == error.code())
+                errorTopics.add(metadata.name());
         }
         return errorTopics;
-    }
-
-    /**
-     * Returns the set of topics with an error indicating invalid metadata
-     * and topics with any partition whose error indicates invalid metadata.
-     * This includes all non-existent topics specified in the metadata request
-     * and any topic returned with one or more partitions whose leader is not known.
-     */
-    public Set<String> unavailableTopics() {
-        Set<String> invalidMetadataTopics = new HashSet<>();
-        for (TopicMetadata topicMetadata : this.topicMetadata) {
-            if (topicMetadata.error.exception() instanceof InvalidMetadataException)
-                invalidMetadataTopics.add(topicMetadata.topic);
-            else {
-                for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                    if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
-                        invalidMetadataTopics.add(topicMetadata.topic);
-                        break;
-                    }
-                }
-            }
-        }
-        return invalidMetadataTopics;
     }
 
     /**
@@ -370,32 +133,64 @@ public class MetadataResponse extends AbstractResponse {
     public Cluster cluster() {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
-        for (TopicMetadata metadata : topicMetadata) {
 
+        for (TopicMetadata metadata : topicMetadata()) {
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    partitions.add(partitionMetaToInfo(metadata.topic, partitionMetadata));
+                    partitions.add(toPartitionInfo(partitionMetadata, holder().brokers));
                 }
             }
         }
-        return new Cluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
-                topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, this.controller);
+        return new Cluster(data.clusterId(), brokers(), partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
+                topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller());
+    }
+
+    public static PartitionInfo toPartitionInfo(PartitionMetadata metadata, Map<Integer, Node> nodesById) {
+        return new PartitionInfo(metadata.topic(),
+                metadata.partition(),
+                metadata.leaderId.map(nodesById::get).orElse(null),
+                convertToNodeArray(metadata.replicaIds, nodesById),
+                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
+                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+    }
+
+    private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
+        return replicaIds.stream().map(replicaId -> {
+            Node node = nodesById.get(replicaId);
+            if (node == null)
+                return new Node(replicaId, "", -1);
+            return node;
+        }).toArray(Node[]::new);
     }
 
     /**
-     * Transform a topic and PartitionMetadata into PartitionInfo
-     * @return
+     * Returns a 32-bit bitfield to represent authorized operations for this topic.
      */
-    public static PartitionInfo partitionMetaToInfo(String topic, PartitionMetadata partitionMetadata) {
-        return new PartitionInfo(
-                topic,
-                partitionMetadata.partition(),
-                partitionMetadata.leader(),
-                partitionMetadata.replicas().toArray(new Node[0]),
-                partitionMetadata.isr().toArray(new Node[0]),
-                partitionMetadata.offlineReplicas().toArray(new Node[0]));
+    public Optional<Integer> topicAuthorizedOperations(String topicName) {
+        MetadataResponseTopic topic = data.topics().find(topicName);
+        if (topic == null)
+            return Optional.empty();
+        else
+            return Optional.of(topic.topicAuthorizedOperations());
+    }
+
+    /**
+     * Returns a 32-bit bitfield to represent authorized operations for this cluster.
+     */
+    public int clusterAuthorizedOperations() {
+        return data.clusterAuthorizedOperations();
+    }
+
+    private Holder holder() {
+        if (holder == null) {
+            synchronized (data) {
+                if (holder == null)
+                    holder = new Holder(data);
+            }
+        }
+        return holder;
     }
 
     /**
@@ -403,7 +198,11 @@ public class MetadataResponse extends AbstractResponse {
      * @return the brokers
      */
     public Collection<Node> brokers() {
-        return brokers;
+        return holder().brokers.values();
+    }
+
+    public Map<Integer, Node> brokersById() {
+        return holder().brokers;
     }
 
     /**
@@ -411,7 +210,7 @@ public class MetadataResponse extends AbstractResponse {
      * @return the topicMetadata
      */
     public Collection<TopicMetadata> topicMetadata() {
-        return topicMetadata;
+        return holder().topicMetadata;
     }
 
     /**
@@ -419,7 +218,7 @@ public class MetadataResponse extends AbstractResponse {
      * @return the controller node or null if it doesn't exist
      */
     public Node controller() {
-        return controller;
+        return holder().controller;
     }
 
     /**
@@ -427,11 +226,23 @@ public class MetadataResponse extends AbstractResponse {
      * @return cluster identifier if it is present in the response, null otherwise.
      */
     public String clusterId() {
-        return this.clusterId;
+        return this.data.clusterId();
+    }
+
+    /**
+     * Check whether the leader epochs returned from the response can be relied on
+     * for epoch validation in Fetch, ListOffsets, and OffsetsForLeaderEpoch requests.
+     * If not, then the client will not retain the leader epochs and hence will not
+     * forward them in requests.
+     *
+     * @return true if the epoch can be used for validation
+     */
+    public boolean hasReliableLeaderEpochs() {
+        return hasReliableLeaderEpochs;
     }
 
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(ApiKeys.METADATA.parseResponse(version, buffer));
+        return new MetadataResponse(ApiKeys.METADATA.responseSchema(version).read(buffer), version);
     }
 
     public static class TopicMetadata {
@@ -439,15 +250,25 @@ public class MetadataResponse extends AbstractResponse {
         private final String topic;
         private final boolean isInternal;
         private final List<PartitionMetadata> partitionMetadata;
+        private int authorizedOperations;
+
+        public TopicMetadata(Errors error,
+                             String topic,
+                             boolean isInternal,
+                             List<PartitionMetadata> partitionMetadata,
+                             int authorizedOperations) {
+            this.error = error;
+            this.topic = topic;
+            this.isInternal = isInternal;
+            this.partitionMetadata = partitionMetadata;
+            this.authorizedOperations = authorizedOperations;
+        }
 
         public TopicMetadata(Errors error,
                              String topic,
                              boolean isInternal,
                              List<PartitionMetadata> partitionMetadata) {
-            this.error = error;
-            this.topic = topic;
-            this.isInternal = isInternal;
-            this.partitionMetadata = partitionMetadata;
+            this(error, topic, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
         public Errors error() {
@@ -466,149 +287,236 @@ public class MetadataResponse extends AbstractResponse {
             return partitionMetadata;
         }
 
+        public void authorizedOperations(int authorizedOperations) {
+            this.authorizedOperations = authorizedOperations;
+        }
+
+        public int authorizedOperations() {
+            return authorizedOperations;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final TopicMetadata that = (TopicMetadata) o;
+            return isInternal == that.isInternal &&
+                error == that.error &&
+                Objects.equals(topic, that.topic) &&
+                Objects.equals(partitionMetadata, that.partitionMetadata) &&
+                Objects.equals(authorizedOperations, that.authorizedOperations);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(error, topic, isInternal, partitionMetadata, authorizedOperations);
+        }
+
         @Override
         public String toString() {
-            return "(type=TopicMetadata" +
-                    ", error=" + error +
-                    ", topic=" + topic +
-                    ", isInternal=" + isInternal +
-                    ", partitionMetadata=" + partitionMetadata + ')';
+            return "TopicMetadata{" +
+                "error=" + error +
+                ", topic='" + topic + '\'' +
+                ", isInternal=" + isInternal +
+                ", partitionMetadata=" + partitionMetadata +
+                ", authorizedOperations=" + authorizedOperations +
+                '}';
         }
     }
 
     // This is used to describe per-partition state in the MetadataResponse
     public static class PartitionMetadata {
-        private final Errors error;
-        private final int partition;
-        private final Node leader;
-        private final Optional<Integer> leaderEpoch;
-        private final List<Node> replicas;
-        private final List<Node> isr;
-        private final List<Node> offlineReplicas;
+        public final TopicPartition topicPartition;
+        public final Errors error;
+        public final Optional<Integer> leaderId;
+        public final Optional<Integer> leaderEpoch;
+        public final List<Integer> replicaIds;
+        public final List<Integer> inSyncReplicaIds;
+        public final List<Integer> offlineReplicaIds;
 
         public PartitionMetadata(Errors error,
-                                 int partition,
-                                 Node leader,
+                                 TopicPartition topicPartition,
+                                 Optional<Integer> leaderId,
                                  Optional<Integer> leaderEpoch,
-                                 List<Node> replicas,
-                                 List<Node> isr,
-                                 List<Node> offlineReplicas) {
+                                 List<Integer> replicaIds,
+                                 List<Integer> inSyncReplicaIds,
+                                 List<Integer> offlineReplicaIds) {
             this.error = error;
-            this.partition = partition;
-            this.leader = leader;
+            this.topicPartition = topicPartition;
+            this.leaderId = leaderId;
             this.leaderEpoch = leaderEpoch;
-            this.replicas = replicas;
-            this.isr = isr;
-            this.offlineReplicas = offlineReplicas;
-        }
-
-        public Errors error() {
-            return error;
+            this.replicaIds = replicaIds;
+            this.inSyncReplicaIds = inSyncReplicaIds;
+            this.offlineReplicaIds = offlineReplicaIds;
         }
 
         public int partition() {
-            return partition;
+            return topicPartition.partition();
         }
 
-        public int leaderId() {
-            return leader == null ? -1 : leader.id();
+        public String topic() {
+            return topicPartition.topic();
         }
 
-        public Optional<Integer> leaderEpoch() {
-            return leaderEpoch;
-        }
-
-        public Node leader() {
-            return leader;
-        }
-
-        public List<Node> replicas() {
-            return replicas;
-        }
-
-        public List<Node> isr() {
-            return isr;
-        }
-
-        public List<Node> offlineReplicas() {
-            return offlineReplicas;
+        public PartitionMetadata withoutLeaderEpoch() {
+            return new PartitionMetadata(error,
+                    topicPartition,
+                    leaderId,
+                    Optional.empty(),
+                    replicaIds,
+                    inSyncReplicaIds,
+                    offlineReplicaIds);
         }
 
         @Override
         public String toString() {
-            return "(type=PartitionMetadata" +
-                    ", error=" + error +
-                    ", partition=" + partition +
-                    ", leader=" + leader +
+            return "PartitionMetadata(" +
+                    "error=" + error +
+                    ", partition=" + topicPartition +
+                    ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicas, ",") +
-                    ", isr=" + Utils.join(isr, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicas, ",") + ')';
+                    ", replicas=" + Utils.join(replicaIds, ",") +
+                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
+                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
         }
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.METADATA.responseSchema(version));
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        List<Struct> brokerArray = new ArrayList<>();
-        for (Node node : brokers) {
-            Struct broker = struct.instance(BROKERS);
-            broker.set(NODE_ID, node.id());
-            broker.set(HOST, node.host());
-            broker.set(PORT, node.port());
-            // This field only exists in v1+
-            broker.setIfExists(RACK, node.rack());
-            brokerArray.add(broker);
+    private static class Holder {
+        private final Map<Integer, Node> brokers;
+        private final Node controller;
+        private final Collection<TopicMetadata> topicMetadata;
+
+        Holder(MetadataResponseData data) {
+            this.brokers = Collections.unmodifiableMap(createBrokers(data));
+            this.topicMetadata = createTopicMetadata(data);
+            this.controller = brokers.get(data.controllerId());
         }
-        struct.set(BROKERS, brokerArray.toArray());
 
-        // This field only exists in v1+
-        struct.setIfExists(CONTROLLER_ID, controller == null ? NO_CONTROLLER_ID : controller.id());
+        private Map<Integer, Node> createBrokers(MetadataResponseData data) {
+            return data.brokers().valuesList().stream().map(b -> new Node(b.nodeId(), b.host(), b.port(), b.rack()))
+                    .collect(Collectors.toMap(Node::id, Function.identity()));
+        }
 
-        // This field only exists in v2+
-        struct.setIfExists(CLUSTER_ID, clusterId);
+        private Collection<TopicMetadata> createTopicMetadata(MetadataResponseData data) {
+            List<TopicMetadata> topicMetadataList = new ArrayList<>();
+            for (MetadataResponseTopic topicMetadata : data.topics()) {
+                Errors topicError = Errors.forCode(topicMetadata.errorCode());
+                String topic = topicMetadata.name();
+                boolean isInternal = topicMetadata.isInternal();
+                List<PartitionMetadata> partitionMetadataList = new ArrayList<>();
 
-        List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
-        for (TopicMetadata metadata : topicMetadata) {
-            Struct topicData = struct.instance(TOPIC_METADATA);
-            topicData.set(TOPIC_NAME, metadata.topic);
-            topicData.set(ERROR_CODE, metadata.error.code());
-            // This field only exists in v1+
-            topicData.setIfExists(IS_INTERNAL, metadata.isInternal());
+                for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
+                    Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
+                    int partitionIndex = partitionMetadata.partitionIndex();
 
-            List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
-            for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                Struct partitionData = topicData.instance(PARTITION_METADATA);
-                partitionData.set(ERROR_CODE, partitionMetadata.error.code());
-                partitionData.set(PARTITION_ID, partitionMetadata.partition);
-                partitionData.set(LEADER, partitionMetadata.leaderId());
+                    int leaderId = partitionMetadata.leaderId();
+                    Optional<Integer> leaderIdOpt = leaderId < 0 ? Optional.empty() : Optional.of(leaderId);
 
-                // Leader epoch exists in v7 forward
-                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, partitionMetadata.leaderEpoch);
-
-                ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
-                for (Node node : partitionMetadata.replicas)
-                    replicas.add(node.id());
-                partitionData.set(REPLICAS, replicas.toArray());
-                ArrayList<Integer> isr = new ArrayList<>(partitionMetadata.isr.size());
-                for (Node node : partitionMetadata.isr)
-                    isr.add(node.id());
-                partitionData.set(ISR, isr.toArray());
-                if (partitionData.hasField(OFFLINE_REPLICAS)) {
-                    ArrayList<Integer> offlineReplicas = new ArrayList<>(partitionMetadata.offlineReplicas.size());
-                    for (Node node : partitionMetadata.offlineReplicas)
-                        offlineReplicas.add(node.id());
-                    partitionData.set(OFFLINE_REPLICAS, offlineReplicas.toArray());
+                    Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
+                    TopicPartition topicPartition = new TopicPartition(topic, partitionIndex);
+                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leaderIdOpt,
+                            leaderEpoch, partitionMetadata.replicaNodes(), partitionMetadata.isrNodes(),
+                            partitionMetadata.offlineReplicas()));
                 }
-                partitionMetadataArray.add(partitionData);
 
+                topicMetadataList.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadataList,
+                        topicMetadata.topicAuthorizedOperations()));
             }
-            topicData.set(PARTITION_METADATA, partitionMetadataArray.toArray());
-            topicMetadataArray.add(topicData);
+            return topicMetadataList;
         }
-        struct.set(TOPIC_METADATA, topicMetadataArray.toArray());
-        return struct;
+
+    }
+
+    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
+                                                   int controllerId, List<TopicMetadata> topicMetadataList,
+                                                   int clusterAuthorizedOperations,
+                                                   short responseVersion) {
+        MetadataResponseData responseData = new MetadataResponseData();
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        brokers.forEach(broker ->
+            responseData.brokers().add(new MetadataResponseBroker()
+                .setNodeId(broker.id())
+                .setHost(broker.host())
+                .setPort(broker.port())
+                .setRack(broker.rack()))
+        );
+
+        responseData.setClusterId(clusterId);
+        responseData.setControllerId(controllerId);
+        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
+
+        topicMetadataList.forEach(topicMetadata -> {
+            MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
+            metadataResponseTopic
+                .setErrorCode(topicMetadata.error.code())
+                .setName(topicMetadata.topic)
+                .setIsInternal(topicMetadata.isInternal)
+                .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
+
+            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
+                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
+                    .setErrorCode(partitionMetadata.error.code())
+                    .setPartitionIndex(partitionMetadata.partition())
+                    .setLeaderId(partitionMetadata.leaderId.orElse(NO_LEADER_ID))
+                    .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setReplicaNodes(partitionMetadata.replicaIds)
+                    .setIsrNodes(partitionMetadata.inSyncReplicaIds)
+                    .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
+            }
+            responseData.topics().add(metadataResponseTopic);
+        });
+        return new MetadataResponse(responseData.toStruct(responseVersion), responseVersion);
+    }
+
+    public static MetadataResponse prepareResponse(int throttleTimeMs,
+                                                   Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
+                                                   List<TopicMetadata> topicMetadataList,
+                                                   short responseVersion) {
+        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED, responseVersion);
+    }
+
+    public static MetadataResponse prepareResponse(Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
+                                                   List<TopicMetadata> topicMetadata,
+                                                   short responseVersion) {
+        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
+            topicMetadata, responseVersion);
+    }
+
+    public static MetadataResponse prepareResponse(Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
+                                                   List<TopicMetadata> topicMetadata) {
+        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
+            topicMetadata, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse prepareResponse(int throttleTimeMs,
+                                                   List<MetadataResponseTopic> topicMetadataList,
+                                                   Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
+                                                   int clusterAuthorizedOperations) {
+        MetadataResponseData responseData = new MetadataResponseData();
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        brokers.forEach(broker ->
+            responseData.brokers().add(new MetadataResponseBroker()
+                .setNodeId(broker.id())
+                .setHost(broker.host())
+                .setPort(broker.port())
+                .setRack(broker.rack()))
+        );
+
+        responseData.setClusterId(clusterId);
+        responseData.setControllerId(controllerId);
+        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
+
+        topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
+        return new MetadataResponse(responseData);
     }
 
     @Override

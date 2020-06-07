@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -179,7 +178,7 @@ public class GlobalStreamThread extends Thread {
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,
-                              final Metrics metrics,
+                              final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener) {
@@ -189,11 +188,11 @@ public class GlobalStreamThread extends Thread {
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
+        this.streamsMetrics = streamsMetrics;
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
     }
 
@@ -258,7 +257,7 @@ public class GlobalStreamThread extends Thread {
             } catch (final RuntimeException e) {
                 // just log an error if the consumer throws an exception during close
                 // so we can always attempt to close the state stores.
-                log.error("Failed to close consumer due to the following error:", e);
+                log.error("Failed to close global consumer due to the following error:", e);
             }
 
             stateMaintainer.close();
@@ -279,7 +278,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
-            streamsMetrics.removeAllThreadLevelSensors();
+            streamsMetrics.removeAllThreadLevelSensors(getName());
 
             return;
         }
@@ -303,7 +302,7 @@ public class GlobalStreamThread extends Thread {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
 
-            streamsMetrics.removeAllThreadLevelSensors();
+            streamsMetrics.removeAllThreadLevelSensors(getName());
 
             setState(DEAD);
 

@@ -19,17 +19,17 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util.{Collections, Arrays, Properties}
+import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{admin, CommonClientConfigs}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 
@@ -49,7 +49,7 @@ object EndToEndLatency {
   private val defaultReplicationFactor: Short = 1
   private val defaultNumPartitions: Int = 1
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
       Exit.exit(1)
@@ -88,7 +88,7 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    def finalise() {
+    def finalise(): Unit = {
       consumer.commitSync()
       producer.close()
       consumer.close()
@@ -109,7 +109,7 @@ object EndToEndLatency {
       .map(p => new TopicPartition(p.topic(), p.partition())).asJava
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
-    consumer.assignment().asScala.foreach(consumer.position)
+    consumer.assignment.forEach(consumer.position(_))
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -147,7 +147,7 @@ object EndToEndLatency {
 
       //Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        println(i.toString + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
       latencies(i) = elapsed / 1000 / 1000
     }
@@ -171,7 +171,7 @@ object EndToEndLatency {
     println("Topic \"%s\" does not exist. Will create topic with %d partition(s) and replication factor = %d"
               .format(topic, defaultNumPartitions, defaultReplicationFactor))
 
-    val adminClient = admin.AdminClient.create(props)
+    val adminClient = Admin.create(props)
     val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
     try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
     finally Utils.closeQuietly(adminClient, "AdminClient")

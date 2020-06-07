@@ -56,8 +56,10 @@ final Serde&lt;Long&gt; longSerde = Serdes.Long();
 // Construct a `KStream` from the input topic "streams-plaintext-input", where message values
 // represent lines of text (for the sake of this example, we ignore whatever may be stored
 // in the message keys).
-KStream&lt;String, String&gt; textLines = builder.stream("streams-plaintext-input",
-    Consumed.with(stringSerde, stringSerde);
+KStream&lt;String, String&gt; textLines = builder.stream(
+      "streams-plaintext-input",
+      Consumed.with(stringSerde, stringSerde)
+    );
 
 KTable&lt;String, Long&gt; wordCounts = textLines
     // Split each text line, by whitespace, into words.
@@ -67,7 +69,7 @@ KTable&lt;String, Long&gt; wordCounts = textLines
     .groupBy((key, value) -> value)
 
     // Count the occurrences of each word (message key).
-    .count()
+    .count();
 
 // Store the running counts as a changelog stream to the output topic.
 wordCounts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
@@ -138,7 +140,7 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-plaintext-input
@@ -150,7 +152,7 @@ Note: we create the output topic with compaction enabled because the output stre
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-wordcount-output \
@@ -161,12 +163,12 @@ Created topic "streams-wordcount-output".
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --zookeeper localhost:2181 --describe
+&gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 
-Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
-    Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
-Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact
+Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact,segment.bytes=1073741824
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
+Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segment.bytes=1073741824
+	Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 </pre>
 
 <h4><a id="quickstart_streams_start" href="#quickstart_streams_start">Step 4: Start the Wordcount Application</a></h4>
@@ -186,7 +188,7 @@ Hence there won't be any STDOUT output except log entries as the results are wri
 Now we can start the console producer in a separate terminal to write some input data to this topic:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 </pre>
 
 and inspect the output of the WordCount demo application by reading from its output topic with the console consumer in a separate terminal:
@@ -210,7 +212,7 @@ This will send a new message to the input topic, where the message key is null a
 (in practice, input data for applications will typically be streaming continuously into Kafka, rather than being manually entered as we do in this quickstart):
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 </pre>
 
@@ -244,7 +246,7 @@ Enter the text line "hello kafka streams" and hit &lt;RETURN&gt;.
 Your terminal should look as follows:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 hello kafka streams
 </pre>
@@ -274,10 +276,10 @@ streams	2
 Here the last printed lines <b>kafka 2</b> and <b>streams 2</b> indicate updates to the keys <b>kafka</b> and <b>streams</b> whose counts have been incremented from <b>1</b> to <b>2</b>.
 Whenever you write further input messages to the input topic, you will observe new messages being added to the <b>streams-wordcount-output</b> topic,
 representing the most recent word counts as computed by the WordCount application.
-Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-wordcount-input</b> before we wrap up this quickstart:
+Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-plaintext-input</b> before we wrap up this quickstart:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-wordcount-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 hello kafka streams
 join kafka summit

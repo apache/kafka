@@ -20,9 +20,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#listTopics()}.
+ * Options for {@link Admin#listTopics()}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
@@ -30,7 +30,7 @@ public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
     private boolean listInternal = false;
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */

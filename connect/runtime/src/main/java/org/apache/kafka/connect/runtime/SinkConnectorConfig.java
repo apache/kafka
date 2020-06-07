@@ -120,7 +120,12 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return getBoolean(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG);
     }
 
+    public boolean enableErrantRecordReporter() {
+        String dqlTopic = dlqTopicName();
+        return !dqlTopic.isEmpty() || enableErrorLog();
+    }
+
     public static void main(String[] args) {
-        System.out.println(config.toHtmlTable());
+        System.out.println(config.toHtml());
     }
 }

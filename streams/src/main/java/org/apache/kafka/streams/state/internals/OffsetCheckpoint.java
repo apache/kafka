@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -50,6 +52,7 @@ import java.util.regex.Pattern;
  *   separated by spaces.
  */
 public class OffsetCheckpoint {
+    private static final Logger LOG = LoggerFactory.getLogger(OffsetCheckpoint.class);
 
     private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 
@@ -64,6 +67,8 @@ public class OffsetCheckpoint {
     }
 
     /**
+     * Write the given offsets to the checkpoint file. All offsets should be non-negative.
+     *
      * @throws IOException if any file operation fails with an IO exception
      */
     public void write(final Map<TopicPartition, Long> offsets) throws IOException {
@@ -75,6 +80,7 @@ public class OffsetCheckpoint {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
             final File temp = new File(file.getAbsolutePath() + ".tmp");
+            LOG.trace("Writing tmp checkpoint file {}", temp.getAbsolutePath());
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
             try (final BufferedWriter writer = new BufferedWriter(
@@ -83,13 +89,21 @@ public class OffsetCheckpoint {
                 writeIntLine(writer, offsets.size());
 
                 for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                    writeEntry(writer, entry.getKey(), entry.getValue());
+                    final TopicPartition tp = entry.getKey();
+                    final Long offset = entry.getValue();
+                    if (offset >= 0L) {
+                        writeEntry(writer, tp, offset);
+                    } else {
+                        LOG.error("Received offset={} to write to checkpoint file for {}", offset, tp);
+                        throw new IllegalStateException("Attempted to write a negative offset to the checkpoint file");
+                    }
                 }
 
                 writer.flush();
                 fileOutputStream.getFD().sync();
             }
 
+            LOG.trace("Swapping tmp checkpoint file {} {}", temp.toPath(), file.toPath());
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }
@@ -97,8 +111,8 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeIntLine(final BufferedWriter writer,
-                              final int number) throws IOException {
+    static void writeIntLine(final BufferedWriter writer,
+                             final int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
@@ -106,9 +120,9 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeEntry(final BufferedWriter writer,
-                            final TopicPartition part,
-                            final long offset) throws IOException {
+    static void writeEntry(final BufferedWriter writer,
+                           final TopicPartition part,
+                           final long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
         writer.write(Integer.toString(part.partition()));
@@ -119,6 +133,8 @@ public class OffsetCheckpoint {
 
 
     /**
+     * Reads the offsets from the local checkpoint file, skipping any negative offsets it finds.
+     *
      * @throws IOException if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
@@ -140,8 +156,14 @@ public class OffsetCheckpoint {
 
                             final String topic = pieces[0];
                             final int partition = Integer.parseInt(pieces[1]);
+                            final TopicPartition tp = new TopicPartition(topic, partition);
                             final long offset = Long.parseLong(pieces[2]);
-                            offsets.put(new TopicPartition(topic, partition), offset);
+                            if (offset >= 0L) {
+                                offsets.put(tp, offset);
+                            } else {
+                                LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
+                            }
+
                             line = reader.readLine();
                         }
                         if (offsets.size() != expectedSize) {

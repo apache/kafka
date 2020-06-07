@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -51,14 +51,14 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   val sent2 = List("more", "messages")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     config = KafkaConfig.fromProps(props)
   }
 
   @Test
-  def testCleanShutdown() {
+  def testCleanShutdown(): Unit = {
 
     def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
@@ -122,7 +122,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCleanShutdownWithDeleteTopicEnabled() {
+  def testCleanShutdownWithDeleteTopicEnabled(): Unit = {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("delete.topic.enable", "true")
     val newConfig = KafkaConfig.fromProps(newProps)
@@ -135,7 +135,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCleanShutdownAfterFailedStartup() {
+  def testCleanShutdownAfterFailedStartup(): Unit = {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
     newProps.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
@@ -144,7 +144,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCleanShutdownAfterFailedStartupDueToCorruptLogs() {
+  def testCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     val server = new KafkaServer(config)
     server.startup()
     createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
@@ -157,7 +157,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
   }
 
-  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]) {
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]): Unit = {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     try {
       server.startup()
@@ -184,14 +184,14 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     !t.isDaemon && t.isAlive && t.getName.startsWith(this.getClass.getName)
   }
 
-  def verifyNonDaemonThreadsStatus() {
+  def verifyNonDaemonThreadsStatus(): Unit = {
     assertEquals(0, Thread.getAllStackTraces.keySet.toArray
       .map(_.asInstanceOf[Thread])
       .count(isNonDaemonKafkaThread))
   }
 
   @Test
-  def testConsecutiveShutdown(){
+  def testConsecutiveShutdown(): Unit = {
     val server = new KafkaServer(config)
     server.startup()
     server.shutdown()
@@ -226,15 +226,15 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
-      controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
+      controllerContext.setLiveBrokers(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, 0L, Map.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
-      controllerChannelManager.sendRequest(1, ApiKeys.LEADER_AND_ISR, requestBuilder)
+        controllerId, 1, 0L, Seq.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
+      controllerChannelManager.sendRequest(1, requestBuilder)
       receiveFuture.get(10, TimeUnit.SECONDS)
 
       // Shutdown controller. Request timeout is 30s, verify that shutdown completed well before that

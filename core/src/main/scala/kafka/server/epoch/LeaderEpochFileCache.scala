@@ -24,7 +24,8 @@ import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.Seq
+import scala.collection.mutable.ArrayBuffer
 
 /**
  * Represents a cache of (LeaderEpoch => Offset) mappings for a particular replica.
@@ -42,7 +43,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   this.logIdent = s"[LeaderEpochCache $topicPartition] "
 
   private val lock = new ReentrantReadWriteLock()
-  private var epochs: ListBuffer[EpochEntry] = inWriteLock(lock) { ListBuffer(checkpoint.read(): _*) }
+  private var epochs: ArrayBuffer[EpochEntry] = inWriteLock(lock) {
+    val read = checkpoint.read()
+    new ArrayBuffer(read.size) ++= read
+  }
 
   /**
     * Assigns the supplied Leader Epoch to the supplied Offset
@@ -78,19 +82,26 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 
     if (removedEpochs.isEmpty) {
       debug(s"Appended new epoch entry $entryToAppend. Cache now contains ${epochs.size} entries.")
-    } else {
+    } else if (removedEpochs.size > 1 || removedEpochs.head.startOffset != entryToAppend.startOffset) {
+      // Only log a warning if there were non-trivial removals. If the start offset of the new entry
+      // matches the start offset of the removed epoch, then no data has been written and the truncation
+      // is expected.
       warn(s"New epoch entry $entryToAppend caused truncation of conflicting entries $removedEpochs. " +
         s"Cache now contains ${epochs.size} entries.")
     }
   }
 
+  def nonEmpty: Boolean = inReadLock(lock) {
+    epochs.nonEmpty
+  }
+
   /**
-   * Returns the current Leader Epoch. This is the latest epoch
+   * Returns the current Leader Epoch if one exists. This is the latest epoch
    * which has messages assigned to it.
    */
-  def latestEpoch: Int = {
+  def latestEpoch: Option[Int] = {
     inReadLock(lock) {
-      if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
+      epochs.lastOption.map(_.epoch)
     }
   }
 
@@ -112,7 +123,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     * Offset if the latest epoch was requested.
     *
     * During the upgrade phase, where there are existing messages may not have a leader epoch,
-    * if requestedEpoch is < the first epoch cached, UNSUPPORTED_EPOCH_OFFSET will be returned
+    * if requestedEpoch is < the first epoch cached, UNDEFINED_EPOCH_OFFSET will be returned
     * so that the follower falls back to High Water Mark.
     *
     * @param requestedEpoch requested leader epoch
@@ -125,7 +136,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
           // This may happen if a bootstrapping follower sends a request with undefined epoch or
           // a follower is on the older message format where leader epochs are not recorded
           (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-        } else if (requestedEpoch == latestEpoch) {
+        } else if (latestEpoch.contains(requestedEpoch)) {
           // For the leader, the latest epoch is always the current leader epoch that is still being written to.
           // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
           // might if it is verifying its committed offset following a group rebalance. In this case, we return
@@ -216,7 +227,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   // Visible for testing
-  def epochEntries: ListBuffer[EpochEntry] = {
+  def epochEntries: Seq[EpochEntry] = {
     epochs
   }
 

@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -35,19 +35,20 @@ import org.apache.kafka.common.utils.Time
  * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
 class MockScheduler(val time: Time) extends Scheduler {
-  
+
   /* a priority queue of tasks ordered by next execution time */
   private val tasks = new PriorityQueue[MockTask]()
   
   def isStarted = true
 
-  def startup() {}
+  def startup(): Unit = {}
   
-  def shutdown() {
-    this synchronized {
-      tasks.foreach(_.fun())
-      tasks.clear()
-    }
+  def shutdown(): Unit = {
+    var currTask: Option[MockTask] = None
+    do {
+      currTask = poll(_ => true)
+      currTask.foreach(_.fun())
+    } while (currTask.nonEmpty)
   }
   
   /**
@@ -55,27 +56,28 @@ class MockScheduler(val time: Time) extends Scheduler {
    * when this method is called and the execution happens synchronously in the calling thread.
    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
    */
-  def tick() {
-    this synchronized {
-      val now = time.milliseconds
-      while(tasks.nonEmpty && tasks.head.nextExecution <= now) {
-        /* pop and execute the task with the lowest next execution time */
-        val curr = tasks.dequeue
+  def tick(): Unit = {
+    val now = time.milliseconds
+    var currTask: Option[MockTask] = None
+    /* pop and execute the task with the lowest next execution time if ready */
+    do {
+      currTask = poll(_.nextExecution <= now)
+      currTask.foreach { curr =>
         curr.fun()
         /* if the task is periodic, reschedule it and re-enqueue */
         if(curr.periodic) {
           curr.nextExecution += curr.period
-          this.tasks += curr
+          add(curr)
         }
       }
-    }
+    } while (currTask.nonEmpty)
   }
-  
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
-    this synchronized {
-      tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
-      tick()
-    }
+
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
+    val task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
+    add(task)
+    tick()
+    task
   }
 
   def clear(): Unit = {
@@ -83,10 +85,24 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
-  
+
+  private def poll(predicate: MockTask => Boolean): Option[MockTask] = {
+    this synchronized {
+      if (tasks.nonEmpty && predicate.apply(tasks.head))
+        Some(tasks.dequeue)
+      else
+        None
+    }
+  }
+
+  private def add(task: MockTask): Unit = {
+    this synchronized {
+      tasks += task
+    }
+  }
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -96,4 +112,38 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
     else
       1
   }
+
+  /**
+    * Not used, so not not fully implemented
+    */
+  def cancel(mayInterruptIfRunning: Boolean) : Boolean = {
+    false
+  }
+
+  def get(): Unit = {
+  }
+
+  def get(timeout: Long, unit: TimeUnit): Unit = {
+  }
+
+  def isCancelled: Boolean = {
+    false
+  }
+
+  def isDone: Boolean = {
+    false
+  }
+
+  def getDelay(unit: TimeUnit): Long = {
+    this synchronized {
+      time.milliseconds - nextExecution
+    }
+  }
+
+  def compareTo(o : Delayed) : Int = {
+    this.getDelay(TimeUnit.MILLISECONDS).compareTo(o.getDelay(TimeUnit.MILLISECONDS))
+  }
+}
+object MockTask {
+  implicit def MockTaskOrdering: Ordering[MockTask] = (x, y) => x.compare(y)
 }

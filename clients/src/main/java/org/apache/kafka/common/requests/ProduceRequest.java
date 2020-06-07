@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -120,9 +120,15 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
 
+    /**
+     * V8 bumped up to add two new fields record_errors offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
+     * (See KIP-467)
+     */
+    private static final Schema PRODUCE_REQUEST_V8 = PRODUCE_REQUEST_V7;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7, PRODUCE_REQUEST_V8};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -327,21 +333,7 @@ public class ProduceRequest extends AbstractRequest {
         for (TopicPartition tp : partitions())
             responseMap.put(tp, partitionResponse);
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-                return new ProduceResponse(responseMap, throttleTimeMs);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
-        }
+        return new ProduceResponse(responseMap, throttleTimeMs);
     }
 
     @Override
@@ -402,7 +394,7 @@ public class ProduceRequest extends AbstractRequest {
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                     "contain record batches with magic version 2");
             if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
-                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are note allowed to " +
+                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
                     "use ZStandard compression");
             }
 
@@ -434,6 +426,7 @@ public class ProduceRequest extends AbstractRequest {
             case 5:
             case 6:
             case 7:
+            case 8:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:
