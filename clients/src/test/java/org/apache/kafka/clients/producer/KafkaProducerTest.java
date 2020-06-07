@@ -214,6 +214,19 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testConstructorWitDefaults() {
+        Properties defProps = new Properties();
+        defProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        Properties newProps = new Properties(defProps);
+
+        try {
+            new KafkaProducer<>(newProps, new StringSerializer(), new StringSerializer());
+        } catch (ConfigException e) {
+            fail("Constructor should have worked with default properties");
+        }
+    }
+
+    @Test
     public void testSerializerClose() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
