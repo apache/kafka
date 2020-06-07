@@ -644,6 +644,14 @@ subprojects {
 
 }
 
+def nativeImagePath() {
+  def graalHome = System.getenv("GRAALVM_HOME")
+  if (graalHome == null)
+    return "native-image"
+  else
+    return graalHome + "/bin/native-image"
+}
+
 gradle.taskGraph.whenReady { taskGraph ->
   taskGraph.getAllTasks().findAll { it.name.contains('spotbugsScoverage') || it.name.contains('spotbugsTest') }.each { task ->
     task.enabled = false
@@ -1020,6 +1028,17 @@ project(':core') {
         srcDirs = ["src/test/java", "src/test/scala"]
       }
     }
+  }
+
+  // Before running the nativeImage task, we need to generate the configuration files. One option
+  // is to run kafka with the tracing agent by adding the following jvm argument:
+  // -agentlib:native-image-agent=config-output-dir=/path/to/config-dir/
+  // More details here: https://github.com/oracle/graal/blob/master/substratevm/BuildConfiguration.md
+  task nativeImage(type: Exec) {
+    executable = nativeImagePath()
+    args "--no-fallback", "--allow-incomplete-classpath", "--report-unsupported-elements-at-runtime",
+            "-cp", "${-> sourceSets.main.runtimeClasspath.asPath}",
+            "kafka.Kafka"
   }
 }
 
