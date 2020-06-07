@@ -93,6 +93,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
 /**
@@ -132,6 +133,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
+    private static final short BACKOFF_RETRIES = 5;
 
     private final AtomicLong requestSeqNum = new AtomicLong();
 
@@ -180,6 +182,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private SecretKey sessionKey;
     private volatile long keyExpiration;
     private short currentProtocolVersion;
+    private short backoffRetries;
 
     private final DistributedConfig config;
 
@@ -254,6 +257,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         scheduledRebalance = Long.MAX_VALUE;
         keyExpiration = Long.MAX_VALUE;
         sessionKey = null;
+        backoffRetries = BACKOFF_RETRIES;
 
         currentProtocolVersion = ConnectProtocolCompatibility.compatibility(
             config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)
@@ -1096,7 +1100,27 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void backoff(long ms) {
-        Utils.sleep(ms);
+        if (ConnectProtocolCompatibility.fromProtocolVersion(currentProtocolVersion) == EAGER) {
+            Utils.sleep(ms);
+            return;
+        }
+
+        if (backoffRetries-- > 0) {
+            int rebalanceDelayFraction =
+                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG) / 10 / backoffRetries;
+            Utils.sleep(rebalanceDelayFraction);
+            return;
+        }
+
+        ExtendedAssignment runningAssignmentSnapshot;
+        synchronized (this) {
+            runningAssignmentSnapshot = ExtendedAssignment.duplicate(runningAssignment);
+        }
+        log.info("Revoking current running assignment {} because after {} retries the worker "
+                + "has not caught up with the latest Connect cluster updates",
+                runningAssignmentSnapshot, BACKOFF_RETRIES);
+        member.revokeAssignment(runningAssignmentSnapshot);
+        backoffRetries = BACKOFF_RETRIES;
     }
 
     private void startAndStop(Collection<Callable<Void>> callables) {
