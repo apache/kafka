@@ -66,7 +66,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
     protected int delay;
-    private int previousGenerationId;
+    protected int previousGenerationId;
     private Set<String> previousMembers;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
@@ -163,8 +163,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
-        if (previousGenerationId != coordinator.lastCompletedGenerationId()) {
-            log.debug("Emptying previous assignments due to generation mismatch since the last assignment: {}", previousAssignment);
+        int lastCompletedGenerationId = coordinator.lastCompletedGenerationId();
+        if (previousGenerationId != lastCompletedGenerationId) {
+            log.debug("Emptying previous assignments due to generation mismatch between previous "
+                    + "generation ID {} and last completed generation ID {} since the last assignment: {}",
+                    previousGenerationId, lastCompletedGenerationId, previousAssignment);
             this.previousAssignment = ConnectorsAndTasks.EMPTY;
         }
 
