@@ -240,7 +240,7 @@ public class KafkaBasedLog<K, V> {
         producer.send(new ProducerRecord<>(topic, key, value), callback);
     }
 
-    public int getPartitionCount() {
+    public int partitionCount() {
         return partitionCount;
     }
 

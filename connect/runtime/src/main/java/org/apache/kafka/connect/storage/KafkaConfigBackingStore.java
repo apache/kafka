@@ -266,10 +266,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         // updates can continue to occur in the background
         configLog.start();
 
-        int partitionCount = configLog.getPartitionCount();
+        int partitionCount = configLog.partitionCount();
         if (partitionCount > 1) {
-            throw new ConfigException("KafkaConfigBackingStore must have exactly 1 partition but found " + partitionCount + ", check topic set by " +
-                DistributedConfig.CONFIG_TOPIC_CONFIG);
+            String msg = String.format("Topic '%s' supplied via the '%s' property is required "
+                    + "to have a single partition in order to guarantee consistency of "
+                    + "connector configurations, but found %d partitions.",
+                    topic, DistributedConfig.CONFIG_TOPIC_CONFIG, partitionCount);
+            throw new ConfigException(msg);
         }
 
         started = true;
