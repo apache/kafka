@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -87,11 +88,18 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     public Future<Void> executeFailed(Stage stage, Class<?> executingClass,
                                       ConsumerRecord<byte[], byte[]> consumerRecord,
                                       Throwable error) {
+
+        markAsFailed();
         context.consumerRecord(consumerRecord);
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordError();
-        return context.report();
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            throw new ConnectException("Tolerance exceeded in the errant record reporter", error);
+        }
+        return errantRecordFuture;
     }
 
     /**
