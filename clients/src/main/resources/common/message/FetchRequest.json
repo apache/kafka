@@ -49,7 +49,8 @@
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
-    { "name": "MaxWaitTimeMs", "type": "int32", "versions": "0+",
+
+    { "name": "MaxWaitMs", "type": "int32", "versions": "0+",
       "about": "The maximum time in milliseconds to wait for the response." },
     { "name": "MinBytes", "type": "int32", "versions": "0+",
       "about": "The minimum bytes to accumulate in the response." },
