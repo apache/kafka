@@ -1603,6 +1603,28 @@ class LogCleanerTest {
     }
   }
 
+  @Test
+  def testMaxCleanTimeSecs(): Unit = {
+    val logCleaner = new LogCleaner(new CleanerConfig,
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, Log](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    def checkGauge(name: String): Unit = {
+      val gauge = logCleaner.newGauge(name, () => 999)
+      // if there is no cleaners, 0 is default value
+      assertEquals(0, gauge.value())
+    }
+
+    try {
+      checkGauge("max-buffer-utilization-percent")
+      checkGauge("max-clean-time-secs")
+      checkGauge("max-compaction-delay-secs")
+    } finally logCleaner.shutdown()
+  }
+
+
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
