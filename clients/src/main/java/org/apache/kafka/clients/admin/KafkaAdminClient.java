@@ -70,6 +70,11 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDir;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
@@ -236,6 +241,7 @@ import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1406,6 +1412,17 @@ public class KafkaAdminClient extends AdminClient {
         return runnable.pendingCalls.size();
     }
 
+    /**
+     * Fail futures in the given stream which are not done.
+     * Used when a response handler expected a result for some entity but no result was present.
+     */
+    private static <K, V> void completeUnrealizedFutures(
+            Stream<Map.Entry<K, KafkaFutureImpl<V>>> futures,
+            Function<K, String> messageFormatter) {
+        futures.filter(entry -> !entry.getValue().isDone()).forEach(entry ->
+                entry.getValue().completeExceptionally(new ApiException(messageFormatter.apply(entry.getKey()))));
+    }
+
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
@@ -1485,13 +1502,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
-                    if (!future.isDone()) {
-                        future.completeExceptionally(new ApiException("The server response did not " +
-                            "contain a reference to node " + entry.getKey()));
-                    }
-                }
+                completeUnrealizedFutures(topicFutures.entrySet().stream(),
+                    topic -> "The controller response did not contain a result for topic " + topic);
             }
 
             @Override
@@ -1558,13 +1570,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
-                    if (!future.isDone()) {
-                        future.completeExceptionally(new ApiException("The server response did not " +
-                            "contain a reference to node " + entry.getKey()));
-                    }
-                }
+                completeUnrealizedFutures(topicFutures.entrySet().stream(),
+                    topic -> "The controller response did not contain a result for topic " + topic);
             }
 
             @Override
@@ -2256,21 +2263,31 @@ public class KafkaAdminClient extends AdminClient {
         for (TopicPartitionReplica replica : replicaAssignment.keySet())
             futures.put(replica, new KafkaFutureImpl<>());
 
-        Map<Integer, Map<TopicPartition, String>> replicaAssignmentByBroker = new HashMap<>();
+        Map<Integer, AlterReplicaLogDirsRequestData> replicaAssignmentByBroker = new HashMap<>();
         for (Map.Entry<TopicPartitionReplica, String> entry: replicaAssignment.entrySet()) {
             TopicPartitionReplica replica = entry.getKey();
             String logDir = entry.getValue();
             int brokerId = replica.brokerId();
-            TopicPartition topicPartition = new TopicPartition(replica.topic(), replica.partition());
-            if (!replicaAssignmentByBroker.containsKey(brokerId))
-                replicaAssignmentByBroker.put(brokerId, new HashMap<>());
-            replicaAssignmentByBroker.get(brokerId).put(topicPartition, logDir);
+            AlterReplicaLogDirsRequestData value = replicaAssignmentByBroker.computeIfAbsent(brokerId,
+                key -> new AlterReplicaLogDirsRequestData());
+            AlterReplicaLogDir alterReplicaLogDir = value.dirs().find(logDir);
+            if (alterReplicaLogDir == null) {
+                alterReplicaLogDir = new AlterReplicaLogDir();
+                alterReplicaLogDir.setPath(logDir);
+                value.dirs().add(alterReplicaLogDir);
+            }
+            AlterReplicaLogDirTopic alterReplicaLogDirTopic = alterReplicaLogDir.topics().find(replica.topic());
+            if (alterReplicaLogDirTopic == null) {
+                alterReplicaLogDirTopic = new AlterReplicaLogDirTopic().setName(replica.topic());
+                alterReplicaLogDir.topics().add(alterReplicaLogDirTopic);
+            }
+            alterReplicaLogDirTopic.partitions().add(replica.partition());
         }
 
         final long now = time.milliseconds();
-        for (Map.Entry<Integer, Map<TopicPartition, String>> entry: replicaAssignmentByBroker.entrySet()) {
+        for (Map.Entry<Integer, AlterReplicaLogDirsRequestData> entry: replicaAssignmentByBroker.entrySet()) {
             final int brokerId = entry.getKey();
-            final Map<TopicPartition, String> assignment = entry.getValue();
+            final AlterReplicaLogDirsRequestData assignment = entry.getValue();
 
             runnable.call(new Call("alterReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
@@ -2283,20 +2300,27 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     AlterReplicaLogDirsResponse response = (AlterReplicaLogDirsResponse) abstractResponse;
-                    for (Map.Entry<TopicPartition, Errors> responseEntry: response.responses().entrySet()) {
-                        TopicPartition tp = responseEntry.getKey();
-                        Errors error = responseEntry.getValue();
-                        TopicPartitionReplica replica = new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId);
-                        KafkaFutureImpl<Void> future = futures.get(replica);
-                        if (future == null) {
-                            handleFailure(new IllegalStateException(
-                                "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
-                        } else if (error == Errors.NONE) {
-                            future.complete(null);
-                        } else {
-                            future.completeExceptionally(error.exception());
+                    for (AlterReplicaLogDirTopicResult topicResult: response.data().results()) {
+                        for (AlterReplicaLogDirPartitionResult partitionResult: topicResult.partitions()) {
+                            TopicPartitionReplica replica = new TopicPartitionReplica(
+                                    topicResult.topicName(), partitionResult.partitionIndex(), brokerId);
+                            KafkaFutureImpl<Void> future = futures.get(replica);
+                            if (future == null) {
+                                log.warn("The partition {} in the response from broker {} is not in the request",
+                                        new TopicPartition(topicResult.topicName(), partitionResult.partitionIndex()),
+                                        brokerId);
+                            } else if (partitionResult.errorCode() == Errors.NONE.code()) {
+                                future.complete(null);
+                            } else {
+                                future.completeExceptionally(Errors.forCode(partitionResult.errorCode()).exception());
+                            }
                         }
                     }
+                    // The server should send back a response for every replica. But do a sanity check anyway.
+                    completeUnrealizedFutures(
+                        futures.entrySet().stream().filter(entry -> entry.getKey().brokerId() == brokerId),
+                        replica -> "The response from broker " + brokerId +
+                                " did not contain a result for replica " + replica);
                 }
                 @Override
                 void handleFailure(Throwable throwable) {

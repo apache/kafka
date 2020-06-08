@@ -341,22 +341,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            Config config = connector.validate(connectorProps);
-            if (null == config) {
-                throw new BadRequestException(
-                    String.format(
-                        "%s.validate() must return a Config that is not null.",
-                        connector.getClass().getName()
-                    )
-                );
-            }
             ConfigDef configDef = connector.config();
             if (null == configDef) {
                 throw new BadRequestException(
-                    String.format(
-                        "%s.config() must return a ConfigDef that is not null.",
-                        connector.getClass().getName()
-                    )
+                        String.format(
+                                "%s.config() must return a ConfigDef that is not null.",
+                                connector.getClass().getName()
+                        )
+                );
+            }
+            Config config = connector.validate(connectorProps);
+            if (null == config) {
+                throw new BadRequestException(
+                        String.format(
+                                "%s.validate() must return a Config that is not null.",
+                                connector.getClass().getName()
+                        )
                 );
             }
             configKeys.putAll(configDef.configKeys());

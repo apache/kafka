@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -58,9 +59,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
-import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
-import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 
 public class TaskManager {
     // initialize the task list
@@ -89,7 +87,7 @@ public class TaskManager {
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
-    private Set<TaskId> lockedTaskDirectories = new HashSet<>();
+    private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -192,7 +190,7 @@ public class TaskManager {
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
-        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Set<Task> tasksToClose = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
@@ -212,11 +210,11 @@ public class TaskManager {
                 tasksToRecycle.add(task);
             } else {
                 try {
-                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
                         .committableOffsetsAndMetadata();
 
-                    checkpointPerTask.put(task, checkpoint);
+                    tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -252,20 +250,17 @@ public class TaskManager {
                 log.error("Failed to batch commit tasks, " +
                     "will close all tasks involved in this commit as dirty by the end", e);
                 dirtyTasks.addAll(additionalTasksForCommitting);
-                dirtyTasks.addAll(checkpointPerTask.keySet());
+                dirtyTasks.addAll(tasksToClose);
 
-                checkpointPerTask.clear();
+                tasksToClose.clear();
                 // Just add first taskId to re-throw by the end.
                 taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
             }
         }
 
-        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
-            final Task task = taskAndCheckpoint.getKey();
-            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
-
+        for (final Task task : tasksToClose) {
             try {
-                completeTaskCloseClean(task, checkpoint);
+                completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
@@ -388,30 +383,28 @@ public class TaskManager {
     boolean tryToCompleteRestoration() {
         boolean allRunning = true;
 
-        final List<Task> restoringTasks = new LinkedList<>();
+        final List<Task> activeTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
-            if (task.state() == CREATED) {
-                try {
-                    task.initializeIfNeeded();
-                } catch (final LockException | TimeoutException e) {
-                    // it is possible that if there are multiple threads within the instance that one thread
-                    // trying to grab the task from the other, while the other has not released the lock since
-                    // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
-                    allRunning = false;
-                }
+            try {
+                task.initializeIfNeeded();
+            } catch (final LockException | TimeoutException e) {
+                // it is possible that if there are multiple threads within the instance that one thread
+                // trying to grab the task from the other, while the other has not released the lock since
+                // it did not participate in the rebalance. In this case we can just retry in the next iteration
+                log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
+                allRunning = false;
             }
 
-            if (task.state() == RESTORING) {
-                restoringTasks.add(task);
+            if (task.isActive()) {
+                activeTasks.add(task);
             }
         }
 
-        if (allRunning && !restoringTasks.isEmpty()) {
+        if (allRunning && !activeTasks.isEmpty()) {
 
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
 
-            for (final Task task : restoringTasks) {
+            for (final Task task : activeTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
                         task.completeRestoration();
@@ -529,11 +522,7 @@ public class TaskManager {
         for (final TaskId id : lockedTaskDirectories) {
             final Task task = tasks.get(id);
             if (task != null) {
-                if (task.isActive() && task.state() == RUNNING) {
-                    taskOffsetSums.put(id, Task.LATEST_OFFSET);
-                } else {
-                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
-                }
+                taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
@@ -613,10 +602,20 @@ public class TaskManager {
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
 
-            offsetSum += offset;
-            if (offsetSum < 0) {
-                log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
-                return Long.MAX_VALUE;
+
+            if (offset == Task.LATEST_OFFSET) { // this condition can only be true for active tasks; never for standby
+                // for this case, the offset of all partitions is set to `LATEST_OFFSET`
+                // and we "forward" the sentinel value directly
+                return Task.LATEST_OFFSET;
+            } else {
+                if (offset < 0) {
+                    throw new IllegalStateException("Offset should not be negative.");
+                }
+                offsetSum += offset;
+                if (offsetSum < 0) {
+                    log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
+                    return Long.MAX_VALUE;
+                }
             }
         }
 
@@ -629,9 +628,9 @@ public class TaskManager {
         task.closeDirty();
     }
 
-    private void completeTaskCloseClean(final Task task, final Map<TopicPartition, Long> checkpoint) {
+    private void completeTaskCloseClean(final Task task) {
         cleanupTask(task);
-        task.closeClean(checkpoint);
+        task.closeClean();
     }
 
     // Note: this MUST be called *before* actually closing the task
@@ -650,16 +649,16 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        final Map<Task, Map<TopicPartition, Long>> checkpointPerTask = new HashMap<>();
+        final Set<Task> tasksToClose = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : tasks.values()) {
             if (clean) {
                 try {
-                    final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
+                    task.prepareCloseClean();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
 
-                    checkpointPerTask.put(task, checkpoint);
+                    tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -679,11 +678,9 @@ public class TaskManager {
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
         }
 
-        for (final Map.Entry<Task, Map<TopicPartition, Long>> taskAndCheckpoint : checkpointPerTask.entrySet()) {
-            final Task task = taskAndCheckpoint.getKey();
-            final Map<TopicPartition, Long> checkpoint = taskAndCheckpoint.getValue();
+        for (final Task task : tasksToClose) {
             try {
-                completeTaskCloseClean(task, checkpoint);
+                completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
                 closeTaskDirty(task);
@@ -742,10 +739,6 @@ public class TaskManager {
             .collect(Collectors.toSet());
     }
 
-    Task taskForInputPartition(final TopicPartition partition) {
-        return partitionToTask.get(partition);
-    }
-
     Map<TaskId, Task> tasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -775,6 +768,25 @@ public class TaskManager {
     // For testing only.
     int commitAll() {
         return commit(tasks.values());
+    }
+
+    /**
+     * Take records and add them to each respective task
+     *
+     * @param records Records, can be null
+     */
+    void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
+        for (final TopicPartition partition : records.partitions()) {
+            final Task task = partitionToTask.get(partition);
+
+            if (task == null) {
+                log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
+                    partition, toString(">"));
+                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+            }
+
+            task.addRecords(partition, records.records(partition));
+        }
     }
 
     /**

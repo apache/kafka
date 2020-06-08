@@ -253,6 +253,10 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
+            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
+        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         expectLockObtainedFor(taskId00);
@@ -260,7 +264,12 @@ public class TaskManagerTest {
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
-        handleAssignment(taskId00Assignment, emptyMap(), emptyMap());
+        final StateMachineTask runningTask = handleAssignment(
+            taskId00Assignment,
+            emptyMap(),
+            emptyMap()
+        ).get(taskId00);
+        runningTask.setChangelogOffsets(changelogOffsets);
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
@@ -595,7 +604,7 @@ public class TaskManagerTest {
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
         };
@@ -685,7 +694,6 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertEquals(newPartitionsSet, task00.inputPartitions());
-        assertEquals(task00, taskManager.taskForInputPartition(t1p1));
         verify(activeTaskCreator, consumer, changeLogReader);
     }
 
@@ -1107,7 +1115,7 @@ public class TaskManagerTest {
         final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
 
@@ -1125,7 +1133,7 @@ public class TaskManagerTest {
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
 
@@ -1443,13 +1451,13 @@ public class TaskManagerTest {
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new RuntimeException("oops");
             }
         };
@@ -2265,14 +2273,14 @@ public class TaskManagerTest {
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t2 close exception", new RuntimeException());
             }
         };
@@ -2295,14 +2303,14 @@ public class TaskManagerTest {
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
             }
         };
@@ -2324,14 +2332,14 @@ public class TaskManagerTest {
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void prepareCloseClean() {
                 throw new KafkaException("Kaboom for t2!", new RuntimeException());
             }
         };
@@ -2637,11 +2645,17 @@ public class TaskManagerTest {
         public void initializeIfNeeded() {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
+                if (!active) {
+                    transitionTo(State.RUNNING);
+                }
             }
         }
 
         @Override
         public void completeRestoration() {
+            if (state() == State.RUNNING) {
+                return;
+            }
             transitionTo(State.RUNNING);
         }
 
@@ -2689,15 +2703,13 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> prepareCloseClean() {
-            return Collections.emptyMap();
-        }
+        public void prepareCloseClean() {}
 
         @Override
         public void prepareCloseDirty() {}
 
         @Override
-        public void closeClean(final Map<TopicPartition, Long> checkpoint) {
+        public void closeClean() {
             transitionTo(State.CLOSED);
         }
 

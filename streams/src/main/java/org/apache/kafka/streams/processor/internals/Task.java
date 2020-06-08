@@ -39,7 +39,6 @@ public interface Task {
     long LATEST_OFFSET = -2L;
 
     /*
-     *
      * <pre>
      *                 +-------------+
      *          +<---- | Created (0) | <----------------------+
@@ -59,14 +58,9 @@ public interface Task {
      *          |            |                      |         |
      *          |            |                      |         |
      *          |            v                      |         |
-     *          |      +-----+-------+              |         |
-     *          +----> | Closing (4) | <------------+         |
-     *                 +-----+-------+                        |
-     *                       |                                |
-     *                       v                                |
-     *                 +-----+-------+                        |
-     *                 | Closed (5)  | -----------------------+
-     *                 +-------------+
+     *          |      +-----+-------+ <------------+         |
+     *          +----> | Closed (4)  |                        |
+     *                 +-------------+ <----------------------+
      * </pre>
      */
     enum State {
@@ -151,12 +145,12 @@ public interface Task {
      *
      * @throws StreamsException fatal error, should close the thread
      */
-    Map<TopicPartition, Long> prepareCloseClean();
+    void prepareCloseClean();
 
     /**
      * Must be idempotent.
      */
-    void closeClean(final Map<TopicPartition, Long> checkpoint);
+    void closeClean();
 
     /**
      * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.

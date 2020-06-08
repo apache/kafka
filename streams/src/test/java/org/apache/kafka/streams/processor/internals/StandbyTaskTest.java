@@ -52,7 +52,6 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -136,7 +135,7 @@ public class StandbyTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null && !task.isClosed()) {
+        if (task != null) {
             task.prepareCloseDirty();
             task.closeDirty();
             task = null;
@@ -270,8 +269,8 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        task.closeClean(checkpoint);
+        task.prepareCloseClean();
+        task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
 
@@ -323,8 +322,8 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-        assertThrows(RuntimeException.class, () -> task.closeClean(checkpoint));
+        task.prepareCloseClean();
+        assertThrows(RuntimeException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

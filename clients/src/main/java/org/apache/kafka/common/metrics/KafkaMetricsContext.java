@@ -45,7 +45,7 @@ public class KafkaMetricsContext implements MetricsContext {
      */
     public KafkaMetricsContext(String namespace, Map<String, ?> contextLabels) {
         this.contextLabels.put(MetricsContext.NAMESPACE, namespace);
-        contextLabels.forEach((key, value) -> this.contextLabels.put(key, value.toString()));
+        contextLabels.forEach((key, value) -> this.contextLabels.put(key, value != null ? value.toString() : null));
     }
 
     @Override
