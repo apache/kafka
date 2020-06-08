@@ -257,7 +257,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       // Cleaning is aborted before deleting a partition. In this case, we don't want
       // to spam the log with useless information.
-      abortAndPauseCleaning(topicPartition, logAbortMessage = false)
+      abortAndPauseCleaning(topicPartition)
       resumeCleaning(Seq(topicPartition))
     }
   }
@@ -274,7 +274,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  6. If the partition is already paused, a new call to this function
    *     will increase the paused count by one.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition, logAbortMessage: Boolean = true): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
@@ -289,8 +289,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       while(!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
-    if (logAbortMessage)
-      info(s"The cleaning for partition $topicPartition is aborted and paused")
   }
 
   /**

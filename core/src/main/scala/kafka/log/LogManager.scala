@@ -510,19 +510,17 @@ class LogManager(logDirs: Seq[File],
       // If the log does not exist, skip it
       if (log != null) {
         // May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner = cleaner != null && truncateOffset < log.activeSegment.baseOffset
+        val needToStopCleaner = truncateOffset < log.activeSegment.baseOffset
         if (needToStopCleaner && !isFuture)
-          cleaner.abortAndPauseCleaning(topicPartition)
+          abortAndPauseCleaning(topicPartition)
         try {
           if (log.truncateTo(truncateOffset))
             affectedLogs += log
           if (needToStopCleaner && !isFuture)
-            cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
+            maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log, topicPartition)
         } finally {
-          if (needToStopCleaner && !isFuture) {
-            cleaner.resumeCleaning(Seq(topicPartition))
-            info(s"Cleaning for partition $topicPartition is resumed")
-          }
+          if (needToStopCleaner && !isFuture)
+            resumeCleaning(topicPartition)
         }
       }
     }
@@ -550,18 +548,15 @@ class LogManager(logDirs: Seq[File],
     // If the log does not exist, skip it
     if (log != null) {
       // Abort and pause the cleaning of the log, and resume after truncation is done.
-      if (cleaner != null && !isFuture)
-        cleaner.abortAndPauseCleaning(topicPartition)
+      if (!isFuture)
+        abortAndPauseCleaning(topicPartition)
       try {
         log.truncateFullyAndStartAt(newOffset)
-        if (cleaner != null && !isFuture) {
-          cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
-        }
+        if (!isFuture)
+          maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log, topicPartition)
       } finally {
-        if (cleaner != null && !isFuture) {
-          cleaner.resumeCleaning(Seq(topicPartition))
-          info(s"Compaction for partition $topicPartition is resumed")
-        }
+        if (!isFuture)
+          resumeCleaning(topicPartition)
       }
       checkpointRecoveryOffsetsInDir(log.parentDirFile)
       cleanSnapshotsInDir(Seq(log), log.parentDirFile)
@@ -575,7 +570,7 @@ class LogManager(logDirs: Seq[File],
   def checkpointLogRecoveryOffsets(): Unit = {
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
-      val logs = logsByDirCached.getOrElse(logDir.getAbsolutePath, Map.empty)
+      val logs = logsByDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsInDir(logs, logDir)
       cleanSnapshotsInDir(logs.values.toSeq, logDir)
     }
@@ -588,8 +583,7 @@ class LogManager(logDirs: Seq[File],
   def checkpointLogStartOffsets(): Unit = {
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
-      checkpointLogStartOffsetsInDir(
-        logsByDirCached.getOrElse(logDir.getAbsolutePath, Map.empty), logDir)
+      checkpointLogStartOffsetsInDir(logsByDir(logsByDirCached, logDir), logDir)
     }
   }
 
@@ -600,12 +594,12 @@ class LogManager(logDirs: Seq[File],
   def checkpoint(logDirs: Set[File]): Unit = {
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
-      val partitionToLog = logsByDirCached.getOrElse(logDir.getAbsolutePath, Map.empty)
+      val logs = logsByDir(logsByDirCached, logDir)
       if (cleaner != null) {
         cleaner.updateCheckpoints(logDir)
       }
-      checkpointRecoveryOffsetsInDir(partitionToLog, logDir)
-      checkpointLogStartOffsetsInDir(partitionToLog, logDir)
+      checkpointRecoveryOffsetsInDir(logs, logDir)
+      checkpointLogStartOffsetsInDir(logs, logDir)
     }
   }
 
@@ -695,11 +689,35 @@ class LogManager(logDirs: Seq[File],
       preferredLogDirs.put(topicPartition, logDir)
   }
 
+  /**
+   * Abort and pause cleaning of the provided partition and log a message about it.
+   */
   def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
-    if (cleaner != null)
+    if (cleaner != null) {
       cleaner.abortAndPauseCleaning(topicPartition)
+      info(s"The cleaning for partition $topicPartition is aborted and paused")
+    }
   }
 
+  /**
+   * Resume cleaning of the provided partition and log a message about it.
+   */
+  private def resumeCleaning(topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.resumeCleaning(Seq(topicPartition))
+      info(s"Cleaning for partition $topicPartition is resumed")
+    }
+  }
+
+  /**
+   * Truncate the cleaner's checkpoint to the based offset of the active segment of
+   * the provided log.
+   */
+  private def maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log: Log, topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
+    }
+  }
 
   /**
    * Get the log if it exists, otherwise return None
@@ -926,8 +944,7 @@ class LogManager(logDirs: Seq[File],
       currentLogs.put(topicPartition, destLog)
       if (cleaner != null) {
         cleaner.alterCheckpointDir(topicPartition, sourceLog.parentDirFile, destLog.parentDirFile)
-        cleaner.resumeCleaning(Seq(topicPartition))
-        info(s"Compaction for partition $topicPartition is resumed")
+        resumeCleaning(topicPartition)
       }
 
       try {
@@ -1073,6 +1090,11 @@ class LogManager(logDirs: Seq[File],
 
   private def logsByDir(dir: File): Map[TopicPartition, Log] = {
     logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
+  }
+
+  private def logsByDir(cachedLogsByDir: Map[String, Map[TopicPartition, Log]],
+                        dir: File): Map[TopicPartition, Log] = {
+    cachedLogsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
   }
 
   // logDir should be an absolute path
