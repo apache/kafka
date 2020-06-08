@@ -36,7 +36,8 @@ public class LogTruncationException extends OffsetOutOfRangeException {
     private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
 
     public LogTruncationException(Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
-        super(Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset));
+        super("Detected log truncation with diverging offsets " + divergentOffsets,
+            Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset));
         this.divergentOffsets = Collections.unmodifiableMap(divergentOffsets);
     }
 

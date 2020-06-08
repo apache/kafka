@@ -371,10 +371,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void testAddStateStoreWithDuplicates() {
+    public void shouldNotAllowToAddStoresWithSameName() {
         builder.addStateStore(storeBuilder);
+        final StoreBuilder otherBuilder = new MockKeyValueStoreBuilder("store", false);
         try {
-            builder.addStateStore(storeBuilder);
+            builder.addStateStore(otherBuilder);
             fail("Should throw TopologyException with store name conflict");
         } catch (final TopologyException expected) { /* ok */ }
     }
@@ -393,6 +394,22 @@ public class InternalTopologyBuilderTest {
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
+    }
+
+    @Test
+    public void shouldAllowAddingSameStoreBuilderMultipleTimes() {
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-2", storeBuilder.name());
+
+        assertEquals(1, builder.buildTopology().stateStores().size());
     }
 
     @Test

@@ -116,7 +116,7 @@ object ApiVersion {
     versionMap.getOrElse(key, throw new IllegalArgumentException(s"Version `$versionString` is not a valid version"))
   }
 
-  def latestVersion: ApiVersion = allVersions.last
+  val latestVersion: ApiVersion = allVersions.last
 
   /**
    * Return the minimum `ApiVersion` that supports `RecordVersion`.

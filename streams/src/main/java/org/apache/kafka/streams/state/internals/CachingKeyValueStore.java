@@ -46,7 +46,6 @@ public class CachingKeyValueStore
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
     private String cacheName;
-    private ThreadCache cache;
     private InternalProcessorContext context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
@@ -69,9 +68,8 @@ public class CachingKeyValueStore
     private void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
 
-        this.cache = this.context.getCache();
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
-        cache.addDirtyEntryFlushListener(cacheName, entries -> {
+        this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, (InternalProcessorContext) context);
             }
@@ -133,7 +131,7 @@ public class CachingKeyValueStore
 
     private void putInternal(final Bytes key,
                              final byte[] value) {
-        cache.put(
+        context.cache().put(
             cacheName,
             key,
             new LRUCacheEntry(
@@ -219,8 +217,8 @@ public class CachingKeyValueStore
 
     private byte[] getInternal(final Bytes key) {
         LRUCacheEntry entry = null;
-        if (cache != null) {
-            entry = cache.get(cacheName, key);
+        if (context.cache() != null) {
+            entry = context.cache().get(cacheName, key);
         }
         if (entry == null) {
             final byte[] rawValue = wrapped().get(key);
@@ -230,7 +228,7 @@ public class CachingKeyValueStore
             // only update the cache if this call is on the streamThread
             // as we don't want other threads to trigger an eviction/flush
             if (Thread.currentThread().equals(streamThread)) {
-                cache.put(cacheName, key, new LRUCacheEntry(rawValue));
+                context.cache().put(cacheName, key, new LRUCacheEntry(rawValue));
             }
             return rawValue;
         } else {
@@ -250,7 +248,7 @@ public class CachingKeyValueStore
 
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, from, to);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
@@ -259,7 +257,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
@@ -281,7 +279,7 @@ public class CachingKeyValueStore
         lock.writeLock().lock();
         try {
             validateStoreOpen();
-            cache.flush(cacheName);
+            context.cache().flush(cacheName);
             wrapped().flush();
         } finally {
             lock.writeLock().unlock();
@@ -293,8 +291,8 @@ public class CachingKeyValueStore
         lock.writeLock().lock();
         try {
             final LinkedList<RuntimeException> suppressed = executeAll(
-                () -> cache.flush(cacheName),
-                () -> cache.close(cacheName),
+                () -> context.cache().flush(cacheName),
+                () -> context.cache().close(cacheName),
                 wrapped()::close
             );
             if (!suppressed.isEmpty()) {

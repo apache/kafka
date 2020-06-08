@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigType;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -92,6 +93,6 @@ public class ConfigTest {
 
     public static ConfigEntry newConfigEntry(String name, String value, ConfigEntry.ConfigSource source, boolean isSensitive,
                                              boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
-        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms);
+        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms, ConfigType.UNKNOWN, null);
     }
 }

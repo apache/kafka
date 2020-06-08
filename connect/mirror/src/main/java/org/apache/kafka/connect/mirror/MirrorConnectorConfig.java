@@ -19,8 +19,10 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 
@@ -270,9 +272,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
     List<MetricsReporter> metricsReporters() {
         List<MetricsReporter> reporters = getConfiguredInstances(
                 CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        JmxReporter jmxReporter = new JmxReporter("kafka.connect.mirror");
+        JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(this.originals());
         reporters.add(jmxReporter);
+        MetricsContext metricsContext = new KafkaMetricsContext("kafka.connect.mirror");
+
+        for (MetricsReporter reporter : reporters) {
+            reporter.contextChange(metricsContext);
+        }
+
         return reporters;
     }
 

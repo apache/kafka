@@ -46,6 +46,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -223,6 +224,37 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        }
+    }
+
+    @Test
+    public void shouldPollWithRightTimeout() {
+        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
+        EasyMock.replay(stateManager, storeMetadata, store);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                return partitions.stream().collect(Collectors.toMap(Function.identity(), partition -> 11L));
+            }
+        };
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
+
+        final StoreChangelogReader changelogReader =
+                new StoreChangelogReader(time, config, logContext, consumer, callback);
+
+        changelogReader.register(tp, stateManager);
+
+        if (type == STANDBY) {
+            changelogReader.transitToUpdateStandby();
+        }
+
+        changelogReader.restore();
+
+        if (type == ACTIVE) {
+            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
+        } else {
+            assertEquals(Duration.ZERO, consumer.lastPollTimeout());
         }
     }
 
@@ -865,7 +897,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
 
         // should support removing and clearing changelogs
-        changelogReader.remove(Collections.singletonList(tp));
+        changelogReader.unregister(Collections.singletonList(tp), false);
         assertNull(changelogReader.changelogMetadata(tp));
         assertFalse(changelogReader.isEmpty());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
@@ -1006,7 +1038,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         // transition to update standby is NOT idempotent
         assertThrows(IllegalStateException.class, changelogReader::transitToUpdateStandby);
 
-        changelogReader.remove(Collections.singletonList(tp));
+        changelogReader.unregister(Collections.singletonList(tp), false);
         changelogReader.register(tp, activeStateManager);
 
         // if a new active is registered, we should immediately transit to standby updating
@@ -1060,7 +1092,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldNotThrowOnUnknownRevokedPartition() {
         LogCaptureAppender.setClassLoggerToDebug(StoreChangelogReader.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
-            changelogReader.remove(Collections.singletonList(new TopicPartition("unknown", 0)));
+            changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)), false);
 
             assertThat(
                 appender.getMessages(),
