@@ -53,9 +53,8 @@ public interface SslEngineFactory extends Configurable, Closeable {
 
     /**
      * Returns true if SSLEngine needs to be rebuilt. This method will be called when reconfiguration is triggered on
-     * {@link org.apache.kafka.common.security.ssl.SslFactory}. Based on the <i>nextConfigs</i>, this method will
-     * decide whether underlying SSLEngine object needs to be rebuilt. If this method returns true, the
-     * {@link org.apache.kafka.common.security.ssl.SslFactory} will re-create instance of this object and run other
+     * SslFactory. Based on the <i>nextConfigs</i>, this method will decide whether underlying SSLEngine object
+     * needs to be rebuilt. If this method returns true, the SslFactory will re-create instance of this object and run other
      * checks before deciding to use the new object for the <i>new incoming connection</i> requests.The existing connections
      * are not impacted by this and will not see any changes done as part of reconfiguration.
      *
@@ -76,13 +75,11 @@ public interface SslEngineFactory extends Configurable, Closeable {
 
     /**
      * Returns keystore.
-     * @return
      */
     KeyStore keystore();
 
     /**
      * Returns truststore.
-     * @return
      */
     KeyStore truststore();
 }
