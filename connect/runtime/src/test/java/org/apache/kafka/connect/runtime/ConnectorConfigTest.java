@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -434,5 +436,52 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
+    @Test
+    public void testEnrichedConfigDef() {
+        String alias = "hdt";
+        String prefix = ConnectorConfig.TRANSFORMS_CONFIG + "." + alias + ".";
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.TRANSFORMS_CONFIG, alias);
+        props.put(prefix + "type", HasDuplicateConfigTransformation.class.getName());
+        ConfigDef def = ConnectorConfig.enrich(MOCK_PLUGINS, new ConfigDef(), props, false);
+        assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
+        assertEnrichedConfigDef(def, prefix, PredicatedTransformation.PREDICATE_CONFIG, ConfigDef.Type.STRING);
+        assertEnrichedConfigDef(def, prefix, PredicatedTransformation.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
+    }
 
+    private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
+        assertNull(def.configKeys().get(keyName));
+        ConfigDef.ConfigKey configKey = def.configKeys().get(prefix + keyName);
+        assertNotNull(prefix + keyName + "' config must be present", configKey);
+        assertEquals(prefix + keyName + "' config should be a " + expectedType, expectedType, configKey.type);
+    }
+
+    public static class HasDuplicateConfigTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
+        private static final String MUST_EXIST_KEY = "must.exist.key";
+        private static final ConfigDef CONFIG_DEF = new ConfigDef()
+                // this configDef is duplicate. It should be removed automatically so as to avoid duplicate config error.
+                .define(PredicatedTransformation.PREDICATE_CONFIG, ConfigDef.Type.INT, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM, "fake")
+                // this configDef is duplicate. It should be removed automatically so as to avoid duplicate config error.
+                .define(PredicatedTransformation.NEGATE_CONFIG, ConfigDef.Type.INT, 123, ConfigDef.Importance.MEDIUM, "fake")
+                // this configDef should appear if above duplicate configDef is removed without any error
+                .define(MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM, "this key must exist");
+
+        @Override
+        public R apply(R record) {
+            return record;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return CONFIG_DEF;
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+    }
 }

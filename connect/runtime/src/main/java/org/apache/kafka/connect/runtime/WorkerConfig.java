@@ -277,7 +277,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
-                        ClientDnsLookup.DEFAULT.toString(),
+                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                         in(ClientDnsLookup.DEFAULT.toString(),
                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
@@ -350,7 +350,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT, Importance.LOW,
                         TOPIC_CREATION_ENABLE_DOC)
                 .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
-                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC)
+                // security support
+                .withClientSslSupport();
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {

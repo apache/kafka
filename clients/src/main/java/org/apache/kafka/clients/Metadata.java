@@ -234,7 +234,9 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Update metadata assuming the current request version. This is mainly for convenience in testing.
+     * Update metadata assuming the current request version.
+     *
+     * For testing only.
      */
     public synchronized void updateWithCurrentRequestVersion(MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         this.update(this.requestVersion, response, isPartialUpdate, nowMs);
@@ -401,7 +403,7 @@ public class Metadata implements Closeable {
      * the producer to abort waiting for metadata if there were fatal exceptions (e.g. authentication failures)
      * in the last metadata update.
      */
-    public synchronized void maybeThrowFatalException() {
+    protected synchronized void maybeThrowFatalException() {
         KafkaException metadataException = this.fatalException;
         if (metadataException != null) {
             fatalException = null;

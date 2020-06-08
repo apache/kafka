@@ -48,6 +48,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -184,6 +185,7 @@ public class ConnectWorkerIntegrationTest {
      */
     @Test
     public void testBrokerCoordinator() throws Exception {
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
         connect = connectBuilder.workerProps(workerProps).build();
         // start the clusters
@@ -204,6 +206,9 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not start in time.");
 
+        // expect that the connector will be stopped once the coordinator is detected to be down
+        StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
+
         connect.kafka().stopOnlyKafka();
 
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
@@ -213,6 +218,12 @@ public class ConnectWorkerIntegrationTest {
         // heartbeat timeout * 2 + 4sec
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
+        // Wait for the connector to be stopped
+        assertTrue("Failed to stop connector and tasks after coordinator failure within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+
+        StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
         connect.kafka().startOnlyKafkaOnSamePorts();
 
         // Allow for the kafka brokers to come back online
@@ -226,6 +237,11 @@ public class ConnectWorkerIntegrationTest {
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not start in time.");
+
+        // Expect that the connector has started again
+        assertTrue("Failed to stop connector and tasks after coordinator failure within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
     }
 
     /**

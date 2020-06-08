@@ -454,6 +454,9 @@ class AdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
+    if (!metadataCache.contains(topic))
+      throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
+
     adminZkClient.validateTopicConfig(topic, configProps)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {

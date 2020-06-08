@@ -272,7 +272,6 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .withClientSslSupport()
             .withClientSaslSupport()
             .define(WORKER_SYNC_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,

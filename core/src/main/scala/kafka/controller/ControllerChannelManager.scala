@@ -153,7 +153,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
-        ClientDnsLookup.DEFAULT,
+        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         false,
         new ApiVersions,
@@ -400,7 +400,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val leaderEpoch = if (controllerContext.isTopicQueuedUpForDeletion(topicPartition.topic)) {
       LeaderAndIsr.EpochDuringDelete
     } else {
-      controllerContext.partitionLeadershipInfo.get(topicPartition)
+      controllerContext.partitionLeadershipInfo(topicPartition)
         .map(_.leaderAndIsr.leaderEpoch)
         .getOrElse(LeaderAndIsr.NoEpoch)
     }
@@ -420,7 +420,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                          partitions: collection.Set[TopicPartition]): Unit = {
 
     def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
-      controllerContext.partitionLeadershipInfo.get(partition) match {
+      controllerContext.partitionLeadershipInfo(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
           val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))

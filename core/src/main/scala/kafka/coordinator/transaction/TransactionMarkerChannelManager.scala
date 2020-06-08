@@ -79,7 +79,7 @@ object TransactionMarkerChannelManager {
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,
-      ClientDnsLookup.DEFAULT,
+      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
       new ApiVersions,
@@ -214,13 +214,11 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  private def writeTxnCompletion(pendingCommitTxn: PendingCompleteTxn): Unit = {
-    transactionsWithPendingMarkers.remove(pendingCommitTxn.transactionalId)
-
-    val transactionalId = pendingCommitTxn.transactionalId
-    val txnMetadata = pendingCommitTxn.txnMetadata
-    val newMetadata = pendingCommitTxn.newMetadata
-    val coordinatorEpoch = pendingCommitTxn.coordinatorEpoch
+  private def writeTxnCompletion(pendingCompleteTxn: PendingCompleteTxn): Unit = {
+    val transactionalId = pendingCompleteTxn.transactionalId
+    val txnMetadata = pendingCompleteTxn.txnMetadata
+    val newMetadata = pendingCompleteTxn.newMetadata
+    val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch
 
     trace(s"Completed sending transaction markers for $transactionalId; begin transition " +
       s"to ${newMetadata.txnState}")
@@ -242,7 +240,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
           debug(s"Sending $transactionalId's transaction markers for $txnMetadata with " +
             s"coordinator epoch $coordinatorEpoch succeeded, trying to append complete transaction log now")
-
           tryAppendToLog(PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, newMetadata))
         } else {
           info(s"The cached metadata $txnMetadata has changed to $epochAndMetadata after " +
@@ -263,15 +260,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                           txnMetadata: TransactionMetadata,
                           newMetadata: TxnTransitMetadata): Unit = {
     val transactionalId = txnMetadata.transactionalId
-
-    val pendingCommitTxn = PendingCompleteTxn(
+    val pendingCompleteTxn = PendingCompleteTxn(
       transactionalId,
       coordinatorEpoch,
       txnMetadata,
-      newMetadata
-    )
+      newMetadata)
 
-    transactionsWithPendingMarkers.put(transactionalId, pendingCommitTxn)
+    transactionsWithPendingMarkers.put(transactionalId, pendingCompleteTxn)
     addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId,
       txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
     maybeWriteTxnCompletion(transactionalId)
@@ -285,15 +280,16 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  private def maybeWriteTxnCompletion(transactionalId: String): Unit = {
-    Option(transactionsWithPendingMarkers.get(transactionalId)).foreach { pendingCommitTxn =>
-      if (!hasPendingMarkersToWrite(pendingCommitTxn.txnMetadata)) {
-        writeTxnCompletion(pendingCommitTxn)
+  def maybeWriteTxnCompletion(transactionalId: String): Unit = {
+    Option(transactionsWithPendingMarkers.get(transactionalId)).foreach { pendingCompleteTxn =>
+      if (!hasPendingMarkersToWrite(pendingCompleteTxn.txnMetadata) &&
+          transactionsWithPendingMarkers.remove(transactionalId, pendingCompleteTxn)) {
+        writeTxnCompletion(pendingCompleteTxn)
       }
     }
   }
 
-  private def tryAppendToLog(txnLogAppend: PendingCompleteTxn) = {
+  private def tryAppendToLog(txnLogAppend: PendingCompleteTxn): Unit = {
     // try to append to the transaction log
     def appendCallback(error: Errors): Unit =
       error match {
@@ -404,18 +400,17 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def removeMarkersForTxnId(transactionalId: String): Unit = {
     transactionsWithPendingMarkers.remove(transactionalId)
   }
-
-  def completeSendMarkersForTxnId(transactionalId: String): Unit = {
-    maybeWriteTxnCompletion(transactionalId)
-  }
 }
 
 case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
 
-case class PendingCompleteTxn(transactionalId: String, coordinatorEpoch: Int, txnMetadata: TransactionMetadata, newMetadata: TxnTransitMetadata) {
+case class PendingCompleteTxn(transactionalId: String,
+                              coordinatorEpoch: Int,
+                              txnMetadata: TransactionMetadata,
+                              newMetadata: TxnTransitMetadata) {
 
   override def toString: String = {
-    "TxnLogAppend(" +
+    "PendingCompleteTxn(" +
       s"transactionalId=$transactionalId, " +
       s"coordinatorEpoch=$coordinatorEpoch, " +
       s"txnMetadata=$txnMetadata, " +
