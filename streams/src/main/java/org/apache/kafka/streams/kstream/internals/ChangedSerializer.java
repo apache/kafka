@@ -23,7 +23,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, T> {
+public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
     private static final int NEWFLAG_SIZE = 1;
 
@@ -38,9 +38,9 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     }
 
     @Override
-    public void setIfUnset(final Serializer<T> defaultSerializer) {
+    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<T> defaultValueSerializer) {
         if (inner == null) {
-            inner = Objects.requireNonNull(defaultSerializer, "defaultSerializer cannot be null");
+            inner = Objects.requireNonNull(defaultValueSerializer);
         }
     }
 

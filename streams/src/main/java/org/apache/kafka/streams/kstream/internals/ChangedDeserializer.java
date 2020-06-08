@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, T> {
+public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
     private static final int NEWFLAG_SIZE = 1;
 
@@ -37,9 +37,9 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
     }
 
     @Override
-    public void setIfUnset(final Deserializer<T> defaultDeserializer) {
+    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<T> defaultValueDeserializer) {
         if (inner == null) {
-            inner = Objects.requireNonNull(defaultDeserializer, "defaultDeserializer cannot be null");
+            inner = Objects.requireNonNull(defaultValueDeserializer);
         }
     }
 
