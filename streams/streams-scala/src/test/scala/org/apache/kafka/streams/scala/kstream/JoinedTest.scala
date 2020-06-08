@@ -21,8 +21,8 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.streams.scala.Serdes
 import org.apache.kafka.streams.scala.Serdes._
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class JoinedTest extends FlatSpec with Matchers {
@@ -42,6 +42,5 @@ class JoinedTest extends FlatSpec with Matchers {
     joined.keySerde.getClass shouldBe Serdes.String.getClass
     joined.valueSerde.getClass shouldBe Serdes.Long.getClass
     joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
-    joined.name() shouldBe repartitionTopicName
   }
 }

@@ -50,9 +50,4 @@ public class UUIDSerializer implements Serializer<UUID> {
             throw new SerializationException("Error when serializing UUID to byte[] due to unsupported encoding " + encoding);
         }
     }
-
-    @Override
-    public void close() {
-      // nothing to do
-    }
 }

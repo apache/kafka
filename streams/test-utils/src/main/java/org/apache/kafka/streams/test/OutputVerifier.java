@@ -18,6 +18,7 @@ package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.Objects;
@@ -25,8 +26,11 @@ import java.util.Objects;
 /**
  * Helper class to verify topology result records.
  *
+ * @deprecated Since 2.4 use methods of {@link TestOutputTopic} and standard assertion libraries instead
+ *
  * @see TopologyTestDriver
  */
+@Deprecated
 public class OutputVerifier {
 
     /**

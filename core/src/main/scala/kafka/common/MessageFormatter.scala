@@ -30,10 +30,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
   */
 trait MessageFormatter {
 
-  def init(props: Properties) {}
+  def init(props: Properties): Unit = {}
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit
 
-  def close() {}
+  def close(): Unit = {}
 
 }

@@ -18,14 +18,15 @@
   "type": "response",
   "name": "WriteTxnMarkersResponse",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarkerResult", "versions": "0+",
       "about": "The results for writing makers.", "fields": [
-      { "name": "ProducerId", "type": "int64", "versions": "0+",
+      { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
         "about": "The current producer ID in use by the transactional ID." },
       { "name": "Topics", "type": "[]WritableTxnMarkerTopicResult", "versions": "0+",
         "about": "The results by topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+",
+        { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]WritableTxnMarkerPartitionResult", "versions": "0+",
           "about": "The results by partition.", "fields": [

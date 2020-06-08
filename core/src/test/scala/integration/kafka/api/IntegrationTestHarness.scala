@@ -23,37 +23,50 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}
 
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
 abstract class IntegrationTestHarness extends KafkaServerTestHarness {
-  protected def serverCount: Int
+  protected def brokerCount: Int
   protected def logDirCount: Int = 1
 
   val producerConfig = new Properties
   val consumerConfig = new Properties
+  val adminClientConfig = new Properties
   val serverConfig = new Properties
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
+  private val adminClients = mutable.Buffer[Admin]()
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
+  protected def modifyConfigs(props: Seq[Properties]): Unit = {
+    props.foreach(_ ++= serverConfig)
+  }
+
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
-    cfgs.foreach { config =>
+    configureListeners(cfgs)
+    modifyConfigs(cfgs)
+    cfgs.map(KafkaConfig.fromProps)
+  }
+
+  protected def configureListeners(props: Seq[Properties]): Unit = {
+    props.foreach { config =>
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
       config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
 
@@ -64,12 +77,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       config.setProperty(KafkaConfig.ListenersProp, listeners)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
     }
-    cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     doSetup(createOffsetsTopic = true)
   }
 
@@ -77,6 +88,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
+    adminClientConfig ++= clientSecurityProps("adminClient")
 
     super.setUp()
 
@@ -90,6 +102,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
 
     if (createOffsetsTopic)
       TestUtils.createOffsetsTopic(zkClient, servers)
@@ -124,13 +138,26 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
+  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
+    val props = new Properties
+    props ++= adminClientConfig
+    props ++= configOverrides
+    val adminClient = Admin.create(props)
+    adminClients += adminClient
+    adminClient
+  }
+
   @After
-  override def tearDown() {
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+  override def tearDown(): Unit = {
+    producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))
+    adminClients.foreach(_.close(Duration.ZERO))
+
     producers.clear()
     consumers.clear()
+    adminClients.clear()
+
     super.tearDown()
   }
 

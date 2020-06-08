@@ -18,9 +18,18 @@
   "type": "request",
   "name": "DescribeGroupsRequest",
   // Versions 1 and 2 are the same as version 0.
-  "validVersions": "0-2",
+  //
+  // Starting in version 3, authorized operations can be requested.
+  //
+  // Starting in version 4, the response will include group.instance.id info for members.
+  //
+  // Version 5 is the first flexible version.
+  "validVersions": "0-5",
+  "flexibleVersions": "5+",
   "fields": [
-    { "name": "Groups", "type": "[]string", "versions": "0+",
-      "about": "The names of the groups to describe" }
+    { "name": "Groups", "type": "[]string", "versions": "0+", "entityType": "groupId",
+      "about": "The names of the groups to describe" },
+    { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "3+",
+      "about": "Whether to include authorized operations." }
   ]
 }

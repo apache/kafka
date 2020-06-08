@@ -49,9 +49,4 @@ public class StringSerializer implements Serializer<String> {
             throw new SerializationException("Error when serializing string to byte[] due to unsupported encoding " + encoding);
         }
     }
-
-    @Override
-    public void close() {
-        // nothing to do
-    }
 }

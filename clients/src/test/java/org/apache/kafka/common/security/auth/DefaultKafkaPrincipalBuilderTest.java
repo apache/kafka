@@ -30,8 +30,6 @@ import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import java.net.InetAddress;
 import java.security.Principal;
-import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -143,7 +141,7 @@ public class DefaultKafkaPrincipalBuilderTest {
                                         .thenReturn(new X500Principal("CN=duke, OU=JavaSoft, O=Sun Microsystems"))
                                         .thenReturn(new X500Principal("OU=JavaSoft, O=Sun Microsystems, C=US"));
 
-        List<String> rules = Arrays.asList(
+        String rules = String.join(", ",
             "RULE:^CN=(.*),OU=ServiceUsers.*$/$1/L",
             "RULE:^CN=(.*),OU=(.*),O=(.*),L=(.*),ST=(.*),C=(.*)$/$1@$2/L",
             "RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/U",

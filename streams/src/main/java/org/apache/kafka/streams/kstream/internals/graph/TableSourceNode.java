@@ -20,11 +20,12 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Collections;
 
@@ -38,6 +39,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
+    private boolean shouldReuseSourceTopicForChangelog = false;
 
     private TableSourceNode(final String nodeName,
                             final String sourceName,
@@ -57,6 +59,11 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         this.materializedInternal = materializedInternal;
     }
 
+
+    public void reuseSourceTopicForChangeLog(final boolean shouldReuseSourceTopicForChangelog) {
+        this.shouldReuseSourceTopicForChangelog = shouldReuseSourceTopicForChangelog;
+    }
+
     @Override
     public String toString() {
         return "TableSourceNode{" +
@@ -74,12 +81,12 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = getTopicNames().iterator().next();
+        final String topicName = topicNames().iterator().next();
 
-        // TODO: we assume source KTables can only be key-value stores for now.
+        // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder =
-            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
+            new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {
             topologyBuilder.addGlobalStore(storeBuilder,
@@ -102,9 +109,13 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
             // only add state store if the source KTable should be materialized
             final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
-            if (ktableSource.queryableName() != null) {
+            if (ktableSource.materialized()) {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
-                topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
+
+                if (shouldReuseSourceTopicForChangelog) {
+                    storeBuilder.withLoggingDisabled();
+                    topologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topicName);
+                }
             }
         }
 

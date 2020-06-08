@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * A serializable type
@@ -61,6 +63,20 @@ public abstract class Type {
      */
     public boolean isNullable() {
         return false;
+    }
+
+    /**
+     * If the type is an array, return the type of the array elements.  Otherwise, return empty.
+     */
+    public Optional<Type> arrayElementType() {
+        return Optional.empty();
+    }
+
+    /**
+     * Returns true if the type is an array.
+     */
+    public final boolean isArray() {
+        return arrayElementType().isPresent();
     }
 
     /**
@@ -313,6 +329,80 @@ public abstract class Type {
         }
     };
 
+    public static final DocumentedType UUID = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            final java.util.UUID uuid = (java.util.UUID) o;
+            buffer.putLong(uuid.getMostSignificantBits());
+            buffer.putLong(uuid.getLeastSignificantBits());
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return new java.util.UUID(buffer.getLong(), buffer.getLong());
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 16;
+        }
+
+        @Override
+        public String typeName() {
+            return "UUID";
+        }
+
+        @Override
+        public UUID validate(Object item) {
+            if (item instanceof UUID)
+                return (UUID) item;
+            else
+                throw new SchemaException(item + " is not a UUID.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a java.util.UUID. " +
+                    "The values are encoded using sixteen bytes in network byte order (big-endian).";
+        }
+    };
+
+    public static final DocumentedType FLOAT64 = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeDouble((Double) o, buffer);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return ByteUtils.readDouble(buffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 8;
+        }
+
+        @Override
+        public String typeName() {
+            return "FLOAT64";
+        }
+
+        @Override
+        public Double validate(Object item) {
+            if (item instanceof Double)
+                return (Double) item;
+            else
+                throw new SchemaException(item + " is not a Double.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a double-precision 64-bit format IEEE 754 value. " +
+                    "The values are encoded using eight bytes in network byte order (big-endian).";
+        }
+    };
+
     public static final DocumentedType STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -358,6 +448,56 @@ public abstract class Type {
             return "Represents a sequence of characters. First the length N is given as an " + INT16 +
                     ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
                     "Length must not be negative.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_STRING = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            byte[] bytes = Utils.utf8((String) o);
+            if (bytes.length > Short.MAX_VALUE)
+                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
+            ByteUtils.writeUnsignedVarint(bytes.length + 1, buffer);
+            buffer.put(bytes);
+        }
+
+        @Override
+        public String read(ByteBuffer buffer) {
+            int length = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (length < 0)
+                throw new SchemaException("String length " + length + " cannot be negative");
+            if (length > Short.MAX_VALUE)
+                throw new SchemaException("String length " + length + " is larger than the maximum string length.");
+            if (length > buffer.remaining())
+                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+            String result = Utils.utf8(buffer, length);
+            buffer.position(buffer.position() + length);
+            return result;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            int length = Utils.utf8Length((String) o);
+            return ByteUtils.sizeOfUnsignedVarint(length + 1) + length;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item instanceof String)
+                return (String) item;
+            else
+                throw new SchemaException(item + " is not a String.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
         }
     };
 
@@ -425,6 +565,74 @@ public abstract class Type {
         }
     };
 
+    public static final DocumentedType COMPACT_NULLABLE_STRING = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                ByteUtils.writeUnsignedVarint(0, buffer);
+            } else {
+                byte[] bytes = Utils.utf8((String) o);
+                if (bytes.length > Short.MAX_VALUE)
+                    throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
+                ByteUtils.writeUnsignedVarint(bytes.length + 1, buffer);
+                buffer.put(bytes);
+            }
+        }
+
+        @Override
+        public String read(ByteBuffer buffer) {
+            int length = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (length < 0) {
+                return null;
+            } else if (length > Short.MAX_VALUE) {
+                throw new SchemaException("String length " + length + " is larger than the maximum string length.");
+            } else if (length > buffer.remaining()) {
+                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+            } else {
+                String result = Utils.utf8(buffer, length);
+                buffer.position(buffer.position() + length);
+                return result;
+            }
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+            int length = Utils.utf8Length((String) o);
+            return ByteUtils.sizeOfUnsignedVarint(length + 1) + length;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_NULLABLE_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item == null) {
+                return null;
+            } else if (item instanceof String) {
+                return (String) item;
+            } else {
+                throw new SchemaException(item + " is not a String.");
+            }
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "A null string is represented with a length of 0.";
+        }
+    };
+
     public static final DocumentedType BYTES = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -472,6 +680,57 @@ public abstract class Type {
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
                     ". Then N bytes follow.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_BYTES = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteBuffer arg = (ByteBuffer) o;
+            int pos = arg.position();
+            ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
+            buffer.put(arg);
+            arg.position(pos);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (size < 0)
+                throw new SchemaException("Bytes size " + size + " cannot be negative");
+            if (size > buffer.remaining())
+                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
+            ByteBuffer val = buffer.slice();
+            val.limit(size);
+            buffer.position(buffer.position() + size);
+            return val;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            ByteBuffer buffer = (ByteBuffer) o;
+            int remaining = buffer.remaining();
+            return ByteUtils.sizeOfUnsignedVarint(remaining + 1) + remaining;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+            else
+                throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
+                    "Then N bytes follow.";
         }
     };
 
@@ -538,6 +797,72 @@ public abstract class Type {
         public String documentation() {
             return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
                     ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_NULLABLE_BYTES = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                ByteUtils.writeUnsignedVarint(0, buffer);
+            } else {
+                ByteBuffer arg = (ByteBuffer) o;
+                int pos = arg.position();
+                ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
+                buffer.put(arg);
+                arg.position(pos);
+            }
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (size < 0)
+                return null;
+            if (size > buffer.remaining())
+                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
+            ByteBuffer val = buffer.slice();
+            val.limit(size);
+            buffer.position(buffer.position() + size);
+            return val;
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+            ByteBuffer buffer = (ByteBuffer) o;
+            int remaining = buffer.remaining();
+            return ByteUtils.sizeOfUnsignedVarint(remaining + 1) + remaining;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_NULLABLE_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+
+            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
+                    "Then N bytes follow. A null object is represented with a length of 0.";
         }
     };
 
@@ -665,12 +990,12 @@ public abstract class Type {
     };
 
     private static String toHtml() {
-
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG,
-            STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
-            RECORDS, new ArrayOf(STRING)};
+            UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
+            STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
+            BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
+            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");

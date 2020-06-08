@@ -18,34 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.nio.ByteBuffer;
-
 public interface RecordConverter {
     ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
-
-    @SuppressWarnings("deprecation")
-    static RecordConverter converter() {
-        return record -> {
-            final byte[] rawValue = record.value();
-            final long timestamp = record.timestamp();
-            return new ConsumerRecord<>(
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                timestamp,
-                record.timestampType(),
-                record.checksum(),
-                record.serializedKeySize(),
-                record.serializedValueSize(),
-                record.key(),
-                ByteBuffer
-                    .allocate(8 + rawValue.length)
-                    .putLong(timestamp)
-                    .put(rawValue)
-                    .array(),
-                record.headers(),
-                record.leaderEpoch()
-            );
-        };
-    }
 }

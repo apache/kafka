@@ -28,11 +28,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     outputTopic = "streamsResilienceSink"
     client_id = "streams-broker-resilience-verify-consumer"
     num_messages = 10000
-    message = "processed[0-9]*messages"
+    message = "processed [0-9]* messages"
     connected_message = "Discovered group coordinator"
 
-    def __init__(self, test_context):
+    def __init__(self, test_context, kafka):
         super(StreamsBrokerDownResilience, self).__init__(test_context,
+                                                          kafka,
                                                           topics={self.inputTopic: {'partitions': 3, 'replication-factor': 1},
                                                                   self.outputTopic: {'partitions': 1, 'replication-factor': 1}},
                                                           num_brokers=1)
@@ -47,7 +48,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         # So with (2 * 15000) = 30 seconds, we'll set downtime to 70 seconds
         broker_down_time_in_seconds = 70
 
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.prop_file())
         processor.start()
 
         self.assert_produce_consume(self.inputTopic,
@@ -80,7 +81,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
+        configs = self.prop_file()
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -144,7 +145,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=shutdown_with_broker_down")
+        configs = self.prop_file()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
@@ -217,7 +218,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=failover_with_broker_down")
+        configs = self.prop_file()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()

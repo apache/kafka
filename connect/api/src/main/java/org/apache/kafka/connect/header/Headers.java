@@ -254,7 +254,7 @@ public interface Headers extends Iterable<Header> {
     Headers retainLatest(String key);
 
     /**
-     * Removes all but the last {@Header} object with each key.
+     * Removes all but the last {@link Header} object with each key.
      *
      * @return this object to facilitate chaining multiple methods; never null
      */

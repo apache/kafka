@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StreamsResetterTest {
@@ -240,6 +241,14 @@ public class StreamsResetterTest {
             streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
             assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
         }
+    }
+
+    @Test
+    public void shouldDetermineInternalTopicBasedOnTopicName1() {
+        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-response-topic"));
+        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-registration-topic"));
+        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-12323232-topic"));
+        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-12323232-topic"));
     }
 
     private Cluster createCluster(final int numNodes) {

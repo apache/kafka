@@ -20,9 +20,14 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{TimeWindowedKStream => TimeWindowedKStreamJ, _}
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
+import org.apache.kafka.streams.kstream.internals.KTableImpl
+import org.apache.kafka.streams.kstream.{KTable => KTableJ, TimeWindowedKStream => TimeWindowedKStreamJ, Windowed}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
+  AggregatorFromFunction,
+  InitializerFromFunction,
+  ReducerFromFunction,
+  ValueMapperFromFunction
+}
 
 /**
  * Wraps the Java class TimeWindowedKStream and delegates method calls to the underlying Java object.
@@ -48,7 +53,7 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArrayWindowStore]
   ): KTable[Windowed[K], VR] =
-    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
+    new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized))
 
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
@@ -59,9 +64,15 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */
   def count()(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
-    val c: KTable[Windowed[K], java.lang.Long] =
+    val javaCountTable: KTableJ[Windowed[K], java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayWindowStore]])
-    c.mapValues[Long](Long2long _)
+    val tableImpl = javaCountTable.asInstanceOf[KTableImpl[Windowed[K], ByteArrayWindowStore, java.lang.Long]]
+    new KTable(
+      javaCountTable.mapValues[Long](
+        ((l: java.lang.Long) => Long2long(l)).asValueMapper,
+        Materialized.`with`[Windowed[K], Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.Long)
+      )
+    )
   }
 
   /**
@@ -76,5 +87,5 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   def reduce(reducer: (V, V) => V)(
     implicit materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
-    inner.reduce(reducer.asReducer, materialized)
+    new KTable(inner.reduce(reducer.asReducer, materialized))
 }

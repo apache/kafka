@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -45,15 +47,14 @@ public class StreamsBrokerDownResilienceTest {
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
     public static void main(final String[] args) throws IOException {
-        if (args.length < 2) {
-            System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
+        if (args.length < 1) {
+            System.err.println("StreamsBrokerDownResilienceTest requires one argument (properties-file) but none provided.");
             System.exit(1);
         }
 
-        System.out.println("StreamsTest instance started");
+        System.out.println("StreamsTest instance started with arguments: " + Arrays.toString(args));
 
         final String propFileName = args[0];
-        final String additionalConfigs = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
@@ -67,15 +68,6 @@ public class StreamsBrokerDownResilienceTest {
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-
-
-        // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
-        // streams_broker_down_resilience_test and passed as args
-        if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            final Map<String, String> updated = updatedConfigs(additionalConfigs);
-            System.out.println("Updating configs with " + updated);
-            streamsProperties.putAll(updated);
-        }
 
         if (!confirmCorrectConfigs(streamsProperties)) {
             System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s %s %s %s",
@@ -97,34 +89,28 @@ public class StreamsBrokerDownResilienceTest {
                 public void apply(final String key, final String value) {
                     System.out.println("received key " + key + " and value " + value);
                     messagesProcessed++;
-                    System.out.println("processed" + messagesProcessed + "messages");
+                    System.out.println("processed " + messagesProcessed + " messages");
                     System.out.flush();
                 }
             }).to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(final Thread t, final Throwable e) {
+        streams.setUncaughtExceptionHandler((t, e) -> {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
                 streams.close(Duration.ofSeconds(30));
             }
-        });
+        );
+
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                streams.close(Duration.ofSeconds(30));
-                System.out.println("Complete shutdown of streams resilience test app now");
-                System.out.flush();
-            }
-        }));
-
-
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            streams.close(Duration.ofSeconds(30));
+            System.out.println("Complete shutdown of streams resilience test app now");
+            System.out.flush();
+        });
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {

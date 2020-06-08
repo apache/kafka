@@ -20,15 +20,17 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#describeCluster()}.
+ * Options for {@link Admin#describeCluster()}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
+    private boolean includeAuthorizedOperations;
+
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */
@@ -38,4 +40,16 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
         return this;
     }
 
+    public DescribeClusterOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    /**
+     * Specify if authorized operations should be included in the response.  Note that some
+     * older brokers cannot not supply this information even if it is requested.
+     */
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
+    }
 }

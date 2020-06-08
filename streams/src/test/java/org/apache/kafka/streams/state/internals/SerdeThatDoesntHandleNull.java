@@ -22,19 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
-import java.util.Map;
-
 class SerdeThatDoesntHandleNull implements Serde<String> {
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
-
-    }
-
-    @Override
-    public void close() {
-
-    }
-
     @Override
     public Serializer<String> serializer() {
         return new StringSerializer();

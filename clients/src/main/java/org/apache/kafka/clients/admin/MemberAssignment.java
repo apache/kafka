@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -46,7 +47,7 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return topicPartitions != null ? topicPartitions.equals(that.topicPartitions) : that.topicPartitions == null;
+        return Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override

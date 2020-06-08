@@ -17,19 +17,22 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
 import java.util.Properties
 
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * Subclasses of `BaseProduceSendRequestTest` exercise the producer and produce request/response. This class
@@ -37,8 +40,10 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
+  val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
+
   @Test
-  def testSimpleProduceRequest() {
+  def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
@@ -52,6 +57,7 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
       assertEquals(-1, partitionResponse.logAppendTime)
+      assertTrue(partitionResponse.recordErrors.isEmpty)
       partitionResponse
     }
 
@@ -64,7 +70,43 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceToNonReplica() {
+  def testProduceWithInvalidTimestamp(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val topicConfig = new Properties
+    topicConfig.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
+    val leader = partitionToLeader(partition)
+
+    def createRecords(magicValue: Byte, timestamp: Long, codec: CompressionType): MemoryRecords = {
+      val buf = ByteBuffer.allocate(512)
+      val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+      builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
+      builder.appendWithOffset(1, timestamp, null, "there".getBytes)
+      builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
+      builder.build()
+    }
+
+    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, System.currentTimeMillis() - 1001L, CompressionType.GZIP)
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = Map(topicPartition -> records)
+    val produceResponse = sendProduceRequest(leader, ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
+    val (tp, partitionResponse) = produceResponse.responses.asScala.head
+    assertEquals(topicPartition, tp)
+    assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
+    // there are 3 records with InvalidTimestampException created from inner function createRecords
+    assertEquals(3, partitionResponse.recordErrors.size())
+    assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
+    assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
+    assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
+    for (recordError <- partitionResponse.recordErrors.asScala) {
+      assertNotNull(recordError.message)
+    }
+    assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
+  }
+
+  @Test
+  def testProduceToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
 
@@ -95,7 +137,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testCorruptLz4ProduceRequest() {
+  def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
     val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
@@ -113,6 +155,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
   @Test
@@ -149,8 +193,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
-    ProduceResponse.parse(response, request.version)
+    connectAndReceive[ProduceResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

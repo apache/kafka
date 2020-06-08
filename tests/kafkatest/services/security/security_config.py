@@ -13,17 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
+
 from kafkatest.services.security.minikdc import MiniKdc
+from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 import itertools
+
+from kafkatest.utils.remote_account import java_version
 
 
 class SslStores(object):
-    def __init__(self, local_scratch_dir):
+    def __init__(self, local_scratch_dir, logger=None):
+        self.logger = logger
         self.ca_crt_path = os.path.join(local_scratch_dir, "test.ca.crt")
         self.ca_jks_path = os.path.join(local_scratch_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
@@ -31,7 +37,8 @@ class SslStores(object):
         self.truststore_path = os.path.join(local_scratch_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
-        self.key_passwd = "test-key-passwd"
+        # Zookeeper TLS (as of v3.5.6) does not support a key password different than the keystore password
+        self.key_passwd = self.keystore_passwd
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
 
@@ -44,7 +51,7 @@ class SslStores(object):
         Generate CA private key and certificate.
         """
 
-        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA -startdate %s" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd, self.startdate))
+        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA -startdate %s --ext bc=ca:true" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd, self.startdate))
         self.runcmd("keytool -export -alias ca -keystore %s -storepass %s -storetype JKS -rfc -file %s" % (self.ca_jks_path, self.ca_passwd, self.ca_crt_path))
 
     def generate_truststore(self):
@@ -71,6 +78,25 @@ class SslStores(object):
         self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
         node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+
+        # generate ZooKeeper client TLS config file for encryption-only (no client cert) use case
+        str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.truststore.location=%s
+zookeeper.ssl.truststore.password=%s
+""" % (SecurityConfig.TRUSTSTORE_PATH, self.truststore_passwd)
+        node.account.create_file(SecurityConfig.ZK_CLIENT_TLS_ENCRYPT_ONLY_CONFIG_PATH, str)
+
+        # also generate ZooKeeper client TLS config file for mutual authentication use case
+        str = """zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.truststore.location=%s
+zookeeper.ssl.truststore.password=%s
+zookeeper.ssl.keystore.location=%s
+zookeeper.ssl.keystore.password=%s
+""" % (SecurityConfig.TRUSTSTORE_PATH, self.truststore_passwd, SecurityConfig.KEYSTORE_PATH, self.keystore_passwd)
+        node.account.create_file(SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH, str)
+
         rmtree(ks_dir)
 
     def hostname(self, node):
@@ -79,6 +105,8 @@ class SslStores(object):
         return node.account.hostname
 
     def runcmd(self, cmd):
+        if self.logger:
+            self.logger.log(logging.DEBUG, cmd)
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         stdout, stderr = proc.communicate()
 
@@ -103,6 +131,8 @@ class SecurityConfig(TemplateRenderer):
     CONFIG_DIR = "/mnt/security"
     KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
     TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
+    ZK_CLIENT_TLS_ENCRYPT_ONLY_CONFIG_PATH = "/mnt/security/zk_client_tls_encrypt_only_config.properties"
+    ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH = "/mnt/security/zk_client_mutual_auth_config.properties"
     JAAS_CONF_PATH = "/mnt/security/jaas.conf"
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
@@ -112,7 +142,8 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None):
+                 zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
+                 listener_security_config=ListenerSecurityConfig(), tls_version=None):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -126,7 +157,7 @@ class SecurityConfig(TemplateRenderer):
             # This generates keystore/trustore files in a local scratch directory which gets
             # automatically destroyed after the test is run
             # Creating within the scratch directory allows us to run tests in parallel without fear of collision
-            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir)
+            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir, context.logger)
             SecurityConfig.ssl_stores.generate_ca()
             SecurityConfig.ssl_stores.generate_truststore()
 
@@ -141,9 +172,11 @@ class SecurityConfig(TemplateRenderer):
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
-        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
+        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls
         self.zk_sasl = zk_sasl
+        self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
+        self.listener_security_config = listener_security_config
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -156,6 +189,11 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+
+        if tls_version is not None:
+            self.properties.update({'tls.version' : tls_version})
+
+        self.properties.update(self.listener_security_config.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None):
@@ -169,7 +207,9 @@ class SecurityConfig(TemplateRenderer):
                               client_sasl_mechanism=self.client_sasl_mechanism,
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
-                              jaas_override_variables=jaas_override_variables)
+                              jaas_override_variables=jaas_override_variables,
+                              listener_security_config=self.listener_security_config,
+                              tls_version=self.tls_version)
 
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
@@ -185,20 +225,24 @@ class SecurityConfig(TemplateRenderer):
         jaas_conf_file = "jaas.conf"
         java_version = node.account.ssh_capture("java -version")
 
-        jaas_conf = self.render_jaas_config(
-            jaas_conf_file,
-            {
-                'node': node,
-                'is_ibm_jdk': any('IBM' in line for line in java_version),
-                'SecurityConfig': SecurityConfig,
-                'client_sasl_mechanism': self.client_sasl_mechanism,
-                'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
-            }
-        )
+        jaas_conf = None
+        if 'sasl.jaas.config' not in self.properties:
+            jaas_conf = self.render_jaas_config(
+                jaas_conf_file,
+                {
+                    'node': node,
+                    'is_ibm_jdk': any('IBM' in line for line in java_version),
+                    'SecurityConfig': SecurityConfig,
+                    'client_sasl_mechanism': self.client_sasl_mechanism,
+                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                }
+            )
+        else:
+            jaas_conf = self.properties['sasl.jaas.config']
 
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
-        else:
+        elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
@@ -222,6 +266,9 @@ class SecurityConfig(TemplateRenderer):
 
         if self.has_sasl:
             self.setup_sasl(node)
+
+        if java_version(node) <= 11 and self.properties.get('tls.version') == 'TLSv1.3':
+            self.properties.update({'tls.version': 'TLSv1.2'})
 
     def setup_credentials(self, node, path, zk_connect, broker):
         if broker:
@@ -266,6 +313,10 @@ class SecurityConfig(TemplateRenderer):
     @property
     def security_protocol(self):
         return self.properties['security.protocol']
+
+    @property
+    def tls_version(self):
+        return self.properties.get('tls.version')
 
     @property
     def client_sasl_mechanism(self):

@@ -81,7 +81,7 @@ class SecurityTest(EndToEndTest):
         self.create_and_start_clients(log_level="DEBUG")
 
         try:
-            wait_until(lambda: self.producer.num_acked > 0, timeout_sec=5)
+            wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30)
 
             # Fail quickly if messages are successfully acked
             raise RuntimeError("Messages published successfully but should not have!"
@@ -91,7 +91,7 @@ class SecurityTest(EndToEndTest):
             pass
 
         error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
-        wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=5)
+        wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
         self.producer.stop()
         self.consumer.stop()
 
