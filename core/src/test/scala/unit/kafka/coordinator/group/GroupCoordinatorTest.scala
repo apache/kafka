@@ -1380,7 +1380,7 @@ class GroupCoordinatorTest {
 
     assertEquals(Set(rebalanceResult.leaderId, rebalanceResult.followerId,
       dynamicJoinResult.memberId), getGroup(groupId).allMembers)
-    assertEquals(Set(leaderInstanceId, followerInstanceId),
+    assertEquals(Set(leaderInstanceId.get, followerInstanceId.get),
       getGroup(groupId).allStaticMembers)
     assertEquals(Set(dynamicJoinResult.memberId), getGroup(groupId).allDynamicMembers)
 
@@ -2134,7 +2134,7 @@ class GroupCoordinatorTest {
     EasyMock.replay(replicaManager)
 
     // advance clock to timeout the pending member
-    assertEquals(Set(secondJoinResult.memberId), group.allMembers)
+    assertEquals(Set(firstMemberId), group.allMembers)
     assertEquals(1, group.numPending)
     timer.advanceClock(300)
 
