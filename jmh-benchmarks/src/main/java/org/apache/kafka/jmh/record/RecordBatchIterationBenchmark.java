@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.jmh.record;
 
+import kafka.api.ApiVersion;
+import kafka.common.LongRef;
+import kafka.log.AppendOrigin;
+import kafka.log.LogValidator;
+import kafka.message.CompressionCodec;
+import kafka.server.BrokerTopicStats;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
@@ -26,6 +33,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.Time;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -57,7 +65,7 @@ public class RecordBatchIterationBenchmark {
         RANDOM, ONES
     }
 
-    @Param(value = {"10", "50", "200", "500"})
+    @Param(value = {"1", "2", "10", "50", "200", "500"})
     private int maxBatchSize = 200;
 
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
@@ -72,8 +80,11 @@ public class RecordBatchIterationBenchmark {
     @Param(value = {"RANDOM", "ONES"})
     private Bytes bytes = Bytes.RANDOM;
 
+    @Param(value = {"NO_CACHING", "CREATE"})
+    private String bufferSupplierStr;
+
     // zero starting offset is much faster for v1 batches, but that will almost never happen
-    private final int startingOffset = 42;
+    private int startingOffset;
 
     // Used by measureSingleMessage
     private ByteBuffer singleBatchBuffer;
@@ -82,10 +93,24 @@ public class RecordBatchIterationBenchmark {
     private ByteBuffer[] batchBuffers;
     private int[] batchSizes;
     private BufferSupplier bufferSupplier;
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
 
     @Setup
     public void init() {
-        bufferSupplier = BufferSupplier.create();
+        brokerTopicStats = new BrokerTopicStats();
+
+        // For v0 batches a zero starting offset is much faster but that will almost never happen.
+        // For v2 batches we use starting offset = 0 as these batches are relative to the base
+        // offset and measureValidation will mutate these batches between iterations
+        startingOffset = messageVersion == 2 ? 0 : 42;
+
+        if (bufferSupplierStr.equals("NO_CACHING")) {
+            bufferSupplier = BufferSupplier.NO_CACHING;
+        } else if (bufferSupplierStr.equals("CREATE")) {
+            bufferSupplier = BufferSupplier.create();
+        } else {
+            throw new IllegalArgumentException("Unsupported buffer supplier " + bufferSupplierStr);
+        }
         singleBatchBuffer = createBatch(1);
 
         batchBuffers = new ByteBuffer[batchCount];
@@ -120,6 +145,19 @@ public class RecordBatchIterationBenchmark {
             builder.append(0, null, value);
         }
         return builder.build().buffer();
+    }
+
+    @Benchmark
+    public void measureValidation(Blackhole bh) throws IOException {
+        MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
+        LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
+                new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
+                CompressionCodec.getCompressionCodec(compressionType.id),
+                CompressionCodec.getCompressionCodec(compressionType.id),
+                false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
+                new AppendOrigin.Client$(),
+                ApiVersion.latestVersion(),
+                brokerTopicStats);
     }
 
     @Benchmark

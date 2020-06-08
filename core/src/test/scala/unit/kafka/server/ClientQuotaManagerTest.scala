@@ -91,7 +91,7 @@ class ClientQuotaManagerTest {
       clientMetrics.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
 
       assertEquals("Default producer quota should be " + config.quotaBytesPerSecondDefault,
-        config.quotaBytesPerSecondDefault, clientMetrics.quota(randomClient.user, randomClient.clientId).bound, 0.0)
+        config.quotaBytesPerSecondDefault.toDouble, clientMetrics.quota(randomClient.user, randomClient.clientId).bound, 0.0)
       assertEquals("Should return the overridden value (2000)", 2000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
       assertEquals("Should return the overridden value (4000)", 4000, clientMetrics.quota(client2.user, client2.clientId).bound, 0.0)
 
@@ -193,10 +193,11 @@ class ClientQuotaManagerTest {
   }
 
   private def checkQuota(quotaManager: ClientQuotaManager, user: String, clientId: String, expectedBound: Long, value: Int, expectThrottle: Boolean): Unit = {
-    assertEquals(expectedBound, quotaManager.quota(user, clientId).bound, 0.0)
+    assertEquals(expectedBound.toDouble, quotaManager.quota(user, clientId).bound, 0.0)
     val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost)
     val expectedMaxValueInQuotaWindow =
-      if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound else Double.MaxValue
+      if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound.toDouble
+      else Double.MaxValue
     assertEquals(expectedMaxValueInQuotaWindow, quotaManager.getMaxValueInQuotaWindow(session, clientId), 0.01)
 
     val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)

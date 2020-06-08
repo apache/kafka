@@ -28,9 +28,12 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer}
 
+import scala.annotation.nowarn
+
 
 object AuthorizerUtils {
 
+  @nowarn("cat=deprecation")
   def createAuthorizer(className: String): Authorizer = {
     Utils.newInstance(className, classOf[Object]) match {
       case auth: Authorizer => auth

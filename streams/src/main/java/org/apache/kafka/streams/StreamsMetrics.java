@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
 import java.util.Map;
 
@@ -58,9 +57,9 @@ public interface StreamsMetrics {
      * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags               additional tags of the sensor
      * @return The added sensor.
-     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
      * @see #removeSensor(Sensor)
-     * @see #addSensor(String, RecordingLevel, Sensor...)
+     * @see #addSensor(String, Sensor.RecordingLevel, Sensor...)
      */
     Sensor addLatencyRateTotalSensor(final String scopeName,
                                      final String entityName,
@@ -88,9 +87,9 @@ public interface StreamsMetrics {
      * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags               additional tags of the sensor
      * @return The added sensor.
-     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
      * @see #removeSensor(Sensor)
-     * @see #addSensor(String, RecordingLevel, Sensor...)
+     * @see #addSensor(String, Sensor.RecordingLevel, Sensor...)
      */
     Sensor addRateTotalSensor(final String scopeName,
                               final String entityName,
@@ -181,16 +180,16 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor.
      * Note that for most cases it is advisable to use
-     * {@link #addRateTotalSensor(String, String, String, RecordingLevel, String...) addRateTotalSensor()}
-     * or {@link #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...) addLatencyRateTotalSensor()}
+     * {@link #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...) addRateTotalSensor()}
+     * or {@link #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...) addLatencyRateTotalSensor()}
      * to ensure metric name well-formedness and conformity with the rest of the Kafka Streams code base.
      * However, if the above two methods are not sufficient, this method can also be used.
      *
      * @param name           name of the sensor.
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor
      * @return The added sensor.
-     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
-     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
+     * @see #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
      * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,
@@ -199,16 +198,16 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor with parent sensors.
      * Note that for most cases it is advisable to use
-     * {@link #addRateTotalSensor(String, String, String, RecordingLevel, String...) addRateTotalSensor()}
-     * or {@link #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...) addLatencyRateTotalSensor()}
+     * {@link #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...) addRateTotalSensor()}
+     * or {@link #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...) addLatencyRateTotalSensor()}
      * to ensure metric name well-formedness and conformity with the rest of the Kafka Streams code base.
      * However, if the above two methods are not sufficient, this method can also be used.
      *
      * @param name           name of the sensor
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor
      * @return The added sensor.
-     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
-     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
+     * @see #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
      * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,

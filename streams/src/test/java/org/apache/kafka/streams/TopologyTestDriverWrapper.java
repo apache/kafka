@@ -43,7 +43,7 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      * @return the processor context
      */
     public ProcessorContext setCurrentNodeForProcessorContext(final String processorName) {
-        final ProcessorContext context = task.context();
+        final ProcessorContext context = task.processorContext();
         ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
         return context;
     }

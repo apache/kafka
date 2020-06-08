@@ -26,7 +26,7 @@ import org.junit.Test
 
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
   private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp
@@ -272,7 +272,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   def testDescribeClientQuotasMatchPartial(): Unit = {
     setupDescribeClientQuotasMatchTest()
 
-    def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean) {
+    def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean): Unit = {
       val result = describeClientQuotas(filter)
       val (expectedMatches, expectedNonMatches) = matchEntities.partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
@@ -359,7 +359,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testClientQuotasUnsupportedEntityTypes() {
+  def testClientQuotasUnsupportedEntityTypes(): Unit = {
     val entity = new ClientQuotaEntity(Map(("other" -> "name")).asJava)
     try {
       verifyDescribeEntityQuotas(entity, Map())
@@ -380,6 +380,20 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     verifyDescribeEntityQuotas(entity, Map(
       (ProducerByteRateProp -> 20000.0),
     ))
+  }
+
+  @Test
+  def testClientQuotasWithDefaultName(): Unit = {
+    // An entity using the name associated with the default entity name. The entity's name should be sanitized so
+    // that it does not conflict with the default entity name.
+    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.Default)).asJava)
+    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(20000.0))), validateOnly = false)
+    verifyDescribeEntityQuotas(entity, Map((ProducerByteRateProp -> 20000.0)))
+
+    // This should not match.
+    val result = describeClientQuotas(
+      ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)).asJava))
+    assert(result.isEmpty)
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {

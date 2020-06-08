@@ -123,6 +123,7 @@
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="record">
@@ -243,6 +244,10 @@
       <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
 
+    <subpackage name="internals">
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
     <subpackage name="perf">
       <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
@@ -282,17 +287,6 @@
         </subpackage>
       </subpackage>
     </subpackage>
-  </subpackage>
-
-  <subpackage name="jmh">
-    <allow pkg="org.openjdk.jmh.annotations" />
-    <allow pkg="org.openjdk.jmh.runner" />
-    <allow pkg="org.openjdk.jmh.runner.options" />
-    <allow pkg="org.openjdk.jmh.infra" />
-    <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.streams" />
-    <allow pkg="org.github.jamm" />
   </subpackage>
 
   <subpackage name="log4jappender">
@@ -368,6 +362,7 @@
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
+      <allow pkg="org.eclipse.jetty.util" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />

@@ -42,7 +42,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class StateRestorationIntegrationTest {
@@ -77,7 +76,7 @@ public class StateRestorationIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
+    public void shouldRestoreNullRecord() throws Exception {
         builder.table(INPUT_TOPIC, Materialized.<Integer, Bytes>as(
                 Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
                 .withKeySerde(Serdes.Integer())

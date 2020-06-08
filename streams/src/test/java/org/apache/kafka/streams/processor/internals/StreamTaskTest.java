@@ -22,13 +22,16 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.record.TimestampType;
@@ -45,7 +48,9 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
@@ -83,9 +88,11 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -132,11 +139,12 @@ public class StreamTaskTest {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
-    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
-    private final MockTime time = new MockTime();
+
+    private MockTime time = new MockTime();
+    private Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
+    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
 
     private StateDirectory stateDirectory;
     private StreamTask task;
@@ -146,6 +154,8 @@ public class StreamTaskTest {
     private ProcessorStateManager stateManager;
     @Mock(type = MockType.NICE)
     private RecordCollector recordCollector;
+    @Mock(type = MockType.NICE)
+    private ThreadCache cache;
 
     private final Punctuator punctuator = new Punctuator() {
         @Override
@@ -197,7 +207,8 @@ public class StreamTaskTest {
 
     @Before
     public void setup() {
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
+        EasyMock.expect(stateManager.taskId()).andStubReturn(taskId);
+        EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
 
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
@@ -206,7 +217,8 @@ public class StreamTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null && !task.isClosed()) {
+        if (task != null) {
+            task.prepareCloseDirty();
             task.closeDirty();
             task = null;
         }
@@ -244,12 +256,15 @@ public class StreamTaskTest {
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
         final IMocksControl ctrl = EasyMock.createStrictControl();
         final ProcessorStateManager stateManager = ctrl.createMock(ProcessorStateManager.class);
+        EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
         stateDirectory = ctrl.createMock(StateDirectory.class);
 
         stateManager.registerGlobalStateStores(Collections.emptyList());
         EasyMock.expectLastCall();
 
         EasyMock.expect(stateManager.taskId()).andReturn(taskId);
+
+        EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
 
         stateManager.close();
         EasyMock.expectLastCall();
@@ -264,7 +279,7 @@ public class StreamTaskTest {
         ctrl.replay();
 
         task = createStatefulTask(createConfig(true, "100"), true, stateManager);
-        task.transitionTo(Task.State.CLOSING);
+        task.prepareCloseDirty();
         task.closeDirty();
         task = null;
 
@@ -370,6 +385,145 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRecordBufferedRecords() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertThat(metric.metricValue(), equalTo(0.0d));
+
+        task.addRecords(partition1, asList(
+            getConsumerRecord(partition1, 10),
+            getConsumerRecord(partition1, 20)
+        ));
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
+
+        assertThat(metric.metricValue(), equalTo(2.0d));
+
+        task.process(0L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
+
+        assertThat(metric.metricValue(), equalTo(1.0d));
+    }
+
+    @Test
+    public void shouldRecordProcessRatio() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString(), StreamsConfig.METRICS_LATEST);
+
+        assertThat(metric.metricValue(), equalTo(0.0d));
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessBatchTime(15L);
+        task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
+
+        assertThat(metric.metricValue(), equalTo(0.25d));
+
+        task.recordProcessBatchTime(10L);
+
+        assertThat(metric.metricValue(), equalTo(0.25d));
+
+        task.recordProcessBatchTime(10L);
+        task.recordProcessTimeRatioAndBufferSize(20L, time.milliseconds());
+
+        assertThat(metric.metricValue(), equalTo(1.0d));
+    }
+
+    @Test
+    public void shouldRecordE2ELatencyOnProcessForSourceNodes() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode = source1.name();
+
+        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        // e2e latency = 100
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.process(100L);
+
+        assertThat(maxMetric.metricValue(), equalTo(100d));
+    }
+
+    @Test
+    public void shouldRecordE2ELatencyOnProcessForTerminalNodes() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String terminalNode = processorStreamTime.name();
+
+        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNode, StreamsConfig.METRICS_LATEST);
+
+        // e2e latency = 100
+        time.setCurrentTimeMs(100L);
+        task.maybeRecordE2ELatency(0L, terminalNode);
+
+        assertThat(maxMetric.metricValue(), equalTo(100d));
+    }
+
+    @Test
+    public void shouldRecordE2ELatencyMinAndMax() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode = source1.name();
+
+        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final Metric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        assertThat(minMetric.metricValue(), equalTo(Double.NaN));
+        assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
+
+        // e2e latency = 10
+        time.setCurrentTimeMs(10L);
+        task.maybeRecordE2ELatency(0L, sourceNode);
+        assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(10d));
+
+        // e2e latency = 15
+        time.setCurrentTimeMs(25L);
+        task.maybeRecordE2ELatency(10L, sourceNode);
+        assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(15d));
+
+        // e2e latency = 25
+        time.setCurrentTimeMs(30L);
+        task.maybeRecordE2ELatency(5L, sourceNode);
+        assertThat(minMetric.metricValue(), equalTo(10d));
+        assertThat(maxMetric.metricValue(), equalTo(25d));
+
+        // e2e latency = 20
+        time.setCurrentTimeMs(40L);
+        task.maybeRecordE2ELatency(35L, sourceNode);
+        assertThat(minMetric.metricValue(), equalTo(5d));
+        assertThat(maxMetric.metricValue(), equalTo(25d));
+    }
+
+    @Test
+    public void shouldRecordE2ELatencyPercentiles() {
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        final String sourceNode = source1.name();
+
+        final Metric p99Metric = getProcessorMetric("record-e2e-latency", "%s-p99", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final Metric p90Metric = getProcessorMetric("record-e2e-latency", "%s-p90", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+
+        for (int i = 0; i < 100; i++) {
+            time.setCurrentTimeMs(i);
+            task.maybeRecordE2ELatency(0L, sourceNode);
+        }
+
+        assertEquals((double) p99Metric.metricValue(), 99d, 5.0);
+        assertEquals((double) p90Metric.metricValue(), 90d, 5.0);
+    }
+
+    @Test
     public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
@@ -381,31 +535,6 @@ public class StreamTaskTest {
 
     private void testMetrics(final String builtInMetricsVersion) {
         task = createStatelessTask(createConfig(false, "100"), builtInMetricsVersion);
-
-        assertNotNull(getMetric(
-            "commit",
-            "%s-latency-avg",
-            task.id().toString(),
-            builtInMetricsVersion
-        ));
-        assertNotNull(getMetric(
-            "commit",
-            "%s-latency-max",
-            task.id().toString(),
-            builtInMetricsVersion
-        ));
-        assertNotNull(getMetric(
-            "commit",
-            "%s-rate",
-            task.id().toString(),
-            builtInMetricsVersion
-        ));
-        assertNotNull(getMetric(
-            "commit",
-            "%s-total",
-            task.id().toString(),
-            builtInMetricsVersion
-        ));
 
         assertNotNull(getMetric(
             "enforced-processing",
@@ -433,13 +562,30 @@ public class StreamTaskTest {
             builtInMetricsVersion
         ));
 
+        assertNotNull(getMetric(
+            "active-process",
+            "%s-ratio",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "active-buffer",
+            "%s-count",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             testMetricsForBuiltInMetricsVersion0100To24();
         } else {
             testMetricsForBuiltInMetricsVersionLatest();
         }
 
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter();
+        final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
+        reporter.contextChange(metricsContext);
+
         metrics.addReporter(reporter);
         final String threadIdTag =
             StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_24;
@@ -465,8 +611,8 @@ public class StreamTaskTest {
         assertNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
         assertNull(getMetric("commit", "%s-total", "all", builtInMetricsVersion));
 
-        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
 
         assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
         assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
@@ -476,8 +622,6 @@ public class StreamTaskTest {
 
     private void testMetricsForBuiltInMetricsVersion0100To24() {
         final String builtInMetricsVersion = StreamsConfig.METRICS_0100_TO_24;
-        assertNotNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
-        assertNotNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
         assertNotNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
 
         assertNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
@@ -507,6 +651,28 @@ public class StreamTaskTest {
                 )
             )
         ));
+    }
+
+    private Metric getProcessorMetric(final String operation,
+                                      final String nameFormat,
+                                      final String taskId,
+                                      final String processorNodeId,
+                                      final String builtInMetricsVersion) {
+
+        return getMetricByNameFilterByTags(
+            metrics.metrics(),
+            String.format(nameFormat, operation),
+            "stream-processor-node-metrics",
+            mkMap(
+                mkEntry("task-id", taskId),
+                mkEntry("processor-node-id", processorNodeId),
+                mkEntry(
+                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
+                        : THREAD_ID_TAG_0100_TO_24,
+                    Thread.currentThread().getName()
+                )
+            )
+        );
     }
 
     @Test
@@ -714,44 +880,54 @@ public class StreamTaskTest {
         assertTrue(task.process(0L));
         assertTrue(task.commitNeeded());
 
-        task.commit();
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit();
         assertFalse(task.commitNeeded());
 
         assertTrue(task.maybePunctuateStreamTime());
         assertTrue(task.commitNeeded());
 
-        task.commit();
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit();
         assertFalse(task.commitNeeded());
 
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         assertTrue(task.commitNeeded());
 
-        task.commit();
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit();
         assertFalse(task.commitNeeded());
     }
 
     @Test
     public void shouldCommitNextOffsetFromQueueIfAvailable() {
-        recordCollector.commit(EasyMock.eq(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(5L))))));
-        EasyMock.expectLastCall();
-
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, Arrays.asList(getConsumerRecord(partition1, 0L), getConsumerRecord(partition1, 5L)));
-        task.process(0L);
-        task.commit();
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 0L),
+            getConsumerRecord(partition1, 3L),
+            getConsumerRecord(partition1, 5L)));
 
-        EasyMock.verify(recordCollector);
+        task.process(0L);
+        task.process(0L);
+
+        task.prepareCommit();
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
+
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(3L))))));
     }
 
     @Test
     public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
-        recordCollector.commit(EasyMock.eq(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
-        EasyMock.expectLastCall();
-
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration();
@@ -763,9 +939,55 @@ public class StreamTaskTest {
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
         task.process(0L);
-        task.commit();
+        task.prepareCommit();
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
 
-        EasyMock.verify(recordCollector);
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+    }
+
+    @Test
+    public void shouldFailOnCommitIfTaskIsClosed() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.transitionTo(Task.State.CLOSED);
+
+        final IllegalStateException thrown = assertThrows(
+            IllegalStateException.class,
+            task::committableOffsetsAndMetadata
+        );
+
+        assertThat(thrown.getMessage(), is("Task 0_0 is closed."));
+    }
+
+    @Test
+    public void shouldOnlyCommitConsumerPositionTaskIfRunning() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        consumer.addRecord(getConsumerRecord(partition1, 0L));
+        consumer.addRecord(getConsumerRecord(partition1, 1L));
+        consumer.addRecord(getConsumerRecord(partition1, 2L));
+        consumer.poll(Duration.ZERO);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.process(0L);
+        task.prepareCommit();
+        task.postCommit();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
+
+        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+
+        task.transitionTo(Task.State.SUSPENDED);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
+        task.transitionTo(Task.State.CLOSED);
+        task.transitionTo(Task.State.CREATED);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
+        task.transitionTo(Task.State.RESTORING);
+        assertTrue(task.committableOffsetsAndMetadata().isEmpty());
+
     }
 
     @Test
@@ -1041,8 +1263,6 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, 10L));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, 10L)));
         EasyMock.expectLastCall();
@@ -1053,6 +1273,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
+        task.prepareSuspend();
         task.suspend();
 
         assertEquals(Task.State.SUSPENDED, task.state());
@@ -1078,12 +1299,10 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotReInitializeTopologyWhenResuming() throws IOException {
+    public void shouldReInitializeTopologyWhenResuming() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
         EasyMock.expect(recordCollector.offsets()).andThrow(new AssertionError("Should not try to read offsets")).anyTimes();
-        recordCollector.commit(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new AssertionError("Should not try to commit")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
@@ -1094,6 +1313,7 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
 
+        task.prepareSuspend();
         task.suspend();
 
         assertEquals(Task.State.SUSPENDED, task.state());
@@ -1120,8 +1340,6 @@ public class StreamTaskTest {
         final Long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
         EasyMock.expectLastCall();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(changelogPartition));
@@ -1133,7 +1351,8 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
         task.completeRestoration();
-        task.commit();
+        task.prepareCommit();
+        task.postCommit();
 
         EasyMock.verify(recordCollector);
     }
@@ -1149,7 +1368,8 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
         task.completeRestoration();
-        task.commit();
+        task.prepareCommit();
+        task.postCommit();
         final File checkpointFile = new File(
             stateDirectory.directoryForTask(taskId),
             StateManagerUtil.CHECKPOINT_FILE_NAME
@@ -1189,7 +1409,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(((InternalProcessorContext) task.context()).currentNode(), nullValue());
+        assertThat(task.processorContext().currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -1206,9 +1426,8 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCloseStateManagerEvenFailureOnUncleanTaskClose() {
+    public void shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
-        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
         EasyMock.expectLastCall();
 
         stateManager.close();
@@ -1220,6 +1439,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
+        task.prepareCloseDirty();
         task.closeDirty();
 
         EasyMock.verify(stateManager);
@@ -1241,18 +1461,29 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
+        final StreamsConfig config = createConfig(false, "0");
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         task = new StreamTask(
             taskId,
             mkSet(partition1, repartition),
             topology,
             consumer,
-            createConfig(false, "0"),
+            config,
             streamsMetrics,
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
+
         task.initializeIfNeeded();
         task.completeRestoration();
 
@@ -1262,7 +1493,7 @@ public class StreamTaskTest {
         assertTrue(task.process(0L));
         assertTrue(task.process(0L));
 
-        task.commit();
+        task.prepareCommit();
 
         final Map<TopicPartition, Long> map = task.purgeableOffsets();
 
@@ -1291,8 +1522,19 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowIfCommittingOnIllegalState() {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        assertThrows(IllegalStateException.class, task::prepareCommit);
 
-        assertThrows(IllegalStateException.class, task::commit);
+        task.transitionTo(Task.State.CLOSED);
+        assertThrows(IllegalStateException.class, task::prepareCommit);
+    }
+
+    @Test
+    public void shouldThrowIfPostCommittingOnIllegalState() {
+        task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        assertThrows(IllegalStateException.class, task::postCommit);
+
+        task.transitionTo(Task.State.CLOSED);
+        assertThrows(IllegalStateException.class, task::postCommit);
     }
 
     @Test
@@ -1325,6 +1567,7 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
+        task.prepareCloseClean();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1354,6 +1597,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
+        task.prepareCloseDirty();
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1372,14 +1616,13 @@ public class StreamTaskTest {
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
-        recordCollector.commit(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new AssertionError("Should not call this function")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
         task.initializeIfNeeded();
+        task.prepareSuspend();
         task.suspend();
 
         assertEquals(Task.State.SUSPENDED, task.state());
@@ -1393,14 +1636,13 @@ public class StreamTaskTest {
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
-        recordCollector.commit(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new AssertionError("Should not call this function")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
         task.initializeIfNeeded();
+        task.prepareCloseClean();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1413,8 +1655,6 @@ public class StreamTaskTest {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         stateManager.close();
         EasyMock.expectLastCall();
         stateManager.flush();
@@ -1428,6 +1668,7 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
         task.completeRestoration();
+        task.prepareCloseClean();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1439,12 +1680,10 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowOnCloseCleanError() {
+    public void shouldSwallowExceptionOnCloseCleanError() {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
         EasyMock.expectLastCall();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(changelogPartition)).anyTimes();
@@ -1457,9 +1696,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        assertThrows(ProcessorStateException.class, task::closeClean);
-
-        assertEquals(Task.State.CLOSING, task.state());
+        task.prepareCloseClean();
+        assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -1467,6 +1705,8 @@ public class StreamTaskTest {
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(changelogPartition)).anyTimes();
+        stateManager.close();
+        EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
     }
 
@@ -1475,8 +1715,6 @@ public class StreamTaskTest {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         stateManager.flush();
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
@@ -1490,7 +1728,7 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
 
-        assertThrows(ProcessorStateException.class, task::closeClean);
+        assertThrows(ProcessorStateException.class, task::prepareCloseClean);
 
         assertEquals(Task.State.RESTORING, task.state());
 
@@ -1508,8 +1746,6 @@ public class StreamTaskTest {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        recordCollector.commit(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(Collections.emptyMap());
@@ -1524,7 +1760,8 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
 
-        assertThrows(ProcessorStateException.class, task::closeClean);
+        task.prepareCloseClean();
+        assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         assertEquals(Task.State.RESTORING, task.state());
 
@@ -1552,17 +1789,18 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowIfClosingOnIllegalState() {
+    public void closeShouldBeIdempotent() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
+        task.prepareCloseClean();
         task.closeClean();
 
-        // close call are not idempotent since we are already in closed
-        assertThrows(IllegalStateException.class, task::closeClean);
-        assertThrows(IllegalStateException.class, task::closeDirty);
+        // close calls are idempotent since we are already in closed
+        task.closeClean();
+        task.closeDirty();
 
         EasyMock.reset(stateManager);
         EasyMock.replay(stateManager);
@@ -1577,6 +1815,14 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.singletonMap(storeName, topic1));
 
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         return new StreamTask(
             taskId,
             mkSet(partition1),
@@ -1585,10 +1831,11 @@ public class StreamTaskTest {
             config,
             streamsMetrics,
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private StreamTask createDisconnectedTask(final StreamsConfig config) {
@@ -1607,6 +1854,14 @@ public class StreamTaskTest {
             }
         };
 
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         return new StreamTask(
             taskId,
             partitions,
@@ -1615,10 +1870,11 @@ public class StreamTaskTest {
             config,
             streamsMetrics,
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
@@ -1628,6 +1884,14 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.emptyMap());
 
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         return new StreamTask(
             taskId,
             partitions,
@@ -1636,10 +1900,11 @@ public class StreamTaskTest {
             config,
             streamsMetrics,
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -1655,6 +1920,14 @@ public class StreamTaskTest {
             singletonList(stateStore),
             logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
 
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         return new StreamTask(
             taskId,
             partitions,
@@ -1663,13 +1936,14 @@ public class StreamTaskTest {
             config,
             streamsMetrics,
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
-    private StreamTask createStatelessTask(final StreamsConfig streamsConfig,
+    private StreamTask createStatelessTask(final StreamsConfig config,
                                            final String builtInMetricsVersion) {
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
@@ -1685,18 +1959,27 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
         return new StreamTask(
             taskId,
             partitions,
             topology,
             consumer,
-            streamsConfig,
+            config,
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion),
             stateDirectory,
-            null,
+            cache,
             time,
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {

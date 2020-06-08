@@ -30,7 +30,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -128,11 +128,10 @@ object ZkSecurityMigrator extends Logging {
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
     info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
-    zkTlsConfigFileProps.entrySet().asScala.foreach(entry => {
-      val key = entry.getKey.toString
+    zkTlsConfigFileProps.asScala.foreach { case (key, value) =>
       info(s"Setting $key")
-      KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, entry.getValue.toString)
-    })
+      KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, value)
+    }
     zkClientConfig
   }
 

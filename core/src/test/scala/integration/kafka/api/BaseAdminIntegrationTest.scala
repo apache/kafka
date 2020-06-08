@@ -33,7 +33,7 @@ import org.junit.Assert._
 import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 
@@ -133,7 +133,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       val partition = topic1.partitions.get(partitionId)
       assertEquals(partitionId, partition.partition)
       assertEquals(3, partition.replicas.size)
-      partition.replicas.asScala.foreach { replica =>
+      partition.replicas.forEach { replica =>
         assertTrue(replica.id >= 0)
         assertTrue(replica.id < brokerCount)
       }
@@ -205,7 +205,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }
 

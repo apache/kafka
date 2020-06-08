@@ -31,7 +31,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class MetadataRequestTest extends BaseRequestTest {
@@ -86,7 +86,7 @@ class MetadataRequestTest extends BaseRequestTest {
   def testRack(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
-    metadataResponse.brokers.asScala.foreach { broker =>
+    metadataResponse.brokers.forEach { broker =>
       assertEquals("Rack information should match config", s"rack/${broker.id}", broker.rack)
     }
   }
@@ -241,7 +241,7 @@ class MetadataRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, topicMetadata.error)
       assertEquals("t1", topicMetadata.topic)
       assertEquals(Set(0, 1), topicMetadata.partitionMetadata.asScala.map(_.partition).toSet)
-      topicMetadata.partitionMetadata.asScala.foreach { partitionMetadata =>
+      topicMetadata.partitionMetadata.forEach { partitionMetadata =>
         val assignment = replicaAssignment(partitionMetadata.partition)
         assertEquals(assignment, partitionMetadata.replicaIds.asScala)
         assertEquals(assignment, partitionMetadata.inSyncReplicaIds.asScala)

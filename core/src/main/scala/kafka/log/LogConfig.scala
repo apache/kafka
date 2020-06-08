@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.{Collections, Locale, Properties}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.api.{ApiVersion, ApiVersionValidator}
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -308,7 +308,7 @@ object LogConfig {
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    defaults.forEach { (k, v) => props.put(k, v) }
     props ++= overrides
     val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
     new LogConfig(props, overriddenKeys)

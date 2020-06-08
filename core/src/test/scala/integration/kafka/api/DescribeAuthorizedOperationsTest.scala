@@ -30,7 +30,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.Assert.{assertEquals, assertFalse, assertNull}
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
@@ -110,7 +110,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => adminClientConfig.put(key.asInstanceOf[String], value) }
+    securityProps.forEach { (key, value) => adminClientConfig.put(key.asInstanceOf[String], value) }
     adminClientConfig
   }
 

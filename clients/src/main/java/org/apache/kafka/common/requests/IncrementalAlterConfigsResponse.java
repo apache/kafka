@@ -70,10 +70,9 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
-        for (AlterConfigsResourceResponse response : data.responses()) {
-            Errors error = Errors.forCode(response.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
-        }
+        data.responses().forEach(response ->
+            updateErrorCounts(counts, Errors.forCode(response.errorCode()))
+        );
         return counts;
     }
 

@@ -105,8 +105,9 @@ public abstract class SourceTask implements Task {
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
      * @throws InterruptedException
-     * @see #commitRecord(SourceRecord, RecordMetadata)
+     * @deprecated Use {@link #commitRecord(SourceRecord, RecordMetadata)} instead.
      */
+    @Deprecated
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
     }
@@ -123,7 +124,7 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      * <p>
-     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default. It is
+     * The default implementation just calls {@link #commitRecord(SourceRecord)}, which is a nop by default. It is
      * not necessary to implement both methods.
      * </p>
      *
@@ -133,7 +134,7 @@ public abstract class SourceTask implements Task {
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata)
             throws InterruptedException {
-        // by default, just call other method for backwards compatability
+        // by default, just call other method for backwards compatibility
         commitRecord(record);
     }
 }

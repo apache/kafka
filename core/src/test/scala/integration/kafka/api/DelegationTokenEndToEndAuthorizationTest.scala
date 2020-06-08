@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.Before
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
@@ -89,7 +89,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 

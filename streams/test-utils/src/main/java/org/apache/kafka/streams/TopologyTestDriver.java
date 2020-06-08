@@ -17,8 +17,10 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -64,8 +66,9 @@ import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.processor.internals.TestDriverProducer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -99,12 +102,15 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -140,6 +146,12 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
  * Topology topology = ...
  * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
  * }</pre>
+ *
+ * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
+ * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
+ * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
+ * after each input record.
  *
  * <h2>Processing messages</h2>
  * <p>
@@ -213,14 +225,16 @@ public class TopologyTestDriver implements Closeable {
     ProcessorTopology processorTopology;
     ProcessorTopology globalTopology;
 
+    private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
+    private final TestDriverProducer testDriverProducer;
 
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
-    private final boolean eosEnabled;
+    private final StreamThread.ProcessingMode processingMode;
 
     private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
         @Override
@@ -292,7 +306,7 @@ public class TopologyTestDriver implements Closeable {
 
         logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
-        eosEnabled = EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        processingMode = StreamThread.processingMode(streamsConfig);
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);
@@ -300,8 +314,10 @@ public class TopologyTestDriver implements Closeable {
         final ThreadCache cache = new ThreadCache(
             logContext,
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
-            streamsMetrics);
+            streamsMetrics
+        );
 
+        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
@@ -309,6 +325,31 @@ public class TopologyTestDriver implements Closeable {
                 return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
+        testDriverProducer = new TestDriverProducer(
+            streamsConfig,
+            new KafkaClientSupplier() {
+                @Override
+                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
+                    return producer;
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+
+                @Override
+                public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+                    throw new IllegalStateException();
+                }
+            },
+            logContext
+        );
 
         setupGlobalTask(streamsConfig, streamsMetrics, cache);
         setupTask(streamsConfig, streamsMetrics, cache);
@@ -342,7 +383,7 @@ public class TopologyTestDriver implements Closeable {
             "test-client",
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
         );
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(mockWallClockTime));
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
 
         return streamsMetrics;
@@ -388,7 +429,8 @@ public class TopologyTestDriver implements Closeable {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig);
+                streamsConfig
+            );
 
             final GlobalProcessorContextImpl globalProcessorContext =
                 new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
@@ -407,7 +449,8 @@ public class TopologyTestDriver implements Closeable {
                 -1L,
                 -1,
                 ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders()));
+                new RecordHeaders())
+            );
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -418,7 +461,6 @@ public class TopologyTestDriver implements Closeable {
                            final StreamsMetricsImpl streamsMetrics,
                            final ThreadCache cache) {
         if (!partitionsByInputTopic.isEmpty()) {
-            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
             for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
@@ -429,7 +471,7 @@ public class TopologyTestDriver implements Closeable {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
                 Task.TaskType.ACTIVE,
-                EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
                 new StoreChangelogReader(
@@ -439,15 +481,24 @@ public class TopologyTestDriver implements Closeable {
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
                     stateRestoreListener),
                 processorTopology.storeToChangelogTopic(),
-                new HashSet<>(partitionsByInputTopic.values()));
+                new HashSet<>(partitionsByInputTopic.values())
+            );
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 logContext,
                 TASK_ID,
-                consumer,
-                new StreamsProducer(producer, eosEnabled, logContext, streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)),
+                testDriverProducer,
                 streamsConfig.defaultProductionExceptionHandler(),
-                eosEnabled,
-                streamsMetrics);
+                streamsMetrics
+            );
+
+            final InternalProcessorContext context = new ProcessorContextImpl(
+                TASK_ID,
+                streamsConfig,
+                stateManager,
+                streamsMetrics,
+                cache
+            );
+
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByInputTopic.values()),
@@ -459,15 +510,18 @@ public class TopologyTestDriver implements Closeable {
                 cache,
                 mockWallClockTime,
                 stateManager,
-                recordCollector);
+                recordCollector,
+                context
+            );
             task.initializeIfNeeded();
             task.completeRestoration();
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
+            task.processorContext().setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,
                 -1,
                 ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders()));
+                new RecordHeaders())
+            );
         } else {
             task = null;
         }
@@ -497,7 +551,8 @@ public class TopologyTestDriver implements Closeable {
             consumerRecord.timestamp(),
             consumerRecord.key(),
             consumerRecord.value(),
-            consumerRecord.headers());
+            consumerRecord.headers()
+        );
     }
 
     private void pipeRecord(final String topicName,
@@ -539,7 +594,8 @@ public class TopologyTestDriver implements Closeable {
             value == null ? ConsumerRecord.NULL_SIZE : value.length,
             key,
             value,
-            headers)));
+            headers))
+        );
     }
 
     private void completeAllProcessableWork() {
@@ -557,7 +613,8 @@ public class TopologyTestDriver implements Closeable {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
-                task.commit();
+                task.prepareCommit();
+                commit(task.committableOffsetsAndMetadata());
                 captureOutputsAndReEnqueueInternalResults();
             }
             if (task.hasRecordsQueued()) {
@@ -567,6 +624,14 @@ public class TopologyTestDriver implements Closeable {
                              " Streams to process more.",
                          StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
             }
+        }
+    }
+
+    private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_BETA) {
+            testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
+        } else {
+            consumer.commitSync(offsets);
         }
     }
 
@@ -586,7 +651,8 @@ public class TopologyTestDriver implements Closeable {
             value == null ? ConsumerRecord.NULL_SIZE : value.length,
             key,
             value,
-            headers));
+            headers)
+        );
         globalStateTask.flushState();
     }
 
@@ -637,7 +703,8 @@ public class TopologyTestDriver implements Closeable {
                     record.timestamp(),
                     record.key(),
                     record.value(),
-                    record.headers());
+                    record.headers()
+                );
             }
 
             if (globalInputTopicPartition != null) {
@@ -646,7 +713,8 @@ public class TopologyTestDriver implements Closeable {
                     record.timestamp(),
                     record.key(),
                     record.value(),
-                    record.headers());
+                    record.headers()
+                );
             }
         }
     }
@@ -691,7 +759,8 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
-            task.commit();
+            task.prepareCommit();
+            commit(task.committableOffsetsAndMetadata());
         }
         completeAllProcessableWork();
     }
@@ -733,8 +802,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             return null;
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
@@ -803,6 +872,21 @@ public class TopologyTestDriver implements Closeable {
         return new TestOutputTopic<>(this, topicName, keyDeserializer, valueDeserializer);
     }
 
+    /**
+     * Get all the names of all the topics to which records have been produced during the test run.
+     * <p>
+     * Call this method after piping the input into the test driver to retrieve the full set of topic names the topology
+     * produced records to.
+     * <p>
+     * The returned set of topic names may include user (e.g., output) and internal (e.g., changelog, repartition) topic
+     * names.
+     *
+     * @return the set of topic names the topology has produced to
+     */
+    public final Set<String> producedTopicNames() {
+        return Collections.unmodifiableSet(outputRecordsByTopic.keySet());
+    }
+
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {
         final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
@@ -822,8 +906,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             throw new NoSuchElementException("Empty topic: " + topic);
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
@@ -917,7 +1001,7 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);
@@ -1096,6 +1180,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
+            task.prepareCloseClean();
             task.closeClean();
         }
         if (globalStateTask != null) {
@@ -1111,7 +1196,7 @@ public class TopologyTestDriver implements Closeable {
                          " {} configuration during TopologyTestDriver#close().",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         }
-        if (!eosEnabled) {
+        if (processingMode == AT_LEAST_ONCE) {
             producer.close();
         }
         stateDirectory.clean();

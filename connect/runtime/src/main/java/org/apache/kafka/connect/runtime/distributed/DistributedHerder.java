@@ -46,6 +46,7 @@ import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -1108,26 +1109,39 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private void startWork() {
         // Start assigned connectors and tasks
-        log.info("Starting connectors and tasks using config offset {}", assignment.offset());
-
         List<Callable<Void>> callables = new ArrayList<>();
-        for (String connectorName : assignmentDifference(assignment.connectors(), runningAssignment.connectors())) {
-            callables.add(getConnectorStartingCallable(connectorName));
+
+        // The sets in runningAssignment may change when onRevoked is called voluntarily by this
+        // herder (e.g. when a broker coordinator failure is detected). Otherwise the
+        // runningAssignment is always replaced by the assignment here.
+        synchronized (this) {
+            log.info("Starting connectors and tasks using config offset {}", assignment.offset());
+            log.debug("Received assignment: {}", assignment);
+            log.debug("Currently running assignment: {}", runningAssignment);
+
+            for (String connectorName : assignmentDifference(assignment.connectors(), runningAssignment.connectors())) {
+                callables.add(getConnectorStartingCallable(connectorName));
+            }
+
+            // These tasks have been stopped by this worker due to task reconfiguration. In order to
+            // restart them, they are removed just before the overall task startup from the set of
+            // currently running tasks. Therefore, they'll be restarted only if they are included in
+            // the assignment that was just received after rebalancing.
+            log.debug("Tasks to restart from currently running assignment: {}", tasksToRestart);
+            runningAssignment.tasks().removeAll(tasksToRestart);
+            tasksToRestart.clear();
+            for (ConnectorTaskId taskId : assignmentDifference(assignment.tasks(), runningAssignment.tasks())) {
+                callables.add(getTaskStartingCallable(taskId));
+            }
         }
 
-        // These tasks have been stopped by this worker due to task reconfiguration. In order to
-        // restart them, they are removed just before the overall task startup from the set of
-        // currently running tasks. Therefore, they'll be restarted only if they are included in
-        // the assignment that was just received after rebalancing.
-        runningAssignment.tasks().removeAll(tasksToRestart);
-        tasksToRestart.clear();
-        for (ConnectorTaskId taskId : assignmentDifference(assignment.tasks(), runningAssignment.tasks())) {
-            callables.add(getTaskStartingCallable(taskId));
-        }
         startAndStop(callables);
-        runningAssignment = member.currentProtocolVersion() == CONNECT_PROTOCOL_V0
-                            ? ExtendedAssignment.empty()
-                            : assignment;
+
+        synchronized (this) {
+            runningAssignment = member.currentProtocolVersion() == CONNECT_PROTOCOL_V0
+                                ? ExtendedAssignment.empty()
+                                : assignment;
+        }
 
         log.info("Finished starting connectors and tasks");
     }
@@ -1288,7 +1302,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (worker.isSinkConnector(connName)) {
                 connConfig = new SinkConnectorConfig(plugins(), configs);
             } else {
-                connConfig = new SourceConnectorConfig(plugins(), configs);
+                connConfig = new SourceConnectorConfig(plugins(), configs, worker.isTopicCreationEnabled());
             }
 
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
@@ -1526,6 +1540,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    private void updateDeletedTaskStatus() {
+        ClusterConfigState snapshot = configBackingStore.snapshot();
+        for (String connector : statusBackingStore.connectors()) {
+            Set<ConnectorTaskId> remainingTasks = new HashSet<>(snapshot.tasks(connector));
+            
+            statusBackingStore.getAll(connector).stream()
+                .map(TaskStatus::id)
+                .filter(task -> !remainingTasks.contains(task))
+                .forEach(this::onDeletion);
+        }
+    }
+
     protected HerderMetrics herderMetrics() {
         return herderMetrics;
     }
@@ -1588,11 +1614,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }
 
-            // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
-            // be done after the rebalance completes to avoid race conditions as the previous generation attempts
-            // to change the state to UNASSIGNED after tasks have been stopped.
-            if (isLeader())
+            // Delete the statuses of all connectors and tasks removed prior to the start of this rebalance. This
+            // has to be done after the rebalance completes to avoid race conditions as the previous generation
+            // attempts to change the state to UNASSIGNED after tasks have been stopped.
+            if (isLeader()) {
                 updateDeletedConnectorStatus();
+                updateDeletedTaskStatus();
+            }
 
             // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
             // sleep in the poll() for a long time. Forcing a wakeup ensures we'll get to process this event in the
@@ -1622,6 +1650,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // The actual timeout for graceful task stop is applied in worker's stopAndAwaitTask method.
                 startAndStop(callables);
                 log.info("Finished stopping tasks in preparation for rebalance");
+
+                synchronized (DistributedHerder.this) {
+                    log.debug("Removing connectors from running assignment {}", connectors);
+                    runningAssignment.connectors().removeAll(connectors);
+                    log.debug("Removing tasks from running assignment {}", tasks);
+                    runningAssignment.tasks().removeAll(tasks);
+                }
 
                 if (isTopicTrackingEnabled) {
                     // Send tombstones to reset active topics for removed connectors only after

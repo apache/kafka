@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.io.FileWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -119,17 +120,35 @@ public class TestUtils {
         return metadataUpdateWith("kafka-cluster", numNodes, topicPartitionCounts);
     }
 
+    public static MetadataResponse metadataUpdateWith(final int numNodes,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final short responseVersion) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -137,7 +156,8 @@ public class TestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -145,7 +165,8 @@ public class TestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier,
-                                                      final PartitionMetadataSupplier partitionSupplier) {
+                                                      final PartitionMetadataSupplier partitionSupplier,
+                                                      final short responseVersion) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
             nodes.add(new Node(i, "localhost", 1969 + i));
@@ -175,7 +196,7 @@ public class TestUtils {
                     Topic.isInternal(topic), Collections.emptyList()));
         }
 
-        return MetadataResponse.prepareResponse(nodes, clusterId, 0, topicMetadata);
+        return MetadataResponse.prepareResponse(nodes, clusterId, 0, topicMetadata, responseVersion);
     }
 
     @FunctionalInterface
@@ -224,6 +245,19 @@ public class TestUtils {
     public static File tempFile() throws IOException {
         final File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
+
+        return file;
+    }
+
+    /**
+     * Create a file with the given contents in the default temporary-file directory,
+     * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+     */
+    public static File tempFile(final String contents) throws IOException {
+        final File file = tempFile();
+        final FileWriter writer = new FileWriter(file);
+        writer.write(contents);
+        writer.close();
 
         return file;
     }
@@ -361,9 +395,9 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
-        String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
         retryOnExceptionWithTimeout(maxWaitMs, () -> {
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
                 testCondition.conditionMet());
         });

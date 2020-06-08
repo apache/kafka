@@ -189,8 +189,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onDeletion(String connector) {
         for (TaskStatus status : statusBackingStore.getAll(connector))
-            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED, workerId, generation()));
+            onDeletion(status.id());
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    @Override
+    public void onDeletion(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
     }
 
     @Override
@@ -300,6 +305,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+        return validateConnectorConfig(connectorProps, true);
+    }
+
+    @Override
+    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
@@ -331,22 +341,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            Config config = connector.validate(connectorProps);
-            if (null == config) {
-                throw new BadRequestException(
-                    String.format(
-                        "%s.validate() must return a Config that is not null.",
-                        connector.getClass().getName()
-                    )
-                );
-            }
             ConfigDef configDef = connector.config();
             if (null == configDef) {
                 throw new BadRequestException(
-                    String.format(
-                        "%s.config() must return a ConfigDef that is not null.",
-                        connector.getClass().getName()
-                    )
+                        String.format(
+                                "%s.config() must return a ConfigDef that is not null.",
+                                connector.getClass().getName()
+                        )
+                );
+            }
+            Config config = connector.validate(connectorProps);
+            if (null == config) {
+                throw new BadRequestException(
+                        String.format(
+                                "%s.validate() must return a Config that is not null.",
+                                connector.getClass().getName()
+                        )
                 );
             }
             configKeys.putAll(configDef.configKeys());
@@ -354,7 +364,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configValues.addAll(config.configValues());
             ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
 
-            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps);
+            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps, doLog);
             String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
             ConfigInfos producerConfigInfos = null;
             ConfigInfos consumerConfigInfos = null;
@@ -577,7 +587,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             callback.onCompletion(
                 new BadRequestException(
                     messages.append(
-                        "\nYou can also find the above list of errors at the endpoint `/{connectorType}/config/validate`"
+                        "\nYou can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
                     ).toString()
                 ), null
             );

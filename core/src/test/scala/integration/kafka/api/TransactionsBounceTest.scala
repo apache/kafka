@@ -19,25 +19,22 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-class TransactionsBounceTest extends KafkaServerTestHarness {
+class TransactionsBounceTest extends IntegrationTestHarness {
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3
-
-  val numServers = 4
   private val outputTopic = "output-topic"
   private val inputTopic = "input-topic"
 
@@ -57,7 +54,6 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
   overridingProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
 
-
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing
   // brokers too quickly when they get new, random ports. If we're not careful, the client can end up in a situation
@@ -68,9 +64,11 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(numServers, zkConnect,enableControlledShutdown = true)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
+
+  override protected def brokerCount: Int = 4
 
   @Test
   def testWithGroupId(): Unit = {
@@ -93,17 +91,18 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
-    val consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
-    val producer = TestUtils.createTransactionalProducer("test-txn", servers, 512)
+    val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
+    val producer = createTransactionalProducer("test-txn")
 
     producer.initTransactions()
 
     val scheduler = new BounceScheduler
     scheduler.start()
 
-    var numMessagesProcessed = 0
-    var iteration = 0
     try {
+      var numMessagesProcessed = 0
+      var iteration = 0
+
       while (numMessagesProcessed < numInputRecords) {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
         trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
@@ -130,13 +129,10 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         iteration += 1
       }
     } finally {
-      producer.close()
-      consumer.close()
+      scheduler.shutdown()
     }
 
-    scheduler.shutdown()
-
-    val verifyingConsumer = createConsumerAndSubscribeToTopics("randomGroup", List(outputTopic), readCommitted = true)
+    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
     val recordsByPartition = new mutable.HashMap[TopicPartition, mutable.ListBuffer[Int]]()
     TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).foreach { record =>
       val value = TestUtils.assertCommittedAndGetValue(record).toInt
@@ -156,17 +152,26 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     val expectedValues = (0 until numInputRecords).toSet
     assertEquals(s"Missing messages: ${expectedValues -- recordSet}", expectedValues, recordSet)
-
-    verifyingConsumer.close()
   }
 
-  private def createConsumerAndSubscribeToTopics(groupId: String,
-                                                 topics: List[String],
-                                                 readCommitted: Boolean = false) = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      groupId = groupId,
-      readCommitted = readCommitted,
-      enableAutoCommit = false)
+  private def createTransactionalProducer(transactionalId: String) = {
+    val props = new Properties()
+    props.put(ProducerConfig.ACKS_CONFIG, "all")
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512")
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    createProducer(configOverrides = props)
+  }
+
+  private def createConsumerAndSubscribe(groupId: String,
+                                         topics: List[String],
+                                         readCommitted: Boolean = false) = {
+    val consumerProps = new Properties
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+      if (readCommitted) "read_committed" else "read_uncommitted")
+    val consumer = createConsumer(configOverrides = consumerProps)
     consumer.subscribe(topics.asJava)
     consumer
   }
@@ -198,4 +203,5 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       super.shutdown()
    }
   }
+
 }

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import json
 import os.path
 import re
@@ -31,7 +30,8 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 class KafkaListener:
@@ -94,17 +94,20 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
+    def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT,
+                 interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
-                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None, extra_kafka_opts=""):
+                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
+                 extra_kafka_opts="", tls_version=None):
         """
         :param context: test context
         :param ZookeeperService zk:
         :param dict topics: which topics to create automatically
         :param str security_protocol: security protocol for clients to use
+        :param str tls_version: version of the TLS protocol.
         :param str interbroker_security_protocol: security protocol to use for broker-to-broker communication
         :param str client_sasl_mechanism: sasl mechanism for clients to use
         :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
@@ -128,6 +131,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.zk = zk
 
         self.security_protocol = security_protocol
+        self.tls_version = tls_version
         self.client_sasl_mechanism = client_sasl_mechanism
         self.topics = topics
         self.minikdc = None
@@ -214,7 +218,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                 zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                listener_security_config=self.listener_security_config)
+                                listener_security_config=self.listener_security_config,
+                                tls_version=self.tls_version)
         for port in self.port_mappings.values():
             if port.open:
                 config.enable_security_protocol(port.security_protocol)
@@ -341,6 +346,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
         security_kafka_opts = self.security_config.kafka_opts.strip('\"')
+
+        cmd += fix_opts_for_new_jvm(node)
         cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, security_kafka_opts, self.extra_kafka_opts)
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
@@ -351,14 +358,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def start_node(self, node, timeout_sec=60):
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
+
+        self.security_config.setup_node(node)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
+
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
         node.account.create_file(KafkaService.CONFIG_FILE, prop_file)
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
-
-        self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
@@ -455,7 +463,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         use_zk_connection = topic_cfg.get('if-not-exists', False) or use_zk_to_create_topic
 
-        cmd = "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
             'kafka_topics_cmd': self._kafka_topics_cmd(node, use_zk_connection),
             'connection_string': self._connect_setting(node, use_zk_connection),
             'topic': topic_cfg.get("topic"),
@@ -494,7 +503,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Deleting topic %s" % topic)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = kafka_topic_script + " "
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += kafka_topic_script + " "
         cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
             'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
             'topic': topic
@@ -505,7 +515,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None, use_zk_to_describe_topic=True):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s %s --topic %s --describe %s" % \
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s %s --topic %s --describe %s" % \
               (self._kafka_topics_cmd(node=node, use_zk_connection=use_zk_to_describe_topic),
                self._connect_setting(node=node, use_zk_connection=use_zk_to_describe_topic),
                topic, self._kafka_topics_cmd_config(node=node, use_zk_connection=use_zk_to_describe_topic))
@@ -519,7 +530,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def list_topics(self, node=None, use_zk_to_list_topic=True):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s %s --list %s" % (self._kafka_topics_cmd(node, use_zk_to_list_topic),
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s %s --list %s" % (self._kafka_topics_cmd(node, use_zk_to_list_topic),
                                    self._connect_setting(node, use_zk_to_list_topic),
                                    self._kafka_topics_cmd_config(node, use_zk_to_list_topic))
         for line in node.account.ssh_capture(cmd):
@@ -530,7 +543,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
-        cmd = "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
@@ -542,7 +557,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Enabling unclean leader election for topic %s", topic)
         else:
             self.logger.info("Disabling unclean leader election for topic %s", topic)
-        cmd = "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
@@ -589,7 +606,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         json_str = json.dumps(json_str)
 
         # create command
-        cmd = "echo %s > %s && " % (json_str, json_file)
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
@@ -628,7 +646,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         json_str = json.dumps(json_str)
 
         # create command
-        cmd = "echo %s > %s && " % (json_str, json_file)
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
         cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
@@ -663,7 +682,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             # Check each data file to see if it contains the messages we want
             for log in files:
-                cmd = "%s kafka.tools.DumpLogSegments --print-data-log --files %s | grep -E \"%s\"" % \
+                cmd = fix_opts_for_new_jvm(node)
+                cmd += "%s kafka.tools.DumpLogSegments --print-data-log --files %s | grep -E \"%s\"" % \
                       (self.path.script("kafka-run-class.sh", node), log.strip(), payload_match)
 
                 for line in node.account.ssh_capture(cmd, allow_fail=True):
@@ -779,7 +799,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        cmd = "%s --bootstrap-server %s %s --list" % \
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --list" % \
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config)
@@ -803,7 +824,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        cmd = "%s --bootstrap-server %s %s --group %s --describe" % \
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config, group)
@@ -877,7 +899,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
 
-        cmd = self.path.script("kafka-run-class.sh", node)
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " kafka.tools.GetOffsetShell"
         cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
 

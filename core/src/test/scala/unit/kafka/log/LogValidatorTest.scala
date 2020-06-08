@@ -21,21 +21,21 @@ import java.util.concurrent.TimeUnit
 
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.{LongRef, RecordValidationException}
+import kafka.log.LogValidator.ValidationAndOffsetAssignResult
 import kafka.message._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.meterCount
-import org.apache.kafka.common.InvalidRecordException
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.{assertThrows, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogValidatorTest {
 
@@ -65,6 +65,29 @@ class LogValidatorTest {
   }
 
   @Test
+  def testValidationOfBatchesWithNonSequentialInnerOffsets(): Unit = {
+    def testMessageValidation(magicValue: Byte): Unit = {
+      val numRecords = 20
+      val invalidRecords = recordsWithNonSequentialInnerOffsets(magicValue, CompressionType.GZIP, numRecords)
+
+      // Validation for v2 and above is strict for this case. For older formats, we fix invalid
+      // internal offsets by rewriting the batch.
+      if (magicValue >= RecordBatch.MAGIC_VALUE_V2) {
+        assertThrows[InvalidRecordException] {
+          validateMessages(invalidRecords, magicValue, CompressionType.GZIP, CompressionType.GZIP)
+        }
+      } else {
+        val result = validateMessages(invalidRecords, magicValue, CompressionType.GZIP, CompressionType.GZIP)
+        assertEquals(0 until numRecords, result.validatedRecords.records.asScala.map(_.offset))
+      }
+    }
+
+    for (version <- RecordVersion.values) {
+      testMessageValidation(version.value)
+    }
+  }
+
+  @Test
   def testMisMatchMagic(): Unit = {
     checkMismatchMagic(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
     checkMismatchMagic(RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
@@ -88,7 +111,10 @@ class LogValidatorTest {
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}") > 0)
   }
 
-  private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
+  private def validateMessages(records: MemoryRecords,
+                               magic: Byte,
+                               sourceCompressionType: CompressionType,
+                               targetCompressionType: CompressionType): ValidationAndOffsetAssignResult = {
     LogValidator.validateMessagesAndAssignOffsets(records,
       topicPartition,
       new LongRef(0L),
@@ -112,6 +138,11 @@ class LogValidatorTest {
     checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
+  @Test
+  def testLogAppendTimeNonCompressedV2(): Unit = {
+    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
+  }
+
   private def checkLogAppendTimeNonCompressed(magic: Byte): Unit = {
     val now = System.currentTimeMillis()
     // The timestamps should be overwritten
@@ -133,17 +164,16 @@ class LogValidatorTest {
       brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
-    assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
+    // we index from last offset in version 2 instead of base offset
+    val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
+    assertEquals(s"The offset of max timestamp should be $expectedMaxTimestampOffset",
+      expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
       compressed = false)
-  }
-
-  def testLogAppendTimeNonCompressedV2(): Unit = {
-    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test
@@ -174,7 +204,7 @@ class LogValidatorTest {
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, -1, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, -1, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -219,7 +249,7 @@ class LogValidatorTest {
 
     assertEquals("message set size should not change", records.records.asScala.size,
       validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -1287,7 +1317,6 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
     }
 
-    e.recordErrors.foreach(e => println(e.batchIndex + " " + e.message))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertTrue(e.recordErrors.nonEmpty)
     // recordsWithInvalidInnerMagic creates 20 records
@@ -1399,6 +1428,23 @@ class LogValidatorTest {
       assertEquals("Unexpected offset in message set iterator", offset, entry.offset)
       offset += 1
     }
+  }
+
+  private def recordsWithNonSequentialInnerOffsets(magicValue: Byte,
+                                                   codec: CompressionType,
+                                                   numRecords: Int): MemoryRecords = {
+    val records = (0 until numRecords).map { id =>
+      new SimpleRecord(id.toString.getBytes)
+    }
+
+    val buffer = ByteBuffer.allocate(1024)
+    val builder = MemoryRecords.builder(buffer, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+
+    records.foreach { record =>
+      builder.appendUncheckedWithOffset(0, record)
+    }
+
+    builder.build()
   }
 
   private def recordsWithInvalidInnerMagic(batchMagicValue: Byte,

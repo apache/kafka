@@ -54,7 +54,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.ControlThrowable
@@ -170,7 +170,7 @@ class SocketServerTest {
   }
 
   private def sslClientSocket(port: Int): Socket = {
-    val sslContext = SSLContext.getInstance("TLSv1.2")
+    val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
     sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
     val socketFactory = sslContext.getSocketFactory
     val socket = socketFactory.createSocket("localhost", port)
@@ -302,13 +302,23 @@ class SocketServerTest {
     testProps.put("inter.broker.listener.name", "INTERNAL")
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup(startupProcessors = false)
+    testableServer.startup(startProcessingRequests = false)
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
+
+    def controlPlaneListenerStarted() = {
+      try {
+        val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
+        sendAndReceiveControllerRequest(socket, testableServer)
+        true
+      } catch {
+        case _: Throwable => false
+      }
+    }
 
     def listenerStarted(listenerName: ListenerName) = {
       try {
@@ -321,14 +331,11 @@ class SocketServerTest {
     }
 
     try {
-      testableServer.startControlPlaneProcessor()
-      val socket1 = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
-      sendAndReceiveControllerRequest(socket1, testableServer)
-
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
-      val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
+      val futures = Map(externalEndpoint -> externalReadyFuture)
+      val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
+      TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 
@@ -340,6 +347,27 @@ class SocketServerTest {
       executor.shutdownNow()
       shutdownServerAndMetrics(testableServer)
     }
+  }
+
+  @Test
+  def testStagedListenerShutdownWhenConnectionQueueIsFull(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    val connectionQueueSize = 1
+    val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.startup(startProcessingRequests = false)
+
+    val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket1, producerRequestBytes())
+    val socket2 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket2, producerRequestBytes())
+
+    testableServer.shutdown()
   }
 
   @Test
@@ -1016,7 +1044,7 @@ class SocketServerTest {
   }
 
   @Test
-  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend() {
+  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
@@ -1135,7 +1163,7 @@ class SocketServerTest {
 
     // legacy metrics not tagged
     val yammerMetricsNames = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getType.equals("Processor"))
+      .filter { case (k, _) => k.getType.equals("Processor") }
       .collect { case (k, _: Gauge[_]) => k }
     assertFalse(yammerMetricsNames.isEmpty)
 
@@ -1569,6 +1597,8 @@ class SocketServerTest {
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+      assertEquals(1, testableServer.uncaughtExceptions)
+      testableServer.uncaughtExceptions = 0
     })
   }
 
@@ -1647,6 +1677,7 @@ class SocketServerTest {
         testWithServer(testableServer)
     } finally {
       shutdownServerAndMetrics(testableServer)
+      assertEquals(0, testableServer.uncaughtExceptions)
     }
   }
 
@@ -1683,8 +1714,9 @@ class SocketServerTest {
 
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
-    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
+    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == blockedPercentMetricMBeanName
+    }.values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate
@@ -1701,6 +1733,7 @@ class SocketServerTest {
       new Metrics, time, credentialProvider) {
 
     @volatile var selector: Option[TestableSelector] = None
+    @volatile var uncaughtExceptions = 0
 
     override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
@@ -1712,6 +1745,12 @@ class SocketServerTest {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
            selector = Some(testableSelector)
            testableSelector
+        }
+
+        override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
+          if (errorMessage.contains("uncaught exception"))
+            uncaughtExceptions += 1
+          super.processException(errorMessage, throwable)
         }
       }
     }
@@ -1765,12 +1804,19 @@ class SocketServerTest {
     // Enable data from `Selector.poll()` to be deferred to a subsequent poll() until
     // the number of elements of that type reaches `minPerPoll`. This enables tests to verify
     // that failed processing doesn't impact subsequent processing within the same iteration.
-    class PollData[T] {
+    abstract class PollData[T] {
       var minPerPoll = 1
       val deferredValues = mutable.Buffer[T]()
-      val currentPollValues = mutable.Buffer[T]()
-      def update(newValues: mutable.Buffer[T]): Unit = {
-        if (currentPollValues.nonEmpty || deferredValues.size + newValues.size >= minPerPoll) {
+
+      /**
+       * Process new results and return the results for the current poll if at least
+       * `minPerPoll` results are available including any deferred results. Otherwise
+       * add the provided values to the deferred set and return an empty buffer. This allows
+       * tests to process `minPerPoll` elements as the results of a single poll iteration.
+       */
+      protected def update(newValues: mutable.Buffer[T]): mutable.Buffer[T] = {
+        val currentPollValues = mutable.Buffer[T]()
+        if (deferredValues.size + newValues.size >= minPerPoll) {
           if (deferredValues.nonEmpty) {
             currentPollValues ++= deferredValues
             deferredValues.clear()
@@ -1778,14 +1824,49 @@ class SocketServerTest {
           currentPollValues ++= newValues
         } else
           deferredValues ++= newValues
+
+        currentPollValues
       }
-      def reset(): Unit = {
-        currentPollValues.clear()
+
+      /**
+       * Process results from the appropriate buffer in Selector and update the buffer to either
+       * defer and return nothing or return all results including previously deferred values.
+       */
+      def updateResults(): Unit
+    }
+
+    class CompletedReceivesPollData(selector: TestableSelector) extends PollData[NetworkReceive] {
+      val completedReceivesMap: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(selector, classOf[Selector], "completedReceives")
+
+      override def updateResults(): Unit = {
+        val currentReceives = update(selector.completedReceives.asScala.toBuffer)
+        completedReceivesMap.clear()
+        currentReceives.foreach { receive =>
+          val channelOpt = Option(selector.channel(receive.source)).orElse(Option(selector.closingChannel(receive.source)))
+          channelOpt.foreach { channel => completedReceivesMap.put(channel.id, receive) }
+        }
       }
     }
-    val cachedCompletedReceives = new PollData[NetworkReceive]()
-    val cachedCompletedSends = new PollData[Send]()
-    val cachedDisconnected = new PollData[(String, ChannelState)]()
+
+    class CompletedSendsPollData(selector: TestableSelector) extends PollData[Send] {
+      override def updateResults(): Unit = {
+        val currentSends = update(selector.completedSends.asScala)
+        selector.completedSends.clear()
+        currentSends.foreach { selector.completedSends.add }
+      }
+    }
+
+    class DisconnectedPollData(selector: TestableSelector) extends PollData[(String, ChannelState)] {
+      override def updateResults(): Unit = {
+        val currentDisconnected = update(selector.disconnected.asScala.toBuffer)
+        selector.disconnected.clear()
+        currentDisconnected.foreach { case (channelId, state) => selector.disconnected.put(channelId, state) }
+      }
+    }
+
+    val cachedCompletedReceives = new CompletedReceivesPollData(this)
+    val cachedCompletedSends = new CompletedSendsPollData(this)
+    val cachedDisconnected = new DisconnectedPollData(this)
     val allCachedPollData = Seq(cachedCompletedReceives, cachedCompletedSends, cachedDisconnected)
     val pendingClosingChannels = new ConcurrentLinkedQueue[KafkaChannel]()
     @volatile var minWakeupCount = 0
@@ -1832,20 +1913,23 @@ class SocketServerTest {
 
     override def poll(timeout: Long): Unit = {
       try {
+        assertEquals(0, super.completedReceives().size)
+        assertEquals(0, super.completedSends().size)
+
         pollCallback.apply()
         while (!pendingClosingChannels.isEmpty) {
           makeClosing(pendingClosingChannels.poll())
         }
-        allCachedPollData.foreach(_.reset)
         runOp(SelectorOperation.Poll, None) {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
         }
       } finally {
-        super.channels.asScala.foreach(allChannels += _.id)
+        super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
-        cachedCompletedReceives.update(super.completedReceives.asScala.toBuffer)
-        cachedCompletedSends.update(super.completedSends.asScala)
-        cachedDisconnected.update(super.disconnected.asScala.toBuffer)
+
+        cachedCompletedReceives.updateResults()
+        cachedCompletedSends.updateResults()
+        cachedDisconnected.updateResults()
       }
     }
 
@@ -1869,12 +1953,6 @@ class SocketServerTest {
           super.wakeup()
       }
     }
-
-    override def disconnected: java.util.Map[String, ChannelState] = cachedDisconnected.currentPollValues.toMap.asJava
-
-    override def completedSends: java.util.List[Send] = cachedCompletedSends.currentPollValues.asJava
-
-    override def completedReceives: java.util.List[NetworkReceive] = cachedCompletedReceives.currentPollValues.asJava
 
     override def close(id: String): Unit = {
       runOp(SelectorOperation.Close, Some(id)) {
