@@ -497,7 +497,7 @@ public class IncrementalCooperativeAssignorTest {
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
-        // This was the assignment that should have been sent, but didn't make it after all the way
+        // This was the assignment that should have been sent, but didn't make it all the way
         assertDelay(0, returnedAssignments);
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(2, 8, 0, 0, "worker1", "worker2");
@@ -560,7 +560,7 @@ public class IncrementalCooperativeAssignorTest {
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
-        // This was the assignment that should have been sent, but didn't make it after all the way
+        // This was the assignment that should have been sent, but didn't make it all the way
         assertDelay(0, returnedAssignments);
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
