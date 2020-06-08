@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 
 public class MockInternalTopicManager extends InternalTopicManager {
 
@@ -63,7 +64,9 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics,
+                                                    final HashSet<String> leaderNotAvailableTopics,
+                                                    final int remainingRetries) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (final String topic : topics) {
             partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());

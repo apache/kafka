@@ -54,9 +54,6 @@ public class InternalTopicManager {
 
     private final int retries;
     private final long retryBackOffMs;
-    private int remainingRetries;
-
-    private HashSet<String> leaderNotAvailableTopics = new HashSet<>();
 
     public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
@@ -98,12 +95,13 @@ public class InternalTopicManager {
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
         log.debug("Starting to validate internal topics {} in partition assignor.", topics);
 
-        remainingRetries = retries;
+        int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
+        final HashSet<String> leaderNotAvailableTopics = new HashSet<>();
 
-        while (shouldRetry(topicsNotReady) && remainingRetries >= 0) {
-            topicsNotReady = validateTopics(topicsNotReady, topics);
+        while (shouldRetry(topicsNotReady, leaderNotAvailableTopics) && remainingRetries >= 0) {
+            topicsNotReady = validateTopics(topicsNotReady, topics, leaderNotAvailableTopics, remainingRetries);
             newlyCreatedTopics.addAll(topicsNotReady);
 
             if (!topicsNotReady.isEmpty()) {
@@ -155,7 +153,7 @@ public class InternalTopicManager {
             }
 
 
-            if (shouldRetry(topicsNotReady)) {
+            if (shouldRetry(topicsNotReady, leaderNotAvailableTopics)) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
 
                 Utils.sleep(retryBackOffMs);
@@ -164,7 +162,7 @@ public class InternalTopicManager {
             }
         }
 
-        if (shouldRetry(topicsNotReady)) {
+        if (shouldRetry(topicsNotReady, leaderNotAvailableTopics)) {
             final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
@@ -182,7 +180,9 @@ public class InternalTopicManager {
      * Topics that were not able to get its description will simply not be returned
      */
     // visible for testing
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics,
+                                                    final HashSet<String> leaderNotAvailableTopics,
+                                                    final int remainingRetries) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
@@ -194,9 +194,7 @@ public class InternalTopicManager {
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
-                if (leaderNotAvailableTopics.contains(topicName)) {
-                    leaderNotAvailableTopics.remove(topicName);
-                }
+                leaderNotAvailableTopics.remove(topicName);
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -231,13 +229,16 @@ public class InternalTopicManager {
     /**
      * Check the existing topics to have correct number of partitions; and return the remaining topics that needs to be created
      */
-    private Set<String> validateTopics(final Set<String> topicsToValidate, final Map<String, InternalTopicConfig> topicsMap) {
+    private Set<String> validateTopics(final Set<String> topicsToValidate,
+                                       final Map<String, InternalTopicConfig> topicsMap,
+                                       final HashSet<String> leaderNotAvailableTopics,
+                                       final int remainingRetries) {
         if (!topicsMap.keySet().containsAll(topicsToValidate)) {
             throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
                 topicsToValidate + " trying to validate.");
         }
 
-        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
+        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate, leaderNotAvailableTopics, remainingRetries);
 
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
@@ -263,7 +264,7 @@ public class InternalTopicManager {
         return topicsToCreate;
     }
 
-    private boolean shouldRetry(final Set<String> topicsNotReady) {
+    private boolean shouldRetry(final Set<String> topicsNotReady, final HashSet<String> leaderNotAvailableTopics) {
         // If there's topic with LeaderNotAvailableException, we still need retry
         return !topicsNotReady.isEmpty() || leaderNotAvailableTopics.size() > 0;
     }

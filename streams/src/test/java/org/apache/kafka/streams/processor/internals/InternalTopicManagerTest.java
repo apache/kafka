@@ -47,12 +47,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Optional;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -111,7 +110,8 @@ public class InternalTopicManagerTest {
             topic,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList())),
             null);
-        assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
+        assertEquals(Collections.singletonMap(topic, 1),
+                internalTopicManager.getNumPartitions(Collections.singleton(topic), new HashSet<String>(), 1));
     }
 
     @Test
@@ -298,38 +298,23 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldLogWhenTopicLeaderNotAvailableAndThrowException() {
-        final String topicLeaderNotAvailable = "LeaderNotAvailableTopic";
         mockAdminClient.addTopic(
             false,
-            topicLeaderNotAvailable,
+            MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
             null);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topicLeaderNotAvailable, Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
 
         final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(topicLeaderNotAvailable, internalTopicConfig);
+        topicConfigMap.put(MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC, internalTopicConfig);
 
         LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
             final StreamsException exception = assertThrows(
                 StreamsException.class,
                 () -> internalTopicManager.makeReady(topicConfigMap));
-
-            final String expectedMessage = "Could not create topics after 1 retries. This can happen if the Kafka cluster is temporary not available";
-            // should throw exception when leader keeps unavailable
-            assertTrue(exception.getMessage().contains(expectedMessage));
-
-            final String logLeaderNotAvailable = "The leader of Topic " + topicLeaderNotAvailable + " is not available";
-            // should log the leader not available
-            assertThat(appender.getMessages(), hasItem(containsString(logLeaderNotAvailable)));
-
-            final String logCreateTopic = "Going to create topic " + topicLeaderNotAvailable;
-            final String logTopicExistsException = "TopicExistsException";
-            // should not attempt to create the topic when Leader not available
-            assertThat(appender.getMessages(), not(hasItem(containsString(logCreateTopic))));
-            assertThat(appender.getMessages(), not(hasItem(containsString(logTopicExistsException))));
         }
     }
 
