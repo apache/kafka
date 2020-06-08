@@ -58,6 +58,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -87,7 +88,6 @@ public class ProcessorTopologyTest {
 
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
-
 
     @Before
     public void setup() {
@@ -147,6 +147,29 @@ public class ProcessorTopologyTest {
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
         assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsWithNewMatchingTopic() {
+        topology.addSource("source-1", "topic-1");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertNull(processorTopology.source("topic-2"));
+        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", asList("topic-1", "topic-2")));
+
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsWithRemovedTopic() {
+        topology.addSource("source-1", "topic-1", "topic-2");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+
+        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
+
+        assertNull(processorTopology.source("topic-2"));
     }
 
     @Test

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -496,12 +497,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
-        super.update(topicPartitions, processorTopology);
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        super.update(topicPartitions, nodeToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
-        if (state() != State.RESTORING) { // if task is RESTORING then topology will be initialized in completeRestoration
-            initializeTopology();
-        }
     }
 
     @Override
@@ -512,18 +510,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         switch (state()) {
             case CREATED:
-            case RUNNING:
             case RESTORING:
+            case RUNNING:
             case SUSPENDED:
                 stateMgr.recycle();
                 recordCollector.close();
                 break;
-
             case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
-
+                throw new IllegalStateException("Illegal state " + state() + " while recycling active task " + id);
             default:
-                throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
+                throw new IllegalStateException("Unknown state " + state() + " while recycling active task " + id);
         }
 
         partitionGroup.close();
