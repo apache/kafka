@@ -183,9 +183,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   // initialized as the same as the current state
   var pendingState: Option[TransactionState] = None
 
-  // Previous value for the producer epoch. This is populated when fencing a producer so that if the fencing
-  // transition fails to append to the log, the epoch bump can be rolled back
-  var previousEpoch: Option[Short] = None
+  // Indicates that during a previous attempt to fence a producer, the bumped epoch may not have been
+  // successfully written to the log. If this is true, we will not bump the epoch again when fencing
+  var hasFailedEpochFence: Boolean = false
 
   private[transaction] val lock = new ReentrantLock
 
@@ -214,7 +214,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     if (producerEpoch == Short.MaxValue)
       throw new IllegalStateException(s"Cannot fence producer with epoch equal to Short.MaxValue since this would overflow")
 
-    prepareTransitionTo(PrepareEpochFence, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+    val bumpedEpoch = if (hasFailedEpochFence) producerEpoch else (producerEpoch + 1).toShort
+
+    prepareTransitionTo(PrepareEpochFence, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
       topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
@@ -289,8 +291,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
 
-    // Since the state change was successfully written to the log, clear the previous epoch
-    previousEpoch = None
+    // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
+    hasFailedEpochFence = false
     prepareTransitionTo(newState, producerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
       txnStartTimestamp, updateTimestamp)
   }

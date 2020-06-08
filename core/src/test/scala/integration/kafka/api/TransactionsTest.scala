@@ -666,7 +666,6 @@ class TransactionsTest extends KafkaServerTestHarness {
   def testFailureToFenceEpoch(): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
-    val consumer = transactionalConsumers.head
 
     producer1.initTransactions()
 
@@ -692,7 +691,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer2.initTransactions()
     } catch {
       case _: TimeoutException =>
-      // good!
+        // good!
       case e: Exception =>
         fail("Got an unexpected exception from initTransactions", e)
     } finally {
@@ -701,19 +700,26 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     restartDeadBrokers()
 
-    producer1.commitTransaction()
-
-    consumer.subscribe(List(topic1, topic2).asJava)
-
-    val records = consumeRecords(consumer, 3)
-    records.foreach { record =>
-      TestUtils.assertCommittedAndGetValue(record)
+    // Because the epoch was bumped in memory, attempting to commit with producer 1 should fail
+    try {
+      producer1.commitTransaction()
+    } catch {
+      case _: ProducerFencedException =>
+        // good!
+      case e: Exception =>
+        fail("Got an unexpected exception from commitTransaction", e)
+    } finally {
+      producer1.close()
     }
 
-    // Check that the epoch did not increase
+    // Create a third producer and initialize it in order to force the epoch to be written to disk
+    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
+    producer3.initTransactions()
+
+    // Check that the epoch only increased by 1
     producerStateEntry =
       servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
-    assertTrue(producerStateEntry.producerEpoch == initialProducerEpoch)
+    assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

@@ -615,12 +615,13 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldNotBumpEpochDueToInitPidDuringOngoingTxnIfAppendToLogFails(): Unit = {
+  def shouldNotRepeatedlyBumpEpochDueToInitPidDuringOngoingTxnIfAppendToLogFails(): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
 
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
+      .anyTimes()
 
     EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.anyObject[TransactionMetadata]()))
       .andReturn(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
@@ -628,34 +629,66 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andAnswer(() => Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
-      .times(2)
+      .anyTimes()
 
-    val txnMetadataAfterAppendFailure = new TransactionMetadata(transactionalId, producerId, producerId, (producerEpoch + 1).toShort,
+    /* val txnMetadataAfterAppendFailure = new TransactionMetadata(transactionalId, producerId, producerId, (producerEpoch + 1).toShort,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
-    txnMetadataAfterAppendFailure.previousEpoch = Some(producerEpoch)
+    txnMetadataAfterAppendFailure.hasFailedEpochFence = true
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andAnswer(() => Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadataAfterAppendFailure))))
-      .once
+      .times(3) */
 
     val originalMetadata = new TransactionMetadata(transactionalId, producerId, producerId, (producerEpoch + 1).toShort,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
+    val txnTransitMetadata = originalMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
-      EasyMock.eq(originalMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())),
+      EasyMock.eq(txnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject())
-    ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS))
+    ).andAnswer(() => {
+      capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS)
+      txnMetadata.pendingState = None
+    }).times(2)
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(coordinatorEpoch),
+      EasyMock.eq(txnTransitMetadata),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject())
+    ).andAnswer(() => {
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+
+      // For the successful call, execute the state transitions that would happen in appendTransactionToLog()
+      txnMetadata.completeTransitionTo(txnTransitMetadata)
+      txnMetadata.prepareComplete(time.milliseconds())
+    }).once()
 
     EasyMock.replay(transactionManager)
 
+    // For the first two calls, verify that the epoch was only bumped once
     coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
-
     assertEquals(InitProducerIdResult(-1, -1, Errors.NOT_ENOUGH_REPLICAS), result)
-    EasyMock.verify(transactionManager)
 
-    assertEquals(producerEpoch, txnMetadataAfterAppendFailure.producerEpoch)
-    assertEquals(None, txnMetadataAfterAppendFailure.previousEpoch)
+    assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertTrue(txnMetadata.hasFailedEpochFence)
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(-1, -1, Errors.NOT_ENOUGH_REPLICAS), result)
+
+    assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertTrue(txnMetadata.hasFailedEpochFence)
+
+    // For the last, successful call, verify that the epoch was not bumped further
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+
+    assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertFalse(txnMetadata.hasFailedEpochFence)
+
+    EasyMock.verify(transactionManager)
   }
 
   @Test
@@ -922,8 +955,8 @@ class TransactionCoordinatorTest {
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .times(2)
 
-    val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, producerEpoch, txnTimeoutMs,
-      PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+    val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
@@ -1000,7 +1033,6 @@ class TransactionCoordinatorTest {
 
     val txnMetadataAfterAppendFailure = new TransactionMetadata(transactionalId, producerId, producerId, (producerEpoch + 1).toShort,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, now, now)
-    txnMetadataAfterAppendFailure.previousEpoch = Some(producerEpoch)
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andAnswer(() => Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadataAfterAppendFailure))))
       .once
@@ -1023,8 +1055,8 @@ class TransactionCoordinatorTest {
     scheduler.tick()
     EasyMock.verify(transactionManager)
 
-    assertEquals(producerEpoch, txnMetadataAfterAppendFailure.producerEpoch)
-    assertEquals(None, txnMetadataAfterAppendFailure.previousEpoch)
+    assertEquals((producerEpoch + 1).toShort, txnMetadataAfterAppendFailure.producerEpoch)
+    assertTrue(txnMetadataAfterAppendFailure.hasFailedEpochFence)
   }
 
   @Test
