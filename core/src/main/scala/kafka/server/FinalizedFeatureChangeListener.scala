@@ -20,8 +20,8 @@ package kafka.server
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 
 import kafka.utils.{Logging, ShutdownableThread}
-import kafka.zk.{FeatureZNode,FeatureZNodeStatus, KafkaZkClient, ZkVersion}
-import kafka.zookeeper.ZNodeChangeHandler
+import kafka.zk.{FeatureZNode, FeatureZNodeStatus, KafkaZkClient, ZkVersion}
+import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler}
 import org.apache.kafka.common.internals.FatalExitError
 
 import scala.concurrent.TimeoutException
@@ -94,7 +94,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         featureZNode.status match {
           case FeatureZNodeStatus.Disabled => {
             info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
-            FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+            FinalizedFeatureCache.clear()
           }
           case FeatureZNodeStatus.Enabled => {
             FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
@@ -170,6 +170,16 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
+  object ZkStateChangeHandler extends StateChangeHandler {
+    val path: String = FeatureZNode.path
+
+    override val name: String = s"change-notification-$path"
+
+    override def afterInitializingSession(): Unit = {
+      queue.add(new FeatureCacheUpdater(path))
+    }
+  }
+
   private val queue = new LinkedBlockingQueue[FeatureCacheUpdater]
 
   private val thread = new ChangeNotificationProcessorThread("feature-zk-node-event-process-thread")
@@ -194,6 +204,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     }
 
     thread.start()
+    zkClient.registerStateChangeHandler(ZkStateChangeHandler)
     zkClient.registerZNodeChangeHandlerAndCheckExistence(FeatureZNodeChangeHandler)
     val ensureCacheUpdateOnce = new FeatureCacheUpdater(
       FeatureZNodeChangeHandler.path, Some(new CountDownLatch(1)))
@@ -213,6 +224,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
    * clearing the queue and shutting down the ChangeNotificationProcessorThread.
    */
   def close(): Unit = {
+    zkClient.unregisterStateChangeHandler(ZkStateChangeHandler.name)
     zkClient.unregisterZNodeChangeHandler(FeatureZNodeChangeHandler.path)
     queue.clear()
     thread.shutdown()

@@ -36,7 +36,6 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Possible error codes:
@@ -45,13 +44,15 @@ import java.util.Optional;
  */
 public class ApiVersionsResponse extends AbstractResponse {
 
+    public static final int UNKNOWN_FINALIZED_FEATURES_EPOCH = -1;
+
     public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
         createApiVersionsResponse(
             DEFAULT_THROTTLE_TIME,
             RecordBatch.CURRENT_MAGIC_VALUE,
             Features.emptySupportedFeatures(),
-            Optional.empty(),
-            Optional.empty());
+            Features.emptyFinalizedFeatures(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH);
 
     public final ApiVersionsResponseData data;
 
@@ -132,7 +133,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         byte maxMagic,
         Features<SupportedVersionRange> latestSupportedFeatures) {
         return apiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, Optional.empty(), Optional.empty());
+            throttleTimeMs, maxMagic, latestSupportedFeatures, Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
     }
 
     public static ApiVersionsResponse apiVersionsResponse(
@@ -141,16 +142,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
         int finalizedFeaturesEpoch) {
-        return apiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, Optional.of(finalizedFeatures), Optional.of(finalizedFeaturesEpoch));
-    }
-
-    private static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        byte maxMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Optional<Features<FinalizedVersionRange>> finalizedFeatures,
-        Optional<Integer> finalizedFeaturesEpoch) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
             return DEFAULT_API_VERSIONS_RESPONSE;
         }
@@ -158,12 +149,23 @@ public class ApiVersionsResponse extends AbstractResponse {
             throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
     }
 
+    public static ApiVersionsResponse createApiVersionsResponseWithEmptyFeatures(
+        int throttleTimeMs,
+        final byte minMagic) {
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            minMagic,
+            Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+    }
+
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         final byte minMagic,
         Features<SupportedVersionRange> latestSupportedFeatures,
-        Optional<Features<FinalizedVersionRange>> finalizedFeatures,
-        Optional<Integer> finalizedFeaturesEpoch
+        Features<FinalizedVersionRange> finalizedFeatures,
+        int finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {
@@ -180,12 +182,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setErrorCode(Errors.NONE.code());
         data.setApiKeys(apiKeys);
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
-        if (finalizedFeatures.isPresent()) {
-            data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures.get()));
-        }
-        if (finalizedFeaturesEpoch.isPresent()) {
-            data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch.get());
-        }
+        data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
+        data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
 
         return new ApiVersionsResponse(data);
     }

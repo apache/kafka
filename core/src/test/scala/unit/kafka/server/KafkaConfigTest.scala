@@ -715,7 +715,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetricReporterClassesProp => // ignore string
         case KafkaConfig.MetricRecordingLevelProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
-        // SSL Configs
+        //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
         case KafkaConfig.ConnectionsMaxReauthMsProp =>
         case KafkaConfig.SslProtocolProp => // ignore string
@@ -736,7 +736,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslCipherSuitesProp => // ignore string
         case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
-        // Sasl Configs
+        //Sasl Configs
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
         case KafkaConfig.SaslClientCallbackHandlerClassProp =>
@@ -755,7 +755,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
         case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
 
-        // Security config
+        //Security config
         case KafkaConfig.securityProviderClassProp =>
 
         // Password encoder configs
@@ -766,13 +766,13 @@ class KafkaConfigTest {
         case KafkaConfig.PasswordEncoderKeyLengthProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
 
-        // delegation token configs
+        //delegation token configs
         case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
-        // Kafka Yammer metrics reporter configs
+        //Kafka Yammer metrics reporter configs
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 

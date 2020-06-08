@@ -1,9 +1,28 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package kafka.server
 
+import java.util.concurrent.CountDownLatch
+
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion, ZooKeeperTestHarness}
-import kafka.utils.{Exit, TestUtils}
+import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.internals.FatalExitError
 import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.{Before, Test}
 
@@ -117,10 +136,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
     assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
+
     TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.get.isDefined &&
-        FinalizedFeatureCache.get.get.features.equals(updatedFinalizedFeatures) &&
-        FinalizedFeatureCache.get.get.epoch == updatedVersion
+      FinalizedFeatureCache.get.isEmpty
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
     assertTrue(listener.isListenerInitiated)
   }
@@ -141,12 +159,14 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertNotEquals(initialVersion, ZkVersion.UnknownVersion)
     assertFalse(mayBeFeatureZNodeBytes.isEmpty)
 
-    Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
+    val exitLatch = new CountDownLatch(1)
+    Exit.setExitProcedure((_, _) => exitLatch.countDown())
     try {
       val listener = new FinalizedFeatureChangeListener(zkClient)
       assertFalse(listener.isListenerInitiated)
       assertTrue(FinalizedFeatureCache.isEmpty)
       assertThrows(classOf[TimeoutException], () => listener.initOrThrow(5000))
+      exitLatch.await()
       assertFalse(listener.isListenerInitiated)
       assertTrue(listener.isListenerDead)
       assertTrue(FinalizedFeatureCache.isEmpty)
@@ -165,7 +185,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val initialFinalizedFeatures = createFinalizedFeatures()
     val listener = createListener(Some(initialFinalizedFeatures))
 
-    Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
+    val exitLatch = new CountDownLatch(1)
+    Exit.setExitProcedure((_, _) => exitLatch.countDown())
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 5))
     val incompatibleFinalizedFeatures = Features.finalizedFeatures(incompatibleFinalizedFeaturesMap.asJava)
@@ -176,7 +197,16 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
 
     try {
       TestUtils.waitUntilTrue(() => {
-        !listener.isListenerInitiated && listener.isListenerDead && FinalizedFeatureCache.get.get.equals(initialFinalizedFeatures)
+        // Make sure the custom exit procedure (defined above) was called.
+        exitLatch.getCount == 0 &&
+        // Make sure the listener is no longer initiated (because, it is dead).
+        !listener.isListenerInitiated &&
+        // Make sure the listener dies after hitting an exception when processing incompatible
+        // features read from ZK.
+        listener.isListenerDead &&
+        // Make sure the cache contents are as expected, and, the incompatible features were not
+        // applied.
+        FinalizedFeatureCache.get.get.equals(initialFinalizedFeatures)
       }, "Timed out waiting for listener death and FinalizedFeatureCache to be updated")
     } finally {
       Exit.resetExitProcedure()

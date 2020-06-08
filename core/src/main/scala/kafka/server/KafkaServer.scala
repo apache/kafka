@@ -701,12 +701,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown(), this)
 
+        if (featureChangeListener != null)
+          CoreUtils.swallow(featureChangeListener.close(), this)
+
         if (zkClient != null)
           CoreUtils.swallow(zkClient.close(), this)
-
-        if (featureChangeListener != null) {
-          CoreUtils.swallow(featureChangeListener.close(), this)
-        }
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)

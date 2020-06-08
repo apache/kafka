@@ -136,7 +136,8 @@ public class FeaturesTest {
     }
 
     @Test
-    public void testFromToSupportedFeaturesMap() {
+    public void testSupportedFeaturesFromMapFailure() {
+        // This is invalid because 'max_version' key is missing.
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
             mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));
         assertThrows(
@@ -146,8 +147,9 @@ public class FeaturesTest {
 
     @Test
     public void testFinalizedFeaturesFromMapFailure() {
+        // This is invalid because 'max_version_level' key is missing.
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
-            mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));
+            mkEntry("feature_1", mkMap(mkEntry("min_version_level", (short) 1))));
         assertThrows(
             IllegalArgumentException.class,
             () -> Features.fromFinalizedFeaturesMap(invalidFeatures));

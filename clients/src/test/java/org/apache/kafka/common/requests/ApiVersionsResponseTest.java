@@ -50,7 +50,7 @@ public class ApiVersionsResponseTest {
         assertEquals(10, response.throttleTimeMs());
         assertTrue(response.data.supportedFeatures().isEmpty());
         assertTrue(response.data.finalizedFeatures().isEmpty());
-        assertEquals(0L, response.data.finalizedFeaturesEpoch());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -58,7 +58,7 @@ public class ApiVersionsResponseTest {
         assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(0L, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -71,7 +71,7 @@ public class ApiVersionsResponseTest {
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data.supportedFeatures().isEmpty());
         assertTrue(response.data.finalizedFeatures().isEmpty());
-        assertEquals(0L, response.data.finalizedFeaturesEpoch());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
@@ -100,7 +100,7 @@ public class ApiVersionsResponseTest {
 
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(0L, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
