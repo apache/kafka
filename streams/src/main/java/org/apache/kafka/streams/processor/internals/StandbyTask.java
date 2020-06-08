@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -108,13 +107,20 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void prepareSuspend() {
-        log.trace("No-op prepareSuspend with state {}", state());
+    public void suspendDirty() {
+        log.trace("No-op suspend dirty with state {}", state());
+        if (state() == State.RUNNING) {
+            transitionTo(State.SUSPENDED);
+        }
     }
 
     @Override
-    public void suspend() {
-        log.trace("No-op suspend with state {}", state());
+    public void suspendCleanAndPrepareCommit() {
+        log.trace("No-op suspend clean with state {}", state());
+        if (state() == State.RUNNING) {
+            transitionTo(State.SUSPENDED);
+        }
+        prepareCommit();
     }
 
     @Override
@@ -130,7 +136,7 @@ public class StandbyTask extends AbstractTask implements Task {
      */
     @Override
     public void prepareCommit() {
-        if (state() == State.RUNNING) {
+        if (state() == State.RUNNING || state() == State.SUSPENDED) {
             stateMgr.flush();
             log.info("Task ready for committing");
         } else {
@@ -152,68 +158,22 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void prepareCloseClean() {
-        prepareClose(true);
-
-        log.info("Prepared clean close");
-    }
-
-    @Override
-    public void prepareCloseDirty() {
-        prepareClose(false);
-
-        log.info("Prepared dirty close");
-    }
-
-    /**
-     * 1. commit if we are running and clean close;
-     * 2. close the state manager.
-     *
-     * @throws TaskMigratedException all the task has been migrated
-     * @throws StreamsException fatal error, should close the thread
-     */
-    private void prepareClose(final boolean clean) {
-        switch (state()) {
-            case CREATED:
-            case CLOSED:
-                log.trace("Skip prepare closing since state is {}", state());
-                return;
-
-            case RUNNING:
-                if (clean) {
-                    stateMgr.flush();
-                }
-
-                break;
-
-            case RESTORING:
-            case SUSPENDED:
-                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
-
-            default:
-                throw new IllegalStateException("Unknown state " + state() + " while closing standby task " + id);
-        }
-    }
-
-    @Override
     public void closeClean() {
         close(true);
-
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
         close(false);
-
         log.info("Closed dirty");
     }
 
     @Override
     public void closeAndRecycleState() {
-        prepareClose(true);
+        suspendCleanAndPrepareCommit();
 
-        if (state() == State.CREATED || state() == State.RUNNING) {
+        if (state() == State.CREATED || state() == State.SUSPENDED) {
             // since there's no written offsets we can checkpoint with empty map,
             // and the state current offset would be used to checkpoint
             stateMgr.checkpoint(Collections.emptyMap());
@@ -232,7 +192,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private void close(final boolean clean) {
         switch (state()) {
             case CREATED:
-            case RUNNING:
+            case SUSPENDED:
                 if (clean) {
                     // since there's no written offsets we can checkpoint with empty map,
                     // and the state current offset would be used to checkpoint
@@ -260,8 +220,8 @@ public class StandbyTask extends AbstractTask implements Task {
                 log.trace("Skip closing since state is {}", state());
                 return;
 
-            case RESTORING:
-            case SUSPENDED:
+            case RESTORING: // a StandbyTask in never in RESTORING state
+            case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
 
             default:

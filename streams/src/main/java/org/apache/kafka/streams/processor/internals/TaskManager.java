@@ -157,7 +157,7 @@ public class TaskManager {
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
-            task.prepareCloseDirty();
+            task.suspendDirty();
             task.closeDirty();
             task.revive();
         }
@@ -210,9 +210,9 @@ public class TaskManager {
                 tasksToRecycle.add(task);
             } else {
                 try {
-                    task.prepareCloseClean();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
-                        .committableOffsetsAndMetadata();
+                    task.suspendCleanAndPrepareCommit();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets =
+                        task.committableOffsetsAndMetadata();
 
                     tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
@@ -436,22 +436,20 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        final Set<Task> suspended = new HashSet<>();
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
-                task.prepareSuspend();
+                task.suspendCleanAndPrepareCommit();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
-                suspended.add(task);
-            } else {
-                if (task.isActive() && task.commitNeeded()) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
+            } else if (task.isActive() && task.commitNeeded()) {
+                task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
             }
             remainingPartitions.removeAll(task.inputPartitions());
@@ -463,11 +461,7 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                if (suspended.contains(task)) {
-                    task.suspend();
-                } else {
-                    task.postCommit();
-                }
+                task.postCommit();
             }
         }
 
@@ -623,7 +617,7 @@ public class TaskManager {
     }
 
     private void closeTaskDirty(final Task task) {
-        task.prepareCloseDirty();
+        task.suspendDirty();
         cleanupTask(task);
         task.closeDirty();
     }
@@ -655,7 +649,7 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             if (clean) {
                 try {
-                    task.prepareCloseClean();
+                    task.suspendCleanAndPrepareCommit();
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
 
                     tasksToClose.add(task);
@@ -680,6 +674,7 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
+                task.postCommit();
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);

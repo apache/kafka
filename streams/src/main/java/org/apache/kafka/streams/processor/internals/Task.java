@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -42,32 +41,34 @@ public interface Task {
     /*
      * <pre>
      *                 +-------------+
-     *          +<---- | Created (0) | <----------------------+
-     *          |      +-----+-------+                        |
-     *          |            |                                |
-     *          |            v                                |
-     *          |      +-----+-------+                        |
-     *          +<---- | Restoring(1)|<---------------+       |
-     *          |      +-----+-------+                |       |
-     *          |            |                        |       |
-     *          |            +--------------------+   |       |
-     *          |            |                    |   |       |
-     *          |            v                    v   |       |
-     *          |      +-----+-------+       +----+---+----+  |
-     *          |      | Running (2) | ----> | Suspended(3)|  |    //TODO Suspended(3) could be removed after we've stable on KIP-429
-     *          |      +-----+-------+       +------+------+  |
-     *          |            |                      |         |
-     *          |            |                      |         |
-     *          |            v                      |         |
-     *          |      +-----+-------+ <------------+         |
-     *          +----> | Closed (4)  |                        |
-     *                 +-------------+ <----------------------+
+     *          +----- | Created (0) | <----------+
+     *          |      +-----+-------+            |
+     *          |            |                    |
+     *          |            v                    |
+     *          |      +-----+-------+            |
+     *          +----- | Restoring(1)| <----+     |
+     *          |      +-----+-------+      |     |
+     *          |            |              |     |
+     *          |            v              |     |
+     *          |      +-----+-------+      |     |
+     *          |      | Running (2) |      |     |
+     *          |      +-----+-------+      |     |
+     *          |            |              |     |
+     *          |            v              |     |
+     *          |     +------+--------+     |     |
+     *          |     | Suspended (3) | <---+     |    //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          |     +------+--------+           |
+     *          |            |                    |
+     *          |            v                    |
+     *          |      +-----+-------+            |
+     *          +----> | Closed (4)  | -----------+
+     *                 +-------------+
      * </pre>
      */
     enum State {
         CREATED(1, 4),         // 0
         RESTORING(2, 3, 4),    // 1
-        RUNNING(3, 4),         // 2
+        RUNNING(3),            // 2
         SUSPENDED(1, 4),       // 3
         CLOSED(0);             // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
@@ -126,13 +127,10 @@ public interface Task {
 
     void postCommit();
 
-    /**
-     * @throws TaskMigratedException all the task has been migrated
-     * @throws StreamsException fatal error, should close the thread
-     */
-    void prepareSuspend();
+    void suspendDirty();
 
-    void suspend();
+    void suspendCleanAndPrepareCommit();
+
     /**
      *
      * @throws StreamsException fatal error, should close the thread
@@ -140,25 +138,9 @@ public interface Task {
     void resume();
 
     /**
-     * Prepare to close a task that we still own and prepare it for committing
-     * Throws an exception if this couldn't be done.
-     * Must be idempotent.
-     *
-     * @throws StreamsException fatal error, should close the thread
-     */
-    void prepareCloseClean();
-
-    /**
      * Must be idempotent.
      */
     void closeClean();
-
-    /**
-     * Prepare to close a task that we may not own. Discard any uncommitted progress and close the task.
-     * Never throws an exception, but just makes all attempts to release resources while closing.
-     * Must be idempotent.
-     */
-    void prepareCloseDirty();
 
     /**
      * Must be idempotent.

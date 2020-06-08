@@ -136,7 +136,13 @@ public class StandbyTaskTest {
     @After
     public void cleanup() throws IOException {
         if (task != null) {
-            task.prepareCloseDirty();
+            try {
+                task.suspendDirty();
+            } catch (final IllegalStateException maybeSwallow) {
+                if (!maybeSwallow.getMessage().startsWith("Invalid transition from CLOSED to SUSPENDED")) {
+                    throw maybeSwallow;
+                }
+            }
             task.closeDirty();
             task = null;
         }
@@ -154,6 +160,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
 
         assertThrows(LockException.class, task::initializeIfNeeded);
+        task = null;
     }
 
     @Test
@@ -229,7 +236,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.prepareCloseDirty();
+        task.suspendDirty();
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -249,6 +256,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
+        task.suspendDirty();
         task.closeDirty();
 
         EasyMock.verify(stateManager);
@@ -257,8 +265,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldCommitOnCloseClean() {
         stateManager.close();
-        EasyMock.expectLastCall();
-        stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
@@ -269,7 +275,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.prepareCloseClean();
+        task.suspendCleanAndPrepareCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -322,7 +328,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        task.prepareCloseClean();
+        task.suspendCleanAndPrepareCommit();
         assertThrows(RuntimeException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
@@ -331,29 +337,6 @@ public class StandbyTaskTest {
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
-        EasyMock.replay(stateManager);
-    }
-
-    @Test
-    public void shouldThrowOnCloseCleanFlushError() {
-        stateManager.flush();
-        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
-        EasyMock.replay(stateManager);
-        final MetricName metricName = setupCloseTaskMetric();
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-
-        assertThrows(RuntimeException.class, task::prepareCloseClean);
-        assertEquals(Task.State.RUNNING, task.state());
-
-        final double expectedCloseTaskMetric = 0.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-
-        EasyMock.verify(stateManager);
-        EasyMock.reset(stateManager);
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
     }
 
@@ -380,21 +363,6 @@ public class StandbyTaskTest {
         EasyMock.reset(stateManager);
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(stateManager);
-    }
-
-    @Test
-    public void shouldThrowIfClosingOnIllegalState() {
-        EasyMock.replay(stateManager);
-
-        task = createStandbyTask();
-
-        task.transitionTo(Task.State.RESTORING);
-
-        // close calls are not idempotent since we are already in closed
-        assertThrows(IllegalStateException.class, task::prepareCloseClean);
-        assertThrows(IllegalStateException.class, task::prepareCloseDirty);
-
-        task.transitionTo(Task.State.CLOSED);
     }
 
     @Test
