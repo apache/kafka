@@ -72,7 +72,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
-        partitionMovements = new PartitionMovements();
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
         if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
@@ -273,6 +272,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                             Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
+        partitionMovements = new PartitionMovements();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment, prevAssignment);
 
