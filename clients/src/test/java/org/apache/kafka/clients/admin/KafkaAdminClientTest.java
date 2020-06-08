@@ -974,13 +974,22 @@ public class KafkaAdminClientTest {
     public void testDescribeConfigs() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
                     new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
                             .setResourceName("0").setResourceType(ConfigResource.Type.BROKER.id()).setErrorCode(Errors.NONE.code())
-                            .setConfigs(emptyList())))
-            ));
-            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
-                new ConfigResource(ConfigResource.Type.BROKER, "0")));
+                            .setConfigs(emptyList())))), env.cluster().nodeById(0));
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                            .setResourceName("1").setResourceType(ConfigResource.Type.BROKER.id()).setErrorCode(Errors.NONE.code())
+                            .setConfigs(emptyList())))), env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                            .setResourceName("topic").setResourceType(ConfigResource.Type.TOPIC.id()).setErrorCode(Errors.NONE.code())
+                            .setConfigs(emptyList())))));
+            DescribeConfigsResult result2 = env.adminClient().describeConfigs(asList(
+                new ConfigResource(ConfigResource.Type.BROKER, "0"),
+                new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                new ConfigResource(ConfigResource.Type.TOPIC, "topic")));
             result2.all().get();
         }
     }
