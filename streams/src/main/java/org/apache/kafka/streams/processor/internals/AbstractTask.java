@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -118,8 +120,8 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
         this.inputPartitions = topicPartitions;
-        this.topology = processorTopology;
+        topology.updateSourceTopics(nodeToSourceTopics);
     }
 }

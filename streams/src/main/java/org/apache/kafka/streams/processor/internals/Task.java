@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -167,7 +168,7 @@ public interface Task {
     /**
      * Updates input partitions and topology after rebalance
      */
-    void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology);
+    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics);
 
     /**
      * Attempt a clean close but do not close the underlying state

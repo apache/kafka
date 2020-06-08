@@ -65,7 +65,7 @@ public class RecordQueueTest {
         new MockRecordCollector()
     );
     private final MockSourceNode<Integer, Integer> mockSourceNodeWithMetrics
-        = new MockSourceNode<>(new String[] {"topic"}, intDeserializer, intDeserializer);
+        = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition("topic", 1),
         mockSourceNodeWithMetrics,

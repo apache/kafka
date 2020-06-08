@@ -357,7 +357,7 @@ public class TaskManager {
             for (final TopicPartition topicPartition : topicPartitions) {
                 partitionToTask.put(topicPartition, task);
             }
-            task.update(topicPartitions, builder.buildSubtopology(task.id().topicGroupId));
+            task.update(topicPartitions, builder.nodeToSourceTopics());
         }
         task.resume();
     }

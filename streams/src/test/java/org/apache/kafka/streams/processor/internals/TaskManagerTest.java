@@ -2623,7 +2623,6 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
-        private InternalProcessorContext processorContext = mock(InternalProcessorContext.class);
 
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
@@ -2721,6 +2720,11 @@ public class TaskManagerTest {
         @Override
         public void closeAndRecycleState() {
             transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+            inputPartitions = topicPartitions;
         }
 
         void setCommittableOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> committableOffsets) {
