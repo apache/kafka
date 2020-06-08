@@ -453,16 +453,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
+        suspendCleanAndPrepareCommit();
         writeCheckpointIfNeed();
 
         switch (state()) {
             case CREATED:
-            case RESTORING:
-            case RUNNING:
-            case SUSPENDED:
-                stateMgr.recycle();
                 recordCollector.close();
                 break;
+
+            case RESTORING: // we should have transitioned to `SUSPENDED` already
+            case RUNNING: // we should have transitioned to `SUSPENDED` already
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while recycling active task " + id);
             default:

@@ -1781,6 +1781,30 @@ public class StreamTaskTest {
         assertThat(task.inputPartitions(), equalTo(newPartitions));
     }
 
+    @Test
+    public void shouldRecycleTask() {
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        recordCollector.flush();
+        EasyMock.expectLastCall();
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(Collections.emptyMap());
+        EasyMock.expectLastCall();
+        stateManager.recycle();
+        EasyMock.expectLastCall();
+        recordCollector.close();
+        EasyMock.expectLastCall();
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createStatefulTask(createConfig(false, "100"), true);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        task.closeAndRecycleState();
+
+        EasyMock.verify(stateManager, recordCollector);
+    }
+
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
         final StateStore stateStore = new MockKeyValueStore(storeName, true);
 

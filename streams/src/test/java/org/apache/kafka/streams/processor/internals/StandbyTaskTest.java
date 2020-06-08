@@ -444,6 +444,26 @@ public class StandbyTaskTest {
         assertEquals(Task.State.CLOSED, task.state());
     }
 
+    @Test
+    public void shouldRecycleTask() {
+        EasyMock.expectLastCall();
+        stateManager.flush();
+        EasyMock.expectLastCall();
+        stateManager.checkpoint(Collections.emptyMap());
+        EasyMock.expectLastCall();
+        stateManager.recycle();
+        EasyMock.expectLastCall();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap());
+        EasyMock.replay(stateManager);
+
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+
+        task.closeAndRecycleState();
+
+        EasyMock.verify(stateManager);
+    }
+
     private StandbyTask createStandbyTask() {
 
         final ThreadCache cache = new ThreadCache(
