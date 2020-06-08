@@ -142,10 +142,6 @@ public class StreamsPartitionAssignorTest {
     private final TopicPartition t3p1 = new TopicPartition("topic3", 1);
     private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
     private final TopicPartition t3p3 = new TopicPartition("topic3", 3);
-    private final TopicPartition t4p0 = new TopicPartition("topic4", 0);
-    private final TopicPartition t4p1 = new TopicPartition("topic4", 1);
-    private final TopicPartition t4p2 = new TopicPartition("topic4", 2);
-    private final TopicPartition t4p3 = new TopicPartition("topic4", 3);
 
     private final List<PartitionInfo> infos = asList(
         new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
