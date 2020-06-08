@@ -217,15 +217,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
-<<<<<<< HEAD
         configs = self.prop_file()
-=======
-        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
-        configs = self.get_configs(
-            extra_configs=",application.id=failover_with_broker_down" +
-                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
-        )
->>>>>>> trunk
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
