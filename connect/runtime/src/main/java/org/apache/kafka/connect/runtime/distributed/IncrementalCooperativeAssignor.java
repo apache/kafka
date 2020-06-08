@@ -165,8 +165,12 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Previous assignments: {}", previousAssignment);
         int lastCompletedGenerationId = coordinator.lastCompletedGenerationId();
         if (previousGenerationId != lastCompletedGenerationId) {
-            log.debug("Emptying previous assignments due to generation mismatch between previous "
-                    + "generation ID {} and last completed generation ID {} since the last assignment: {}",
+            log.debug("Clearing the view of previous assignments due to generation mismatch between "
+                    + "previous generation ID {} and last completed generation ID {}. This can "
+                    + "happen if the leader fails to sync the assignment within a rebalancing round. "
+                    + "The following view of previous assignments might be outdated and will be "
+                    + "ignored by the leader in the current computation of new assignments. "
+                    + "Possibly outdated previous assignments: {}",
                     previousGenerationId, lastCompletedGenerationId, previousAssignment);
             this.previousAssignment = ConnectorsAndTasks.EMPTY;
         }
@@ -370,8 +374,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 + lostAssignments);
 
         if (previousMembers.size() == memberConfigs.size() && scheduledRebalance <= 0) {
-            log.debug("Group size is same between rebalances. Lost assignments are probably due to lost SyncGroup "
-                    + "responses. Treating lost tasks as new tasks");
+            log.debug("The number of workers remained the same between rebalances. The missing "
+                    + "assignments that the leader is detecting are probably due to some workers "
+                    + "failing to receive the new assignments in the previous rebalance. Will "
+                    + "reassign missing tasks as new tasks");
             newSubmissions.connectors().addAll(lostAssignments.connectors());
             newSubmissions.tasks().addAll(lostAssignments.tasks());
             return;
