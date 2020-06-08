@@ -105,16 +105,14 @@ object ConsumerPerformance extends LazyLogging {
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var joinStart = 0L
     var joinTimeMsInSingleRound = 0L
 
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        joinTime.addAndGet(System.currentTimeMillis - joinStart)
-        joinTimeMsInSingleRound += System.currentTimeMillis - joinStart
+        joinTime.addAndGet(System.currentTimeMillis - testStartTime)
+        joinTimeMsInSingleRound += System.currentTimeMillis - testStartTime
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-        joinStart = System.currentTimeMillis
       }})
 
     // Now start the benchmark
