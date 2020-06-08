@@ -373,11 +373,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Found the following connectors and tasks missing from previous assignments: "
                 + lostAssignments);
 
-        if (previousMembers.equals(memberConfigs.keySet()) && scheduledRebalance <= 0) {
-            log.debug("The workers remained the same between rebalances. The missing assignments "
-                    + "that the leader is detecting are probably due to some workers failing to "
-                    + "receive the new assignments in the previous rebalance. Will reassign "
-                    + "missing tasks as new tasks");
+        if (scheduledRebalance <= 0 && memberConfigs.keySet().containsAll(previousMembers)) {
+            log.debug("No worker seems to have departed the group during the rebalance. The "
+                    + "missing assignments that the leader is detecting are probably due to some "
+                    + "workers failing to receive the new assignments in the previous rebalance. "
+                    + "Will reassign missing tasks as new tasks");
             newSubmissions.connectors().addAll(lostAssignments.connectors());
             newSubmissions.tasks().addAll(lostAssignments.tasks());
             return;
