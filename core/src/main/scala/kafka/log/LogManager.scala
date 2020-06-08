@@ -591,7 +591,7 @@ class LogManager(logDirs: Seq[File],
    * Write the checkpoint files for all the provided directories. This is used to cleanup
    * checkpoints after having deleted partitions.
    */
-  def checkpoint(logDirs: Set[File]): Unit = {
+  private def checkpoint(logDirs: Set[File]): Unit = {
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
       val logs = logsByDir(logsByDirCached, logDir)
@@ -973,9 +973,12 @@ class LogManager(logDirs: Seq[File],
     *
     * @param topicPartition TopicPartition that needs to be deleted
     * @param isFuture True iff the future log of the specified partition should be deleted
+    * @param checkpoint True if checkpoints must be written
     * @return the removed log
     */
-  def asyncDelete(topicPartition: TopicPartition, isFuture: Boolean = false): Log = {
+  def asyncDelete(topicPartition: TopicPartition,
+                  isFuture: Boolean = false,
+                  checkpoint: Boolean = true): Log = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
       if (isFuture)
         futureLogs.remove(topicPartition)
@@ -984,16 +987,47 @@ class LogManager(logDirs: Seq[File],
     }
     if (removedLog != null) {
       // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-      if (cleaner != null && !isFuture) {
+      if (cleaner != null && !isFuture)
         cleaner.abortCleaning(topicPartition)
-      }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
+      if (checkpoint)
+        checkpointRecoveryAndLogStartOffsetsInDir(removedLog.parentDirFile)
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException(s"Failed to delete log for ${if (isFuture) "future" else ""} $topicPartition because it may be in one of the offline directories ${offlineLogDirs.mkString(",")}")
     }
     removedLog
+  }
+
+  /**
+   * Rename the directories of the given topic-partitions and add them in the queue for
+   * deletion. Checkpoints are updated once all the directories have been renamed.
+   *
+   * @param topicPartitions The set of topic-partitions to delete asynchronously
+   * @param errorHandler The error handler that will be called when a exception for a particular
+   *                     topic-partition is raised
+   */
+  def asyncDelete(topicPartitions: Set[TopicPartition],
+                  errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
+    val logDirs = mutable.Set.empty[File]
+
+    topicPartitions.foreach { topicPartition =>
+      try {
+        getLog(topicPartition).foreach { log =>
+          logDirs += log.parentDirFile
+          asyncDelete(topicPartition, checkpoint = false)
+        }
+        getLog(topicPartition, isFuture = true).foreach { log =>
+          logDirs += log.parentDirFile
+          asyncDelete(topicPartition, isFuture = true, checkpoint = false)
+        }
+      } catch {
+        case e: Throwable => errorHandler(topicPartition, e)
+      }
+    }
+
+    checkpoint(logDirs)
   }
 
   /**

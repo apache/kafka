@@ -459,7 +459,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def delete(): Unit = {
+  def close(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
@@ -470,9 +470,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
-      logManager.asyncDelete(topicPartition)
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
-        logManager.asyncDelete(topicPartition, isFuture = true)
     }
   }
 
