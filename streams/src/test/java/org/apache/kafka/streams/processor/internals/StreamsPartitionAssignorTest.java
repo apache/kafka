@@ -114,6 +114,7 @@ import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -128,6 +129,7 @@ public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
     private static final String CONSUMER_3 = "consumer3";
+    private static final String CONSUMER_4 = "consumer4";
 
     private final Set<String> allTopics = mkSet("topic1", "topic2");
 
@@ -147,23 +149,6 @@ public class StreamsPartitionAssignorTest {
     private final TopicPartition t4p1 = new TopicPartition("topic4", 1);
     private final TopicPartition t4p2 = new TopicPartition("topic4", 2);
     private final TopicPartition t4p3 = new TopicPartition("topic4", 3);
-
-    private final Map<TaskId, Set<TopicPartition>> partitionsForTask = mkMap(
-        mkEntry(TASK_0_0, mkSet(t1p0, t2p0)),
-        mkEntry(TASK_0_1, mkSet(t1p1, t2p1)),
-        mkEntry(TASK_0_2, mkSet(t1p2, t2p2)),
-        mkEntry(TASK_0_3, mkSet(t1p3, t2p3)),
-
-        mkEntry(TASK_1_0, mkSet(t3p0)),
-        mkEntry(TASK_1_1, mkSet(t3p1)),
-        mkEntry(TASK_1_2, mkSet(t3p2)),
-        mkEntry(TASK_1_3, mkSet(t3p3)),
-
-        mkEntry(TASK_2_0, mkSet(t4p0)),
-        mkEntry(TASK_2_1, mkSet(t4p1)),
-        mkEntry(TASK_2_2, mkSet(t4p2)),
-        mkEntry(TASK_2_3, mkSet(t4p3))
-    );
 
     private final List<PartitionInfo> infos = asList(
         new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
@@ -389,6 +374,88 @@ public class StreamsPartitionAssignorTest {
 
         previousAssignment.get(CONSUMER_2).add(newTask);
         assertEquivalentAssignment(previousAssignment, newAssignment);
+    }
+
+    @Test
+    public void shouldProduceMaximallyStickyAssignmentWhenMemberLeaves() {
+        final List<TaskId> allTasks =
+            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
+
+        final Map<String, List<TaskId>> previousAssignment = mkMap(
+            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
+            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
+            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+        );
+
+        final ClientState state = new ClientState();
+        final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
+        state.initializePrevTasks(emptyMap());
+        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+
+        // Consumer 3 leaves the group
+        consumers.remove(CONSUMER_3);
+
+        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
+            allTasks,
+            emptySet(),
+            consumers,
+            state
+        );
+
+        // Each member should have all of its previous tasks reassigned plus some of consumer 3's tasks
+        // We should give one of its tasks to consumer 1, and two of its tasks to consumer 2
+        assertTrue(assignment.get(CONSUMER_1).containsAll(previousAssignment.get(CONSUMER_1)));
+        assertTrue(assignment.get(CONSUMER_2).containsAll(previousAssignment.get(CONSUMER_2)));
+
+        assertThat(assignment.get(CONSUMER_1).size(), equalTo(4));
+        assertThat(assignment.get(CONSUMER_2).size(), equalTo(4));
+    }
+
+    @Test
+    public void shouldProduceStickyEnoughAssignmentWhenNewMemberJoins() {
+        final List<TaskId> allTasks =
+            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
+
+        final Map<String, List<TaskId>> previousAssignment = mkMap(
+            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
+            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
+            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+        );
+
+        final ClientState state = new ClientState();
+        final SortedSet<String> consumers = mkSortedSet(CONSUMER_1, CONSUMER_2, CONSUMER_3);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
+        state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
+
+        // Consumer 4 joins the group
+        consumers.add(CONSUMER_4);
+        state.addPreviousTasksAndOffsetSums(CONSUMER_4, getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS));
+        
+        state.initializePrevTasks(emptyMap());
+        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+
+        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
+            allTasks,
+            emptySet(),
+            consumers,
+            state
+        );
+
+        // we should move one task each from consumer 1 and consumer 3 to the new member, and none from consumer 2
+        assertTrue(previousAssignment.get(CONSUMER_1).containsAll(assignment.get(CONSUMER_1)));
+        assertTrue(previousAssignment.get(CONSUMER_3).containsAll(assignment.get(CONSUMER_3)));
+
+        assertTrue(assignment.get(CONSUMER_2).containsAll(previousAssignment.get(CONSUMER_2)));
+
+
+        assertThat(assignment.get(CONSUMER_1).size(), equalTo(2));
+        assertThat(assignment.get(CONSUMER_2).size(), equalTo(2));
+        assertThat(assignment.get(CONSUMER_3).size(), equalTo(2));
+        assertThat(assignment.get(CONSUMER_4).size(), equalTo(2));
     }
 
     @Test
