@@ -962,4 +962,25 @@ public final class MessageTest {
         assertEquals("Expected the serialized size to be " + size +
             ", but it was " + buf.position(), size, buf.position());
     }
+
+    @Test
+    public void testCompareWithUnknownTaggedFields() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
+        createTopics.setTimeoutMs(123);
+        CreateTopicsRequestData createTopics2 = new CreateTopicsRequestData();
+        createTopics2.setTimeoutMs(123);
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
+        // Call the accessor, which will create a new empty list.
+        createTopics.unknownTaggedFields();
+        // Verify that the equalities still hold after the new empty list has been created.
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
+        createTopics.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
+        assertFalse(createTopics.equals(createTopics2));
+        assertFalse(createTopics2.equals(createTopics));
+        createTopics2.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
+    }
 }
