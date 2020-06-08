@@ -21,28 +21,27 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 
-import kafka.log.{Log, LogSegment}
-import kafka.network.SocketServer
+import kafka.log.{ClientRecordDeletion, Log, LogSegment}
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  protected override def numBrokers = 1
+  override def brokerCount = 1
 
   protected override def brokerTime(brokerId: Int) = time
 
-  protected override def propertyOverrides(props: Properties): Unit = {
+  protected override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")
     props.put("num.partitions", "20")
     props.put("log.retention.hours", "10")
@@ -52,7 +51,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @Test
-  def testGetOffsetsForUnknownTopic() {
+  def testGetOffsetsForUnknownTopic(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
     val request = ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(Map(topicPartition ->
@@ -63,7 +62,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @Test
-  def testGetOffsetsAfterDeleteRecords() {
+  def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
@@ -78,8 +77,8 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    log.onHighWatermarkIncremented(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(3)
+    log.updateHighWatermark(log.logEndOffset)
+    log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
     log.deleteOldSegments()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
@@ -95,7 +94,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testGetOffsetsBeforeLatestTime() {
+  def testGetOffsetsBeforeLatestTime(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
@@ -130,7 +129,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testEmptyLogsGetOffsets() {
+  def testEmptyLogsGetOffsets(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(10))
@@ -155,7 +154,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
-  def testGetOffsetsBeforeNow() {
+  def testGetOffsetsBeforeNow(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
@@ -163,7 +162,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -185,7 +184,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
-  def testGetOffsetsBeforeEarliestTime() {
+  def testGetOffsetsBeforeEarliestTime(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
@@ -193,7 +192,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
@@ -214,7 +213,7 @@ class LogOffsetTest extends BaseRequestTest {
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
    * a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegmentSize() {
+  def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
     val log: Log = EasyMock.niceMock(classOf[Log])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
@@ -231,7 +230,7 @@ class LogOffsetTest extends BaseRequestTest {
   /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
    * different (simulating a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegments() {
+  def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
     val log: Log = EasyMock.niceMock(classOf[Log])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {
@@ -249,14 +248,12 @@ class LogOffsetTest extends BaseRequestTest {
 
   private def server: KafkaServer = servers.head
 
-  private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = destination.getOrElse(anySocketServer))
-    ListOffsetResponse.parse(response, request.version)
+  private def sendListOffsetsRequest(request: ListOffsetRequest): ListOffsetResponse = {
+    connectAndReceive[ListOffsetResponse](request)
   }
 
-  private def sendFetchRequest(request: FetchRequest, destination: Option[SocketServer] = None): FetchResponse[MemoryRecords] = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = destination.getOrElse(anySocketServer))
-    FetchResponse.parse(response, request.version)
+  private def sendFetchRequest(request: FetchRequest): FetchResponse[MemoryRecords] = {
+    connectAndReceive[FetchResponse[MemoryRecords]](request)
   }
 
 }

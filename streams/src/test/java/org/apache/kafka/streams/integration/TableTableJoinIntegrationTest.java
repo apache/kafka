@@ -20,10 +20,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,8 +59,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
     }
 
-    final private String expectedFinalJoinResult = "D-d";
-    final private String expectedFinalMultiJoinResult = "D-d-d";
+    final private TestRecord<Long, String> expectedFinalJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L);
+    final private TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L);
     final private String storeName = appID + "-store";
 
     private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
@@ -69,55 +69,34 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             .withCachingDisabled()
             .withLoggingDisabled();
 
-    final private class CountingPeek implements ForeachAction<Long, String> {
-        final private String expected;
-
-        CountingPeek(final boolean multiJoin) {
-            this.expected = multiJoin ? expectedFinalMultiJoinResult : expectedFinalJoinResult;
-        }
-
-        @Override
-        public void apply(final Long key, final String value) {
-            numRecordsExpected++;
-            if (expected.equals(value)) {
-                final boolean ret = finalResultReached.compareAndSet(false, true);
-
-                if (!ret) {
-                    // do nothing; it is possible that we will see multiple duplicates of final results due to KAFKA-4309
-                    // TODO: should be removed when KAFKA-4309 is fixed
-                }
-            }
-        }
-    }
-
     @Test
     public void testInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
-            runTest(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("D-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -125,30 +104,30 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
-            runTest(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Collections.singletonList("A-null"),
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList("D-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -156,30 +135,30 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
-            runTest(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Collections.singletonList("A-null"),
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList("null-d"),
-                    Collections.singletonList("D-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -187,39 +166,42 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            // FIXME: the duplicate below for all the multi-joins
-            //        are due to KAFKA-6443, should be updated once it is fixed.
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("C-c-c", "C-c-c"),
-                    null,
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("D-d-d")
+            // TODO K6443: the duplicate below for all the multi-joins are due to
+            //             KAFKA-6443, should be updated once it is fixed.
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                null, // correct would be -> new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)
+                      // we don't get correct value, because of self-join of `rightTable`
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -227,38 +209,39 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("C-c-c", "C-c-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -266,37 +249,44 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Arrays.asList("C-c-c", "C-c-c"),
-                    Arrays.asList((String) null, null),
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("null-d", "D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    // incorrect result `null-d` is caused by self-join of `rightTable`
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -304,38 +294,39 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("C-c-c", "C-c-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -343,38 +334,43 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
-                    Arrays.asList("C-null-null", "C-null-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList("D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -382,37 +378,45 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
-                    Arrays.asList("C-null-null", "C-null-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("null-d", "D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -420,38 +424,41 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b-b"),
-                    null,
-                    null,
-                    Arrays.asList("C-c-c", "C-c-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("null-d-d", "null-d-d"),
-                    Collections.singletonList("D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -459,38 +466,45 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
-                    Arrays.asList("C-null-null", "C-null-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Arrays.asList("null-d-d", "null-d-d"),
-                    Collections.singletonList("D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 
@@ -498,38 +512,46 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
-            runTest(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            final List<List<String>> expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
-                    Collections.singletonList("B-a-a"),
-                    Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b-b"),
-                    Arrays.asList((String) null, null),
-                    null,
-                    Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
-                    Arrays.asList("C-null-null", "C-null-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("null-d-d", "null-d-d", "D-d-d")
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null,  7L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
-
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
-            runTest(expectedResult, storeName);
+            runTestWithDriver(expectedResult, storeName);
         }
     }
 }

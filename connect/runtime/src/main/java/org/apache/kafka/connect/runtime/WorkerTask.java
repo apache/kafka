@@ -30,7 +30,9 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,10 +53,13 @@ import java.util.concurrent.TimeUnit;
  */
 abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
+    private static final String THREAD_NAME_PREFIX = "task-thread-";
 
     protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
     protected final ClassLoader loader;
+    protected final StatusBackingStore statusBackingStore;
+    protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
     private volatile TargetState targetState;
@@ -68,7 +73,9 @@ abstract class WorkerTask implements Runnable {
                       TargetState initialState,
                       ClassLoader loader,
                       ConnectMetrics connectMetrics,
-                      RetryWithToleranceOperator retryWithToleranceOperator) {
+                      RetryWithToleranceOperator retryWithToleranceOperator,
+                      Time time,
+                      StatusBackingStore statusBackingStore) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.statusListener = taskMetricsGroup;
@@ -78,6 +85,8 @@ abstract class WorkerTask implements Runnable {
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
         this.retryWithToleranceOperator = retryWithToleranceOperator;
+        this.time = time;
+        this.statusBackingStore = statusBackingStore;
     }
 
     public ConnectorTaskId id() {
@@ -214,24 +223,32 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
-        try {
-            doRun();
-            onShutdown();
-        } catch (Throwable t) {
-            onFailure(t);
+        // Clear all MDC parameters, in case this thread is being reused
+        LoggingContext.clear();
 
-            if (t instanceof Error)
-                throw (Error) t;
-        } finally {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
+            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+            String savedName = Thread.currentThread().getName();
             try {
-                Plugins.compareAndSwapLoaders(savedLoader);
-                shutdownLatch.countDown();
+                Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
+                doRun();
+                onShutdown();
+            } catch (Throwable t) {
+                onFailure(t);
+
+                if (t instanceof Error)
+                    throw (Error) t;
             } finally {
                 try {
-                    releaseResources();
+                    Thread.currentThread().setName(savedName);
+                    Plugins.compareAndSwapLoaders(savedLoader);
+                    shutdownLatch.countDown();
                 } finally {
-                    taskMetricsGroup.close();
+                    try {
+                        releaseResources();
+                    } finally {
+                        taskMetricsGroup.close();
+                    }
                 }
             }
         }
@@ -267,6 +284,20 @@ abstract class WorkerTask implements Runnable {
             this.targetState = state;
             this.notifyAll();
         }
+    }
+
+    /**
+     * Include this topic to the set of active topics for the connector that this worker task
+     * is running. This information is persisted in the status backing store used by this worker.
+     *
+     * @param topic the topic to mark as active for this connector
+     */
+    protected void recordActiveTopic(String topic) {
+        if (statusBackingStore.getTopic(id.connector(), topic) != null) {
+            // The topic is already recorded as active. No further action is required.
+            return;
+        }
+        statusBackingStore.put(new TopicStatus(topic, id, time.milliseconds()));
     }
 
     /**
@@ -403,6 +434,12 @@ abstract class WorkerTask implements Runnable {
         public void onShutdown(ConnectorTaskId id) {
             taskStateTimer.changeState(State.UNASSIGNED, time.milliseconds());
             delegateListener.onShutdown(id);
+        }
+
+        @Override
+        public void onDeletion(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.DESTROYED, time.milliseconds());
+            delegateListener.onDeletion(id);
         }
 
         public void recordState(TargetState state) {

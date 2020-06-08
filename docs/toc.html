@@ -35,7 +35,7 @@
                 <li><a href="#consumerapi">2.2 Consumer API</a>
                 <li><a href="/{{version}}/documentation/streams">2.3 Streams API</a>
                 <li><a href="#connectapi">2.4 Connect API</a>
-                <li><a href="#adminapi">2.5 AdminClient API</a>
+                <li><a href="#adminapi">2.5 Admin API</a>
             </ul>
         </li>
         <li><a href="#configuration">3. Configuration</a>
@@ -127,9 +127,15 @@
                 <li><a href="#zk_authz">7.6 ZooKeeper Authentication</a></li>
                 <ul>
                     <li><a href="#zk_authz_new">New Clusters</a></li>
+                    <ul>
+                        <li><a href="#zk_authz_new_sasl">ZooKeeper SASL Authentication</a></li>
+                        <li><a href="#zk_authz_new_mtls">ZooKeeper Mutual TLS Authentication</a></li>
+                    </ul>
                     <li><a href="#zk_authz_migration">Migrating Clusters</a></li>
                     <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a></li>
+                    <li><a href="#zk_authz_quorum">ZooKeeper Quorum Mutual TLS Authentication</a></li>
                 </ul>
+                <li><a href="#zk_encryption">7.7 ZooKeeper Encryption</a></li>
             </ul>
         </li>
         <li><a href="#connect">8. Kafka Connect</a>

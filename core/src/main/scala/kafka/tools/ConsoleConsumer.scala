@@ -28,7 +28,7 @@ import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
 import kafka.utils.Implicits._
-import kafka.utils._
+import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
@@ -37,7 +37,8 @@ import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
  * Consumer that dumps messages to standard out.
@@ -48,7 +49,7 @@ object ConsoleConsumer extends Logging {
 
   private val shutdownLatch = new CountDownLatch(1)
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val conf = new ConsumerConfig(args)
     try {
       run(conf)
@@ -62,7 +63,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def run(conf: ConsumerConfig) {
+  def run(conf: ConsumerConfig): Unit = {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
@@ -84,9 +85,8 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig) {
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() {
+  def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig): Unit = {
+    Exit.addShutdownHook("consumer-shutdown-hook", {
         consumer.wakeup()
 
         shutdownLatch.await()
@@ -94,12 +94,11 @@ object ConsoleConsumer extends Logging {
         if (conf.enableSystestEventsLogging) {
           System.out.println("shutdown_complete")
         }
-      }
     })
   }
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: ConsumerWrapper, output: PrintStream,
-              skipMessageOnError: Boolean) {
+              skipMessageOnError: Boolean): Unit = {
     while (messageCount < maxMessages || maxMessages == -1) {
       val msg: ConsumerRecord[Array[Byte], Array[Byte]] = try {
         consumer.receive()
@@ -133,7 +132,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def reportRecordCount() {
+  def reportRecordCount(): Unit = {
     System.err.println(s"Processed a total of $messageCount messages")
   }
 
@@ -168,7 +167,7 @@ object ConsoleConsumer extends Logging {
     * In case both --from-beginning and an explicit value are specified an error is thrown if these
     * are conflicting.
     */
-  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties) {
+  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
     val (earliestConfigValue, latestConfigValue) = ("earliest", "latest")
 
     if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
@@ -264,7 +263,7 @@ object ConsoleConsumer extends Logging {
       "Log lifecycle events of the consumer in addition to logging consumed " +
         "messages. (This is specific for system tests.)")
     val isolationLevelOpt = parser.accepts("isolation-level",
-      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
         "to read all messages.")
       .withRequiredArg()
       .ofType(classOf[String])
@@ -394,7 +393,7 @@ object ConsoleConsumer extends Logging {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
-    def consumerInit() {
+    def consumerInit(): Unit = {
       (topic, partitionId, offset, whitelist) match {
         case (Some(topic), Some(partitionId), Some(offset), None) =>
           seek(topic, partitionId, offset)
@@ -413,7 +412,7 @@ object ConsoleConsumer extends Logging {
       }
     }
 
-    def seek(topic: String, partitionId: Int, offset: Long) {
+    def seek(topic: String, partitionId: Int, offset: Long): Unit = {
       val topicPartition = new TopicPartition(topic, partitionId)
       consumer.assign(Collections.singletonList(topicPartition))
       offset match {
@@ -423,7 +422,7 @@ object ConsoleConsumer extends Logging {
       }
     }
 
-    def resetUnconsumedOffsets() {
+    def resetUnconsumedOffsets(): Unit = {
       val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
       while (recordIter.hasNext) {
         val record = recordIter.next()
@@ -448,7 +447,7 @@ object ConsoleConsumer extends Logging {
       this.consumer.wakeup()
     }
 
-    def cleanup() {
+    def cleanup(): Unit = {
       resetUnconsumedOffsets()
       this.consumer.close()
     }
@@ -457,22 +456,25 @@ object ConsoleConsumer extends Logging {
 }
 
 class DefaultMessageFormatter extends MessageFormatter {
+  var printTimestamp = false
   var printKey = false
   var printValue = true
-  var printTimestamp = false
+  var printPartition = false
   var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
   var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
 
-  override def init(props: Properties) {
+  override def init(props: Properties): Unit = {
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.value"))
       printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
+    if (props.containsKey("print.partition"))
+      printPartition = props.getProperty("print.partition").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
     if (props.containsKey("line.separator"))
@@ -500,7 +502,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     newProps
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
 
     def writeSeparator(columnSeparator: Boolean): Unit = {
       if (columnSeparator)
@@ -509,9 +511,9 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(lineSeparator)
     }
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) {
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String): Unit = {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(topic, nonNullBytes).toString.
+      val convertedBytes = deserializer.map(_.deserialize(topic, consumerRecord.headers, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
     }
@@ -533,6 +535,11 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     if (printValue) {
       write(valueDeserializer, value, topic)
+      writeSeparator(printPartition)
+    }
+
+    if (printPartition) {
+      output.write(s"$partition".getBytes(StandardCharsets.UTF_8))
       output.write(lineSeparator)
     }
   }
@@ -553,15 +560,15 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 }
 
 class NoOpMessageFormatter extends MessageFormatter {
-  override def init(props: Properties) {}
+  override def init(props: Properties): Unit = {}
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream){}
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
 
 class ChecksumMessageFormatter extends MessageFormatter {
   private var topicStr: String = _
 
-  override def init(props: Properties) {
+  override def init(props: Properties): Unit = {
     topicStr = props.getProperty("topic")
     if (topicStr != null)
       topicStr = topicStr + ":"
@@ -569,7 +576,8 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+  @nowarn("cat=deprecation")
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     output.println(topicStr + "checksum:" + consumerRecord.checksum)
   }
 }

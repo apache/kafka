@@ -33,9 +33,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }
         })
 
-    def rolling_bounce_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
+    def rolling_bounce_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
-            for node in consumer.nodes:
+            for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
                 wait_until(lambda: len(consumer.dead_nodes()) == 1,
@@ -47,15 +47,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
-    def bounce_all_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
+    def bounce_all_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
-            for node in consumer.nodes:
+            for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
+            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers - keep_alive, timeout_sec=10,
                        err_msg="Timed out waiting for the consumers to shutdown")
-            
-            for node in consumer.nodes:
+
+            for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
 
             self.await_all_members(consumer)
@@ -90,7 +90,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
           did not cause unexpected group rebalances.
         """
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC)
 
@@ -105,7 +105,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         #       pausing before the node is restarted to ensure that any ephemeral
         #       nodes have time to expire
         self.rolling_bounce_brokers(consumer, clean_shutdown=True)
-        
+
         unexpected_rebalances = consumer.num_rebalances() - num_rebalances
         assert unexpected_rebalances == 0, \
             "Broker rolling bounce caused %d unexpected group rebalances" % unexpected_rebalances
@@ -131,7 +131,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         - Verify delivery semantics according to the failure type.
         """
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC)
 
@@ -145,7 +145,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.bounce_all_consumers(consumer, clean_shutdown=clean_shutdown)
         else:
             self.rolling_bounce_consumers(consumer, clean_shutdown=clean_shutdown)
-                
+
         consumer.stop_all()
         if clean_shutdown:
             # if the total records consumed matches the current position, we haven't seen any duplicates
@@ -160,10 +160,123 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.current_position(partition), consumer.total_consumed())
 
     @cluster(num_nodes=7)
+    @matrix(clean_shutdown=[True], static_membership=[True, False], bounce_mode=["all", "rolling"], num_bounces=[5])
+    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces):
+        """
+        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
+        sure the behavior of static members are different from dynamic ones, we take both static and dynamic
+        membership into this test suite.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers as static/dynamic members and wait until they've joined the group.
+        - In a loop, restart each consumer except the first member (note: may not be the leader), and expect no rebalance triggered
+          during this process if the group is in static membership.
+        """
+        partition = TopicPartition(self.TOPIC, 0)
+
+        producer = self.setup_producer(self.TOPIC)
+
+        producer.start()
+        self.await_produced_messages(producer)
+
+        self.session_timeout_sec = 60
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership)
+
+        consumer.start()
+        self.await_all_members(consumer)
+
+        num_revokes_before_bounce = consumer.num_revokes_for_alive()
+
+        num_keep_alive = 1
+
+        if bounce_mode == "all":
+            self.bounce_all_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+        else:
+            self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+
+        num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
+
+        check_condition = num_revokes_after_bounce != 0
+        # under static membership, the live consumer shall not revoke any current running partitions,
+        # since there is no global rebalance being triggered.
+        if static_membership:
+            check_condition = num_revokes_after_bounce == 0
+
+        assert check_condition, \
+            "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
+            (num_revokes_after_bounce, check_condition)
+
+        consumer.stop_all()
+        if clean_shutdown:
+            # if the total records consumed matches the current position, we haven't seen any duplicates
+            # this can only be guaranteed with a clean shutdown
+            assert consumer.current_position(partition) == consumer.total_consumed(), \
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
+        else:
+            # we may have duplicates in a hard failure
+            assert consumer.current_position(partition) <= consumer.total_consumed(), \
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
+
+    @cluster(num_nodes=10)
+    @matrix(num_conflict_consumers=[1, 2], fencing_stage=["stable", "all"])
+    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage):
+        """
+        Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers as static members and wait until they've joined the group. Some conflict consumers will be configured with
+        - the same group.instance.id.
+        - Let normal consumers and fencing consumers start at the same time, and expect only unique consumers left.
+        """
+        partition = TopicPartition(self.TOPIC, 0)
+
+        producer = self.setup_producer(self.TOPIC)
+
+        producer.start()
+        self.await_produced_messages(producer)
+
+        self.session_timeout_sec = 60
+        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+
+        self.num_consumers = num_conflict_consumers
+        conflict_consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+
+        # wait original set of consumer to stable stage before starting conflict members.
+        if fencing_stage == "stable":
+            consumer.start()
+            self.await_members(consumer, len(consumer.nodes))
+
+            conflict_consumer.start()
+            self.await_members(conflict_consumer, num_conflict_consumers)
+            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
+
+            assert len(consumer.dead_nodes()) == num_conflict_consumers
+        else:
+            consumer.start()
+            conflict_consumer.start()
+
+            wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
+                       timeout_sec=self.session_timeout_sec,
+                       err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from"
+                               "normal consumer group and %d from conflict consumer group" % \
+                               (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
+                       )
+            wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
+                       timeout_sec=self.session_timeout_sec,
+                       err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
+                               "normal consumer group and %d dead in conflict consumer group" % \
+                               (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
+                       )
+
+    @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True], enable_autocommit=[True, False])
     def test_consumer_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
         producer = self.setup_producer(self.TOPIC)
 
@@ -210,7 +323,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
     def test_broker_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
         producer = self.setup_producer(self.TOPIC)
 
@@ -246,7 +359,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     def test_group_consumption(self):
         """
-        Verifies correct group rebalance behavior as consumers are started and stopped. 
+        Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
         expected rebalance.
 
@@ -295,7 +408,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=6)
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor"])
+                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                                 "org.apache.kafka.clients.consumer.StickyAssignor"])
     def test_valid_assignment(self, assignment_strategy):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly

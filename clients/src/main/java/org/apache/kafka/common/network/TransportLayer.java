@@ -81,7 +81,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     boolean hasPendingWrites();
 
     /**
-     * Returns `SSLSession.getPeerPrincipal()` if this is a SslTransportLayer and there is an authenticated peer,
+     * Returns `SSLSession.getPeerPrincipal()` if this is an SslTransportLayer and there is an authenticated peer,
      * `KafkaPrincipal.ANONYMOUS` is returned otherwise.
      */
     Principal peerPrincipal() throws IOException;

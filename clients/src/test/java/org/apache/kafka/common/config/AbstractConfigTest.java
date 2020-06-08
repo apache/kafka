@@ -24,6 +24,8 @@ import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
+import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -32,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -263,7 +266,7 @@ public class AbstractConfigTest {
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
                 if (name.equals(ClassTestConfig.DEFAULT_CLASS.getName()) || name.equals(ClassTestConfig.RESTRICTED_CLASS.getName()))
-                    return null;
+                    throw new ClassNotFoundException();
                 else
                     return ClassTestConfig.class.getClassLoader().loadClass(name);
             }
@@ -318,6 +321,207 @@ public class AbstractConfigTest {
             fail("Should have failed to load class");
         } catch (KafkaException e) {
             // Expected Exception
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, ?> convertPropertiesToMap(Map<?, ?> props) {
+        for (Map.Entry<?, ?> entry : props.entrySet()) {
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(),
+                    "Key must be a string.");
+        }
+        return (Map<String, ?>) props;
+    }
+
+    @Test
+    public void testOriginalsWithConfigProvidersProps() {
+        Properties props = new Properties();
+
+        // Test Case: Valid Test Case for ConfigProviders as part of config.properties
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id);
+        props.put("prefix.ssl.truststore.location.number", 5);
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+        assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+        assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
+        assertEquals(config.originals().get("prefix.ssl.truststore.location.number"), 5);
+        assertEquals(config.originals().get("sasl.kerberos.service.name"), "service name");
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testConfigProvidersPropsAsParam() {
+        // Test Case: Valid Test Case for ConfigProviders as a separate variable
+        Properties providers = new Properties();
+        providers.put("config.providers", "file");
+        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        providers.put("config.providers.file.param.testId", id);
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+        assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testImmutableOriginalsWithConfigProvidersProps() {
+        // Test Case: Valid Test Case for ConfigProviders as a separate variable
+        Properties providers = new Properties();
+        providers.put("config.providers", "file");
+        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        providers.put("config.providers.file.param.testId", id);
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        Map<?, ?> immutableMap = Collections.unmodifiableMap(props);
+        Map<String, ?> provMap = convertPropertiesToMap(providers);
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(immutableMap, provMap);
+        assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithMultipleConfigProviders() {
+        // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
+        Properties providers = new Properties();
+        providers.put("config.providers", "file,vault");
+        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        providers.put("config.providers.file.param.testId", id);
+        providers.put("config.providers.vault.class", MockVaultConfigProvider.class.getName());
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        props.put("sasl.truststore.key", "${vault:/usr/truststore:truststoreKey}");
+        props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+        assertEquals(config.originals().get("sasl.kerberos.password"), "randomPassword");
+        assertEquals(config.originals().get("sasl.truststore.key"), "testTruststoreKey");
+        assertEquals(config.originals().get("sasl.truststore.password"), "randomtruststorePassword");
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithInvalidConfigProviderClass() {
+        // Test Case: Invalid class for Config Provider
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class",
+            "org.apache.kafka.common.config.provider.InvalidConfigProvider");
+        props.put("testKey", "${test:/foo/bar/testpath:testKey}");
+        try {
+            new TestIndirectConfigResolution(props);
+            fail("Expected a config exception due to invalid props :" + props);
+        } catch (KafkaException e) {
+            // this is good
+        }
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithMissingConfigProvider() {
+        // Test Case: Config Provider for a variable missing in config file.
+        Properties props = new Properties();
+        props.put("testKey", "${test:/foo/bar/testpath:testKey}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+        assertEquals(config.originals().get("testKey"), "${test:/foo/bar/testpath:testKey}");
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithMissingConfigKey() {
+        // Test Case: Config Provider fails to resolve the config (key not present)
+        Properties props = new Properties();
+        props.put("config.providers", "test");
+        props.put("config.providers.test.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.test.param.testId", id);
+        props.put("random", "${test:/foo/bar/testpath:random}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+        assertEquals(config.originals().get("random"), "${test:/foo/bar/testpath:random}");
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithDuplicateConfigProvider() {
+        // Test Case: If ConfigProvider is provided in both originals and provider. Only the ones in provider should be used.
+        Properties providers = new Properties();
+        providers.put("config.providers", "test");
+        providers.put("config.providers.test.class", MockVaultConfigProvider.class.getName());
+
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", MockVaultConfigProvider.class.getName());
+
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        assertEquals(config.originals().get("sasl.kerberos.key"), "${file:/usr/kerberos:key}");
+    }
+
+    @Test
+    public void testConfigProviderConfigurationWithConfigParams() {
+        // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
+        Properties providers = new Properties();
+        providers.put("config.providers", "vault");
+        providers.put("config.providers.vault.class", MockVaultConfigProvider.class.getName());
+        providers.put("config.providers.vault.param.key", "randomKey");
+        providers.put("config.providers.vault.param.location", "/usr/vault");
+        Properties props = new Properties();
+        props.put("sasl.truststore.location", "${vault:/usr/truststore:truststoreKey}");
+        props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
+        props.put("sasl.truststore.location", "${vault:/usr/truststore:truststoreLocation}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        assertEquals(config.originals().get("sasl.truststore.location"), "/usr/vault");
+    }
+
+    @Test
+    public void testDocumentationOf() {
+        Properties props = new Properties();
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+
+        assertEquals(
+            config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS),
+            TestIndirectConfigResolution.INDIRECT_CONFIGS_DOC
+        );
+    }
+
+    @Test
+    public void testDocumentationOfExpectNull() {
+        Properties props = new Properties();
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+
+        assertNull(config.documentationOf("xyz"));
+    }
+
+    private static class TestIndirectConfigResolution extends AbstractConfig {
+
+        private static final ConfigDef CONFIG;
+
+        public static final String INDIRECT_CONFIGS = "indirect.variables";
+        private static final String INDIRECT_CONFIGS_DOC = "Variables whose values can be obtained from ConfigProviders";
+
+        static {
+            CONFIG = new ConfigDef().define(INDIRECT_CONFIGS,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    INDIRECT_CONFIGS_DOC);
+        }
+
+        public TestIndirectConfigResolution(Map<?, ?> props) {
+            super(CONFIG, props, true);
+        }
+
+        public TestIndirectConfigResolution(Map<?, ?> props, Map<String, ?> providers) {
+            super(CONFIG, props, providers, true);
         }
     }
 

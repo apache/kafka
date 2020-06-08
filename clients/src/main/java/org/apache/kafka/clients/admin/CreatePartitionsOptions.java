@@ -22,9 +22,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
 
 /**
- * Options for {@link AdminClient#createPartitions(Map)}.
+ * Options for {@link Admin#createPartitions(Map)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class CreatePartitionsOptions extends AbstractOptions<CreatePartitionsOptions> {

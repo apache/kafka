@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class DescribeAclsRequestTest {
     private static final short V0 = 0;
@@ -46,19 +47,19 @@ public class DescribeAclsRequestTest {
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "foo", PatternType.LITERAL),
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfPrefixed() {
-        new DescribeAclsRequest(PREFIXED_FILTER, V0);
+        assertThrows(UnsupportedVersionException.class, () -> new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfUnknown() {
-        new DescribeAclsRequest(UNKNOWN_FILTER, V0);
+        assertThrows(IllegalArgumentException.class, () -> new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V0));
     }
 
     @Test
     public void shouldRoundTripLiteralV0() {
-        final DescribeAclsRequest original = new DescribeAclsRequest(LITERAL_FILTER, V0);
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V0);
         final Struct struct = original.toStruct();
 
         final DescribeAclsRequest result = new DescribeAclsRequest(struct, V0);
@@ -68,13 +69,13 @@ public class DescribeAclsRequestTest {
 
     @Test
     public void shouldRoundTripAnyV0AsLiteral() {
-        final DescribeAclsRequest original = new DescribeAclsRequest(ANY_FILTER, V0);
-        final DescribeAclsRequest expected = new DescribeAclsRequest(
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(ANY_FILTER).build(V0);
+        final DescribeAclsRequest expected = new DescribeAclsRequest.Builder(
             new AclBindingFilter(new ResourcePatternFilter(
                 ANY_FILTER.patternFilter().resourceType(),
                 ANY_FILTER.patternFilter().name(),
                 PatternType.LITERAL),
-                ANY_FILTER.entryFilter()), V0);
+                ANY_FILTER.entryFilter())).build(V0);
 
         final Struct struct = original.toStruct();
         final DescribeAclsRequest result = new DescribeAclsRequest(struct, V0);
@@ -84,7 +85,7 @@ public class DescribeAclsRequestTest {
 
     @Test
     public void shouldRoundTripLiteralV1() {
-        final DescribeAclsRequest original = new DescribeAclsRequest(LITERAL_FILTER, V1);
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V1);
         final Struct struct = original.toStruct();
 
         final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);
@@ -94,7 +95,7 @@ public class DescribeAclsRequestTest {
 
     @Test
     public void shouldRoundTripPrefixedV1() {
-        final DescribeAclsRequest original = new DescribeAclsRequest(PREFIXED_FILTER, V1);
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V1);
         final Struct struct = original.toStruct();
 
         final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);
@@ -104,7 +105,7 @@ public class DescribeAclsRequestTest {
 
     @Test
     public void shouldRoundTripAnyV1() {
-        final DescribeAclsRequest original = new DescribeAclsRequest(ANY_FILTER, V1);
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(ANY_FILTER).build(V1);
         final Struct struct = original.toStruct();
 
         final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);

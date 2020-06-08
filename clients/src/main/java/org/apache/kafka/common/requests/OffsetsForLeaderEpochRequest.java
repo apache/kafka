@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Field;
@@ -36,6 +37,20 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
+    private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
+            "Broker id of the follower. For normal consumers, use -1.");
+
+    /**
+     * Sentinel replica_id value to indicate a regular consumer rather than another broker
+     */
+    public static final int CONSUMER_REPLICA_ID = -1;
+
+    /**
+     * Sentinel replica_id which indicates either a debug consumer or a replica which is using
+     * an old version of the protocol.
+     */
+    public static final int DEBUGGING_REPLICA_ID = -2;
+
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "An array of topics to get epochs for");
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
@@ -67,28 +82,55 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V2 = new Schema(
             TOPICS_V2);
 
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V3 = new Schema(
+            REPLICA_ID,
+            TOPICS_V2);
+
     public static Schema[] schemaVersions() {
         return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1,
-            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2};
+            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2, OFFSET_FOR_LEADER_EPOCH_REQUEST_V3};
     }
 
-    private Map<TopicPartition, PartitionData> epochsByPartition;
+    private final Map<TopicPartition, PartitionData> epochsByPartition;
+
+    private final int replicaId;
 
     public Map<TopicPartition, PartitionData> epochsByTopicPartition() {
         return epochsByPartition;
     }
 
+    public int replicaId() {
+        return replicaId;
+    }
+
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {
         private final Map<TopicPartition, PartitionData> epochsByPartition;
+        private final int replicaId;
 
-        public Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
+        Builder(short oldestAllowedVersion, short latestAllowedVersion, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, oldestAllowedVersion, latestAllowedVersion);
             this.epochsByPartition = epochsByPartition;
+            this.replicaId = replicaId;
+        }
+
+        public static Builder forConsumer(Map<TopicPartition, PartitionData> epochsByPartition) {
+            // Old versions of this API require CLUSTER permission which is not typically granted
+            // to clients. Beginning with version 3, the broker requires only TOPIC Describe
+            // permission for the topic of each requested partition. In order to ensure client
+            // compatibility, we only send this request when we can guarantee the relaxed permissions.
+            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(),
+                    epochsByPartition, CONSUMER_REPLICA_ID);
+        }
+
+        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            return new Builder(version, version, epochsByPartition, replicaId);
         }
 
         @Override
         public OffsetsForLeaderEpochRequest build(short version) {
-            return new OffsetsForLeaderEpochRequest(epochsByPartition, version);
+            if (version < oldestAllowedVersion() || version > latestAllowedVersion())
+                throw new UnsupportedVersionException("Cannot build " + this + " with version " + version);
+            return new OffsetsForLeaderEpochRequest(epochsByPartition, replicaId, version);
         }
 
         public static OffsetsForLeaderEpochRequest parse(ByteBuffer buffer, short version) {
@@ -98,20 +140,22 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type=OffsetForLeaderEpochRequest, ").
-                    append("epochsByTopic=").append(epochsByPartition).
+            bld.append("OffsetsForLeaderEpochRequest(").
+                    append("epochsByPartition=").append(epochsByPartition).
                     append(")");
             return bld.toString();
         }
     }
 
-    public OffsetsForLeaderEpochRequest(Map<TopicPartition, PartitionData> epochsByPartition, short version) {
+    public OffsetsForLeaderEpochRequest(Map<TopicPartition, PartitionData> epochsByPartition, int replicaId, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         this.epochsByPartition = epochsByPartition;
+        this.replicaId = replicaId;
     }
 
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
+        replicaId = struct.getOrElse(REPLICA_ID, DEBUGGING_REPLICA_ID);
         epochsByPartition = new HashMap<>();
         for (Object topicAndEpochsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;
@@ -134,6 +178,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
+        requestStruct.setIfExists(REPLICA_ID, replicaId);
 
         Map<String, Map<Integer, PartitionData>> topicsToPartitionEpochs = CollectionUtils.groupPartitionDataByTopic(epochsByPartition);
 
@@ -189,4 +234,13 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             return bld.toString();
         }
     }
+
+    /**
+     * Check whether a broker allows Topic-level permissions in order to use the
+     * OffsetForLeaderEpoch API. Old versions require Cluster permission.
+     */
+    public static boolean supportsTopicPermission(short latestUsableVersion) {
+        return latestUsableVersion >= 3;
+    }
+
 }

@@ -61,11 +61,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see UnlimitedWindows
  * @see SessionWindows
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
- * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
 public final class JoinWindows extends Windows<Window> {
@@ -92,7 +92,7 @@ public final class JoinWindows extends Windows<Window> {
         this.maintainDurationMs = maintainDurationMs;
     }
 
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
+    @Deprecated // removing segments from Windows will fix this
     private JoinWindows(final long beforeMs,
                         final long afterMs,
                         final long graceMs,
@@ -131,7 +131,6 @@ public final class JoinWindows extends Windows<Window> {
      * @param timeDifference join window interval
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         return of(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
@@ -148,7 +147,6 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if the resulting window size is negative
      * @deprecated Use {@link #before(Duration)} instead.
      */
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Deprecated
     public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
         return new JoinWindows(timeDifferenceMs, afterMs, graceMs, maintainDurationMs, segments);
@@ -164,7 +162,6 @@ public final class JoinWindows extends Windows<Window> {
      * @param timeDifference relative window start time
      * @throws IllegalArgumentException if the resulting window size is negative or {@code timeDifference} can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     public JoinWindows before(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         return before(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
@@ -181,7 +178,6 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if the resulting window size is negative
      * @deprecated Use {@link #after(Duration)} instead
      */
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Deprecated
     public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
         return new JoinWindows(beforeMs, timeDifferenceMs, graceMs, maintainDurationMs, segments);
@@ -197,7 +193,6 @@ public final class JoinWindows extends Windows<Window> {
      * @param timeDifference relative window end time
      * @throws IllegalArgumentException if the resulting window size is negative or {@code timeDifference} can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     public JoinWindows after(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         return after(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
@@ -220,12 +215,12 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
      * after the end of its window.
+     * <p>
+     * Delay is defined as (stream_time - record_timestamp).
      *
-     * Lateness is defined as (stream_time - record_timestamp).
-     *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */
@@ -239,7 +234,6 @@ public final class JoinWindows extends Windows<Window> {
         return new JoinWindows(beforeMs, afterMs, afterWindowEndMs, maintainDurationMs, segments);
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     @Override
     public long gracePeriodMs() {
         // NOTE: in the future, when we remove maintainMs,
@@ -252,9 +246,8 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
-     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)} instead.
+     * @deprecated since 2.1. Use {@link JoinWindows#grace(Duration)} instead.
      */
-    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public JoinWindows until(final long durationMs) throws IllegalArgumentException {
@@ -270,16 +263,16 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
-     * @deprecated since 2.1. This function should not be used anymore as retention period can be specified via {@link Materialized#withRetention(Duration)}.
+     * @deprecated since 2.1. This function should not be used anymore, since {@link JoinWindows#until(long)}
+     *             is deprecated in favor of {@link JoinWindows#grace(Duration)}.
      */
-    @SuppressWarnings({"deprecation", "deprecatedMemberStillInUse"})
     @Override
     @Deprecated
     public long maintainMs() {
         return Math.max(maintainDurationMs, size());
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -296,7 +289,7 @@ public final class JoinWindows extends Windows<Window> {
             graceMs == that.graceMs;
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
         return Objects.hash(beforeMs, afterMs, graceMs, maintainDurationMs, segments);

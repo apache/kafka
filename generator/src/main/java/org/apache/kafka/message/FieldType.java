@@ -20,10 +20,10 @@ package org.apache.kafka.message;
 import java.util.Optional;
 
 public interface FieldType {
-    String STRUCT_PREFIX = "[]";
+    String ARRAY_PREFIX = "[]";
 
     final class BoolFieldType implements FieldType {
-        private static final BoolFieldType INSTANCE = new BoolFieldType();
+        static final BoolFieldType INSTANCE = new BoolFieldType();
         private static final String NAME = "bool";
 
         @Override
@@ -38,7 +38,7 @@ public interface FieldType {
     }
 
     final class Int8FieldType implements FieldType {
-        private static final Int8FieldType INSTANCE = new Int8FieldType();
+        static final Int8FieldType INSTANCE = new Int8FieldType();
         private static final String NAME = "int8";
 
         @Override
@@ -53,7 +53,7 @@ public interface FieldType {
     }
 
     final class Int16FieldType implements FieldType {
-        private static final Int16FieldType INSTANCE = new Int16FieldType();
+        static final Int16FieldType INSTANCE = new Int16FieldType();
         private static final String NAME = "int16";
 
         @Override
@@ -68,7 +68,7 @@ public interface FieldType {
     }
 
     final class Int32FieldType implements FieldType {
-        private static final Int32FieldType INSTANCE = new Int32FieldType();
+        static final Int32FieldType INSTANCE = new Int32FieldType();
         private static final String NAME = "int32";
 
         @Override
@@ -83,7 +83,7 @@ public interface FieldType {
     }
 
     final class Int64FieldType implements FieldType {
-        private static final Int64FieldType INSTANCE = new Int64FieldType();
+        static final Int64FieldType INSTANCE = new Int64FieldType();
         private static final String NAME = "int64";
 
         @Override
@@ -97,9 +97,49 @@ public interface FieldType {
         }
     }
 
+    final class UUIDFieldType implements FieldType {
+        static final UUIDFieldType INSTANCE = new UUIDFieldType();
+        private static final String NAME = "uuid";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(16);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class Float64FieldType implements FieldType {
+        static final Float64FieldType INSTANCE = new Float64FieldType();
+        private static final String NAME = "float64";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(8);
+        }
+
+        @Override
+        public boolean isFloat() {
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
     final class StringFieldType implements FieldType {
-        private static final StringFieldType INSTANCE = new StringFieldType();
+        static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
 
         @Override
         public boolean isString() {
@@ -118,8 +158,13 @@ public interface FieldType {
     }
 
     final class BytesFieldType implements FieldType {
-        private static final BytesFieldType INSTANCE = new BytesFieldType();
+        static final BytesFieldType INSTANCE = new BytesFieldType();
         private static final String NAME = "bytes";
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
 
         @Override
         public boolean isBytes() {
@@ -145,6 +190,11 @@ public interface FieldType {
         }
 
         @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
+
+        @Override
         public boolean isStruct() {
             return true;
         }
@@ -160,6 +210,11 @@ public interface FieldType {
 
         ArrayType(FieldType elementType) {
             this.elementType = elementType;
+        }
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
         }
 
         @Override
@@ -181,6 +236,10 @@ public interface FieldType {
             return elementType;
         }
 
+        public String elementName() {
+            return elementType.toString();
+        }
+
         @Override
         public String toString() {
             return "[]" + elementType.toString();
@@ -200,13 +259,17 @@ public interface FieldType {
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:
                 return Int64FieldType.INSTANCE;
+            case UUIDFieldType.NAME:
+                return UUIDFieldType.INSTANCE;
+            case Float64FieldType.NAME:
+                return Float64FieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
                 return BytesFieldType.INSTANCE;
             default:
-                if (string.startsWith(STRUCT_PREFIX)) {
-                    String elementTypeString = string.substring(STRUCT_PREFIX.length());
+                if (string.startsWith(ARRAY_PREFIX)) {
+                    String elementTypeString = string.substring(ARRAY_PREFIX.length());
                     if (elementTypeString.length() == 0) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");
@@ -240,6 +303,13 @@ public interface FieldType {
     }
 
     /**
+     * Returns true if the serialization of this type is different in flexible versions.
+     */
+    default boolean serializationIsDifferentInFlexibleVersions() {
+        return false;
+    }
+
+    /**
      * Returns true if this is a string type.
      */
     default boolean isString() {
@@ -250,6 +320,13 @@ public interface FieldType {
      * Returns true if this is a bytes type.
      */
     default boolean isBytes() {
+        return false;
+    }
+
+    /**
+     * Returns true if this is a floating point type.
+     */
+    default boolean isFloat() {
         return false;
     }
 
@@ -272,6 +349,10 @@ public interface FieldType {
      */
     default Optional<Integer> fixedLength() {
         return Optional.empty();
+    }
+
+    default boolean isVariableLength() {
+        return !fixedLength().isPresent();
     }
 
     /**

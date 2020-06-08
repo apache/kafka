@@ -75,13 +75,16 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @Override
     public Windowed<T> deserialize(final String topic, final byte[] data) {
+        WindowedSerdes.verifyInnerDeserializerNotNull(inner, this);
+
         if (data == null || data.length == 0) {
             return null;
         }
 
         // toStoreKeyBinary was used to serialize the data.
-        if (this.isChangelogTopic)
+        if (this.isChangelogTopic) {
             return WindowKeySchema.fromStoreKey(data, windowSize, inner, topic);
+        }
 
         // toBinary was used to serialize the data
         return WindowKeySchema.from(data, windowSize, inner, topic);
@@ -89,7 +92,9 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
     public void setIsChangelogTopic(final boolean isChangelogTopic) {

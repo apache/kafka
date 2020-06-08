@@ -28,13 +28,13 @@ import java.util.concurrent.ExecutionException;
 /**
  * The result of the {@link KafkaAdminClient#describeTopics(Collection)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeTopicsResult {
     private final Map<String, KafkaFuture<TopicDescription>> futures;
 
-    DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
+    protected DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
         this.futures = futures;
     }
 
@@ -51,21 +51,18 @@ public class DescribeTopicsResult {
      */
     public KafkaFuture<Map<String, TopicDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.BaseFunction<Void, Map<String, TopicDescription>>() {
-                @Override
-                public Map<String, TopicDescription> apply(Void v) {
-                    Map<String, TopicDescription> descriptions = new HashMap<>(futures.size());
-                    for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
-                        try {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures
-                            // completed successfully.
-                            throw new RuntimeException(e);
-                        }
+            thenApply(v -> {
+                Map<String, TopicDescription> descriptions = new HashMap<>(futures.size());
+                for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
+                    try {
+                        descriptions.put(entry.getKey(), entry.getValue().get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, because allOf ensured that all the futures
+                        // completed successfully.
+                        throw new RuntimeException(e);
                     }
-                    return descriptions;
                 }
+                return descriptions;
             });
     }
 }

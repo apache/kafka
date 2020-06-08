@@ -61,7 +61,7 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
-        [-C|--custom-ducktape DIR]
+        [-C|--custom-ducktape DIR] [-e|--expose-ports ports]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -69,6 +69,11 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     If --custom-ducktape is specified, we will install the provided custom
     ducktape source code directory before bringing up the nodes.  The provided
     directory should be the ducktape git repo, not the ducktape installed module directory.
+
+    if --expose-ports is specified then we will expose those ports to random ephemeral ports
+    on the host. The argument can be a single port (like 5005), a port range like (5005-5009)
+    or a combination of port/port-range separated by comma (like 2181,9092 or 2181,5005-5008).
+    By default no port is exposed. See README.md for more detail on this option.
 
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
@@ -218,6 +223,8 @@ ducker_build() {
     SECONDS=0
 
     must_pushd "${ducker_dir}"
+    # Tip: if you are scratching your head for some dependency problems that are referring to an old code version
+    # (for example java.lang.NoClassDefFoundError), add --no-cache flag to the build shall give you a clean start.
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
         --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
@@ -235,12 +242,21 @@ $((${duration} % 60))s.  See ${build_log} for details."
 docker_run() {
     local node=${1}
     local image_name=${2}
+    local ports_option=${3}
+
+    local expose_ports=""
+    if [[ -n ${ports_option} ]]; then
+        expose_ports="-P"
+        for expose_port in ${ports_option//,/ }; do
+            expose_ports="${expose_ports} --expose ${expose_port}"
+        done
+    fi
 
     # Invoke docker-run. We need privileged mode to be able to run iptables
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     must_do -v docker run --privileged \
-        -d -t --net=host -h "${node}" --network ducknet \
+        -d -t -h "${node}" --network ducknet "${expose_ports}" \
         --memory=${docker_run_memory_limit} --memory-swappiness=1 \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }
@@ -269,6 +285,7 @@ ducker_up() {
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
+            -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
@@ -322,7 +339,7 @@ attempting to start new ones."
     fi
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        docker_run "${node}" "${image_name}"
+        docker_run "${node}" "${image_name}" "${expose_ports}"
     done
     mkdir -p "${ducker_dir}/build"
     exec 3<> "${ducker_dir}/build/node_hosts"

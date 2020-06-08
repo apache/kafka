@@ -18,6 +18,7 @@
 package org.apache.kafka.message;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -58,18 +59,37 @@ final class SchemaGenerator {
     private final HeaderGenerator headerGenerator;
 
     /**
+     * A registry with the structures we're generating.
+     */
+    private final StructRegistry structRegistry;
+
+    /**
      * Maps message names to message information.
      */
     private final Map<String, MessageInfo> messages;
 
-    SchemaGenerator(HeaderGenerator headerGenerator) {
+    /**
+     * The versions that implement a KIP-482 flexible schema.
+     */
+    private Versions messageFlexibleVersions;
+
+    SchemaGenerator(HeaderGenerator headerGenerator, StructRegistry structRegistry) {
         this.headerGenerator = headerGenerator;
+        this.structRegistry = structRegistry;
         this.messages = new HashMap<>();
     }
 
     void generateSchemas(MessageSpec message) throws Exception {
+        this.messageFlexibleVersions = message.flexibleVersions();
+        // Generate schemas for inline structures
         generateSchemas(message.generatedClassName(), message.struct(),
             message.struct().versions());
+
+        // Generate schemas for common structures
+        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+            StructSpec struct = iter.next();
+            generateSchemas(struct.name(), struct, struct.versions());
+        }
     }
 
     void generateSchemas(String className, StructSpec struct,
@@ -85,9 +105,9 @@ final class SchemaGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateSchemas(arrayType.elementType().toString(), field.toStruct(), versions);
+                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions);
             } else if (field.type().isStruct()) {
-                generateSchemas(field.type().toString(), field.toStruct(), versions);
+                generateSchemas(field.type().toString(), structRegistry.findStruct(field), versions);
             }
         }
         CodeBuffer prev = null;
@@ -103,7 +123,8 @@ final class SchemaGenerator {
         }
     }
 
-    private void generateSchemaForVersion(StructSpec struct, short version,
+    private void generateSchemaForVersion(StructSpec struct,
+                                          short version,
                                           CodeBuffer buffer) throws Exception {
         // Find the last valid field index.
         int lastValidIndex = struct.fields().size() - 1;
@@ -112,10 +133,15 @@ final class SchemaGenerator {
                 break;
             }
             FieldSpec field = struct.fields().get(lastValidIndex);
-            if (field.versions().contains(version)) {
+            if ((!field.taggedVersions().contains(version)) &&
+                    field.versions().contains(version)) {
                 break;
             }
             lastValidIndex--;
+        }
+        int finalLine = lastValidIndex;
+        if (messageFlexibleVersions.contains(version)) {
+            finalLine++;
         }
 
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
@@ -123,27 +149,81 @@ final class SchemaGenerator {
         buffer.incrementIndent();
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
-            if (!field.versions().contains(version)) {
+            if ((!field.versions().contains(version)) ||
+                    field.taggedVersions().contains(version)) {
                 continue;
             }
+            Versions fieldFlexibleVersions =
+                field.flexibleVersions().orElse(messageFlexibleVersions);
             headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
             buffer.printf("new Field(\"%s\", %s, \"%s\")%s%n",
                 field.snakeCaseName(),
-                fieldTypeToSchemaType(field, version),
+                fieldTypeToSchemaType(field, version, fieldFlexibleVersions),
                 field.about(),
-                i == lastValidIndex ? "" : ",");
+                i == finalLine ? "" : ",");
+        }
+        if (messageFlexibleVersions.contains(version)) {
+            generateTaggedFieldsSchemaForVersion(struct, version, buffer);
         }
         buffer.decrementIndent();
         buffer.printf(");%n");
     }
 
-    private String fieldTypeToSchemaType(FieldSpec field, short version) {
-        return fieldTypeToSchemaType(field.type(),
-            field.nullableVersions().contains(version),
-            version);
+    private void generateTaggedFieldsSchemaForVersion(StructSpec struct,
+            short version, CodeBuffer buffer) throws Exception {
+        headerGenerator.addStaticImport(MessageGenerator.TAGGED_FIELDS_SECTION_CLASS);
+
+        // Find the last valid tagged field index.
+        int lastValidIndex = struct.fields().size() - 1;
+        while (true) {
+            if (lastValidIndex < 0) {
+                break;
+            }
+            FieldSpec field = struct.fields().get(lastValidIndex);
+            if ((field.taggedVersions().contains(version)) &&
+                field.versions().contains(version)) {
+                break;
+            }
+            lastValidIndex--;
+        }
+
+        buffer.printf("TaggedFieldsSection.of(%n");
+        buffer.incrementIndent();
+        for (int i = 0; i <= lastValidIndex; i++) {
+            FieldSpec field = struct.fields().get(i);
+            if ((!field.versions().contains(version)) ||
+                    (!field.taggedVersions().contains(version))) {
+                continue;
+            }
+            headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
+            Versions fieldFlexibleVersions =
+                field.flexibleVersions().orElse(messageFlexibleVersions);
+            buffer.printf("%d, new Field(\"%s\", %s, \"%s\")%s%n",
+                field.tag().get(),
+                field.snakeCaseName(),
+                fieldTypeToSchemaType(field, version, fieldFlexibleVersions),
+                field.about(),
+                i == lastValidIndex ? "" : ",");
+        }
+        buffer.decrementIndent();
+        buffer.printf(")%n");
     }
 
-    private String fieldTypeToSchemaType(FieldType type, boolean nullable, short version) {
+    private String fieldTypeToSchemaType(FieldSpec field,
+                                         short version,
+                                         Versions fieldFlexibleVersions) {
+        return fieldTypeToSchemaType(field.type(),
+            field.nullableVersions().contains(version),
+            version,
+            fieldFlexibleVersions,
+            field.zeroCopy());
+    }
+
+    private String fieldTypeToSchemaType(FieldType type,
+                                         boolean nullable,
+                                         short version,
+                                         Versions fieldFlexibleVersions,
+                                         boolean zeroCopy) {
         if (type instanceof FieldType.BoolFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -174,18 +254,47 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.INT64";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UUID";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.FLOAT64";
         } else if (type instanceof FieldType.StringFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
-            return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";
+            if (fieldFlexibleVersions.contains(version)) {
+                return nullable ? "Type.COMPACT_NULLABLE_STRING" : "Type.COMPACT_STRING";
+            } else {
+                return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";
+            }
         } else if (type instanceof FieldType.BytesFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
-            return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
+            if (fieldFlexibleVersions.contains(version)) {
+                return nullable ? "Type.COMPACT_NULLABLE_BYTES" : "Type.COMPACT_BYTES";
+            } else {
+                return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
+            }
         } else if (type.isArray()) {
-            headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
-            String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
-            return String.format("%s(%s)", prefix,
-                fieldTypeToSchemaType(arrayType.elementType(), false, version));
+            if (fieldFlexibleVersions.contains(version)) {
+                headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);
+                FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
+                String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
+                return String.format("%s(%s)", prefix,
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+
+            } else {
+                headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
+                FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
+                String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
+                return String.format("%s(%s)", prefix,
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+            }
         } else if (type.isStruct()) {
             if (nullable) {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");

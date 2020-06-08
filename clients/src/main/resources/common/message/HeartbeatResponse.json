@@ -18,8 +18,14 @@
   "type": "response",
   "name": "HeartbeatResponse",
   // Version 1 adds throttle time.
+  //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-2",
+  //
+  // Starting from version 3, heartbeatRequest supports a new field called groupInstanceId to indicate member identity across restarts.
+  //
+  // Version 4 is the first flexible version.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

@@ -30,6 +30,7 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+@Deprecated
 public class ConsumerRecordFactoryTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final IntegerSerializer integerSerializer = new IntegerSerializer();

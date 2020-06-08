@@ -27,4 +27,8 @@ public class PrintedInternal<K, V> extends Printed<K, V> {
     public ProcessorSupplier<K, V> build(final String processorName) {
         return new KStreamPrint<>(new PrintForeachAction<>(outputStream, mapper, label != null ? label : processorName));
     }
+
+    public String name() {
+        return processorName;
+    }
 }

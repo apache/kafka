@@ -26,7 +26,9 @@ import java.time.Instant;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
- * A windowed store interface extending {@link StateStore}.
+ * Interface for storing the aggregated values of fixed-size time windows.
+ * <p>
+ * Note, that the stores's physical key type is {@link Windowed Windowed&lt;K&gt;}.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
@@ -36,19 +38,29 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     /**
      * Use the current record timestamp as the {@code windowStartTimestamp} and
      * delegate to {@link WindowStore#put(Object, Object, long)}.
-     *
+     * <p>
      * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
      * is unlikely to be the correct windowStartTimestamp in general.
      *
      * @param key The key to associate the value to
      * @param value The value to update, it can be null;
-     *              if the serialized bytes are also null it is interpreted as deletes
+     *              if the serialized bytes are also null it is interpreted as delete
      * @throws NullPointerException if the given key is {@code null}
+     *
+     * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
+     * to identify the window frame to which the key belongs.
+     * Use {@link #put(Object, Object, long)} instead.
+     *
      */
+    @Deprecated
     void put(K key, V value);
 
     /**
      * Put a key-value pair into the window with given window start timestamp
+     * <p>
+     * If serialized value bytes are null it is interpreted as delete. Note that deletes will be
+     * ignored in the case of an underlying store that retains duplicates.
+     *
      * @param key The key to associate the value to
      * @param value The value; can be null
      * @param windowStartTimestamp The timestamp of the beginning of the window to put the key/value into
@@ -89,11 +101,13 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if the given key is {@code null}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
-    default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
+    default WindowStoreIterator<V> fetch(final K key,
+                                         final Instant from,
+                                         final Instant to) {
         return fetch(
             key,
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
@@ -113,11 +127,14 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if one of the given keys is {@code null}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 
     @Override
-    default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
+    default KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                   final K to,
+                                                   final Instant fromTime,
+                                                   final Instant toTime) {
         return fetch(
             from,
             to,
@@ -133,7 +150,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override

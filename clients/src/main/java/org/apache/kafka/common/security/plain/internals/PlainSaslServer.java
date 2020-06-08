@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
@@ -67,7 +69,7 @@ public class PlainSaslServer implements SaslServer {
      * </p>
      */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
+    public byte[] evaluateResponse(byte[] responseBytes) throws SaslAuthenticationException {
         /*
          * Message format (from https://tools.ietf.org/html/rfc4616):
          *
@@ -81,23 +83,17 @@ public class PlainSaslServer implements SaslServer {
          *                ;; any UTF-8 encoded Unicode character except NUL
          */
 
-        String[] tokens;
-        try {
-            tokens = new String(response, "UTF-8").split("\u0000");
-        } catch (UnsupportedEncodingException e) {
-            throw new SaslException("UTF-8 encoding not supported", e);
-        }
-        if (tokens.length != 3)
-            throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
-        String authorizationIdFromClient = tokens[0];
-        String username = tokens[1];
-        String password = tokens[2];
+        String response = new String(responseBytes, StandardCharsets.UTF_8);
+        List<String> tokens = extractTokens(response);
+        String authorizationIdFromClient = tokens.get(0);
+        String username = tokens.get(1);
+        String password = tokens.get(2);
 
         if (username.isEmpty()) {
-            throw new SaslException("Authentication failed: username not specified");
+            throw new SaslAuthenticationException("Authentication failed: username not specified");
         }
         if (password.isEmpty()) {
-            throw new SaslException("Authentication failed: password not specified");
+            throw new SaslAuthenticationException("Authentication failed: password not specified");
         }
 
         NameCallback nameCallback = new NameCallback("username", username);
@@ -116,6 +112,26 @@ public class PlainSaslServer implements SaslServer {
 
         complete = true;
         return new byte[0];
+    }
+
+    private List<String> extractTokens(String string) {
+        List<String> tokens = new ArrayList<>();
+        int startIndex = 0;
+        for (int i = 0; i < 4; ++i) {
+            int endIndex = string.indexOf("\u0000", startIndex);
+            if (endIndex == -1) {
+                tokens.add(string.substring(startIndex));
+                break;
+            }
+            tokens.add(string.substring(startIndex, endIndex));
+            startIndex = endIndex + 1;
+        }
+
+        if (tokens.size() != 3)
+            throw new SaslAuthenticationException("Invalid SASL/PLAIN response: expected 3 tokens, got " +
+                tokens.size());
+
+        return tokens;
     }
 
     @Override

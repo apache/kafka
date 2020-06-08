@@ -17,14 +17,12 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-
-import java.util.ArrayList;
 
 /**
  * Contains various sensors used for monitoring errors.
@@ -45,13 +43,6 @@ public class ErrorHandlingMetrics {
     private final Sensor dlqProduceFailures;
     private long lastErrorTime = 0;
 
-    // for testing only
-    public ErrorHandlingMetrics() {
-        this(new ConnectorTaskId("noop-connector", -1),
-                new ConnectMetrics("noop-worker", new SystemTime(), 2, 3000, Sensor.RecordingLevel.INFO.toString(),
-                        new ArrayList<>()));
-    }
-
     public ErrorHandlingMetrics(ConnectorTaskId id, ConnectMetrics connectMetrics) {
 
         ConnectMetricsRegistry registry = connectMetrics.registry();
@@ -62,25 +53,25 @@ public class ErrorHandlingMetrics {
         metricGroup.close();
 
         recordProcessingFailures = metricGroup.sensor("total-record-failures");
-        recordProcessingFailures.add(metricGroup.metricName(registry.recordProcessingFailures), new Total());
+        recordProcessingFailures.add(metricGroup.metricName(registry.recordProcessingFailures), new CumulativeSum());
 
         recordProcessingErrors = metricGroup.sensor("total-record-errors");
-        recordProcessingErrors.add(metricGroup.metricName(registry.recordProcessingErrors), new Total());
+        recordProcessingErrors.add(metricGroup.metricName(registry.recordProcessingErrors), new CumulativeSum());
 
         recordsSkipped = metricGroup.sensor("total-records-skipped");
-        recordsSkipped.add(metricGroup.metricName(registry.recordsSkipped), new Total());
+        recordsSkipped.add(metricGroup.metricName(registry.recordsSkipped), new CumulativeSum());
 
         retries = metricGroup.sensor("total-retries");
-        retries.add(metricGroup.metricName(registry.retries), new Total());
+        retries.add(metricGroup.metricName(registry.retries), new CumulativeSum());
 
         errorsLogged = metricGroup.sensor("total-errors-logged");
-        errorsLogged.add(metricGroup.metricName(registry.errorsLogged), new Total());
+        errorsLogged.add(metricGroup.metricName(registry.errorsLogged), new CumulativeSum());
 
         dlqProduceRequests = metricGroup.sensor("deadletterqueue-produce-requests");
-        dlqProduceRequests.add(metricGroup.metricName(registry.dlqProduceRequests), new Total());
+        dlqProduceRequests.add(metricGroup.metricName(registry.dlqProduceRequests), new CumulativeSum());
 
         dlqProduceFailures = metricGroup.sensor("deadletterqueue-produce-failures");
-        dlqProduceFailures.add(metricGroup.metricName(registry.dlqProduceFailures), new Total());
+        dlqProduceFailures.add(metricGroup.metricName(registry.dlqProduceFailures), new CumulativeSum());
 
         metricGroup.addValueMetric(registry.lastErrorTimestamp, now -> lastErrorTime);
     }

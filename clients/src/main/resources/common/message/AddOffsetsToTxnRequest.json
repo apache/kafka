@@ -19,14 +19,15 @@
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0+",
+    { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The transactional id corresponding to the transaction."},
-    { "name": "ProducerId", "type": "int64", "versions": "0+",
+    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
       "about": "Current producer id in use by the transactional id." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Current epoch associated with the producer id." },
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." }
   ]
 }

@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -32,10 +32,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
@@ -96,7 +98,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldReturnNullIfTopicEqualsNonExistTopic() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC, null));
         assertThat(context.topic(), nullValue());
     }
 
@@ -154,7 +156,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldReturnNullIfHeadersAreNotSet() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC, null));
         assertThat(context.headers(), nullValue());
     }
 
@@ -171,12 +173,16 @@ public class AbstractProcessorContextTest {
     @SuppressWarnings("unchecked")
     @Test
     public void appConfigsShouldReturnParsedValues() {
-        assertThat((Class<RocksDBConfigSetter>) context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG), equalTo(RocksDBConfigSetter.class));
+        assertThat(
+            context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
+            equalTo(RocksDBConfigSetter.class));
     }
 
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
-        assertThat((String) context.appConfigs().get("user.supplied.config"), equalTo("user-suppplied-value"));
+        assertThat(
+            context.appConfigs().get("user.supplied.config"),
+            equalTo("user-supplied-value"));
     }
 
 
@@ -186,7 +192,7 @@ public class AbstractProcessorContextTest {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
-            config.put("user.supplied.config", "user-suppplied-value");
+            config.put("user.supplied.config", "user-supplied-value");
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
@@ -198,9 +204,11 @@ public class AbstractProcessorContextTest {
             return null;
         }
 
-        @SuppressWarnings("deprecation")
         @Override
-        public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        @Deprecated
+        public Cancellable schedule(final long interval,
+                                    final PunctuationType type,
+                                    final Punctuator callback) {
             return null;
         }
 
@@ -217,20 +225,34 @@ public class AbstractProcessorContextTest {
         @Override
         public <K, V> void forward(final K key, final V value, final To to) {}
 
-        @SuppressWarnings("deprecation")
         @Override
+        @Deprecated
         public <K, V> void forward(final K key, final V value, final int childIndex) {}
 
-        @SuppressWarnings("deprecation")
         @Override
+        @Deprecated
         public <K, V> void forward(final K key, final V value, final String childName) {}
 
         @Override
         public void commit() {}
 
         @Override
-        public long streamTime() {
-            throw new RuntimeException("not implemented");
+        public void logChange(final String storeName,
+                              final Bytes key,
+                              final byte[] value,
+                              final long timestamp) {
+        }
+
+        @Override
+        public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        }
+
+        @Override
+        public void transitionToStandby(final ThreadCache newCache) {
+        }
+
+        @Override
+        public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         }
     }
 }

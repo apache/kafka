@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeD
 import java.time.Duration;
 import java.util.Objects;
 
-public class SuppressedInternal<K> implements Suppressed<K> {
+public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> {
     private static final Duration DEFAULT_SUPPRESSION_TIME = Duration.ofMillis(Long.MAX_VALUE);
     private static final StrictBufferConfigImpl DEFAULT_BUFFER_CONFIG = (StrictBufferConfigImpl) BufferConfig.unbounded();
 
@@ -62,11 +62,13 @@ public class SuppressedInternal<K> implements Suppressed<K> {
         return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, safeToDropTombstones);
     }
 
+    @Override
     public String name() {
         return name;
     }
 
-    BufferConfigInternal bufferConfig() {
+    @SuppressWarnings("unchecked")
+    public <BC extends Suppressed.BufferConfig<BC>> BufferConfigInternal<BC> bufferConfig() {
         return bufferConfig;
     }
 
@@ -105,11 +107,12 @@ public class SuppressedInternal<K> implements Suppressed<K> {
 
     @Override
     public String toString() {
-        return "SuppressedInternal{name='" + name + '\'' +
-            ", bufferConfig=" + bufferConfig +
-            ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
-            ", timeDefinition=" + timeDefinition +
-            ", safeToDropTombstones=" + safeToDropTombstones +
-            '}';
+        return "SuppressedInternal{" +
+                "name='" + name + '\'' +
+                ", bufferConfig=" + bufferConfig +
+                ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
+                ", timeDefinition=" + timeDefinition +
+                ", safeToDropTombstones=" + safeToDropTombstones +
+                '}';
     }
 }

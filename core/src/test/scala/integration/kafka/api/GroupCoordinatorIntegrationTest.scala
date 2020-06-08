@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Test
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.util.Properties
 
 import org.apache.kafka.common.internals.Topic
@@ -38,7 +38,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec() {
+  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")

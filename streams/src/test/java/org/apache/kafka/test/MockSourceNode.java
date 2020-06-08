@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockSourceNode<K, V> extends SourceNode<K, V> {
 
-    public static final String NAME = "MOCK-SOURCE-";
-    public static final AtomicInteger INDEX = new AtomicInteger(1);
+    private static final String NAME = "MOCK-SOURCE-";
+    private static final AtomicInteger INDEX = new AtomicInteger(1);
 
     public int numReceived = 0;
     public final ArrayList<K> keys = new ArrayList<>();

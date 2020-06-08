@@ -18,10 +18,13 @@
 package org.apache.kafka.connect.health;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
- * Provides the ability to lookup connector metadata and its health. This is made available to the {@link org.apache.kafka.connect.rest.ConnectRestExtension}
- * implementations. The Connect framework provides the implementation for this interface.
+ * Provides the ability to lookup connector metadata, including status and configurations, as well
+ * as immutable cluster information such as Kafka cluster ID. This is made available to
+ * {@link org.apache.kafka.connect.rest.ConnectRestExtension} implementations. The Connect framework
+ * provides the implementation for this interface.
  */
 public interface ConnectClusterState {
 
@@ -43,4 +46,27 @@ public interface ConnectClusterState {
      * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
      */
     ConnectorHealth connectorHealth(String connName);
+
+    /**
+     * Lookup the current configuration of a connector. This provides the current snapshot of configuration by querying the underlying
+     * herder. A connector returned by previous invocation of {@link #connectors()} may no longer be available and could result in {@link
+     * org.apache.kafka.connect.errors.NotFoundException}.
+     *
+     * @param connName name of the connector
+     * @return the configuration of the connector for the connector name
+     * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
+     * @throws java.lang.UnsupportedOperationException if the default implementation has not been overridden
+     */
+    default Map<String, String> connectorConfig(String connName) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Get details about the setup of the Connect cluster.
+     * @return a {@link ConnectClusterDetails} object containing information about the cluster
+     * @throws java.lang.UnsupportedOperationException if the default implementation has not been overridden
+     **/
+    default ConnectClusterDetails clusterDetails() {
+        throw new UnsupportedOperationException();
+    }
 }

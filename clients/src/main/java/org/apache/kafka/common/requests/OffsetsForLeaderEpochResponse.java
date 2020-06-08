@@ -85,9 +85,12 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             TOPICS_V1);
 
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V3 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2;
+
+
     public static Schema[] schemaVersions() {
         return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1,
-            OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2};
+            OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V3};
     }
 
     private final int throttleTimeMs;
@@ -127,8 +130,9 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (EpochEndOffset response : epochEndOffsetsByPartition.values())
-            updateErrorCounts(errorCounts, response.error());
+        epochEndOffsetsByPartition.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error())
+        );
         return errorCounts;
     }
 
