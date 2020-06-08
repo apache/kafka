@@ -548,8 +548,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return allRepartitionTopicPartitions;
     }
 
-    // Todo Do we have the assumption that no topicsInfo#sourceTopics is empty, but topicsInfo#sinkTopics could be empty?
-    // Then we can deduce that the root node must be TopicNode
     /**
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
