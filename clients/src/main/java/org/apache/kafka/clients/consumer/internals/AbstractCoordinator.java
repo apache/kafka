@@ -1311,12 +1311,10 @@ public abstract class AbstractCoordinator implements Closeable {
                             continue;
                         }
 
-                        if (state != MemberState.STABLE) {
-                            // the group is not stable (perhaps because we left the group or because the coordinator
-                            // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
-                            disable();
-                            continue;
-                        }
+                        // since Consumer.poll(Duration) could return in the middle of a rebalance or even after
+                        // a failed rebalance, and the next poll call would not be triggered as up to max.poll.interval
+                        // which could be much higher than session.timeout, we need to keep heartbeat alive so that
+                        // consumer would not be kicked out of the group
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
