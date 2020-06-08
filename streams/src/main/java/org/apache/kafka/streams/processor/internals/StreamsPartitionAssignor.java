@@ -555,43 +555,43 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                final Map<Integer, TopicsInfo> topicGroups,
                                                                 final Cluster metadata) {
         final Set<String> allRepartitionSourceTopics = new HashSet<>();
-        final Map<String, TopicNode> builtTopicNode = new HashMap<>();
+        final Map<String, TopicNode> builtTopicNodes = new HashMap<>();
         // 1.  Build a graph contains the TopicsInfo and TopicsNode
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
                 allRepartitionSourceTopics.add(topicName);
             }
             for (final String sourceTopic : topicsInfo.sourceTopics) {
-                if (builtTopicNode.containsKey(sourceTopic)) {
-                    builtTopicNode.get(sourceTopic).addDownStreamTopicsInfo(topicsInfo);
+                if (builtTopicNodes.containsKey(sourceTopic)) {
+                    builtTopicNodes.get(sourceTopic).addDownStreamTopicsInfo(topicsInfo);
                 } else {
                     final TopicNode topicNode = new TopicNode(sourceTopic);
                     topicNode.addDownStreamTopicsInfo(topicsInfo);
-                    builtTopicNode.put(sourceTopic, topicNode);
+                    builtTopicNodes.put(sourceTopic, topicNode);
                 }
             }
 
             for (final String sinkTopic : topicsInfo.sinkTopics) {
-                if (builtTopicNode.containsKey(sinkTopic)) {
-                    builtTopicNode.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
+                if (builtTopicNodes.containsKey(sinkTopic)) {
+                    builtTopicNodes.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
                 } else {
                     final TopicNode topicNode = new TopicNode(sinkTopic);
                     topicNode.addUpStreamTopicsInfo(topicsInfo);
-                    builtTopicNode.put(sinkTopic, topicNode);
+                    builtTopicNodes.put(sinkTopic, topicNode);
                 }
             }
         }
 
         // 2. Use DFS along with memoization to calc repartition number of all repartitionSourceTopics
         for (final String topic : allRepartitionSourceTopics) {
-            calcRepartitionNumForTopic(topic, repartitionTopicMetadata, metadata, builtTopicNode, new HashMap<TopicsInfo, Integer>());
+            calcRepartitionNumForTopic(topic, repartitionTopicMetadata, metadata, builtTopicNodes, new HashMap<TopicsInfo, Integer>());
         }
     }
 
     private int calcRepartitionNumForTopic(final String topic,
                                            final Map<String, InternalTopicConfig> repartitionTopicMetadata,
                                            final Cluster metadata,
-                                           final Map<String, TopicNode> builtTopicNode,
+                                           final Map<String, TopicNode> builtTopicNodes,
                                            final Map<TopicsInfo, Integer> topicsInfoNumberOfPartitions) {
 
         if (repartitionTopicMetadata.containsKey(topic)) {
@@ -601,11 +601,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 return maybeNumberPartitions.get();
             } else {
                 // else calculate the max numRepartitions of its upStream TopicsInfo and set the repartitionTopicMetadata for memoization before return
-                final TopicNode topicNode = builtTopicNode.get(topic);
+                final TopicNode topicNode = builtTopicNodes.get(topic);
                 Integer maxNumberPartitions = 0;
                 for (final TopicsInfo upstream : topicNode.upStreams) {
                     final Integer upStreamRepartitionNum = calcRepartitionNumForTopicInfo(upstream, repartitionTopicMetadata,
-                            metadata, builtTopicNode, topicsInfoNumberOfPartitions);
+                            metadata, builtTopicNodes, topicsInfoNumberOfPartitions);
                     maxNumberPartitions = upStreamRepartitionNum > maxNumberPartitions ? upStreamRepartitionNum : maxNumberPartitions;
                 }
                 repartitionTopicMetadata.get(topic).setNumberOfPartitions(maxNumberPartitions);
