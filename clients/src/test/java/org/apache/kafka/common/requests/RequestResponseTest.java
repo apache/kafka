@@ -84,7 +84,6 @@ import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult;
-import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsSynonym;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -172,7 +171,6 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -441,16 +439,15 @@ public class RequestResponseTest {
         checkRequest(createDescribeConfigsRequest(0), true);
         checkRequest(createDescribeConfigsRequestWithConfigEntries(0), false);
         checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException(), true);
-        checkResponse(createDescribeConfigsResponse(0), 0, false);
+        checkResponse(createDescribeConfigsResponse((short) 0), 0, false);
         checkRequest(createDescribeConfigsRequest(1), true);
         checkRequest(createDescribeConfigsRequestWithConfigEntries(1), false);
-        //checkRequest(createDescribeConfigsRequestWithDocumentation(1), false);
-        //checkRequest(createDescribeConfigsRequestWithDocumentation(2), false);
-        //checkRequest(createDescribeConfigsRequestWithDocumentation(3), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(1), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(2), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(3), false);
         checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException(), true);
-        checkResponse(createDescribeConfigsResponse(1), 1, false);
-        checkDescribeConfigsResponseVersions(0);
-        checkDescribeConfigsResponseVersions(1);
+        checkResponse(createDescribeConfigsResponse((short) 1), 1, false);
+        checkDescribeConfigsResponseVersions();
         checkRequest(createCreatePartitionsRequest(), true);
         checkRequest(createCreatePartitionsRequestWithAssignments(), false);
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException(), true);
@@ -505,35 +502,52 @@ public class RequestResponseTest {
         }
     }
 
-    private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual, int version) {
+    private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual, int version) throws Exception {
         for (Map.Entry<ConfigResource, DescribeConfigsResult> resource : expected.resultMap().entrySet()) {
-            Collection<DescribeConfigsResourceResult> actualResults = actual.resultMap().get(resource.getKey()).configs();
-            Iterator<DescribeConfigsResourceResult> expectedResults = expected.resultMap().get(resource.getKey()).configs().iterator();
-            for (DescribeConfigsResourceResult actualResult : actualResults) {
-                DescribeConfigsResourceResult expectedResult = expectedResults.next();
-                assertEquals(expectedResult.name(), actualResult.name());
-                assertEquals(expectedResult.value(), actualResult.value());
-                assertEquals(expectedResult.readOnly(), actualResult.readOnly());
-                assertEquals(expectedResult.isSensitive(), actualResult.isSensitive());
+            List<DescribeConfigsResourceResult> actualEntries = actual.resultMap().get(resource.getKey()).configs();
+            Iterator<DescribeConfigsResourceResult> expectedEntries = expected.resultMap().get(resource.getKey()).configs().iterator();
+            for (DescribeConfigsResourceResult actualEntry : actualEntries) {
+                DescribeConfigsResourceResult expectedEntry = expectedEntries.next();
+                assertEquals(expectedEntry.name(), actualEntry.name());
+                assertEquals("Non-matching values for " + actualEntry.name() + " in version " + version,
+                        expectedEntry.value(), actualEntry.value());
+                assertEquals("Non-matching readonly for " + actualEntry.name() + " in version " + version,
+                        expectedEntry.readOnly(), actualEntry.readOnly());
+                assertEquals("Non-matching isSensitive for " + actualEntry.name() + " in version " + version,
+                        expectedEntry.isSensitive(), actualEntry.isSensitive());
                 if (version < 3) {
-                    assertEquals(ConfigType.UNKNOWN.id, actualResult.configType());
+                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
+                            ConfigType.UNKNOWN.id(), actualEntry.configType());
                 } else {
-                    assertEquals(expectedResult.configType(), actualResult.configType());
+                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
+                            expectedEntry.configType(), actualEntry.configType());
                 }
-                if (version == 1 || version == 3 || (expectedResult.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG.id &&
-                        expectedResult.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id))
-                    assertEquals(expectedResult.configSource(), actualResult.configSource());
+                if (version == 1 || version == 3 || (expectedEntry.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG.id() &&
+                        expectedEntry.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id()))
+                    assertEquals("Non-matching configSource for " + actualEntry.name() + " in version " + version,
+                            expectedEntry.configSource(), actualEntry.configSource());
                 else
-                    assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG, actualResult.configSource());
+                    assertEquals("Non matching configSource for " + actualEntry.name() + " in version " + version,
+                            DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource());
             }
         }
     }
 
-    private void checkDescribeConfigsResponseVersions(int version) throws Exception {
-        DescribeConfigsResponse response = createDescribeConfigsResponse(version);
+    private void checkDescribeConfigsResponseVersions() throws Exception {
+        DescribeConfigsResponse response = createDescribeConfigsResponse((short) 0);
         DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) deserialize(response,
-                response.toStruct((short) version), (short) version);
-        verifyDescribeConfigsResponse(response, deserialized0, version);
+                response.toStruct((short) 0), (short) 0);
+        verifyDescribeConfigsResponse(response, deserialized0, 0);
+
+        response = createDescribeConfigsResponse((short) 1);
+        DescribeConfigsResponse deserialized1 = (DescribeConfigsResponse) deserialize(response,
+                response.toStruct((short) 1), (short) 1);
+        verifyDescribeConfigsResponse(response, deserialized1, 1);
+
+        response = createDescribeConfigsResponse((short) 3);
+        DescribeConfigsResponse deserialized3 = (DescribeConfigsResponse) deserialize(response,
+            response.toStruct((short) 3), (short) 3);
+        verifyDescribeConfigsResponse(response, deserialized3, 3);
     }
 
     private void checkErrorResponse(AbstractRequest req, Throwable e, boolean checkEqualityAndHashCode) {
@@ -1877,59 +1891,85 @@ public class RequestResponseTest {
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(int version) {
-        return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData().setResources(asList(
-                new DescribeConfigsRequestData.DescribeConfigsResource()
-                        .setResourceType(ConfigResource.Type.BROKER.id())
-                        .setResourceName("0"),
-                new DescribeConfigsRequestData.DescribeConfigsResource()
-                        .setResourceType(ConfigResource.Type.TOPIC.id())
-                        .setResourceName("topic"))))
-            .build((short) version);
-    }
-
-    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(int version) {
-        return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData().setResources(asList(
-                new DescribeConfigsRequestData.DescribeConfigsResource()
-                        .setResourceType(ConfigResource.Type.BROKER.id())
-                        .setResourceName("0")
-                        .setConfigurationKeys(asList("foo", "bar")),
-                new DescribeConfigsRequestData.DescribeConfigsResource()
-                        .setResourceType(ConfigResource.Type.TOPIC.id())
-                        .setResourceName("topic")
-                        .setConfigurationKeys(null),
-                new DescribeConfigsRequestData.DescribeConfigsResource()
-                        .setResourceType(ConfigResource.Type.TOPIC.id())
-                        .setResourceName("topic a")
-                        .setConfigurationKeys(Collections.emptyList()))))
+        return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+                .setResources(asList(
+                        new DescribeConfigsRequestData.DescribeConfigsResource()
+                                .setResourceType(ConfigResource.Type.BROKER.id())
+                                .setResourceName("0"),
+                        new DescribeConfigsRequestData.DescribeConfigsResource()
+                                .setResourceType(ConfigResource.Type.TOPIC.id())
+                                .setResourceName("topic"))))
                 .build((short) version);
     }
 
-    private DescribeConfigsResponse createDescribeConfigsResponse(int version) {
-        List<DescribeConfigsSynonym> synonyms = Collections.emptyList();
-        List<DescribeConfigsResourceResult> configEntries = asList(
-                new DescribeConfigsResourceResult().setName("config_name").setValue("config_value")
-                .setConfigSource(version == 0 ? -1 : DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG.id)
-                        .setIsDefault(false)
-                        .setIsSensitive(true).setReadOnly(false).setSynonyms(synonyms),
-                new DescribeConfigsResourceResult().setName("another_name").setValue("another_value")
-                        .setIsDefault(false)
-                        .setConfigSource(version == 0 ? -1 : DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG.id)
-                        .setIsSensitive(false).setReadOnly(true).setSynonyms(synonyms)
-        );
-        List<DescribeConfigsResult> configs = asList(
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(int version) {
+        return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(asList(
+                new DescribeConfigsRequestData.DescribeConfigsResource()
+                    .setResourceType(ConfigResource.Type.BROKER.id())
+                    .setResourceName("0")
+                    .setConfigurationKeys(asList("foo", "bar")),
+                new DescribeConfigsRequestData.DescribeConfigsResource()
+                    .setResourceType(ConfigResource.Type.TOPIC.id())
+                    .setResourceName("topic")
+                    .setConfigurationKeys(null),
+                new DescribeConfigsRequestData.DescribeConfigsResource()
+                    .setResourceType(ConfigResource.Type.TOPIC.id())
+                    .setResourceName("topic a")
+                    .setConfigurationKeys(emptyList())))).build((short) version);
+    }
+
+    private DescribeConfigsRequest createDescribeConfigsRequestWithDocumentation(int version) {
+        DescribeConfigsRequestData data = new DescribeConfigsRequestData()
+                .setResources(asList(
+                        new DescribeConfigsRequestData.DescribeConfigsResource()
+                                .setResourceType(ConfigResource.Type.BROKER.id())
+                                .setResourceName("0")
+                                .setConfigurationKeys(asList("foo", "bar"))));
+        if (version == 3) {
+            data.setIncludeDocumentation(true);
+        }
+        return new DescribeConfigsRequest.Builder(data).build((short) version);
+    }
+
+    private DescribeConfigsResponse createDescribeConfigsResponse(short version) {
+        return new DescribeConfigsResponse(new DescribeConfigsResponseData().setResults(asList(
                 new DescribeConfigsResult()
+                        .setErrorCode(Errors.NONE.code())
                         .setResourceType(ConfigResource.Type.BROKER.id())
                         .setResourceName("0")
-                        .setErrorCode(Errors.NONE.code())
-                        .setConfigs(configEntries),
+                        .setConfigs(asList(
+                                new DescribeConfigsResourceResult()
+                                        .setName("config_name")
+                                        .setValue("config_value")
+                                        // Note: the v0 default for this field that should be exposed to callers is
+                                        // context-dependent. For example, if the resource is a broker, this should default to 4.
+                                        // -1 is just a placeholder value.
+                                        .setConfigSource(version == 0 ? DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id() : DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG.id)
+                                        .setIsSensitive(true).setReadOnly(false)
+                                        .setSynonyms(emptyList()),
+                                new DescribeConfigsResourceResult()
+                                        .setName("yet_another_name")
+                                        .setValue("yet another value")
+                                        .setConfigSource(version == 0 ? DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id() : DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG.id)
+                                        .setIsSensitive(false).setReadOnly(true)
+                                        .setSynonyms(emptyList())
+                                        .setConfigType(ConfigType.BOOLEAN.id())
+                                        .setDocumentation("some description"),
+                                new DescribeConfigsResourceResult()
+                                        .setName("another_name")
+                                        .setValue("another value")
+                                        .setConfigSource(version == 0 ? DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id() : DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG.id)
+                                        .setIsSensitive(false).setReadOnly(true)
+                                        .setSynonyms(emptyList())
+                        )),
                 new DescribeConfigsResult()
+                        .setErrorCode(Errors.NONE.code())
                         .setResourceType(ConfigResource.Type.TOPIC.id())
                         .setResourceName("topic")
-                        .setErrorCode(Errors.NONE.code())
-                        .setConfigs(configEntries)
-                        );
-        return new DescribeConfigsResponse(new DescribeConfigsResponseData()
-                .setThrottleTimeMs(200).setResults(configs));
+                        .setConfigs(emptyList())
+        )));
+
     }
 
     private AlterConfigsRequest createAlterConfigsRequest() {

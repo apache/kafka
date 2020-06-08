@@ -32,12 +32,8 @@
         "about": "The configuration keys to list, or null to list all configuration keys." }
     ]},
     { "name": "IncludeSynonyms", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
-<<<<<<< HEAD
       "about": "True if we should include all synonyms." },
     { "name": "IncludeDocumentation", "type": "bool", "versions": "3+", "default": "false", "ignorable": false,
       "about": "True if we should include configuration documentation." }
-=======
-      "about": "True if we should include all synonyms." }
->>>>>>> Review comments
   ]
 }

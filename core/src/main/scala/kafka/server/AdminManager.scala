@@ -44,7 +44,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
@@ -667,6 +667,27 @@ class AdminManager(val config: KafkaConfig,
 
   private def brokerSynonyms(name: String): List[String] = {
     DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
+  }
+
+  private def brokerDocumentation(name: String): String = {
+    config.documentationOf(name)
+  }
+
+  private def configResponseType(configType: Option[ConfigDef.Type]): DescribeConfigsResponse.ConfigType = {
+    if (configType.isEmpty)
+      DescribeConfigsResponse.ConfigType.UNKNOWN
+    else configType.get match {
+      case ConfigDef.Type.BOOLEAN => DescribeConfigsResponse.ConfigType.BOOLEAN
+      case ConfigDef.Type.STRING => DescribeConfigsResponse.ConfigType.STRING
+      case ConfigDef.Type.INT => DescribeConfigsResponse.ConfigType.INT
+      case ConfigDef.Type.SHORT => DescribeConfigsResponse.ConfigType.SHORT
+      case ConfigDef.Type.LONG => DescribeConfigsResponse.ConfigType.LONG
+      case ConfigDef.Type.DOUBLE => DescribeConfigsResponse.ConfigType.DOUBLE
+      case ConfigDef.Type.LIST => DescribeConfigsResponse.ConfigType.LIST
+      case ConfigDef.Type.CLASS => DescribeConfigsResponse.ConfigType.CLASS
+      case ConfigDef.Type.PASSWORD => DescribeConfigsResponse.ConfigType.PASSWORD
+      case _ => DescribeConfigsResponse.ConfigType.UNKNOWN
+    }
   }
   
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponseData.DescribeConfigsSynonym] = {
