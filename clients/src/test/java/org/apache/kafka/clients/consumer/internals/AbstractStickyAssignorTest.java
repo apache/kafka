@@ -760,32 +760,18 @@ public abstract class AbstractStickyAssignorTest {
                 Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
                 Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
 
-                if (len > otherLen) {
-                    for (String topic: map.keySet())
-                        if (otherMap.containsKey(topic))
-                            //assertTrue(true);
-                        assertFalse("Error: Some partitions can be moved from c" + i + " to c" + j
-                                + " to achieve a better balance"
-                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
-                                + " partitions."
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
-                                .toString(),
-                            otherMap.containsKey(topic));
+                int moreLoaded = len > otherLen ? i : j;
+                int lessLoaded = len > otherLen ? j : i;
 
-
-
-                }
-
-                if (otherLen > len) {
-                    for (String topic: otherMap.keySet())
-                        if (otherMap.containsKey(topic))
-                            //assertTrue(true);
-                        assertFalse("Error: Some partitions can be moved from c" + j + " to c" + i + " to achieve a better balance"
-                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions."
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                            map.containsKey(topic));
-
-
+                // If there's any overlap in the subscribed topics, we should have been able to balance partitions
+                for (String topic: map.keySet()) {
+                    assertFalse("Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
+                            + " to achieve a better balance"
+                            + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
+                            + " partitions."
+                            + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
+                            .toString(),
+                        otherMap.containsKey(topic));
                 }
             }
         }
