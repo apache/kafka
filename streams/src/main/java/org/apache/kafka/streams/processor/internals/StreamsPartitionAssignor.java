@@ -147,6 +147,46 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    /**
+     * TopicNode is the a topic node abstraction for graph built with TopicNode and TopicsInfo, the graph is useful
+     * when in certain cases traverse is needed. For example, method setRepartitionTopicMetadataNumberOfPartitions
+     * internally do a DFS search along with the graph.
+     *
+     TopicNode("t1")      TopicNode("t2")                                    TopicNode("t6")             TopicNode("t7")
+                \           /                                                            \                           /
+                  TopicsInfo(source = (t1,t2), sink = (t3,t4))                           TopicsInfo(source = (t6,t7), sink = (t4))
+                                /           \                                                                        /
+                             /                 \                                                          /
+                          /                        \                                           /
+                      /                                \                           /
+                 /                                       \            /
+     TopicNode("t3")                                     TopicNode("t4")
+            \
+     TopicsInfo(source = (t3), sink = ())
+
+     t3 = max(t1,t2)
+     t4 = max(max(t1,t2), max(t6,t7))
+     */
+    private static class TopicNode {
+        public final String topicName;
+        public final Set<TopicsInfo> upStreams; // upStream TopicsInfo's sinkTopics contains this
+        public final Set<TopicsInfo> downStreams; // downStreams TopicsInfo's sourceTopics contains this
+        TopicNode(final String topicName) {
+            this.topicName = topicName;
+            this.upStreams = new HashSet<>();
+            this.downStreams = new HashSet<>();
+        }
+
+        public void addUpStreamTopicsInfo(final TopicsInfo topicsInfo) {
+            this.upStreams.add(topicsInfo);
+        }
+
+        public void addDownStreamTopicsInfo(final TopicsInfo topicsInfo) {
+            this.downStreams.add(topicsInfo);
+        }
+    }
+
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -508,71 +548,101 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return allRepartitionTopicPartitions;
     }
 
+    // Todo Do we have the assumption that no topicsInfo#sourceTopics is empty, but topicsInfo#sinkTopics could be empty?
+    // Then we can deduce that the root node must be TopicNode
     /**
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
     private void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
                                                                final Map<Integer, TopicsInfo> topicGroups,
-                                                               final Cluster metadata) {
-        boolean numPartitionsNeeded;
-        do {
-            numPartitionsNeeded = false;
-
-            for (final TopicsInfo topicsInfo : topicGroups.values()) {
-                for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(topicName)
-                                                                     .numberOfPartitions();
-                    Integer numPartitions = null;
-
-                    if (!maybeNumPartitions.isPresent()) {
-                        // try set the number of partitions for this repartition topic if it is not set yet
-                        for (final TopicsInfo otherTopicsInfo : topicGroups.values()) {
-                            final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
-
-                            if (otherSinkTopics.contains(topicName)) {
-                                // if this topic is one of the sink topics of this topology,
-                                // use the maximum of all its source topic partitions as the number of partitions
-                                for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    Integer numPartitionsCandidate = null;
-                                    // It is possible the sourceTopic is another internal topic, i.e,
-                                    // map().join().join(map())
-                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
-                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
-                                            numPartitionsCandidate =
-                                                repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
-                                        }
-                                    } else {
-                                        final Integer count = metadata.partitionCountForTopic(sourceTopicName);
-                                        if (count == null) {
-                                            throw new IllegalStateException(
-                                                "No partition count found for source topic "
-                                                    + sourceTopicName
-                                                    + ", but it should have been."
-                                            );
-                                        }
-                                        numPartitionsCandidate = count;
-                                    }
-
-                                    if (numPartitionsCandidate != null) {
-                                        if (numPartitions == null || numPartitionsCandidate > numPartitions) {
-                                            numPartitions = numPartitionsCandidate;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // if we still have not found the right number of partitions,
-                        // another iteration is needed
-                        if (numPartitions == null) {
-                            numPartitionsNeeded = true;
-                        } else {
-                            repartitionTopicMetadata.get(topicName).setNumberOfPartitions(numPartitions);
-                        }
-                    }
+                                                                final Cluster metadata) {
+        final Set<String> allRepartitionSourceTopics = new HashSet<>();
+        final Map<String, TopicNode> builtTopicNode = new HashMap<>();
+        // 1.  Build a graph contains the TopicsInfo and TopicsNode
+        for (final TopicsInfo topicsInfo : topicGroups.values()) {
+            for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
+                allRepartitionSourceTopics.add(topicName);
+            }
+            for (final String sourceTopic : topicsInfo.sourceTopics) {
+                if (builtTopicNode.containsKey(sourceTopic)) {
+                    builtTopicNode.get(sourceTopic).addDownStreamTopicsInfo(topicsInfo);
+                } else {
+                    final TopicNode topicNode = new TopicNode(sourceTopic);
+                    topicNode.addDownStreamTopicsInfo(topicsInfo);
+                    builtTopicNode.put(sourceTopic, topicNode);
                 }
             }
-        } while (numPartitionsNeeded);
+
+            for (final String sinkTopic : topicsInfo.sinkTopics) {
+                if (builtTopicNode.containsKey(sinkTopic)) {
+                    builtTopicNode.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
+                } else {
+                    final TopicNode topicNode = new TopicNode(sinkTopic);
+                    topicNode.addUpStreamTopicsInfo(topicsInfo);
+                    builtTopicNode.put(sinkTopic, topicNode);
+                }
+            }
+        }
+
+        // 2. Use DFS along with memoization to calc repartition number of all repartitionSourceTopics
+        for (final String topic : allRepartitionSourceTopics) {
+            calcRepartitionNumForTopic(topic, repartitionTopicMetadata, metadata, builtTopicNode, new HashMap<TopicsInfo, Integer>());
+        }
+    }
+
+    private int calcRepartitionNumForTopic(final String topic,
+                                           final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                           final Cluster metadata,
+                                           final Map<String, TopicNode> builtTopicNode,
+                                           final Map<TopicsInfo, Integer> topicsInfoNumberOfPartitions) {
+
+        if (repartitionTopicMetadata.containsKey(topic)) {
+            final Optional<Integer> maybeNumberPartitions = repartitionTopicMetadata.get(topic).numberOfPartitions();
+            // if numberOfPartitions already calculated, return directly
+            if (maybeNumberPartitions.isPresent()) {
+                return maybeNumberPartitions.get();
+            } else {
+                // else calculate the max numRepartitions of its upStream TopicsInfo and set the repartitionTopicMetadata for memoization before return
+                final TopicNode topicNode = builtTopicNode.get(topic);
+                Integer maxNumberPartitions = 0;
+                for (final TopicsInfo upstream : topicNode.upStreams) {
+                    final Integer upStreamRepartitionNum = calcRepartitionNumForTopicInfo(upstream, repartitionTopicMetadata,
+                            metadata, builtTopicNode, topicsInfoNumberOfPartitions);
+                    maxNumberPartitions = upStreamRepartitionNum > maxNumberPartitions ? upStreamRepartitionNum : maxNumberPartitions;
+                }
+                repartitionTopicMetadata.get(topic).setNumberOfPartitions(maxNumberPartitions);
+                return maxNumberPartitions;
+            }
+        } else {
+            final Integer count = metadata.partitionCountForTopic(topic);
+            if (count == null) {
+                throw new IllegalStateException(
+                        "No partition count found for source topic "
+                                + topic
+                                + ", but it should have been."
+                );
+            }
+            return count;
+        }
+    }
+
+    private int calcRepartitionNumForTopicInfo(final TopicsInfo topicsInfo,
+                                               final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                               final Cluster metadata,
+                                               final Map<String, TopicNode> builtTopicNode,
+                                               final Map<TopicsInfo, Integer> topicsInfoNumberOfPartitions) {
+        if (topicsInfoNumberOfPartitions.containsKey(topicsInfo)) {
+            return topicsInfoNumberOfPartitions.get(topicsInfo);
+        } else {
+            Integer maxNumberPartitions = 0;
+            for (final String sourceTopic : topicsInfo.sourceTopics) {
+                final Integer sourceTopicNumPartitions = calcRepartitionNumForTopic(sourceTopic, repartitionTopicMetadata,
+                        metadata, builtTopicNode, topicsInfoNumberOfPartitions);
+                maxNumberPartitions = sourceTopicNumPartitions > maxNumberPartitions ? sourceTopicNumPartitions : maxNumberPartitions;
+            }
+            topicsInfoNumberOfPartitions.put(topicsInfo, maxNumberPartitions);
+            return maxNumberPartitions;
+        }
     }
 
     /**
