@@ -469,11 +469,11 @@ class LogManager(logDirs: Seq[File],
 
         // update the last flush point
         debug(s"Updating recovery points at $dir")
-        checkpointLogsRecoveryOffsetsInDir(logsInDir, dir)
+        checkpointRecoveryOffsetsInDir(logsInDir, dir)
         cleanSnapshotsInDir(logsInDir.values.toSeq, dir)
 
         debug(s"Updating log start offsets at $dir")
-        checkpointLogsStartOffsetsInDir(logsInDir, dir)
+        checkpointLogStartOffsetsInDir(logsInDir, dir)
 
         // mark that the shutdown was clean by creating marker file
         debug(s"Writing clean shutdown marker at $dir")
@@ -576,7 +576,7 @@ class LogManager(logDirs: Seq[File],
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
       val logs = logsByDirCached.getOrElse(logDir.getAbsolutePath, Map.empty)
-      checkpointLogsRecoveryOffsetsInDir(logs, logDir)
+      checkpointRecoveryOffsetsInDir(logs, logDir)
       cleanSnapshotsInDir(logs.values.toSeq, logDir)
     }
   }
@@ -588,7 +588,7 @@ class LogManager(logDirs: Seq[File],
   def checkpointLogStartOffsets(): Unit = {
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
-      checkpointLogsStartOffsetsInDir(
+      checkpointLogStartOffsetsInDir(
         logsByDirCached.getOrElse(logDir.getAbsolutePath, Map.empty), logDir)
     }
   }
@@ -604,8 +604,8 @@ class LogManager(logDirs: Seq[File],
       if (cleaner != null) {
         cleaner.updateCheckpoints(logDir)
       }
-      checkpointLogsRecoveryOffsetsInDir(partitionToLog, logDir)
-      checkpointLogsStartOffsetsInDir(partitionToLog, logDir)
+      checkpointRecoveryOffsetsInDir(partitionToLog, logDir)
+      checkpointLogStartOffsetsInDir(partitionToLog, logDir)
     }
   }
 
@@ -633,8 +633,7 @@ class LogManager(logDirs: Seq[File],
    */
   // Only for testing
   private[log] def checkpointRecoveryOffsetsInDir(dir: File): Unit = {
-    val partitionToLog = logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
-    checkpointLogsRecoveryOffsetsInDir(partitionToLog, dir)
+    checkpointRecoveryOffsetsInDir(logsByDir(dir), dir)
   }
 
   /**
@@ -643,9 +642,9 @@ class LogManager(logDirs: Seq[File],
    * @param dir the directory in which logs are checkpointed
    */
   private def checkpointRecoveryAndLogStartOffsetsInDir(dir: File): Unit = {
-    val partitionToLog = logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
-    checkpointLogsRecoveryOffsetsInDir(partitionToLog, dir)
-    checkpointLogsStartOffsetsInDir(partitionToLog, dir)
+    val logs = logsByDir(dir)
+    checkpointRecoveryOffsetsInDir(logs, dir)
+    checkpointLogStartOffsetsInDir(logs, dir)
   }
 
   /**
@@ -654,8 +653,8 @@ class LogManager(logDirs: Seq[File],
    * @param logs the logs and logs to be checkpointed
    * @param dir the directory in which logs are checkpointed
    */
-  private def checkpointLogsRecoveryOffsetsInDir(logs: Map[TopicPartition, Log],
-                                                 dir: File): Unit = {
+  private def checkpointRecoveryOffsetsInDir(logs: Map[TopicPartition, Log],
+                                             dir: File): Unit = {
     try {
       recoveryPointCheckpoints.get(dir).foreach { checkpoint =>
         val recoveryOffsets = logs.map { case (tp, log) => tp -> log.recoveryPoint }
@@ -673,12 +672,12 @@ class LogManager(logDirs: Seq[File],
    * @param logs the partitions and logs to be checkpointed
    * @param dir the directory in which logs are checkpointed
    */
-  private def checkpointLogsStartOffsetsInDir(logs: Map[TopicPartition, Log],
-                                              dir: File): Unit = {
+  private def checkpointLogStartOffsetsInDir(logs: Map[TopicPartition, Log],
+                                             dir: File): Unit = {
     try {
       logStartOffsetCheckpoints.get(dir).foreach { checkpoint =>
         val logStartOffsets = logs.collect {
-          case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -967,9 +966,9 @@ class LogManager(logDirs: Seq[File],
         currentLogs.remove(topicPartition)
     }
     if (removedLog != null) {
-      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+      // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null && !isFuture) {
-        cleaner.abortCleaning(topicPartition, partitionDeleted = true)
+        cleaner.abortCleaning(topicPartition)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       addLogToBeDeleted(removedLog)
@@ -1059,7 +1058,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Map of log dir to logs by topic and partitions in that dir
    */
-  def logsByDir: Map[String, Map[TopicPartition, Log]] = {
+  private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
     // This code is called often by checkpoint processes and is written in a way that reduces
     // allocations and CPU with many topic partitions.
     // When changing this code please measure the changes with org.apache.kafka.jmh.server.CheckpointBench
@@ -1070,6 +1069,10 @@ class LogManager(logDirs: Seq[File],
     currentLogs.foreachEntry(addToDir)
     futureLogs.foreachEntry(addToDir)
     byDir
+  }
+
+  private def logsByDir(dir: File): Map[TopicPartition, Log] = {
+    logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
   }
 
   // logDir should be an absolute path

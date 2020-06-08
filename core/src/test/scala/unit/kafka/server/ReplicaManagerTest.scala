@@ -1303,8 +1303,12 @@ class ReplicaManagerTest {
 
     // We have a fetch in purgatory, now receive a stop replica request and
     // assert that the fetch returns with a NOT_LEADER error
+    replicaManager.stopReplicas(2, 0, 0, brokerEpoch,
+      mutable.Map(tp0 -> new StopReplicaPartitionState()
+        .setPartitionIndex(tp0.partition)
+        .setDeletePartition(true)
+        .setLeaderEpoch(LeaderAndIsr.EpochDuringDelete)))
 
-    replicaManager.stopReplica(tp0, deletePartition = true, mutable.Set.empty[File])
     assertNotNull(fetchResult.get)
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, fetchResult.get.error)
   }
@@ -1338,7 +1342,12 @@ class ReplicaManagerTest {
 
     Mockito.when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
 
-    replicaManager.stopReplica(tp0, deletePartition = true, mutable.Set.empty[File])
+    replicaManager.stopReplicas(2, 0, 0, brokerEpoch,
+      mutable.Map(tp0 -> new StopReplicaPartitionState()
+        .setPartitionIndex(tp0.partition)
+        .setDeletePartition(true)
+        .setLeaderEpoch(LeaderAndIsr.EpochDuringDelete)))
+
     assertNotNull(produceResult.get)
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, produceResult.get.error)
   }

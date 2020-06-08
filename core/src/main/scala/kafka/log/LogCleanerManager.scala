@@ -253,9 +253,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  the partition is aborted.
    *  This is implemented by first abortAndPausing and then resuming the cleaning of the partition.
    */
-  def abortCleaning(topicPartition: TopicPartition, partitionDeleted: Boolean): Unit = {
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
-      abortAndPauseCleaning(topicPartition, partitionDeleted)
+      // Cleaning is aborted before deleting a partition. In this case, we don't want
+      // to spam the log with useless information.
+      abortAndPauseCleaning(topicPartition, logAbortMessage = false)
       resumeCleaning(Seq(topicPartition))
     }
   }
@@ -272,7 +274,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  6. If the partition is already paused, a new call to this function
    *     will increase the paused count by one.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition, partitionDeleted: Boolean = false): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition, logAbortMessage: Boolean = true): Unit = {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
@@ -287,7 +289,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       while(!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
-    if (!partitionDeleted)
+    if (logAbortMessage)
       info(s"The cleaning for partition $topicPartition is aborted and paused")
   }
 
@@ -356,12 +358,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]): Unit = {
+  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition, Long)]): Unit = {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
         try {
-          val existing = checkpoint.read().filter { case (k, _) => logs.keys.contains(k) } ++ update
+          val existing = checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) } ++ update
           checkpoint.write(existing)
         } catch {
           case e: KafkaStorageException =>

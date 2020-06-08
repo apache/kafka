@@ -334,9 +334,9 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.removeMetrics(topic)
   }
 
-  def stopReplica(topicPartition: TopicPartition,
-                  deletePartition: Boolean,
-                  logDirs: mutable.Set[File]): Unit  = {
+  private def stopReplica(topicPartition: TopicPartition,
+                          deletePartition: Boolean,
+                          logDirs: mutable.Set[File]): Unit  = {
     if (deletePartition) {
       val log = logManager.getLog(topicPartition)
       val futureLog = logManager.getLog(topicPartition, isFuture = true)
