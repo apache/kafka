@@ -55,12 +55,18 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         try {
             PlaintextTransportLayer transportLayer = buildTransportLayer(key);
             Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, transportLayer, listenerName);
-            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
+            return buildChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
             log.warn("Failed to create channel due to ", e);
             throw new KafkaException(e);
         }
+    }
+
+    // visible for testing
+    KafkaChannel buildChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
+                              int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+        return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry);
     }
 
     protected PlaintextTransportLayer buildTransportLayer(SelectionKey key) throws IOException {

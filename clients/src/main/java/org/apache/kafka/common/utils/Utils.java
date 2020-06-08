@@ -949,6 +949,16 @@ public final class Utils {
     }
 
     /**
+     * close all closable objects even if one of them throws exception.
+     * @param firstException keeps the first exception
+     * @param name message of closing those objects
+     * @param closeables closable objects
+     */
+    public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
+        for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
+    }
+
+    /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
