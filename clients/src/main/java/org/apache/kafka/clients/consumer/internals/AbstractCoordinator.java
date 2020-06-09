@@ -408,8 +408,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
-                // and  shouldn't block hearbeat thread.
-                // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment
+                // and shouldn't block heartbeat thread.
+                // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment}
                 synchronized (AbstractCoordinator.this) {
                     generationSnapshot = this.generation;
                 }

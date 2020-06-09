@@ -101,12 +101,10 @@
     <suppress checks="ClassFanOutComplexity"
               files="Worker.java"/>
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
+              files="(KafkaConfigBackingStore|IncrementalCooperativeAssignor|RequestResponseTest|WorkerSinkTaskTest).java"/>
 
     <suppress checks="ParameterNumber"
-              files="(WorkerSinkTask|WorkerSourceTask).java"/>
-    <suppress checks="ParameterNumber"
-              files="WorkerCoordinator.java"/>
+              files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
               files="ConfigKeyInfo.java"/>
 
