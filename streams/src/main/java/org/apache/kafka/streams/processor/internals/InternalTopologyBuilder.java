@@ -490,6 +490,7 @@ public class InternalTopologyBuilder {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
         Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
+        TopologyUtil.checkProcessorSupplier(supplier);
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
         }
@@ -842,14 +843,6 @@ public class InternalTopologyBuilder {
             nodeGroup.addAll(value);
         }
         nodeGroup.removeAll(globalNodeGroups());
-        for (final NodeFactory<?, ?> entry : nodeFactories.values()) {
-            if (entry instanceof ProcessorNodeFactory) {
-                ProcessorNodeFactory<?, ?> factory = (ProcessorNodeFactory<?, ?>) entry;
-                if (factory.supplier.get() == factory.supplier.get()) {
-                    throw new TopologyException("topology has singleton result of ProcessorSupplier " + factory.name);
-                }
-            }
-        }
         initializeSubscription();
         return build(nodeGroup);
     }

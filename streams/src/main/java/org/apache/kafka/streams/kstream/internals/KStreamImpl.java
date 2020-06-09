@@ -60,6 +60,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.processor.internals.TopologyUtil;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
@@ -1421,6 +1422,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+        TopologyUtil.checkProcessorSupplier(processorSupplier);
         for (final String stateStoreName : stateStoreNames) {
             Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
         }

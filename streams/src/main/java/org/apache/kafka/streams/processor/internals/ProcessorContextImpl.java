@@ -201,7 +201,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
             final String sendTo = toInternal.child();
             if (currentNode() == null) {
-                throw new StreamsException("Current node is unknown when forwarding to: " + key);
+                throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
+                        "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
+                        " is shared. To avoid this error, make sure that your suppliers return new instances " +
+                        "each time 'get()' of Supplier is called and do not return the same object reference " +
+                        "multiple times.");
             }
             if (sendTo == null) {
                 final List<ProcessorNode<?, ?>> children = currentNode().children();

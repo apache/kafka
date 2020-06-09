@@ -645,12 +645,14 @@ public class Topology {
      * Add a new processor node that receives and processes records output by one or more parent source or processor
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
+     * The supplier should always generate a new instance each time invoking {@link  ProcessorSupplier#get()}. Creating
+     * a single Processor object and returning the same object reference in {@link ProcessorSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
      * will be added to the topology and connected to this processor automatically.
      *
      * @param name          the unique name of the processor node
-     * @param supplier      the supplier used to construct this node's {@link Processor} instance; the implementation of supplier
-     *                      should return a newly constructed {@link Processor} instance inside the scope of the lambda expression.
+     * @param supplier      the supplier used to obtain this node's {@link Processor} instance
      * @param parentNames   the name of one or more source or processor nodes whose output records this processor should receive
      *                      and process
      * @return              itself
