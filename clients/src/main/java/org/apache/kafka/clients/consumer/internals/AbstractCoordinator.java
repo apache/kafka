@@ -447,7 +447,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     needsJoinPrepare = true;
                 } else {
                     log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
-                    resetStateAndRejoin();
+                    resetStateNadRejoin();
                     resetJoinGroupFuture();
                     return false;
                 }
@@ -473,7 +473,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.joinFuture = null;
     }
 
-    private synchronized void resetStateAndRejoin() {
+    private synchronized void resetStateNadRejoin() {
         rejoinNeeded = true;
         state = MemberState.UNJOINED;
     }
@@ -528,7 +528,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
 
                 private void recordRebalanceFailure() {
-                    state = MemberState.UNJOINED;
                     sensors.failedRebalanceSensor.record();
                 }
             });
@@ -652,10 +651,11 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
                 // Broker requires a concrete member id to be allowed to join the group. Update member id
                 // and send another join group request in next cycle.
+                String memberId = joinResponse.data().memberId();
+                log.debug("Attempt to join group returned {} error. Will set the member id as {} and then rejoin", error, memberId);
                 synchronized (AbstractCoordinator.this) {
-                    AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                            joinResponse.data().memberId(), null);
-                    AbstractCoordinator.this.resetStateAndRejoin();
+                    AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
+                    AbstractCoordinator.this.resetStateNadRejoin();
                 }
                 future.raise(error);
             } else {
@@ -1069,6 +1069,13 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatSensor.record(response.requestLatencyMs());
             Errors error = heartbeatResponse.error();
+
+            if (state != MemberState.STABLE) {
+                log.debug("Ignoring Heartbeat response with error {} since during {} state", error, state);
+                future.complete(null);
+                return;
+            }
+
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response");
                 future.complete(null);
@@ -1313,8 +1320,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         // since Consumer.poll(Duration) could return in the middle of a rebalance or even after
                         // a failed rebalance, and the next poll call would not be triggered as up to max.poll.interval
-                        // which could be much higher than session.timeout, we need to keep heartbeat alive so that
-                        // consumer would not be kicked out of the group
+                        // which could be much higher than session.timeout, we need to keep heartbeat alive during
+                        // rebalancing as well so that consumer would not be kicked out of the group
+                        if (state == MemberState.UNJOINED) {
+                            disable();
+                            continue;
+                        }
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();

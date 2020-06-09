@@ -54,6 +54,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -605,6 +606,25 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testHeartbeatSentWhenRebalancing() throws Exception {
+        setupCoordinator();
+        joinGroup();
+
+        final AbstractCoordinator.Generation currGen = coordinator.generation();
+
+        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+
+        // the heartbeat thread should be sent out during a rebalance
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+        TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,
+                "The heartbeat request was not sent");
+        assertTrue(coordinator.heartbeat().hasInflight());
+
+        mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
+        assertEquals(currGen, coordinator.generation());
+    }
+
+    @Test
     public void testHeartbeatIllegalGenerationResponseWithOldGeneration() throws InterruptedException {
         setupCoordinator();
         joinGroup();
@@ -699,8 +719,8 @@ public class AbstractCoordinatorTest {
             2000,
             "The heartbeat response was not received");
 
-        // the generation should be reset but the rebalance should still proceed
-        assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+        // the generation would not be reset while the rebalance is in progress
+        assertEquals(currGen, coordinator.generation());
 
         mockClient.respond(joinGroupFollowerResponse(currGen.generationId, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
