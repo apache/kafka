@@ -251,10 +251,10 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             final TestInputTopic<Integer, String> aTopic = topologyTestDriver.createInputTopic("A", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> bTopic = topologyTestDriver.createInputTopic("B", new IntegerSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> output = topologyTestDriver.createOutputTopic("output", new IntegerDeserializer(), new StringDeserializer());
-            aTopic.pipeInput(1, "1-alpha");
-            bTopic.pipeInput(1, "beta");
+            aTopic.pipeInput(1, "999-alpha");
+            bTopic.pipeInput(999, "beta");
             final Map<Integer, String> x = output.readKeyValuesToMap();
-            assertThat(x, is(Collections.singletonMap(1, "(1-alpha,(1-alpha,beta))")));
+            assertThat(x, is(Collections.singletonMap(1, "(999-alpha,(999-alpha,beta))")));
         }
     }
 }
