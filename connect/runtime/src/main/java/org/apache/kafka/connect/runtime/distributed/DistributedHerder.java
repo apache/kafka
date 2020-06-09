@@ -27,7 +27,6 @@ import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -123,6 +122,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
+    private static final short BACKOFF_RETRIES = 5;
 
     private final AtomicLong requestSeqNum = new AtomicLong();
 
@@ -162,6 +162,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean needsReconfigRebalance;
     private volatile int generation;
     private volatile long scheduledRebalance;
+    private short backoffRetries;
 
     private final DistributedConfig config;
 
@@ -226,6 +227,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         needsReconfigRebalance = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
         scheduledRebalance = Long.MAX_VALUE;
+        backoffRetries = BACKOFF_RETRIES;
     }
 
     @Override
@@ -973,6 +975,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             configBackingStore.refresh(timeoutMs, TimeUnit.MILLISECONDS);
             configState = configBackingStore.snapshot();
             log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
+            backoffRetries = BACKOFF_RETRIES;
             return true;
         } catch (TimeoutException e) {
             // in case reading the log takes too long, leave the group to ensure a quick rebalance (although by default we should be out of the group already)
@@ -985,7 +988,28 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void backoff(long ms) {
-        Utils.sleep(ms);
+        if (member.currentProtocolVersion() == CONNECT_PROTOCOL_V0) {
+            time.sleep(ms);
+            return;
+        }
+
+        if (backoffRetries > 0) {
+            int rebalanceDelayFraction =
+                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG) / 10 / backoffRetries;
+            time.sleep(rebalanceDelayFraction);
+            --backoffRetries;
+            return;
+        }
+
+        ExtendedAssignment runningAssignmentSnapshot;
+        synchronized (this) {
+            runningAssignmentSnapshot = ExtendedAssignment.duplicate(runningAssignment);
+        }
+        log.info("Revoking current running assignment {} because after {} retries the worker "
+                + "has not caught up with the latest Connect cluster updates",
+                runningAssignmentSnapshot, BACKOFF_RETRIES);
+        member.revokeAssignment(runningAssignmentSnapshot);
+        backoffRetries = BACKOFF_RETRIES;
     }
 
     private void startAndStop(Collection<Callable<Void>> callables) {
