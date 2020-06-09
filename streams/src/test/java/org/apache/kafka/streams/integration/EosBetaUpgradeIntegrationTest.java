@@ -299,6 +299,7 @@ public class EosBetaUpgradeIntegrationTest {
             //   p-3: 10 rec + C ---> 5 rec (pending)
             final Set<Long> cleanKeys = mkSet(0L, 1L, 2L, 3L);
             final Set<Long> keyFilterFirstClient = keysFromInstance(streams1Alpha);
+            System.out.println("keyFilterFirstClient = " + keyFilterFirstClient);
             final long potentiallyFirstFailingKey = keyFilterFirstClient.iterator().next();
             cleanKeys.remove(potentiallyFirstFailingKey);
 
@@ -424,11 +425,26 @@ public class EosBetaUpgradeIntegrationTest {
                     .collect(Collectors.toList()),
                 committedState
             );
+            System.out.println("committedKeys = " + committedKeys);
             try {
                 verifyCommitted(expectedCommittedResultAfterRestartFirstClient);
             } catch (final AssertionError e) {
+                System.out.println("AssertionError thrown during verifyCommitted: " + e);
                 // Try to verify whether the data was there but not yet committed, or missing altogether
-                verifyUncommitted(expectedCommittedResultAfterRestartFirstClient);
+                try {
+                    verifyUncommitted(expectedCommittedResultAfterRestartFirstClient);
+                } catch (final AssertionError u) {
+                    System.out.println("AssertionError thrown during verifyUncommitted: " + u);
+                    throw new AssertionError("Expected data was not all uncommitted either, " +
+                        "there were " + commitRequested.get() + " commits requested\n" + "" +
+                        "\n \n" +
+                        "verifyCommited exception message: " + e.getMessage() + " \n" +
+                        "verifyCommited exception cause: " + e.getCause() + " \n" +
+                        "\n \n" +
+                        "verifyUncommited exception message: " + u.getMessage() + "\n" +
+                        "verifyUncommited exception cause: " + u.getCause()  + "\n",
+                        u);
+                }
                 throw new AssertionError("Expected committed data was there but uncommitted, " +
                     "there were " + commitRequested.get() + " commits requested", e);
             }
@@ -965,12 +981,18 @@ public class EosBetaUpgradeIntegrationTest {
     }
 
     private void verifyCommitted(final List<KeyValue<Long, Long>> expectedResult) throws Exception {
+        System.out.println("About to verify committed with expectedResult = " + expectedResult);
         final List<KeyValue<Long, Long>> committedOutput = readResult(expectedResult.size(), true);
+        System.out.println("About to check results with committedOutput = " + committedOutput);
         checkResultPerKey(committedOutput, expectedResult);
     }
 
     private void verifyUncommitted(final List<KeyValue<Long, Long>> expectedResult) throws Exception {
+        System.out.println("About to verify uncommitted with expectedResult = " + expectedResult);
+
         final List<KeyValue<Long, Long>> uncommittedOutput = readResult(expectedResult.size(), false);
+        System.out.println("About to check results with uncommittedOutput = " + uncommittedOutput);
+
         checkResultPerKey(uncommittedOutput, expectedResult);
     }
 
