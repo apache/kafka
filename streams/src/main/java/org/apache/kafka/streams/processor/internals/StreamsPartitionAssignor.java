@@ -148,8 +148,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * TopicNode is the a topic node abstraction for graph built with TopicNode and TopicsInfo, the graph is useful
-     * when in certain cases traverse is needed. For example, method setRepartitionTopicMetadataNumberOfPartitions
+     * A TopicNode is a node that contains topic information and upstream/downstream TopicsInfo. Graph built of TopicNode and TopicsInfo is useful
+     * when in certain cases traverse is needed. For example, {@link #setRepartitionTopicMetadataNumberOfPartitions(Map, Map, Cluster)}
      * internally do a DFS search along with the graph.
      *
      TopicNode("t1")      TopicNode("t2")                                    TopicNode("t6")             TopicNode("t7")
@@ -553,32 +553,20 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     private void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
                                                                final Map<Integer, TopicsInfo> topicGroups,
-                                                                final Cluster metadata) {
+                                                               final Cluster metadata) {
         final Set<String> allRepartitionSourceTopics = new HashSet<>();
         final Map<String, TopicNode> builtTopicNodes = new HashMap<>();
-        // 1.  Build a graph contains the TopicsInfo and TopicsNode
+        // 1. Build a graph containing the TopicsInfo and TopicsNode
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
-            for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                allRepartitionSourceTopics.add(topicName);
-            }
+            allRepartitionSourceTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
             for (final String sourceTopic : topicsInfo.sourceTopics) {
-                if (builtTopicNodes.containsKey(sourceTopic)) {
-                    builtTopicNodes.get(sourceTopic).addDownStreamTopicsInfo(topicsInfo);
-                } else {
-                    final TopicNode topicNode = new TopicNode(sourceTopic);
-                    topicNode.addDownStreamTopicsInfo(topicsInfo);
-                    builtTopicNodes.put(sourceTopic, topicNode);
-                }
+                builtTopicNodes.computeIfAbsent(sourceTopic, topic -> new TopicNode(topic));
+                builtTopicNodes.get(sourceTopic).addDownStreamTopicsInfo(topicsInfo);
             }
 
             for (final String sinkTopic : topicsInfo.sinkTopics) {
-                if (builtTopicNodes.containsKey(sinkTopic)) {
-                    builtTopicNodes.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
-                } else {
-                    final TopicNode topicNode = new TopicNode(sinkTopic);
-                    topicNode.addUpStreamTopicsInfo(topicsInfo);
-                    builtTopicNodes.put(sinkTopic, topicNode);
-                }
+                builtTopicNodes.computeIfAbsent(sinkTopic, topic -> new TopicNode(topic));
+                builtTopicNodes.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
             }
         }
 
