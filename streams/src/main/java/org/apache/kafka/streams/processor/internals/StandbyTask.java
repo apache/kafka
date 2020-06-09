@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
@@ -107,20 +108,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void suspendDirty() {
-        log.trace("No-op suspend dirty with state {}", state());
+    public void suspend() {
+        log.trace("No-op suspend with state {}", state());
         if (state() == State.RUNNING) {
             transitionTo(State.SUSPENDED);
         }
-    }
-
-    @Override
-    public void suspendCleanAndPrepareCommit() {
-        log.trace("No-op suspend clean with state {}", state());
-        if (state() == State.RUNNING) {
-            transitionTo(State.SUSPENDED);
-        }
-        prepareCommit();
     }
 
     @Override
@@ -135,13 +127,15 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         if (state() == State.RUNNING || state() == State.SUSPENDED) {
             stateMgr.flush();
             log.info("Task ready for committing");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
+
+        return Collections.emptyMap();
     }
 
     @Override
@@ -171,7 +165,8 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeAndRecycleState() {
-        suspendCleanAndPrepareCommit();
+        suspend();
+        prepareCommit();
 
         if (state() == State.CREATED || state() == State.SUSPENDED) {
             // since there's no written offsets we can checkpoint with empty map,
@@ -220,7 +215,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 log.trace("Skip closing since state is {}", state());
                 return;
 
-            case RESTORING: // a StandbyTask in never in RESTORING state
+            case RESTORING: // a StandbyTask is never in RESTORING state
             case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
 

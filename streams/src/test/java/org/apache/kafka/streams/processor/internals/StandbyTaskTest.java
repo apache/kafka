@@ -137,7 +137,7 @@ public class StandbyTaskTest {
     public void cleanup() throws IOException {
         if (task != null) {
             try {
-                task.suspendDirty();
+                task.suspend();
             } catch (final IllegalStateException maybeSwallow) {
                 if (!maybeSwallow.getMessage().startsWith("Invalid transition from CLOSED to SUSPENDED")) {
                     throw maybeSwallow;
@@ -236,7 +236,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.suspendDirty();
+        task.suspend();
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -256,7 +256,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        task.suspendDirty();
+        task.suspend();
         task.closeDirty();
 
         EasyMock.verify(stateManager);
@@ -275,7 +275,8 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
+        task.prepareCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -328,7 +329,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
         assertThrows(RuntimeException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;

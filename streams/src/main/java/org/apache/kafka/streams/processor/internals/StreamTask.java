@@ -247,38 +247,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void suspendDirty() {
-        log.info("Suspending dirty");
-        suspend(false);
-    }
-
-    @Override
-    public void suspendCleanAndPrepareCommit() {
-        log.info("Suspending clean");
-        suspend(true);
-    }
-
-    @SuppressWarnings("fallthrough")
-    private void suspend(final boolean clean) {
+    public void suspend() {
         switch (state()) {
             case CREATED:
             case SUSPENDED:
-                // do nothing
                 log.info("Skip suspending since state is {}", state());
 
                 break;
 
             case RESTORING:
             case RUNNING:
-                closeTopology(clean);
-
-                if (clean) {
-                    prepareCommit();
+                try {
+                    closeTopology();
+                } finally {
+                    transitionTo(State.SUSPENDED);
+                    log.info("Suspended");
                 }
-
-                transitionTo(State.SUSPENDED);
-
-                log.info("Suspended");
 
                 break;
 
@@ -322,7 +306,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         switch (state()) {
             case RUNNING:
             case RESTORING:
@@ -342,42 +326,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
+
+        return committableOffsetsAndMetadata();
     }
 
-    @Override
-    public void postCommit() {
-        switch (state()) {
-            case RESTORING:
-            case RUNNING:
-            case SUSPENDED:
-                commitRequested = false;
-                commitNeeded = false;
-
-                if (state() == State.RESTORING) {
-                    writeCheckpointIfNeed();
-                } else if (!eosEnabled) { // if RUNNING, checkpoint only for non-eos
-                    writeCheckpointIfNeed();
-                }
-
-                if (state() == State.SUSPENDED) {
-                    partitionGroup.clear();
-                }
-
-                log.debug("Committed");
-
-                break;
-
-            case CREATED:
-            case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while post committing active task " + id);
-
-            default:
-                throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
-        }
-    }
-
-    @Override
-    public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+    private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
         final Map<TopicPartition, OffsetAndMetadata> committableOffsets;
 
         switch (state()) {
@@ -425,6 +378,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return committableOffsets;
     }
 
+    @Override
+    public void postCommit() {
+        switch (state()) {
+            case RESTORING:
+            case RUNNING:
+            case SUSPENDED:
+                commitRequested = false;
+                commitNeeded = false;
+
+                if (state() == State.RESTORING || state() == State.SUSPENDED) {
+                    writeCheckpointIfNeed();
+                } else if (!eosEnabled) { // if RUNNING, checkpoint only for non-eos
+                    writeCheckpointIfNeed();
+                }
+
+                if (state() == State.SUSPENDED) {
+                    partitionGroup.clear();
+                }
+
+                log.debug("Committed");
+
+                break;
+
+            case CREATED:
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while post committing active task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
+        }
+    }
+
     private Map<TopicPartition, Long> extractPartitionTimes() {
         final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
         for (final TopicPartition partition : partitionGroup.partitions()) {
@@ -453,7 +438,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
-        suspendCleanAndPrepareCommit();
+        suspend();
+        prepareCommit();
         writeCheckpointIfNeed();
 
         switch (state()) {
@@ -469,7 +455,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while recycling active task " + id);
         }
 
-        partitionGroup.close();
+        partitionGroup.clear();
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
@@ -492,22 +478,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case SUSPENDED:
-                this.checkpoint = Collections.emptyMap();
+                this.checkpoint = checkpointableOffsets();
 
                 break;
 
             case CREATED:
             case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
+                throw new IllegalStateException("Illegal state " + state() + " while scheduling checkpoint for active task " + id);
 
             default:
-                throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
+                throw new IllegalStateException("Unknown state " + state() + " while scheduling checkpoint for active task " + id);
         }
     }
 
     private void writeCheckpointIfNeed() {
         if (commitNeeded) {
-            throw new IllegalStateException("A checkpoint should only be written if now commit is needed.");
+            throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
         }
         if (checkpoint != null) {
             stateMgr.checkpoint(checkpoint);
@@ -563,7 +549,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while closing active task " + id);
         }
 
-        partitionGroup.close();
+        partitionGroup.clear();
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
@@ -815,7 +801,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void closeTopology(final boolean clean) {
+    private void closeTopology() {
         if (state() != State.RUNNING) {
             return;
         }
@@ -835,7 +821,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-        if (exception != null && clean) {
+        if (exception != null) {
             throw exception;
         }
     }

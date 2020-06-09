@@ -220,11 +220,13 @@ public class StreamTaskTest {
     public void cleanup() throws IOException {
         if (task != null) {
             try {
-                task.suspendDirty();
+                task.suspend();
             } catch (final IllegalStateException maybeSwallow) {
                 if (!maybeSwallow.getMessage().startsWith("Illegal state CLOSED")) {
                     throw maybeSwallow;
                 }
+            } catch (final RuntimeException swallow) {
+                // suspend dirty case
             }
             task.closeDirty();
             task = null;
@@ -286,7 +288,7 @@ public class StreamTaskTest {
         ctrl.replay();
 
         task = createStatefulTask(createConfig(true, "100"), true, stateManager);
-        task.suspendDirty();
+        task.suspend();
         task.closeDirty();
         task = null;
 
@@ -928,8 +930,7 @@ public class StreamTaskTest {
         task.process(0L);
         task.process(0L);
 
-        task.prepareCommit();
-        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
 
         assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, encodeTimestamp(3L))))));
     }
@@ -947,8 +948,7 @@ public class StreamTaskTest {
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
         task.process(0L);
-        task.prepareCommit();
-        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.committableOffsetsAndMetadata();
+        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
 
         assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
     }
@@ -960,10 +960,10 @@ public class StreamTaskTest {
 
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class,
-            task::committableOffsetsAndMetadata
+            task::prepareCommit
         );
 
-        assertThat(thrown.getMessage(), is("Illegal state CLOSED while getting commitable offsets for active task 0_0"));
+        assertThat(thrown.getMessage(), is("Illegal state CLOSED while preparing active task 0_0 for committing"));
     }
 
     @Test
@@ -1250,7 +1250,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
+        task.prepareCommit();
         task.postCommit();
 
         assertEquals(Task.State.SUSPENDED, task.state());
@@ -1288,7 +1289,7 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
 
         assertEquals(Task.State.SUSPENDED, task.state());
         assertFalse(source1.initialized);
@@ -1418,7 +1419,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.suspendDirty();
+        assertThrows(RuntimeException.class, () -> task.suspend());
         task.closeDirty();
 
         EasyMock.verify(stateManager);
@@ -1548,7 +1549,7 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1576,7 +1577,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.suspendDirty();
+        task.suspend();
         task.closeDirty();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1603,7 +1604,8 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
         task.completeRestoration();
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
+        task.prepareCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1627,7 +1629,8 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
         task.completeRestoration();
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
+        task.prepareCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1655,7 +1658,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
+        task.prepareCommit();
         assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
@@ -1705,20 +1709,20 @@ public class StreamTaskTest {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        stateManager.checkpoint(Collections.emptyMap());
+        stateManager.checkpoint(Collections.singletonMap(changelogPartition, offset));
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
         stateManager.close();
         EasyMock.expectLastCall().andThrow(new AssertionError("Close should not be called!")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
-
         EasyMock.replay(recordCollector, stateManager);
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
 
-        task.suspendCleanAndPrepareCommit();
-        assertThrows(ProcessorStateException.class, () -> task.closeClean());
+        task.suspend();
+        task.prepareCommit();
+        assertThrows(ProcessorStateException.class, () -> task.postCommit());
 
         assertEquals(Task.State.SUSPENDED, task.state());
 
@@ -1742,7 +1746,7 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
 
-        task.suspendDirty();
+        task.suspend();
         task.closeDirty();
 
         EasyMock.verify(stateManager);
@@ -1756,7 +1760,7 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
 
-        task.suspendCleanAndPrepareCommit();
+        task.suspend();
         task.closeClean();
 
         // close calls are idempotent since we are already in closed

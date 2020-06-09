@@ -123,13 +123,11 @@ public interface Task {
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    void prepareCommit();
+    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
 
     void postCommit();
 
-    void suspendDirty();
-
-    void suspendCleanAndPrepareCommit();
+    void suspend();
 
     /**
      *
@@ -180,10 +178,6 @@ public interface Task {
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
     default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
-    }
-
-    default Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
         return Collections.emptyMap();
     }
 
