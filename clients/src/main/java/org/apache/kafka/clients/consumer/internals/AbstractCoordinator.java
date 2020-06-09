@@ -1071,7 +1071,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = heartbeatResponse.error();
 
             if (state != MemberState.STABLE) {
-                log.debug("Ignoring Heartbeat response with error {} since during {} state", error, state);
+                log.debug("Ignoring heartbeat response with error {} during {} state", error, state);
                 future.complete(null);
                 return;
             }
