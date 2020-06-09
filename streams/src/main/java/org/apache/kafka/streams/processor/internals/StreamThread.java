@@ -368,7 +368,6 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-
         changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
 
