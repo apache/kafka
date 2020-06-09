@@ -459,7 +459,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def close(): Unit = {
+  /**
+   * Delete the partition. The underlying logs are deleted by default but one can choose to not
+   * delete them automatically and to delete them manually later one. For instance, we do this
+   * in the handling of the StopReplicaRequest to batch the deletions and checkpoint only once.
+   */
+  def delete(deleteLogs: Boolean = true): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
@@ -470,6 +475,11 @@ class Partition(val topicPartition: TopicPartition,
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
+      if (deleteLogs) {
+        logManager.asyncDelete(topicPartition)
+        if (logManager.getLog(topicPartition, isFuture = true).isDefined)
+          logManager.asyncDelete(topicPartition, isFuture = true)
+      }
     }
   }
 

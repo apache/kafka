@@ -391,13 +391,12 @@ class ReplicaManager(val config: KafkaConfig,
                   requestLeaderEpoch > currentLeaderEpoch) {
                 stoppedPartitions += topicPartition
 
-                // Remove the partition but does not delete it yet
                 if (deletePartition) {
                   if (allPartitions.remove(topicPartition, hostedPartition)) {
                     maybeRemoveTopicMetrics(topicPartition.topic)
-                    // this does not delete the log
-                    partition.close()
-                    // save the partition for later deletion
+                    // Logs are not deleted here. They are deleted in a single batch later on.
+                    // This is done to avoid having to checkpoint for every deletions.
+                    partition.delete(deleteLogs = false)
                     deletedPartitions += topicPartition
                   }
                 }
@@ -406,7 +405,7 @@ class ReplicaManager(val config: KafkaConfig,
                 // We force completion to prevent them from timing out.
                 completeDelayedFetchOrProduceRequests(topicPartition)
 
-                // Assume that everything will go right. It is overwritten in case of error
+                // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
               } else if (requestLeaderEpoch < currentLeaderEpoch) {
                 stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
