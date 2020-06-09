@@ -1101,14 +1101,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private void backoff(long ms) {
         if (ConnectProtocolCompatibility.fromProtocolVersion(currentProtocolVersion) == EAGER) {
-            Utils.sleep(ms);
+            time.sleep(ms);
             return;
         }
 
-        if (backoffRetries-- > 0) {
+        if (backoffRetries > 0) {
             int rebalanceDelayFraction =
                     config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG) / 10 / backoffRetries;
-            Utils.sleep(rebalanceDelayFraction);
+            time.sleep(rebalanceDelayFraction);
+            --backoffRetries;
             return;
         }
 
