@@ -447,7 +447,6 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldRecycleTask() {
-        EasyMock.expectLastCall();
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(Collections.emptyMap());

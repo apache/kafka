@@ -305,6 +305,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    /**
+     * @return offsets that should be committed for this task
+     */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         switch (state()) {
@@ -469,6 +472,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private void maybeScheduleCheckpoint() {
         switch (state()) {
             case RESTORING:
+            case SUSPENDED:
                 this.checkpoint = checkpointableOffsets();
 
                 break;
@@ -477,11 +481,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (!eosEnabled) {
                     this.checkpoint = checkpointableOffsets();
                 }
-
-                break;
-
-            case SUSPENDED:
-                this.checkpoint = checkpointableOffsets();
 
                 break;
 
@@ -805,10 +804,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void closeTopology() {
+        log.trace("Closing processor topology");
+
         if (state() != State.RUNNING) {
             return;
         }
-        log.trace("Closing processor topology");
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
