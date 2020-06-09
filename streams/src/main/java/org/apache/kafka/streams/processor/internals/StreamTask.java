@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -54,6 +53,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -444,7 +444,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         switch (state()) {
             case CREATED:
+            case SUSPENDED:
+                stateMgr.recycle();
                 recordCollector.close();
+
                 break;
 
             case RESTORING: // we should have transitioned to `SUSPENDED` already
