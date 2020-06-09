@@ -447,7 +447,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     needsJoinPrepare = true;
                 } else {
                     log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
-                    resetStateNadRejoin();
+                    resetStateAndRejoin();
                     resetJoinGroupFuture();
                     return false;
                 }
@@ -473,7 +473,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.joinFuture = null;
     }
 
-    private synchronized void resetStateNadRejoin() {
+    private synchronized void resetStateAndRejoin() {
         rejoinNeeded = true;
         state = MemberState.UNJOINED;
     }
@@ -655,7 +655,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Attempt to join group returned {} error. Will set the member id as {} and then rejoin", error, memberId);
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
-                    AbstractCoordinator.this.resetStateNadRejoin();
+                    AbstractCoordinator.this.resetStateAndRejoin();
                 }
                 future.raise(error);
             } else {
