@@ -269,6 +269,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return lastCompletedGenerationId;
     }
 
+    public void revokeAssignment(ExtendedAssignment assignment) {
+        listener.onRevoked(assignment.leader(), assignment.connectors(), assignment.tasks());
+    }
+
     private boolean isLeader() {
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         return localAssignmentSnapshot != null && memberId().equals(localAssignmentSnapshot.leader());

@@ -22,6 +22,7 @@ import org.junit.runner.Description;
 import org.slf4j.Logger;
 
 /**
+ * A utility class for Connect's integration tests
  */
 public class ConnectIntegrationTestUtils {
     public static TestRule newTestWatcher(Logger log) {
