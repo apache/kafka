@@ -70,6 +70,8 @@ public final class Coordinator {
 
     private final Time time;
 
+    final TrogdorMetrics trogdorMetrics;
+
     /**
      * Create a new Coordinator.
      *
@@ -82,7 +84,8 @@ public final class Coordinator {
                        CoordinatorRestResource resource, long firstWorkerId) {
         this.time = scheduler.time();
         this.startTimeMs = time.milliseconds();
-        this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);
+        this.trogdorMetrics = Platform.MetricsContainer.buildMetrics(Time.SYSTEM);
+        this.taskManager = new TaskManager(platform, scheduler, firstWorkerId, trogdorMetrics);
         this.restServer = restServer;
         resource.setCoordinator(this);
     }
@@ -101,6 +104,7 @@ public final class Coordinator {
 
     public void createTask(CreateTaskRequest request) throws Throwable {
         taskManager.createTask(request.id(), request.spec());
+        trogdorMetrics.recordCreatedTask();
     }
 
     public void stopTask(StopTaskRequest request) throws Throwable {
@@ -127,6 +131,7 @@ public final class Coordinator {
     public void waitForShutdown() throws Exception {
         restServer.waitForShutdown();
         taskManager.waitForShutdown();
+        Platform.MetricsContainer.close();
     }
 
     public static void main(String[] args) throws Exception {

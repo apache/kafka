@@ -21,9 +21,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.trogdor.coordinator.TrogdorMetrics;
 
 /**
  * Defines a cluster topology
@@ -51,6 +59,29 @@ public interface Platform {
                 String.class, curNodeName,
                 Scheduler.class, Scheduler.SYSTEM,
                 JsonNode.class, root);
+        }
+    }
+
+    class MetricsContainer {
+        private static TrogdorMetrics trogdorMetrics = null;
+
+        public static TrogdorMetrics buildMetrics(Time time) {
+            if (trogdorMetrics == null) {
+                MetricConfig metricConfig = new MetricConfig();
+                List<MetricsReporter> reporters = new ArrayList<>();
+                JmxReporter jmxReporter = new JmxReporter();
+                reporters.add(jmxReporter);
+                Metrics metrics = new Metrics(metricConfig, reporters, time);
+                trogdorMetrics = new TrogdorMetrics(metrics, "trogdor");
+            }
+            return trogdorMetrics;
+        }
+
+        public static void close() {
+            if (trogdorMetrics != null) {
+                trogdorMetrics.close();
+                trogdorMetrics = null;
+            }
         }
     }
 
