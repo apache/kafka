@@ -19,7 +19,7 @@
 # the modules are executed before the integration tests.
 
 # Run validation checks (compilation and static analysis)
-./gradlew clean compileJava compileScala compileTestJava compileTestScala \
+./gradlew clean compileJava compileScala compileTestJava compileTestScala javadoc \
     spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
     --profile --no-daemon --continue -PxmlSpotBugsReport=true "$@" \
     || { echo 'Validation steps failed'; exit 1; }

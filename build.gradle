@@ -87,6 +87,8 @@ allprojects {
     // disable the crazy super-strict doclint tool in Java 8
     // noinspection SpellCheckingInspection
     options.addStringOption('Xdoclint:none', '-quiet')
+    // fail javadoc if there are javadoc warnings
+    options.addStringOption('Xwerror', '-quiet')
   }
 
 }
