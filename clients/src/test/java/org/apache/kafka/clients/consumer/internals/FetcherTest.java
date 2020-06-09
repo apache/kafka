@@ -3968,6 +3968,35 @@ public class FetcherTest {
     }
 
     @Test
+    public void testSkipValidationForOlderApiVersion() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
+
+        // Start with metadata, epoch=1
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> 1), false, 0L);
+
+        // Request offset reset
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Since we have no position due to reset, no fetch is sent
+        assertEquals(0, fetcher.sendFetches());
+
+        // Still no position, ensure offset validation logic did not transition us to FETCHING state
+        assertEquals(0, fetcher.sendFetches());
+
+        // Complete reset and now we can fetch
+        fetcher.resetOffsetIfNeeded(tp0, OffsetResetStrategy.LATEST,
+                new Fetcher.ListOffsetData(100, 1L, Optional.empty()));
+        assertEquals(1, fetcher.sendFetches());
+    }
+
+    @Test
     public void testTruncationDetected() {
         // Create some records that include a leader epoch (1)
         MemoryRecordsBuilder builder = MemoryRecords.builder(

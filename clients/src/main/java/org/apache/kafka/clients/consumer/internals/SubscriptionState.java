@@ -454,7 +454,7 @@ public class SubscriptionState {
                 return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
             } else {
                 // If the broker does not support a newer version of OffsetsForLeaderEpoch, we skip validation
-                completeValidation(tp);
+                assignedState(tp).updatePositionLeaderNoValidation(leaderAndEpoch);
                 return false;
             }
         } else {
@@ -782,6 +782,13 @@ public class SubscriptionState {
             });
         }
 
+        /**
+         * Check if the position exists and needs to be validated. If so, enter the AWAIT_VALIDATION state. This method
+         * also will update the position with the current leader and epoch.
+         *
+         * @param currentLeaderAndEpoch leader and epoch to compare the offset with
+         * @return
+         */
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
             if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
                 return false;
@@ -797,6 +804,21 @@ public class SubscriptionState {
                 preferredReadReplica = null;
             }
             return this.fetchState.equals(FetchStates.AWAIT_VALIDATION);
+        }
+
+        /**
+         * For older versions of the API, we cannot perform offset validation so we simply transition directly to FETCHING
+         *
+         * @param currentLeaderAndEpoch
+         */
+        private void updatePositionLeaderNoValidation(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
+            if (position != null && !position.currentLeader.equals(currentLeaderAndEpoch)) {
+                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
+                transitionState(FetchStates.FETCHING, () -> {
+                    this.position = newPosition;
+                    this.nextRetryTimeMs = null;
+                });
+            }
         }
 
         private void validatePosition(FetchPosition position) {
@@ -978,7 +1000,7 @@ public class SubscriptionState {
 
             @Override
             public boolean hasPosition() {
-                return true;
+                return false;
             }
 
             @Override
