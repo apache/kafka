@@ -67,7 +67,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected long scheduledRebalance;
     protected int delay;
     protected int previousGenerationId;
-    private Set<String> previousMembers;
+    protected Set<String> previousMembers;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);

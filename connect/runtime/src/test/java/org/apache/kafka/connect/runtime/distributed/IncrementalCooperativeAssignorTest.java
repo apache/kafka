@@ -775,6 +775,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         String flakyWorker = "worker1";
         WorkerLoad lostLoad = workerLoad(flakyWorker, 2, 2, 4, 4);
         memberConfigs.remove(flakyWorker);
@@ -792,6 +793,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
@@ -807,6 +809,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay);
 
         // The new worker has still no assignments
@@ -858,6 +861,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         String removedWorker = "worker1";
         WorkerLoad lostLoad = workerLoad(removedWorker, 2, 2, 4, 4);
         memberConfigs.remove(removedWorker);
@@ -875,6 +879,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
@@ -934,6 +939,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         String flakyWorker = "worker1";
         WorkerLoad lostLoad = workerLoad(flakyWorker, 2, 2, 4, 4);
         memberConfigs.remove(flakyWorker);
@@ -954,6 +960,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
@@ -971,6 +978,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay);
 
         // The new workers have new assignments, other than the lost ones
@@ -1027,6 +1035,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         String veryFlakyWorker = "worker1";
         WorkerLoad lostLoad = workerLoad(veryFlakyWorker, 2, 2, 4, 4);
         memberConfigs.remove(veryFlakyWorker);
@@ -1044,6 +1053,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay / 2);
         rebalanceDelay /= 2;
 
@@ -1059,6 +1069,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
         assertEquals(rebalanceDelay, assignor.delay);
 
+        assignor.previousMembers = new HashSet<>(memberConfigs.keySet());
         time.sleep(rebalanceDelay);
 
         // The returning worker leaves permanently after joining briefly during the delay
