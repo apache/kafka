@@ -83,9 +83,9 @@ object BrokerIdsZNode {
 object BrokerInfo {
 
   /**
-   * - Create a broker info with v5 json format if the apiVersion is 2.6.x or above.
+   * - Create a broker info with v5 json format if the apiVersion is 2.7.x or above.
    * - Create a broker info with v4 json format (which includes multiple endpoints and rack) if
-   *   the apiVersion is 0.10.0.X or above but lesser than 2.6.x.
+   *   the apiVersion is 0.10.0.X or above but lesser than 2.7.x.
    * - Register the broker with v2 json format otherwise.
    *
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.

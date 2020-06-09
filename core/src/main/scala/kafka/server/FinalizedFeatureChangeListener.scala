@@ -173,7 +173,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
   object ZkStateChangeHandler extends StateChangeHandler {
     val path: String = FeatureZNode.path
 
-    override val name: String = s"change-notification-$path"
+    override val name: String = path
 
     override def afterInitializingSession(): Unit = {
       queue.add(new FeatureCacheUpdater(path))
