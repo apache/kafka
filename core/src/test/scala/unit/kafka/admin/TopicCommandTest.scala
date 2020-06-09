@@ -25,32 +25,40 @@ import org.junit.Test
 import scala.jdk.CollectionConverters._
 
 class TopicCommandTest {
-  @Test
-  def testIsNotUnderReplicatedWhenAdding(): Unit = {
-    val replicaIds = List(1, 2)
-    val replicas = replicaIds.map { id =>
-      new Node(id, "localhost", 9090 + id)
-    }
 
-    val partitionDescription = PartitionDescription(
+  private val replicaIds = List(1, 2)
+  private val replicas = replicaIds.map(id => new Node(id, "localhost", 9090 + id))
+  private val topicPartitionInfo = new TopicPartitionInfo(
+    0,
+    new Node(1, "localhost", 9091),
+    replicas.asJava,
+    List(new Node(1, "localhost", 9091)).asJava
+  )
+
+  private def partitionDescription(reassignment: PartitionReassignment) =
+    PartitionDescription(
       "test-topic",
-      new TopicPartitionInfo(
-        0,
-        new Node(1, "localhost", 9091),
-        replicas.asJava,
-        List(new Node(1, "localhost", 9091)).asJava
-      ),
+      topicPartitionInfo,
       None,
       false,
-      Some(
-        new PartitionReassignment(
-          replicaIds.map(id => id: java.lang.Integer).asJava,
-          List(2: java.lang.Integer).asJava,
-          List.empty.asJava
-        )
-      )
+      Some(reassignment)
     )
 
-    assertFalse(partitionDescription.isUnderReplicated)
+  @Test
+  def testIsNotUnderReplicatedWhenAdding(): Unit = {
+    assertFalse(partitionDescription(new PartitionReassignment(
+      replicaIds.map(id => id: java.lang.Integer).asJava,
+      List(2: java.lang.Integer).asJava,
+      List.empty.asJava
+    )).isUnderReplicated)
+  }
+
+  @Test
+  def testIsNotUnderReplicatedWhenRemoving(): Unit = {
+    assertFalse(partitionDescription(new PartitionReassignment(
+      replicaIds.map(id => id: java.lang.Integer).asJava,
+      List.empty.asJava,
+      List(2: java.lang.Integer).asJava
+    )).isUnderReplicated)
   }
 }

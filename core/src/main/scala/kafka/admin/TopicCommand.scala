@@ -575,18 +575,25 @@ object TopicCommand extends Logging {
     original.map(f => Integer.valueOf(f._1) -> f._2.map(e => Integer.valueOf(e)).asJava).asJava
   }
 
+  /**
+   * get the number of partitions which are under replicated. The partitions which are either removing or adding
+   * are EXCLUDED.
+   */
   private def getReplicationFactor(tpi: TopicPartitionInfo, reassignment: Option[PartitionReassignment]): Int = {
+
+    def changingReplicaIds(ra: PartitionReassignment): Set[Int] =
+      ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
+
     // It is possible for a reassignment to complete between the time we have fetched its state and the time
     // we fetch partition metadata. In ths case, we ignore the reassignment when determining replication factor.
     def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
       // Reassignment is still in progress as long as the removing and adding replicas are still present
       val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet
-      val changingReplicaIds = ra.removingReplicas.asScala.map(_.intValue).toSet ++ ra.addingReplicas.asScala.map(_.intValue).toSet
-      allReplicaIds.exists(changingReplicaIds.contains)
+      allReplicaIds.exists(changingReplicaIds(ra).contains)
     }
 
     reassignment match {
-      case Some(ra) if isReassignmentInProgress(ra) => ra.replicas.asScala.diff(ra.addingReplicas.asScala).size
+      case Some(ra) if isReassignmentInProgress(ra) => ra.replicas.asScala.diff(changingReplicaIds(ra).toSeq).size
       case _=> tpi.replicas.size
     }
   }
