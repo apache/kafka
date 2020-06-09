@@ -534,12 +534,12 @@ public class MetricsTest {
     @Test
     public void testPercentilesWithRandomNumbersAndLinearBucketing() {
         long seed = new Random().nextLong();
-        int sizeInBytes = 1000 * 1000;   // 1MB
+        int sizeInBytes = 100 * 1000;   // 100kB
         long maximumValue = 1000 * 24 * 60 * 60 * 1000L; // if values are ms, max is 1000 days
 
         try {
             Random prng = new Random(seed);
-            int numberOfValues = 5000 + prng.nextInt(10_000);  // ranges is [5000, 15000]
+            int numberOfValues = 5000 + prng.nextInt(10_000);  // range is [5000, 15000]
 
             Percentiles percs = new Percentiles(sizeInBytes,
                                                 maximumValue,

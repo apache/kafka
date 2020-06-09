@@ -154,7 +154,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
-    private static final int PERCENTILES_SIZE_IN_BYTES = 1000 * 1000;    // 1 MB
+    private static final int PERCENTILES_SIZE_IN_BYTES = 100 * 1000;    // 100 kB
     private static double MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000d; // maximum latency is 10 days; values above that will be pinned
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
