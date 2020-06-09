@@ -673,10 +673,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer1.commitTransaction()
 
-    producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
-
     val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(topic1, 0))
     var producerStateEntry =
       servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.head._2
@@ -700,9 +696,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     restartDeadBrokers()
 
-    // Because the epoch was bumped in memory, attempting to commit with producer 1 should fail
+    // Because the epoch was bumped in memory, attempting to begin a transaction with producer 1 should fail
     try {
-      producer1.commitTransaction()
+      producer1.beginTransaction()
     } catch {
       case _: ProducerFencedException =>
         // good!
@@ -712,9 +708,12 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer1.close()
     }
 
-    // Create a third producer and initialize it in order to force the epoch to be written to disk
-    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
+    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 5000)
     producer3.initTransactions()
+
+    producer3.beginTransaction()
+    producer3.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer3.commitTransaction()
 
     // Check that the epoch only increased by 1
     producerStateEntry =
