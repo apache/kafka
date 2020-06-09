@@ -438,11 +438,11 @@ public class EosBetaUpgradeIntegrationTest {
                     throw new AssertionError("Expected data was not all uncommitted either, " +
                         "there were " + commitRequested.get() + " commits requested\n" + "" +
                         "\n \n" +
-                        "verifyCommited exception message: " + e.getMessage() + " \n" +
-                        "verifyCommited exception cause: " + e.getCause() + " \n" +
+                        "verifyCommitted exception message: " + e.getMessage() + " \n" +
+                        "verifyCommitted exception cause: " + e.getCause() + " \n" +
                         "\n \n" +
-                        "verifyUncommited exception message: " + u.getMessage() + "\n" +
-                        "verifyUncommited exception cause: " + u.getCause()  + "\n",
+                        "verifyUncommitted exception message: " + u.getMessage() + "\n" +
+                        "verifyUncommitted exception cause: " + u.getCause()  + "\n",
                         u);
                 }
                 throw new AssertionError("Expected committed data was there but uncommitted, " +
