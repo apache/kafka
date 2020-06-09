@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -65,6 +64,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     private boolean rejoinRequested;
     private volatile ConnectProtocolCompatibility currentConnectProtocol;
+    private volatile int lastCompletedGenerationId;
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
     private final int coordinatorDiscoveryTimeoutMs;
@@ -111,6 +111,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
         this.coordinatorDiscoveryTimeoutMs = heartbeatIntervalMs;
+        this.lastCompletedGenerationId = Generation.NO_GENERATION.generationId;
     }
 
     @Override
@@ -216,6 +217,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             log.debug("Augmented new assignment: {}", newAssignment);
         }
         assignmentSnapshot = newAssignment;
+        lastCompletedGenerationId = generation;
         listener.onAssigned(newAssignment, generation);
     }
 
@@ -261,8 +263,17 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the generation ID or -1 if no generation is defined
      */
     public int generationId() {
-        Generation generation = super.generationIfStable();
-        return generation == null ? OffsetCommitRequest.DEFAULT_GENERATION_ID : generation.generationId;
+        return super.generation().generationId;
+    }
+
+    /**
+     * Return id that corresponds to the group generation that was active when the last join was successful
+     *
+     * @return the generation ID of the last group that was joined successfully by this member or -1 if no generation
+     * was stable at that point
+     */
+    public int lastCompletedGenerationId() {
+        return lastCompletedGenerationId;
     }
 
     private boolean isLeader() {

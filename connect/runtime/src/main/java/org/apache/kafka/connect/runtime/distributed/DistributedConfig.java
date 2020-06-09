@@ -144,7 +144,7 @@ public class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.COMPATIBLE.toString();
 
     /**
-     * <code>connect.protocol</code>
+     * <code>scheduled.rebalance.max.delay.ms</code>
      */
     public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG = "scheduled.rebalance.max.delay.ms";
     public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "Compatibility mode for Kafka Connect Protocol";
