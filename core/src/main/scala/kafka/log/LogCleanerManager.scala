@@ -255,8 +255,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    */
   def abortCleaning(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
-      // Cleaning is aborted before deleting a partition. In this case, we don't want
-      // to spam the log with useless information.
       abortAndPauseCleaning(topicPartition)
       resumeCleaning(Seq(topicPartition))
     }

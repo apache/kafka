@@ -448,8 +448,8 @@ class LogManagerTest {
       log.flush()
     }
 
-    logManager.checkpointRecoveryOffsetsInDir(this.logDir)
-    logManager.cleanSnapshotsInDir(allLogs.filter(_.dir.getName.contains("test-a")), this.logDir)
+    logManager.checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir,
+      allLogs.filter(_.dir.getName.contains("test-a")))
 
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
