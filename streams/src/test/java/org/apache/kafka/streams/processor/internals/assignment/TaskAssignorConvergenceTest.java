@@ -185,7 +185,7 @@ public class TaskAssignorConvergenceTest {
                 }
                 newClientState.addPreviousActiveTasks(clientState.activeTasks());
                 newClientState.addPreviousStandbyTasks(clientState.standbyTasks());
-                newClientState.addPreviousTasksAndOffsetSums(taskOffsetSums);
+                newClientState.addPreviousTasksAndOffsetSums("consumer", taskOffsetSums);
                 newClientState.computeTaskLags(uuid, statefulTaskEndOffsetSums);
                 newClientStates.put(uuid, newClientState);
             }
