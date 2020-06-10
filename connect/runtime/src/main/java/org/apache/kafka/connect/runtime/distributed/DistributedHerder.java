@@ -1328,14 +1328,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             @Override
             public Void call() throws Exception {
                 try {
-                    startConnector(
-                            connectorName,
-                            (error, result) -> {
-                                if (error != null) {
-                                    log.error("Failed to start connector '" + connectorName + "'", error);
-                                }
-                            }
-                    );
+                    startConnector(connectorName, (error, result) -> {
+                        if (error != null) {
+                            log.error("Failed to start connector '" + connectorName + "'", error);
+                        }
+                    });
                 } catch (Throwable t) {
                     log.error("Unexpected error while trying to start connector " + connectorName, t);
                     onFailure(connectorName, t);
