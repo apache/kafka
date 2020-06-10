@@ -230,7 +230,6 @@ public class StandaloneHerder extends AbstractHerder {
 
             configBackingStore.putConnectorConfig(connName, config);
 
-            // startConnector(connName, onStart);
             startConnector(connName, (error, result) -> {
                 if (error != null) {
                     callback.onCompletion(error, null);
