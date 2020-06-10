@@ -520,6 +520,10 @@ public class StreamsBuilder {
      * <p>
      * It is not required to connect a global store to {@link Processor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
+     * <p>
+     * The supplier should always generate a new instance each time invoking {@link  ProcessorSupplier#get()}. Creating
+     * a single Processor object and returning the same object reference in {@link ProcessorSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from

@@ -2522,6 +2522,9 @@ public interface KStream<K, V> {
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
+     * The supplier should always generate a new instance each time invoking {@link TransformerSupplier#get()}. Creating
+     * a single Transformer object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
      *                            {@link Transformer}
@@ -2646,6 +2649,9 @@ public interface KStream<K, V> {
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
+     * The supplier should always generate a new instance each time invoking {@link TransformerSupplier#get()}. Creating
+     * a single Transformer object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
      *                            {@link Transformer}
@@ -2772,6 +2778,9 @@ public interface KStream<K, V> {
      * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * The supplier should always generate a new instance each time invoking {@link TransformerSupplier#get()}. Creating
+     * a single Transformer object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
@@ -2895,6 +2904,9 @@ public interface KStream<K, V> {
      * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * The supplier should always generate a new instance each time invoking {@link TransformerSupplier#get()}. Creating
+     * a single Transformer object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param named               a {@link Named} config used to name the processor in the topology

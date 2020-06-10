@@ -25,6 +25,10 @@ import org.apache.kafka.streams.Topology;
  * topology can then be replicated (and thus creating one or more {@link Processor} instances)
  * and distributed to multiple stream threads.
  *
+ * The supplier should always generate a new instance each time invoking {@link ProcessorSupplier#get()}. Creating
+ * a single Processor object and returning the same object reference in {@link ProcessorSupplier#get()} would be
+ * a violation of the supplier pattern and leads to runtime exceptions.
+ *
  * @param <K> the type of keys
  * @param <V> the type of values
  */

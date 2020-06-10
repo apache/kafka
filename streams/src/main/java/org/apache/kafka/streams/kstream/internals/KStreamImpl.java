@@ -1255,6 +1255,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+        KStreamUtil.checkTransformerSupplier(transformerSupplier);
         for (final String stateStoreName : stateStoreNames) {
             Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }

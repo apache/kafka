@@ -22,6 +22,10 @@ import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 /**
  * A {@code TransformerSupplier} interface which can create one or more {@link Transformer} instances.
  *
+ * The supplier should always generate a new instance each time invoking {@link TransformerSupplier#get()}. Creating
+ * a single Transformer object and returning the same object reference in {@link TransformerSupplier#get()} would be
+ * a violation of the supplier pattern and leads to runtime exceptions.
+ *
  * @param <K> key type
  * @param <V> value type
  * @param <R> {@link org.apache.kafka.streams.KeyValue KeyValue} return type (both key and value type can be set
