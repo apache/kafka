@@ -429,6 +429,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case SUSPENDED:
                 writeCheckpointIfNeed();
+                // we cannot `clear()` the `PartitionGroup` in `suspend()` already, but only after committing,
+                // because otherwise we loose the partition-time information
                 partitionGroup.clear();
 
                 break;
@@ -757,10 +759,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * Currently only changelog topic offsets need to be checkpointed.
      */
     private Map<TopicPartition, Long> checkpointableOffsets() {
-        if (state() == State.RESTORING) {
-            return Collections.emptyMap();
-        }
-
         final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
