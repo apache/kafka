@@ -363,23 +363,19 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void close() {
         List<String> connections = new ArrayList<>(channels.keySet());
-        try {
-            for (String id : connections)
-                close(id);
-        } finally {
-            // If there is any exception thrown in close(id), we should still be able
-            // to close the remaining objects, especially the sensors because keeping
-            // the sensors may lead to failure to start up the ReplicaFetcherThread if
-            // the old sensors with the same names has not yet been cleaned up.
-            AtomicReference<Throwable> firstException = new AtomicReference<>();
-            Utils.closeQuietly(nioSelector, "nioSelector", firstException);
-            Utils.closeQuietly(sensors, "sensors", firstException);
-            Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
-            Throwable exception = firstException.get();
-            if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
-                throw (RuntimeException) exception;
-            }
-
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
+        Utils.closeAllQuietly(firstException, "release connections",
+                connections.stream().map(id -> (AutoCloseable) () -> close(id)).toArray(AutoCloseable[]::new));
+        // If there is any exception thrown in close(id), we should still be able
+        // to close the remaining objects, especially the sensors because keeping
+        // the sensors may lead to failure to start up the ReplicaFetcherThread if
+        // the old sensors with the same names has not yet been cleaned up.
+        Utils.closeQuietly(nioSelector, "nioSelector", firstException);
+        Utils.closeQuietly(sensors, "sensors", firstException);
+        Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
+        Throwable exception = firstException.get();
+        if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
+            throw (RuntimeException) exception;
         }
     }
 
