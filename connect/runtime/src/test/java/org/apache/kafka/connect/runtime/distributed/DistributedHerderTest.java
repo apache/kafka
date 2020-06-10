@@ -254,6 +254,7 @@ public class DistributedHerderTest {
             }
         });
         member.wakeup();
+        PowerMock.expectLastCall();
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         PowerMock.expectLastCall();
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
@@ -291,6 +292,7 @@ public class DistributedHerderTest {
             }
         });
         member.wakeup();
+        PowerMock.expectLastCall();
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         worker.startTask(EasyMock.eq(TASK1), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
@@ -476,6 +478,7 @@ public class DistributedHerderTest {
             }
         });
         member.wakeup();
+        PowerMock.expectLastCall();
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
 
@@ -1188,6 +1191,7 @@ public class DistributedHerderTest {
 
         // apply config
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
         // Checks for config updates and starts rebalance
@@ -1258,6 +1262,7 @@ public class DistributedHerderTest {
 
         // apply config
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
         EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT); // for this test, it doesn't matter if we use the same config snapshot
@@ -1330,6 +1335,7 @@ public class DistributedHerderTest {
 
         // handle the state change
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
 
@@ -1392,6 +1398,7 @@ public class DistributedHerderTest {
 
         // handle the state change
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
 
@@ -1450,6 +1457,7 @@ public class DistributedHerderTest {
 
         // state change is ignored since we have no target state
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
 
@@ -1488,6 +1496,7 @@ public class DistributedHerderTest {
 
         // handle the state change
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
 
@@ -1538,6 +1547,7 @@ public class DistributedHerderTest {
 
         // handle the state change
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
 
@@ -1590,6 +1600,7 @@ public class DistributedHerderTest {
 
         // apply config
         member.wakeup();
+        PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
         // Checks for config updates and starts rebalance

@@ -30,7 +30,6 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,10 +40,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
-import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.junit.Assert.assertThrows;
 
 public class BlockingConnectorTest {
@@ -54,9 +53,13 @@ public class BlockingConnectorTest {
     private static final int NUM_WORKERS = 1;
     private static final String BLOCKING_CONNECTOR_NAME = "blocking-connector";
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
+    private static final String TEST_TOPIC = "normal-topic";
+    private static final int NUM_RECORDS_PRODUCED = 100;
+    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
     private EmbeddedConnectCluster connect;
+    private ConnectorHandle normalConnectorHandle;
 
     @Before
     public void setup() {
@@ -94,7 +97,7 @@ public class BlockingConnectorTest {
         BlockingConnector.waitForBlock();
 
         createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
@@ -108,7 +111,7 @@ public class BlockingConnectorTest {
         BlockingConnector.waitForBlock();
 
         createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
@@ -118,7 +121,7 @@ public class BlockingConnectorTest {
         BlockingConnector.waitForBlock();
 
         createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
@@ -128,7 +131,7 @@ public class BlockingConnectorTest {
         BlockingConnector.waitForBlock();
 
         createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
@@ -140,104 +143,38 @@ public class BlockingConnectorTest {
         BlockingConnector.waitForBlock();
 
         createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
     public void testWorkerRestartWithBlockInConnectorStart() throws Exception {
         log.info("Starting test testWorkerRestartWithBlockInConnectorStart");
-        createNormalConnector();
         createConnectorWithBlock(BlockingConnector.START);
         // First instance of the connector should block on startup
         BlockingConnector.waitForBlock();
+        createNormalConnector();
         connect.removeWorker();
 
         connect.addWorker();
         // After stopping the only worker and restarting it, a new instance of the blocking
         // connector should be created and we can ensure that it blocks again
         BlockingConnector.waitForBlock();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     @Test
     public void testWorkerRestartWithBlockInConnectorStop() throws Exception {
         log.info("Starting test testWorkerRestartWithBlockInConnectorStop");
-        createNormalConnector();
         createConnectorWithBlock(BlockingConnector.STOP);
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
+        createNormalConnector();
+        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
         connect.removeWorker();
         BlockingConnector.waitForBlock();
 
         connect.addWorker();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
-    }
-
-    @Test
-    @Ignore("Interaction with this connector method has not been made asynchronous yet and this test will fail")
-    public void testBlockInConnectorTaskClass() throws Exception {
-        createConnectorWithBlock(BlockingConnector.TASK_CLASS);
-        BlockingConnector.waitForBlock();
-
-        createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-    }
-
-    @Test
-    @Ignore("Interaction with this connector method has not been made asynchronous yet and this test will fail")
-    public void testBlockInConnectorTaskConfigs() throws Exception {
-        createConnectorWithBlock(BlockingConnector.TASK_CONFIGS);
-        BlockingConnector.waitForBlock();
-
-        createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-    }
-
-    @Test
-    @Ignore("Interaction with this connector method has not been made asynchronous yet and this test will fail")
-    public void testConnectorRestartWithBlockInConnectorTaskConfigs() throws Exception {
-        createConnectorWithBlock(BlockingConnector.TASK_CONFIGS);
-        // Test both explicit restart and implicit (pause then resume) restart
-        connect.restartConnector(BLOCKING_CONNECTOR_NAME);
-        connect.pauseConnector(BLOCKING_CONNECTOR_NAME);
-        connect.resumeConnector(BLOCKING_CONNECTOR_NAME);
-        BlockingConnector.waitForBlock();
-
-        createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-    }
-
-    // TODO: Consider patching plugin scanning to handle connectors that block in their version methods
-    // @Test
-    // public void testBlockInConnectorVersion() throws Exception {
-    //     createConnectorWithBlock(VersionBlockingConnector.class);
-    //     createNormalConnector();
-    //     waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-    // }
-
-    @Test
-    @Ignore("This connector method is never invoked by the framework")
-    public void testBlockInConnectorInitializeWithTaskConfigs() throws Exception {
-        createConnectorWithBlock(BlockingConnector.INITIALIZE_WITH_TASK_CONFIGS);
-        BlockingConnector.waitForBlock();
-
-        createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-    }
-
-    @Test
-    @Ignore("This connector method is never invoked by the framework")
-    public void testBlockInConnectorReconfigure() throws Exception {
-        createConnectorWithBlock(BlockingConnector.RECONFIGURE);
-        Map<String, String> newProps = baseBlockingConnectorProps();
-        newProps.put("foo", "bar");
-
-        connect.configureConnector(BLOCKING_CONNECTOR_NAME, newProps);
-        BlockingConnector.waitForBlock();
-
-        createNormalConnector();
-        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        verifyNormalConnector();
     }
 
     private void createConnectorWithBlock(String block) {
@@ -272,10 +209,16 @@ public class BlockingConnectorTest {
     }
 
     private void createNormalConnector() {
+        connect.kafka().createTopic(TEST_TOPIC, 3);
+
+        normalConnectorHandle = RuntimeHandles.get().connectorHandle(NORMAL_CONNECTOR_NAME);
+        normalConnectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
+        normalConnectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
+
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
-        props.put(TOPICS_CONFIG, "normal-topic");
+        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
         log.info("Creating normal connector");
         try {
             connect.configureConnector(NORMAL_CONNECTOR_NAME, props);
@@ -294,6 +237,12 @@ public class BlockingConnectorTest {
                 connector
             )
         );
+    }
+
+    private void verifyNormalConnector() throws InterruptedException {
+        waitForConnectorStart(NORMAL_CONNECTOR_NAME);
+        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
+        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
     }
 
     public static class BlockingConnector extends SourceConnector {
@@ -475,14 +424,8 @@ public class BlockingConnectorTest {
         }
     }
 
-    // Commented out in order for class not to be picked up during plugin scanning (otherwise, it
-    // will be picked up with every test run, even those that are not meant to test blocks in the
-    // Connector::version method, and since the worker does not yet gracefully handle connectors
-    // that block in that method during plugin scanning, all of those tests would fail as their
-    // workers would hang indefinitely during plugin scanning)
-    // public static class VersionBlockingConnector extends BlockingConnector {
-    //     public VersionBlockingConnector() {
-    //         super(VERSION);
-    //     }
-    // }
+    // We don't declare a class here that blocks in the version() method since that method is used
+    // in plugin path scanning. Until/unless plugin path scanning is altered to not block completely
+    // on connectors' version() methods, we can't even declare a class that does that without
+    // causing the workers in this test to hang on startup.
 }
