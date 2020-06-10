@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -432,6 +433,21 @@ public class TopicAdminTest {
                 admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
             });
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
+        }
+    }
+
+    @Test
+    public void verifyingGettingTopicCleanupPolicies() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            Set<String> policies = admin.topicCleanupPolicy("myTopic");
+            assertEquals(1, policies.size());
+            assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, policies.iterator().next());
         }
     }
 

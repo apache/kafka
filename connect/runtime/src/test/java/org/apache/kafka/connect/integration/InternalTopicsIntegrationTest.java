@@ -180,7 +180,7 @@ public class InternalTopicsIntegrationTest {
         // Create the poorly-configured topics
         connect.kafka().createTopic("bad-config", 1, 1, deleteCleanupPolicy());
         connect.kafka().createTopic("bad-offset", 1, 1, compactAndDeleteCleanupPolicy());
-        connect.kafka().createTopic("bad-status", 1, 1, emptyCleanupPolicy());
+        connect.kafka().createTopic("bad-status", 1, 1, noTopicSettings());
 
         // Check the topics
         log.info("Verifying the internal topics for Connect were manually created");
@@ -220,6 +220,47 @@ public class InternalTopicsIntegrationTest {
         connect.assertions().assertAtLeastNumWorkersAreUp(1, "Worker did not start in time.");
     }
 
+    @Test
+    public void testStartWhenInternalTopicsCreatedManuallyWithCompactForBrokersDefaultCleanupPolicy() throws InterruptedException {
+        // Change the broker default cleanup policy to compact, which is good for Connect
+        brokerProps.put("log." + TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        // Start out using the properly configured topics
+        workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "offset-topic");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
+        workerProps.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        int numWorkers = 0;
+        int numBrokers = 1;
+        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+                                                      .workerProps(workerProps)
+                                                      .numWorkers(numWorkers)
+                                                      .numBrokers(numBrokers)
+                                                      .brokerProps(brokerProps)
+                                                      .build();
+
+        // Start the brokers but not Connect
+        log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);
+        connect.start();
+        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Broker did not start in time.");
+        log.info("Completed startup of {} Kafka broker. Expected Connect worker to fail", numBrokers);
+
+        // Create the valid internal topics w/o topic settings, so these will use the broker's
+        // broker's log.cleanup.policy=compact (set above)
+        connect.kafka().createTopic("config-topic", 1, 1, noTopicSettings());
+        connect.kafka().createTopic("offset-topic", 1, 1, noTopicSettings());
+        connect.kafka().createTopic("status-topic", 1, 1, noTopicSettings());
+
+        // Check the topics
+        log.info("Verifying the internal topics for Connect were manually created");
+        connect.assertions().assertTopicsExist("config-topic", "offset-topic", "status-topic");
+
+        // Try to start one worker using valid internal topics
+        connect.addWorker();
+        connect.assertions().assertAtLeastNumWorkersAreUp(1, "Worker did not start in time.");
+    }
+
     protected Map<String, String> compactCleanupPolicy() {
         return Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
     }
@@ -228,7 +269,7 @@ public class InternalTopicsIntegrationTest {
         return Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
     }
 
-    protected Map<String, String> emptyCleanupPolicy() {
+    protected Map<String, String> noTopicSettings() {
         return Collections.emptyMap();
     }
 

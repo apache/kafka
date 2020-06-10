@@ -396,7 +396,7 @@ public class TopicAdmin implements AutoCloseable {
     public boolean verifyTopicCleanupPolicyOnlyCompact(String topic, String workerTopicConfig,
             String topicPurpose) {
         Set<String> cleanupPolicies = topicCleanupPolicy(topic);
-        if (cleanupPolicies == null || cleanupPolicies.isEmpty()) {
+        if (cleanupPolicies.isEmpty()) {
             log.debug("Unable to use admin client to verify the cleanup policy of '{}' "
                       + "topic is '{}', either because the broker is an older "
                       + "version or because the Kafka principal used for Connect "
@@ -404,17 +404,19 @@ public class TopicAdmin implements AutoCloseable {
                       + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
             return false;
         }
-        String cleanupPolicyStr = String.join(",", cleanupPolicies);
-        log.debug("Found cleanup policy for '{}' topic is '{}'", topic, cleanupPolicyStr);
         Set<String> expectedPolicies = Collections.singleton(TopicConfig.CLEANUP_POLICY_COMPACT);
-        String expectedPolicyStr = String.join(",", expectedPolicies);
-        if (cleanupPolicies != null && !cleanupPolicies.equals(expectedPolicies)) {
+        if (!cleanupPolicies.equals(expectedPolicies)) {
+            String expectedPolicyStr = String.join(",", expectedPolicies);
+            String cleanupPolicyStr = String.join(",", cleanupPolicies);
             String msg = String.format("Topic '%s' supplied via the '%s' property is required "
-                                       + "to have '%s=%s' to guarantee consistency and durability of "
-                                       + "%s, but found '%s'. "
-                                       + "Correct the topic before restarting Connect.",
+                    + "to have '%s=%s' to guarantee consistency and durability of "
+                    + "%s, but found the topic currently has '%s=%s'. Continuing would likely "
+                    + "result in eventually losing %s and problems restarting this Connect "
+                    + "cluster in the future. Change the '%s' property in the "
+                    + "Connect worker configurations to use a topic with '%s=%s'.",
                     topic, workerTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr,
-                    topicPurpose, cleanupPolicyStr);
+                    topicPurpose, TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicyStr, topicPurpose,
+                    workerTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr);
             throw new ConfigException(msg);
         }
         return true;
@@ -424,22 +426,29 @@ public class TopicAdmin implements AutoCloseable {
      * Get the cleanup policy for a topic.
      *
      * @param topic the name of the topic
-     * @return the set of cleanup policies set for the topic; may be empty if the topic exists
-     *         but has no cleanup policy, or may be null if the topic does not exist
+     * @return the set of cleanup policies set for the topic; may be empty if the topic does not
+     *         exist or the topic's cleanup policy could not be retrieved
      */
     public Set<String> topicCleanupPolicy(String topic) {
         Config topicConfig = describeTopicConfig(topic);
         if (topicConfig == null) {
-            return null;
+            // The topic must not exist
+            log.debug("Unable to find topic '{}' when getting cleanup policy", topic);
+            return Collections.emptySet();
         }
         ConfigEntry entry = topicConfig.get(CLEANUP_POLICY_CONFIG);
         if (entry != null && entry.value() != null) {
             String policyStr = entry.value();
+            log.debug("Found cleanup.policy={} for topic '{}'", policyStr, topic);
             return Arrays.stream(policyStr.split(","))
                          .map(String::trim)
+                         .filter(s -> !s.isEmpty())
                          .map(String::toLowerCase)
                          .collect(Collectors.toSet());
         }
+        // This is unexpected, as the topic config should include the cleanup.policy even if
+        // the topic settings don't override the broker's log.cleanup.policy. But just to be safe.
+        log.debug("Found no cleanup.policy for topic '{}'", topic);
         return Collections.emptySet();
     }
 
@@ -452,7 +461,7 @@ public class TopicAdmin implements AutoCloseable {
      * <p>If the topic does not exist, a null value is returned.
      *
      * @param topic the name of the topic for which the topic configuration should be obtained
-     * @return true if the operation was successful, or false if no topics were described
+     * @return the topic configuration if the topic exists, or null if the topic did not exist
      * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
      *         thread is interrupted while attempting to perform this operation
      * @throws ConnectException if a non retriable error occurs
@@ -471,12 +480,13 @@ public class TopicAdmin implements AutoCloseable {
      * not exist on the brokers.
      *
      * @param topicNames the topics to obtain configurations
-     * @return true if the operation was successful, or false if no topics were described
+     * @return the map of topic configurations for each existing topic, or an empty map if none
+     * of the topics exist
      * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
      *         thread is interrupted while attempting to perform this operation
      * @throws ConnectException if a non retriable error occurs
      */
-    public Map<String, Config> describeTopicConfigs(String...topicNames) {
+    public Map<String, Config> describeTopicConfigs(String... topicNames) {
         if (topicNames == null) {
             return Collections.emptyMap();
         }
