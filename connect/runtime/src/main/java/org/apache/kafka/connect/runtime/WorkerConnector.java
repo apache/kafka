@@ -245,12 +245,10 @@ public class WorkerConnector implements Runnable {
      * Stop this connector. This method does not block, it only triggers shutdown. Use
      * #{@link #awaitShutdown} to block until completion.
      */
-    public void shutdown() {
-        synchronized (this) {
-            log.info("Scheduled shutdown for {}", this);
-            stopping = true;
-            notify();
-        }
+    public synchronized void shutdown() {
+        log.info("Scheduled shutdown for {}", this);
+        stopping = true;
+        notify();
     }
 
     void doShutdown() {
@@ -259,11 +257,10 @@ public class WorkerConnector implements Runnable {
             Callback<TargetState> stateChangeCallback = pendingStateChangeCallback.getAndSet(null);
             if (stateChangeCallback != null) {
                 stateChangeCallback.onCompletion(
-                    new ConnectException(
-                        "Could not begin changing connector state to " + preEmptedState.name()
-                            + " as the connector has been scheduled for shutdown"),
-                    null
-                );
+                        new ConnectException(
+                                "Could not begin changing connector state to " + preEmptedState.name()
+                                    + " as the connector has been scheduled for shutdown"),
+                        null);
             }
             if (state == State.STARTED)
                 connector.stop();
@@ -281,15 +278,13 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    public void cancel() {
-        synchronized (this) {
-            // Proactively update the status of the connector to UNASSIGNED since this connector
-            // instance is being abandoned and we won't update the status on its behalf any more
-            // after this since a new instance may be started soon
-            statusListener.onShutdown(connName);
-            ctx.close();
-            cancelled = true;
-        }
+    public synchronized void cancel() {
+        // Proactively update the status of the connector to UNASSIGNED since this connector
+        // instance is being abandoned and we won't update the status on its behalf any more
+        // after this since a new instance may be started soon
+        statusListener.onShutdown(connName);
+        ctx.close();
+        cancelled = true;
     }
 
     /**
@@ -316,12 +311,12 @@ public class WorkerConnector implements Runnable {
         }
         if (preEmptedStateChangeCallback != null) {
             preEmptedStateChangeCallback.onCompletion(
-                new ConnectException(
-                    "Could not begin changing connector state to " + preEmptedState.name()
-                        + " before another request to change state was made;"
-                        + " the new request (which is to change the state to " + targetState.name()
-                        + ") has pre-empted this one"),
-                null
+                    new ConnectException(
+                            "Could not begin changing connector state to " + preEmptedState.name()
+                                + " before another request to change state was made;"
+                                + " the new request (which is to change the state to " + targetState.name()
+                                + ") has pre-empted this one"),
+                    null
             );
         }
     }
@@ -329,9 +324,8 @@ public class WorkerConnector implements Runnable {
     void doTransitionTo(TargetState targetState, Callback<TargetState> stateChangeCallback) {
         if (state == State.FAILED) {
             stateChangeCallback.onCompletion(
-                new ConnectException(this + " Cannot transition connector to " + targetState + " since it has failed"),
-                null
-            );
+                    new ConnectException(this + " Cannot transition connector to " + targetState + " since it has failed"),
+                    null);
             return;
         }
 
@@ -340,12 +334,10 @@ public class WorkerConnector implements Runnable {
             stateChangeCallback.onCompletion(null, targetState);
         } catch (Throwable t) {
             stateChangeCallback.onCompletion(
-                new ConnectException(
-                    "Failed to transition connector " + connName + " to state " + targetState,
-                    t
-                ),
-                null
-            );
+                    new ConnectException(
+                            "Failed to transition connector " + connName + " to state " + targetState,
+                            t),
+                    null);
         }
     }
 

@@ -40,11 +40,9 @@ public class HerderConnectorContext implements CloseableConnectorContext {
     @Override
     public void requestTaskReconfiguration() {
         if (closed) {
-            throw new ConnectException(String.format(
-                "The request for task reconfiguration has been rejected because this instance of "
-                    + "the connector '%s' has already been shut down.",
-                connectorName
-            ));
+            throw new ConnectException("The request for task reconfiguration has been rejected " 
+                    + "because this instance of the connector '" + connectorName + "' has already " 
+                    + "been shut down.");
         }
 
         // Local herder runs in memory in this process
@@ -55,12 +53,10 @@ public class HerderConnectorContext implements CloseableConnectorContext {
     @Override
     public void raiseError(Exception e) {
         if (closed) {
-            log.warn("Connector '%s' attempted to raise error after shutdown:", e);
-            throw new ConnectException(String.format(
-                "The request to fail the connector has been rejected because this instance of the "
-                    + "connector '%s' has already been shut down.",
-                connectorName
-            ));
+            log.warn("Connector {} attempted to raise error after shutdown:", connectorName, e);
+            throw new ConnectException("The request to fail the connector has been rejected " 
+                    + "because this instance of the connector '" + connectorName + "' has already " 
+                    + "been shut down.");
         }
 
         herder.onFailure(connectorName, e);

@@ -256,9 +256,8 @@ public class Worker {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
-                    new ConnectException("Connector with name " + connName + " already exists"),
-                    null
-                );
+                        new ConnectException("Connector with name " + connName + " already exists"),
+                        null);
                 return;
             }
 
@@ -275,25 +274,13 @@ public class Worker {
                 log.info("Creating connector {} of type {}", connName, connClass);
                 final Connector connector = plugins.newConnector(connClass);
                 final ConnectorConfig connConfig = ConnectUtils.isSinkConnector(connector)
-                    ? new SinkConnectorConfig(plugins, connProps)
-                    : new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
+                        ? new SinkConnectorConfig(plugins, connProps)
+                        : new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
 
                 final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
-                    offsetBackingStore,
-                    connName,
-                    internalKeyConverter,
-                    internalValueConverter
-                );
+                        offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
                 workerConnector = new WorkerConnector(
-                    connName,
-                    connector,
-                    connConfig,
-                    ctx,
-                    metrics,
-                    statusListener,
-                    offsetReader,
-                    connectorLoader
-                );
+                        connName, connector, connConfig, ctx, metrics, statusListener, offsetReader, connectorLoader);
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 workerConnector.transitionTo(initialState, onConnectorStateChange);
                 Plugins.compareAndSwapLoaders(savedLoader);
@@ -311,9 +298,8 @@ public class Worker {
             WorkerConnector existing = connectors.putIfAbsent(connName, workerConnector);
             if (existing != null) {
                 onConnectorStateChange.onCompletion(
-                    new ConnectException("Connector with name " + connName + " already exists"),
-                    null
-                );
+                        new ConnectException("Connector with name " + connName + " already exists"),
+                        null);
                 // Don't need to do any cleanup of the WorkerConnector instance (such as calling
                 // shutdown() on it) here because it hasn't actually started running yet
                 return;
@@ -398,12 +384,12 @@ public class Worker {
     private void stopConnector(String connName) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             WorkerConnector workerConnector = connectors.get(connName);
+            log.info("Stopping connector {}", connName);
+
             if (workerConnector == null) {
                 log.warn("Ignoring stop request for unowned connector {}", connName);
                 return;
             }
-
-            log.info("Stopping connector {}", connName);
 
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
@@ -431,13 +417,11 @@ public class Worker {
             }
 
             if (!connector.awaitShutdown(timeout)) {
-                log.error(
-                    "Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
+                log.error("Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
                         + "may be consuming external resources. Correct the configuration for "
                         + "this connector or remove the connector. After fixing the connector, it "
                         + "may be necessary to restart this worker to release any consumed "
-                        + "resources.",
-                    connName);
+                        + "resources.", connName);
                 connector.cancel();
             } else {
                 log.debug("Graceful stop of connector {} succeeded.", connName);
