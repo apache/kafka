@@ -59,6 +59,9 @@ class KafkaVersion(LooseVersion):
         # indicate if KIP-515 is available
         return self > LATEST_2_4
 
+    def reassign_partitions_command_supports_bootstrap_server(self):
+        return self >= V_2_5_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -147,3 +150,7 @@ LATEST_2_4 = V_2_4_1
 # 2.5.x versions
 V_2_5_0 = KafkaVersion("2.5.0")
 LATEST_2_5 = V_2_5_0
+
+# 2.6.x versions
+V_2_6_0 = KafkaVersion("2.6.0")
+LATEST_2_6 = V_2_6_0
