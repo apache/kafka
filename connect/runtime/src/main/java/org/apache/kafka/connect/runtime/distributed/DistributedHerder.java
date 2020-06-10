@@ -285,7 +285,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             startServices();
 
             log.info("Herder started");
-            running.set(true);
+            running = true;
 
             while (!stopping.get()) {
                 tick();
@@ -299,7 +299,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
             Exit.exit(1);
         } finally {
-            running.set(false);
+            running = false;
         }
     }
 
@@ -638,7 +638,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         log.info("Herder stopped");
-        running.set(false);
+        running = false;
     }
 
     @Override
