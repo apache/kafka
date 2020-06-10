@@ -1153,8 +1153,9 @@ public class IncrementalCooperativeAssignorTest {
 
         verify(coordinator, times(rebalanceNum)).configSnapshot();
         verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(rebalanceNum)).generationId();
+        verify(coordinator, times(2 * rebalanceNum)).generationId();
         verify(coordinator, times(rebalanceNum)).memberId();
+        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
     }
 
     @Test
@@ -1225,8 +1226,9 @@ public class IncrementalCooperativeAssignorTest {
 
         verify(coordinator, times(rebalanceNum)).configSnapshot();
         verify(coordinator, times(rebalanceNum)).leaderState(any());
-        verify(coordinator, times(rebalanceNum)).generationId();
+        verify(coordinator, times(2 * rebalanceNum)).generationId();
         verify(coordinator, times(rebalanceNum)).memberId();
+        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
     }
 
     private WorkerLoad emptyWorkerLoad(String worker) {
