@@ -354,13 +354,21 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
+  def notYetRejoinedMembers = members.filter(!_._2.isAwaitingJoin).toMap
 
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 
   def allStaticMembers = staticMembers.keySet
+
+  // For testing only.
+  def allDynamicMembers = {
+    val dynamicMemberSet = new mutable.HashSet[String]
+    allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
+    staticMembers.values.foreach(memberId => dynamicMemberSet.remove(memberId))
+    dynamicMemberSet.toSet
+  }
 
   def numPending = pendingMembers.size
 
