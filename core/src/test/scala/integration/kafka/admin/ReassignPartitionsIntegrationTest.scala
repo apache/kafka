@@ -40,6 +40,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
+  import ReassignPartitionsIntegrationTest._
+
   @Rule
   def globalTimeout: Timeout = Timeout.millis(300000)
 
