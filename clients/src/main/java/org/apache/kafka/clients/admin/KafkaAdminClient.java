@@ -213,6 +213,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.GeometricProgression;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -345,7 +346,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private final int maxRetries;
 
-    private final long retryBackoffMs;
+    private GeometricProgression retryBackoff;
 
     /**
      * Get or create a list value from a map.
@@ -550,7 +551,11 @@ public class KafkaAdminClient extends AdminClient {
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
-        this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoff = new GeometricProgression(
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                2,
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
+                0.2);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -718,6 +723,14 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
+        final void updateTriesBaseOn(Call failedCall) {
+            this.tries = failedCall.tries + 1;
+        }
+
+        final void updateNextAllowedTryMs(long now) {
+            this.nextAllowedTryMs = now + retryBackoff.term(Math.max(0, tries - 1));
+        }
+
         /**
          * Handle a failure.
          *
@@ -733,7 +746,7 @@ public class KafkaAdminClient extends AdminClient {
                 // If the call was aborted while in flight due to a timeout, deliver a
                 // TimeoutException. In this case, we do not get any more retries - the call has
                 // failed. We increment tries anyway in order to display an accurate log message.
-                tries++;
+                updateTriesBaseOn(this);
                 failWithTimeout(now, throwable);
                 return;
             }
@@ -746,8 +759,9 @@ public class KafkaAdminClient extends AdminClient {
                 runnable.enqueue(this, now);
                 return;
             }
-            tries++;
-            nextAllowedTryMs = now + retryBackoffMs;
+
+            updateTriesBaseOn(this);
+            updateNextAllowedTryMs(now);
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
@@ -1292,7 +1306,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there are pending calls which need to be sent
                 if (!pendingCalls.isEmpty())
-                    pollTimeout = Math.min(pollTimeout, retryBackoffMs);
+                    pollTimeout = Math.min(pollTimeout, retryBackoff.term(0));
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
@@ -2808,8 +2822,9 @@ public class KafkaAdminClient extends AdminClient {
         context.setNode(null);
 
         Call call = nextCall.get();
-        call.tries = failedCall.tries + 1;
-        call.nextAllowedTryMs = calculateNextAllowedRetryMs();
+
+        call.updateTriesBaseOn(failedCall);
+        call.updateNextAllowedTryMs(time.milliseconds());
 
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
         runnable.call(findCoordinatorCall, time.milliseconds());
@@ -3674,8 +3689,8 @@ public class KafkaAdminClient extends AdminClient {
         return new ListPartitionReassignmentsResult(partitionReassignmentsFuture);
     }
 
-    private long calculateNextAllowedRetryMs() {
-        return time.milliseconds() + retryBackoffMs;
+    private long calculateNextAllowedRetryMs(Call call, long now) {
+        return now + retryBackoff.term(call.tries);
     }
 
     private void handleNotControllerError(Errors error) throws ApiException {
@@ -3968,9 +3983,15 @@ public class KafkaAdminClient extends AdminClient {
                     if (!retryTopicPartitionOffsets.isEmpty()) {
                         Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
                             TopicPartition::topic).collect(Collectors.toSet());
-                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
+                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> operationContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
+                        rescheduleMetadataTask(operationContext, () -> {
+                            List<Call> listOffsetsCalls = getListOffsetsCalls(operationContext, retryTopicPartitionOffsets, futures);
+                            listOffsetsCalls.forEach(call -> {
+                                call.updateTriesBaseOn(this);
+                                call.updateNextAllowedTryMs(time.milliseconds());});
+                            return listOffsetsCalls;
+                        });
                     }
                 }
 
