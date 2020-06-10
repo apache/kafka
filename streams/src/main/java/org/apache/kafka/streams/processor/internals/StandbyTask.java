@@ -112,6 +112,8 @@ public class StandbyTask extends AbstractTask implements Task {
         log.trace("No-op suspend with state {}", state());
         if (state() == State.RUNNING) {
             transitionTo(State.SUSPENDED);
+        } else if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
         }
     }
 
@@ -140,7 +142,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void postCommit() {
-        if (state() == State.RUNNING) {
+        if (state() == State.RUNNING || state() == State.SUSPENDED) {
             // since there's no written offsets we can checkpoint with empty map,
             // and the state current offset would be used to checkpoint
             stateMgr.checkpoint(Collections.emptyMap());
@@ -169,10 +171,6 @@ public class StandbyTask extends AbstractTask implements Task {
         prepareCommit();
 
         if (state() == State.CREATED || state() == State.SUSPENDED) {
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state current offset would be used to checkpoint
-            stateMgr.checkpoint(Collections.emptyMap());
-            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
             stateMgr.recycle();
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
@@ -188,12 +186,6 @@ public class StandbyTask extends AbstractTask implements Task {
         switch (state()) {
             case CREATED:
             case SUSPENDED:
-                if (clean) {
-                    // since there's no written offsets we can checkpoint with empty map,
-                    // and the state current offset would be used to checkpoint
-                    stateMgr.checkpoint(Collections.emptyMap());
-                    offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
-                }
                 executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(

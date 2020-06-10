@@ -256,12 +256,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case RESTORING:
+                transitionTo(State.SUSPENDED);
+                log.info("Suspended restoring");
+
+                break;
+
             case RUNNING:
                 try {
+                    // use try-catch to ensure state transition to SUSPENDED even if user code throws in `Processor#close()`
                     closeTopology();
                 } finally {
                     transitionTo(State.SUSPENDED);
-                    log.info("Suspended");
+                    log.info("Suspended running");
                 }
 
                 break;
@@ -271,6 +277,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while suspending active task " + id);
+        }
+    }
+
+    private void closeTopology() {
+        log.trace("Closing processor topology");
+
+        // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
+        RuntimeException exception = null;
+        for (final ProcessorNode<?, ?> node : topology.processors()) {
+            processorContext.setCurrentNode(node);
+            try {
+                node.close();
+            } catch (final RuntimeException e) {
+                exception = e;
+            } finally {
+                processorContext.setCurrentNode(null);
+            }
+        }
+
+        if (exception != null) {
+            throw exception;
         }
     }
 
@@ -383,24 +411,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void postCommit() {
+        commitRequested = false;
+        commitNeeded = false;
+
         switch (state()) {
             case RESTORING:
+                writeCheckpointIfNeed();
+
+                break;
+
             case RUNNING:
+                if (!eosEnabled) { // if RUNNING, checkpoint only for non-eos
+                    writeCheckpointIfNeed();
+                }
+
+                break;
+
             case SUSPENDED:
-                commitRequested = false;
-                commitNeeded = false;
-
-                if (state() == State.RESTORING || state() == State.SUSPENDED) {
-                    writeCheckpointIfNeed();
-                } else if (!eosEnabled) { // if RUNNING, checkpoint only for non-eos
-                    writeCheckpointIfNeed();
-                }
-
-                if (state() == State.SUSPENDED) {
-                    partitionGroup.clear();
-                }
-
-                log.debug("Committed");
+                writeCheckpointIfNeed();
+                partitionGroup.clear();
 
                 break;
 
@@ -411,6 +440,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
+
+        log.debug("Committed");
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -800,32 +831,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             } finally {
                 processorContext.setCurrentNode(null);
             }
-        }
-    }
-
-    private void closeTopology() {
-        log.trace("Closing processor topology");
-
-        if (state() != State.RUNNING) {
-            return;
-        }
-
-        // close the processors
-        // make sure close() is called for each node even when there is a RuntimeException
-        RuntimeException exception = null;
-        for (final ProcessorNode<?, ?> node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
-            }
-        }
-
-        if (exception != null) {
-            throw exception;
         }
     }
 
