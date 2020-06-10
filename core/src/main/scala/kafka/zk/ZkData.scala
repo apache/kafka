@@ -922,7 +922,7 @@ object FeatureZNode {
         val status = FeatureZNodeStatus.withNameOpt(statusInt.get)
         if (status.isEmpty) {
           throw new IllegalArgumentException(
-            s"Malformed status: $statusInt  found in feature information: ${new String(jsonBytes, UTF_8)}")
+            s"Malformed status: $statusInt found in feature information: ${new String(jsonBytes, UTF_8)}")
         }
 
         var finalizedFeatures: Features[FinalizedVersionRange] = null

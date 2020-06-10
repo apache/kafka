@@ -99,7 +99,7 @@ object ApiVersion {
     KAFKA_2_5_IV0,
     // Introduced StopReplicaRequest V3 containing the leader epoch for each partition (KIP-570)
     KAFKA_2_6_IV0,
-    // Introduce feature versioning support (KIP-584)
+    // Introduced feature versioning support (KIP-584)
     KAFKA_2_7_IV0
   )
 

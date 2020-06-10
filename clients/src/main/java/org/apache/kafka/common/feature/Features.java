@@ -44,7 +44,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
      * @param features   Map of feature name to a type of VersionRange.
      */
     private Features(Map<String, VersionRangeType> features) {
-        Objects.requireNonNull(features,"Provided features can not be null.");
+        Objects.requireNonNull(features, "Provided features can not be null.");
         this.features = features;
     }
 
@@ -169,7 +169,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
         if (this == other) {
             return true;
         }
-        if (other == null || !(other instanceof Features)) {
+        if (!(other instanceof Features)) {
             return false;
         }
 

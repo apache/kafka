@@ -176,6 +176,16 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
   }
 
   /**
+   * Tests that the listener initialization fails when invalid wait time (<= 0) is provided as input.
+   */
+  @Test
+  def testInitFailureDueToInvalidWaitTime(): Unit = {
+    val listener = new FinalizedFeatureChangeListener(zkClient)
+    assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(0))
+    assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(-1))
+  }
+
+  /**
    * Tests that after successful initialization, the listener fails when it picks up a feature
    * incompatibility from ZK.
    */

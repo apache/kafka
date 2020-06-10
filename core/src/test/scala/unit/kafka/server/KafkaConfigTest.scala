@@ -755,7 +755,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
         case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
 
-        //Security config
+        // Security config
         case KafkaConfig.securityProviderClassProp =>
 
         // Password encoder configs

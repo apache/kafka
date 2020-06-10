@@ -149,8 +149,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
     }
 
-    public static ApiVersionsResponse createApiVersionsResponseWithEmptyFeatures(
-        int throttleTimeMs,
+    public static ApiVersionsResponse createApiVersionsResponse(
+        final int throttleTimeMs,
         final byte minMagic) {
         return createApiVersionsResponse(
             throttleTimeMs,
@@ -161,11 +161,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
+        final int throttleTimeMs,
         final byte minMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        int finalizedFeaturesEpoch
+        final Features<SupportedVersionRange> latestSupportedFeatures,
+        final Features<FinalizedVersionRange> finalizedFeatures,
+        final int finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {

@@ -33,7 +33,7 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
 
 /**
  * A common mutable cache containing the latest finalized features and epoch. By default the contents of
- * the cache are empty. This cache needs to be populated at least once for it's contents to become
+ * the cache are empty. This cache needs to be populated at least once for its contents to become
  * non-empty. Currently the main reader of this cache is the read path that serves an ApiVersionsRequest,
  * returning the features information in the response.
  *
@@ -43,10 +43,7 @@ object FinalizedFeatureCache extends Logging {
   @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
 
   /**
-   * @return   the latest known FinalizedFeaturesAndEpoch. If the returned value is empty, it means
-   *           no FinalizedFeaturesAndEpoch exists in the cache at the time when this
-   *           method is invoked. This result could change in the future whenever the
-   *           updateOrThrow method is invoked.
+   * @return   the latest known FinalizedFeaturesAndEpoch or empty if not defined in the cache.
    */
   def get: Option[FinalizedFeaturesAndEpoch] = {
     featuresAndEpoch
@@ -66,8 +63,8 @@ object FinalizedFeatureCache extends Logging {
 
   /**
    * Updates the cache to the latestFeatures, and updates the existing epoch to latestEpoch.
-   * Raises an exception when the operation is not successful. Expects that the latestEpoch
-   * should be always greater than the existing epoch (when the existing epoch is defined).
+   * Expects that the latestEpoch should be always greater than the existing epoch (when the
+   * existing epoch is defined).
    *
    * @param latestFeatures   the latest finalized features to be set in the cache
    * @param latestEpoch      the latest epoch value to be set in the cache

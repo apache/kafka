@@ -2051,7 +2051,7 @@ public class FetcherTest {
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
         ByteBuffer buffer = ApiVersionsResponse.
-            createApiVersionsResponseWithEmptyFeatures(
+            createApiVersionsResponse(
                 400,
                 RecordBatch.CURRENT_MAGIC_VALUE
             ).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);

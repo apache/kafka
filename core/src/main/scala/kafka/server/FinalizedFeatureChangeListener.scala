@@ -60,8 +60,6 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
      *           this method is called again after a successful previous invocation.
      * @throws   FeatureCacheUpdateException, if there was an error in updating the
      *           FinalizedFeatureCache.
-     * @throws   RuntimeException, if there was a failure in reading/deserializing the
-     *           contents of the feature ZK node.
      */
     def updateLatestOrThrow(): Unit = {
       maybeNotifyOnce.foreach(notifier => {
@@ -90,17 +88,27 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
         FinalizedFeatureCache.clear()
       } else {
-        val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-        featureZNode.status match {
-          case FeatureZNodeStatus.Disabled => {
-            info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
+        var maybeFeatureZNode: Option[FeatureZNode] = Option.empty
+        try {
+          maybeFeatureZNode = Some(FeatureZNode.decode(mayBeFeatureZNodeBytes.get))
+        } catch {
+          case e: IllegalArgumentException => {
+            error(s"Unable to deserialize feature ZK node at path: $featureZkNodePath", e)
             FinalizedFeatureCache.clear()
           }
-          case FeatureZNodeStatus.Enabled => {
-            FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
-          }
-          case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
         }
+        maybeFeatureZNode.map(featureZNode => {
+          featureZNode.status match {
+            case FeatureZNodeStatus.Disabled => {
+              info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
+              FinalizedFeatureCache.clear()
+            }
+            case FeatureZNodeStatus.Enabled => {
+              FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+            }
+            case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
+          }
+        })
       }
 
       maybeNotifyOnce.foreach(notifier => notifier.countDown())

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.common.feature;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
@@ -84,16 +85,12 @@ class BaseVersionRange {
     }
 
     public String toString() {
-        return String.format("%s[%s:%d, %s:%d]", this.getClass().getSimpleName(), this.minKeyLabel, min(), this.maxKeyLabel, max());
+        return String.format("%s[%s:%d, %s:%d]",
+            this.getClass().getSimpleName(), this.minKeyLabel, min(), this.maxKeyLabel, max());
     }
 
     public Map<String, Short> toMap() {
-        return new HashMap<String, Short>() {
-            {
-                put(minKeyLabel, min());
-                put(maxKeyLabel, max());
-            }
-        };
+        return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
     }
 
     @Override
@@ -101,7 +98,7 @@ class BaseVersionRange {
         if (this == other) {
             return true;
         }
-        if (other == null || !(other instanceof BaseVersionRange)) {
+        if (!(other instanceof BaseVersionRange)) {
             return false;
         }
 
