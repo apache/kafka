@@ -146,19 +146,21 @@ object AclCommand extends Logging {
       val resourceToAcls = getAcls(adminClient, filters)
 
       if (listPrincipals.isEmpty) {
-        for ((resource, acls) <- resourceToAcls)
-          println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        printResourceAcls(resourceToAcls)
       } else {
-        listPrincipals.foreach(principal => {
+        listPrincipals.foreach{principal =>
           println(s"ACLs for principal `$principal`")
           val filteredResourceToAcls = resourceToAcls.map { case (resource, acls) =>
             resource -> acls.filter(acl => principal.toString.equals(acl.principal))
           }.filter { case (_, acls) => acls.nonEmpty }
-
-          for ((resource, acls) <- filteredResourceToAcls)
-            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-        })
+          printResourceAcls(filteredResourceToAcls)
+        }
       }
+    }
+
+    private def printResourceAcls(resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]) = {
+      for ((resource, acls) <- resourceToAcls)
+        println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
 
     private def removeAcls(adminClient: Admin, acls: Set[AccessControlEntry], filter: ResourcePatternFilter): Unit = {
