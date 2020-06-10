@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -46,6 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 
 /**
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
