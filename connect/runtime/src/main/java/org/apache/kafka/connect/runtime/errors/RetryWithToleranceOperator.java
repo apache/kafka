@@ -96,7 +96,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         Future<Void> errantRecordFuture = context.report();
         if (!withinToleranceLimits()) {
             errorHandlingMetrics.recordError();
-            throw new ConnectException("Tolerance exceeded in the errant record reporter", error);
+            throw new ConnectException("Tolerance exceeded in error handler", error);
         }
         return errantRecordFuture;
     }
@@ -207,9 +207,8 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         totalFailures++;
     }
 
-    // Visible for testing
     @SuppressWarnings("fallthrough")
-    boolean withinToleranceLimits() {
+    public boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -287,6 +286,15 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      */
     public boolean failed() {
         return this.context.failed();
+    }
+
+    /**
+     * Returns the error encountered when processing the current stage.
+     *
+     * @return the error encountered when processing the current stage
+     */
+    public Throwable error() {
+        return this.context.error();
     }
 
     @Override

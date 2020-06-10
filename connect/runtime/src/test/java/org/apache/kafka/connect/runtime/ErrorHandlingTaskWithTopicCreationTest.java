@@ -319,8 +319,6 @@ public class ErrorHandlingTaskWithTopicCreationTest {
 
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record1));
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record2));
-        EasyMock.expect(workerErrantRecordReporter.mustThrowException()).andReturn(false);
-        EasyMock.expect(workerErrantRecordReporter.mustThrowException()).andReturn(false);
 
         sinkTask.put(EasyMock.anyObject());
         EasyMock.expectLastCall().times(2);
