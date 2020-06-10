@@ -99,6 +99,8 @@ public class StandbyTask extends AbstractTask implements Task {
             processorContext.initialize();
 
             log.info("Initialized");
+        } else if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while initializing standby task " + id);
         }
     }
 
@@ -119,6 +121,9 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void resume() {
+        if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while resuming standby task " + id);
+        }
         log.trace("No-op resume with state {}", state());
     }
 
