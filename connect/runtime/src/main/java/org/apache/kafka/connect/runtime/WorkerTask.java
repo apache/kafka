@@ -56,7 +56,7 @@ abstract class WorkerTask implements Runnable {
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
     protected final ConnectorTaskId id;
-    private final TaskStatus.Listener statusListener;
+    protected final TaskStatus.Listener statusListener;
     protected final ClassLoader loader;
     protected final StatusBackingStore statusBackingStore;
     protected final Time time;
@@ -177,8 +177,6 @@ abstract class WorkerTask implements Runnable {
                     onPause();
                     if (!awaitUnpause()) return;
                 }
-
-                statusListener.onStartup(id);
             }
 
             execute();

@@ -188,6 +188,9 @@ class WorkerSinkTask extends WorkerTask {
     @Override
     public void execute() {
         initializeAndStart();
+        synchronized (this) {
+            statusListener.onStartup(id);
+        }
         // Make sure any uncommitted data has been committed and the task has
         // a chance to clean up its state
         try (UncheckedCloseable suppressible = this::closePartitions) {

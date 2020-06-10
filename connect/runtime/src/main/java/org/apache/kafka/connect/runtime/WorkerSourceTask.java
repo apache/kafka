@@ -228,6 +228,7 @@ class WorkerSourceTask extends WorkerTask {
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
+                statusListener.onStartup(id);
                 if (startedShutdownBeforeStartCompleted) {
                     tryStop();
                     return;

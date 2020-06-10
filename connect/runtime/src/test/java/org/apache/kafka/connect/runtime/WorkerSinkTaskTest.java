@@ -862,6 +862,8 @@ public class WorkerSinkTaskTest {
     public void testSinkTasksHandleCloseErrors() throws Exception {
         createTask(initialState);
         expectInitializeTask();
+        statusListener.onStartup(taskId);
+        PowerMock.expectLastCall();
         expectTaskGetTopic(true);
 
         // Put one message through the task to get some offsets to commit
@@ -905,6 +907,8 @@ public class WorkerSinkTaskTest {
     public void testSuppressCloseErrors() throws Exception {
         createTask(initialState);
         expectInitializeTask();
+        statusListener.onStartup(taskId);
+        PowerMock.expectLastCall();
         expectTaskGetTopic(true);
 
         // Put one message through the task to get some offsets to commit
