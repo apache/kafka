@@ -447,7 +447,7 @@ public class TopicAdminTest {
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Set<String> policies = admin.topicCleanupPolicy("myTopic");
             assertEquals(1, policies.size());
-            assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, policies.iterator().next());
+            assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, policies.iterator().next());
         }
     }
 
