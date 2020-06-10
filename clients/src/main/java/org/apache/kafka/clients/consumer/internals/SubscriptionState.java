@@ -630,8 +630,8 @@ public class SubscriptionState {
         return assignment.stream().allMatch(state -> state.value().hasValidPosition());
     }
 
-    public synchronized Set<TopicPartition> missingFetchPositions() {
-        return collectPartitions(state -> !state.hasPosition(), Collectors.toSet());
+    public synchronized Set<TopicPartition> initializingPartitions() {
+        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING), Collectors.toSet());
     }
 
     private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
@@ -647,7 +647,7 @@ public class SubscriptionState {
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
             TopicPartitionState partitionState = state.value();
-            if (!partitionState.hasPosition()) {
+            if (!partitionState.fetchState.equals(FetchStates.INITIALIZING)) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -948,8 +948,18 @@ public class SubscriptionState {
 
         Collection<FetchState> validTransitions();
 
+        /**
+         * Test if this state is considered to have a position
+         *
+         * @return
+         */
         boolean hasPosition();
 
+        /**
+         * Test if this state is considered to have a valid position which can be used for fetching
+         *
+         * @return
+         */
         boolean hasValidPosition();
     }
 

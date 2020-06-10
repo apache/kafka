@@ -783,7 +783,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation completed within the timeout
      */
     public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
-        final Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
+        final Set<TopicPartition> missingFetchPositions = subscriptions.initializingPartitions();
 
         final Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, timer);
         if (offsets == null) return false;
