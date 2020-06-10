@@ -273,7 +273,6 @@ public class Worker {
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
-                //workerMetricsGroup.recordConnectorStartupFailure();
                 statusListener.onFailure(connName, t);
                 return false;
             }
@@ -283,7 +282,6 @@ public class Worker {
                 throw new ConnectException("Connector with name " + connName + " already exists");
 
             log.info("Finished creating connector {}", connName);
-            //workerMetricsGroup.recordConnectorStartupSuccess();
         }
         return true;
     }
@@ -484,7 +482,6 @@ public class Worker {
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
-//                workerMetricsGroup.recordTaskFailure();
                 statusListener.onFailure(id, t);
                 return false;
             }
@@ -497,7 +494,6 @@ public class Worker {
             if (workerTask instanceof WorkerSourceTask) {
                 sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
             }
-//            workerMetricsGroup.recordTaskSuccess();
             return true;
         }
     }
