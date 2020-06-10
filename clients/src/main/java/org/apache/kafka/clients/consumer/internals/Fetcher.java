@@ -495,6 +495,7 @@ public class Fetcher<K, V> implements Closeable {
         Map<TopicPartition, FetchPosition> partitionsToValidate = subscriptions
                 .partitionsNeedingValidation(time.milliseconds())
                 .stream()
+                .filter(tp -> subscriptions.position(tp) != null)
                 .collect(Collectors.toMap(Function.identity(), subscriptions::position));
 
         validateOffsetsAsync(partitionsToValidate);
@@ -675,36 +676,41 @@ public class Fetcher<K, V> implements Closeable {
                     completedFetch.partition);
         } else {
             FetchPosition position = subscriptions.position(completedFetch.partition);
-            if (completedFetch.nextFetchOffset == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
+            if (position != null) {
+                if (completedFetch.nextFetchOffset == position.offset) {
+                    List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
 
-                log.trace("Returning {} fetched records at offset {} for assigned partition {}",
-                        partRecords.size(), position, completedFetch.partition);
+                    log.trace("Returning {} fetched records at offset {} for assigned partition {}",
+                            partRecords.size(), position, completedFetch.partition);
 
-                if (completedFetch.nextFetchOffset > position.offset) {
-                    FetchPosition nextPosition = new FetchPosition(
-                            completedFetch.nextFetchOffset,
-                            completedFetch.lastEpoch,
-                            position.currentLeader);
-                    log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
-                    subscriptions.position(completedFetch.partition, nextPosition);
+                    if (completedFetch.nextFetchOffset > position.offset) {
+                        FetchPosition nextPosition = new FetchPosition(
+                                completedFetch.nextFetchOffset,
+                                completedFetch.lastEpoch,
+                                position.currentLeader);
+                        log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
+                        subscriptions.position(completedFetch.partition, nextPosition);
+                    }
+
+                    Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
+                    if (partitionLag != null)
+                        this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
+
+                    Long lead = subscriptions.partitionLead(completedFetch.partition);
+                    if (lead != null) {
+                        this.sensors.recordPartitionLead(completedFetch.partition, lead);
+                    }
+
+                    return partRecords;
+                } else {
+                    // these records aren't next in line based on the last consumed position, ignore them
+                    // they must be from an obsolete request
+                    log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                            completedFetch.partition, completedFetch.nextFetchOffset, position);
                 }
-
-                Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
-                if (partitionLag != null)
-                    this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
-
-                Long lead = subscriptions.partitionLead(completedFetch.partition);
-                if (lead != null) {
-                    this.sensors.recordPartitionLead(completedFetch.partition, lead);
-                }
-
-                return partRecords;
             } else {
-                // these records aren't next in line based on the last consumed position, ignore them
-                // they must be from an obsolete request
-                log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        completedFetch.partition, completedFetch.nextFetchOffset, position);
+                log.warn("Ignoring fetched records for {} at offset {} since the current position is undefined",
+                        completedFetch.partition, completedFetch.nextFetchOffset);
             }
         }
 
@@ -1133,14 +1139,19 @@ public class Fetcher<K, V> implements Closeable {
         long currentTimeMs = time.milliseconds();
 
         for (TopicPartition partition : fetchablePartitions()) {
-            // Use the preferred read replica if set, or the position's leader
             FetchPosition position = this.subscriptions.position(partition);
+            if (position == null) {
+                log.warn("Missing position inside fetch for partition {}", partition);
+                continue;
+            }
+
             Optional<Node> leaderOpt = position.currentLeader.leader;
             if (!leaderOpt.isPresent()) {
                 metadata.requestUpdate();
                 continue;
             }
 
+            // Use the preferred read replica if set, otherwise the position's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
             if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
@@ -1282,11 +1293,12 @@ public class Fetcher<K, V> implements Closeable {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
                 if (!clearedReplicaId.isPresent()) {
                     // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
-                    if (fetchOffset != subscriptions.position(tp).offset) {
+                    FetchPosition position = subscriptions.position(tp);
+                    if (position != null && fetchOffset != position.offset) {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                                "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
+                                "does not match the current offset {}", tp, fetchOffset, position);
                     } else {
-                        handleOffsetOutOfRange(subscriptions.position(tp), tp, "error response in offset fetch");
+                        handleOffsetOutOfRange(position, tp, "error response in offset fetch");
                     }
                 } else {
                     log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
