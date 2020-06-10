@@ -55,6 +55,8 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -399,6 +401,33 @@ public class SelectorTest {
         } while (selector.completedReceives().isEmpty());
         assertEquals("We should have only one response", 1, selector.completedReceives().size());
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().iterator().next().source());
+    }
+
+    @Test
+    public void testCloseAllChannels() throws Exception {
+        AtomicInteger closedChannelsCount = new AtomicInteger(0);
+        ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
+            private int channelIndex = 0;
+            @Override
+            KafkaChannel buildChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
+                                      int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+                return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry) {
+                    private final int index = channelIndex++;
+                    @Override
+                    public void close() throws IOException {
+                        closedChannelsCount.getAndIncrement();
+                        if (index == 0) throw new RuntimeException("you should fail");
+                        else super.close();
+                    }
+                };
+            }
+        };
+        channelBuilder.configure(clientConfigs());
+        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        selector.connect("0", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("1", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        assertThrows(RuntimeException.class, selector::close);
+        assertEquals(2, closedChannelsCount.get());
     }
 
     @Test
