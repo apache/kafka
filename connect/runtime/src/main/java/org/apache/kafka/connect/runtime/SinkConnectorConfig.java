@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -107,16 +108,16 @@ public class SinkConnectorConfig extends ConnectorConfig {
             if (hasTopicsConfig) {
                 List<String> topics = parseTopicsList(props);
                 if (topics.contains(dlqTopic)) {
-                    throw new ConfigException(DLQ_TOPIC_NAME_CONFIG + " has a topic name which is already in " +
-                        SinkTask.TOPICS_CONFIG);
+                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the list of "
+                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topics));
                 }
             }
             if (hasTopicsRegexConfig) {
                 String topicsRegexStr = props.get(SinkTask.TOPICS_REGEX_CONFIG);
                 Pattern pattern = Pattern.compile(topicsRegexStr);
                 if (pattern.matcher(dlqTopic).matches()) {
-                    throw new ConfigException(DLQ_TOPIC_NAME_CONFIG + " has a topic name which matches the regex in " +
-                        SinkTask.TOPICS_REGEX_CONFIG);
+                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the regex matching the "
+                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topicsRegexStr));
                 }
             }
         }
@@ -140,6 +141,9 @@ public class SinkConnectorConfig extends ConnectorConfig {
     @SuppressWarnings("unchecked")
     public static List<String> parseTopicsList(Map<String, String> props) {
         List<String> topics = (List<String>) ConfigDef.parseType(TOPICS_CONFIG, props.get(TOPICS_CONFIG), Type.LIST);
+        if (topics == null) {
+            return Collections.emptyList();
+        }
         return topics
                 .stream()
                 .filter(topic -> !topic.isEmpty())
