@@ -368,6 +368,9 @@ public class ErrorHandlingTaskTest {
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
         expectTopicCreation(TOPIC);
@@ -431,6 +434,9 @@ public class ErrorHandlingTaskTest {
         EasyMock.expectLastCall();
 
         sourceTask.start(EasyMock.anyObject());
+        EasyMock.expectLastCall();
+
+        statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
 
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
