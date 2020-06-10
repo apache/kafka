@@ -47,6 +47,9 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
 
+    private boolean mustThrowException = false;
+    private Throwable exceptionToThrow = null;
+
     // Visible for testing
     protected final LinkedList<Future<Void>> futures;
 
@@ -99,8 +102,15 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
                 valLength, key, value, headers);
         }
 
-        Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
-            SinkTask.class, consumerRecord, error);
+        Future<Void> future;
+        try {
+            future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+                SinkTask.class, consumerRecord, error);
+        } catch (ConnectException e) {
+            mustThrowException = true;
+            exceptionToThrow = e;
+            throw e;
+        }
 
         if (!future.isDone()) {
             futures.add(future);
@@ -163,5 +173,23 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             }
             return null;
         }
+    }
+
+    /**
+     * Returns whether or not the Errant Record Reporter must throw an exception.
+     *
+     * @return boolean indicating whether the Errant Record Reporter must throw an exception
+     */
+    public boolean mustThrowException() {
+        return mustThrowException;
+    }
+
+    /**
+     * Returns the exception that must be thrown by the Errant Record Reporter.
+     *
+     * @return throwable that the Errant Record Reporter must throw
+     */
+    public Throwable getExceptionToThrow() {
+        return exceptionToThrow;
     }
 }

@@ -556,6 +556,9 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
+            if (workerErrantRecordReporter != null && workerErrantRecordReporter.mustThrowException()) {
+                throw workerErrantRecordReporter.getExceptionToThrow();
+            }
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
