@@ -612,6 +612,9 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
         EasyMock.expectLastCall();
 
+        workerTask.removeMetrics();
+        EasyMock.expectLastCall();
+
         expectStopStorage();
 
         PowerMock.replayAll();
@@ -701,6 +704,9 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall().andReturn(WorkerTestConnector.class);
 
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
+        EasyMock.expectLastCall();
+
+        workerTask.removeMetrics();
         EasyMock.expectLastCall();
 
         // Each time we check the task metrics, the worker will call the herder
@@ -929,6 +935,9 @@ public class WorkerTest extends ThreadedTest {
         // Note that in this case we *do not* commit offsets since it's an unclean shutdown
         EasyMock.expectLastCall();
 
+        workerTask.removeMetrics();
+        EasyMock.expectLastCall();
+
         expectStopStorage();
 
         PowerMock.replayAll();
@@ -1023,6 +1032,9 @@ public class WorkerTest extends ThreadedTest {
         workerTask.stop();
         EasyMock.expectLastCall();
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
+        EasyMock.expectLastCall();
+
+        workerTask.removeMetrics();
         EasyMock.expectLastCall();
 
         expectStopStorage();
