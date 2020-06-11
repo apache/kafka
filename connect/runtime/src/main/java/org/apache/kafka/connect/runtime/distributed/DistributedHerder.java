@@ -589,13 +589,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             worker.stopAndAwaitConnector(connectorName);
             // The update may be a deletion, so verify we actually need to restart the connector
             if (remains) {
-                startConnector(connectorName,
-                    (error, result) -> {
-                        if (error != null) {
-                            log.error("Failed to start connector '" + connectorName + "'", error);
-                        }
+                startConnector(connectorName, (error, result) -> {
+                    if (error != null) {
+                        log.error("Failed to start connector '" + connectorName + "'", error);
                     }
-                );
+                });
             }
         }
     }
