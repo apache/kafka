@@ -397,7 +397,7 @@ public class TopicAdmin implements AutoCloseable {
             String topicPurpose) {
         Set<String> cleanupPolicies = topicCleanupPolicy(topic);
         if (cleanupPolicies.isEmpty()) {
-            log.debug("Unable to use admin client to verify the cleanup policy of '{}' "
+            log.info("Unable to use admin client to verify the cleanup policy of '{}' "
                       + "topic is '{}', either because the broker is an older "
                       + "version or because the Kafka principal used for Connect "
                       + "internal topics does not have the required permission to "
