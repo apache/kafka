@@ -815,7 +815,7 @@ public class SubscriptionState {
          * @param currentLeaderAndEpoch
          */
         private void updatePositionLeaderNoValidation(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
-            if (position != null && !position.currentLeader.equals(currentLeaderAndEpoch)) {
+            if (position != null) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 transitionState(FetchStates.FETCHING, () -> {
                     this.position = newPosition;
