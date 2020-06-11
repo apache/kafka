@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Iterator;
-import java.util.PriorityQueue;
-import java.util.Queue;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -59,11 +54,16 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -957,7 +957,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final List<TopicPartition> activePartitionsList = new ArrayList<>();
             final List<TaskId> assignedActiveList = new ArrayList<>();
 
-            final boolean tasksRevoked = populateActiveTaskAndPartitionsLists(
+            final Set<TaskId> activeTasksRemovedPendingRevokation = populateActiveTaskAndPartitionsLists(
                 activePartitionsList,
                 assignedActiveList,
                 consumer,
@@ -967,8 +967,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 allOwnedPartitions
             );
 
-            final Map<TaskId, Set<TopicPartition>> standbyTaskMap =
-                buildStandbyTaskMap(standbyTaskAssignments.get(consumer), partitionsForTask);
+            final Map<TaskId, Set<TopicPartition>> standbyTaskMap = buildStandbyTaskMap(
+                    consumer,
+                    standbyTaskAssignments.get(consumer),
+                    activeTasksRemovedPendingRevokation,
+                    partitionsForTask,
+                    clientMetadata.state
+                );
 
             final AssignmentInfo info = new AssignmentInfo(
                 minUserMetadataVersion,
@@ -980,7 +985,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 AssignorError.NONE.code()
             );
 
-            if (tasksRevoked) {
+            if (!activeTasksRemovedPendingRevokation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
                 log.info("Requesting followup rebalance be scheduled immediately due to tasks changing ownership.");
                 info.setNextRebalanceTime(0L);
@@ -1009,17 +1014,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * Populates the lists of active tasks and active task partitions for the consumer with a 1:1 mapping between them
      * such that the nth task corresponds to the nth partition in the list. This means tasks with multiple partitions
      * will be repeated in the list.
-     * @return whether we had to remove any partitions from the assignment in order to wait for them to be safely revoked
      */
-    private boolean populateActiveTaskAndPartitionsLists(final List<TopicPartition> activePartitionsList,
-                                                         final List<TaskId> assignedActiveList,
-                                                         final String consumer,
-                                                         final ClientState clientState,
-                                                         final List<TaskId> activeTasksForConsumer,
-                                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                         final Set<TopicPartition> allOwnedPartitions) {
+    private Set<TaskId> populateActiveTaskAndPartitionsLists(final List<TopicPartition> activePartitionsList,
+                                                             final List<TaskId> assignedActiveList,
+                                                             final String consumer,
+                                                             final ClientState clientState,
+                                                             final List<TaskId> activeTasksForConsumer,
+                                                             final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                             final Set<TopicPartition> allOwnedPartitions) {
         final List<AssignedPartition> assignedPartitions = new ArrayList<>();
-        boolean needToRevokePartitions = false;
+        final Set<TaskId> removedActiveTasks = new TreeSet<>();
 
         // Build up list of all assigned partition-task pairs
         for (final TaskId taskId : activeTasksForConsumer) {
@@ -1031,12 +1035,20 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // If the partition is new to this consumer but is still owned by another, remove from the assignment
                 // until it has been revoked and can safely be reassigned according to the COOPERATIVE protocol
                 if (newPartitionForConsumer && allOwnedPartitions.contains(partition)) {
-                    log.info("Removing task {} from assignment until it is safely revoked in followup rebalance", taskId);
-                    clientState.unassignActive(taskId);
+                    log.info(
+                        "Removing task {} from {} active assignment until it is safely revoked in followup rebalance",
+                        taskId,
+                        consumer
+                    );
+                    removedActiveTasks.add(taskId);
+
                     // Clear the assigned partitions list for this task if any partition can not safely be assigned,
                     // so as not to encode a partial task
                     assignedPartitionsForTask.clear();
-                    needToRevokePartitions = true;
+
+                    // This has no effect on the assignment, as we'll never consult the ClientState again, but
+                    // it does perform a useful assertion that the task was actually assigned.
+                    clientState.unassignActive(taskId);
                     break;
                 } else {
                     assignedPartitionsForTask.add(new AssignedPartition(taskId, partition));
@@ -1052,17 +1064,32 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             assignedActiveList.add(partition.taskId);
             activePartitionsList.add(partition.partition);
         }
-        return needToRevokePartitions;
+        return removedActiveTasks;
     }
 
     /**
      * @return map from task id to its assigned partitions for all standby tasks
      */
-    private static Map<TaskId, Set<TopicPartition>> buildStandbyTaskMap(final Collection<TaskId> standbys,
-                                                                        final Map<TaskId, Set<TopicPartition>> partitionsForTask) {
+    private Map<TaskId, Set<TopicPartition>> buildStandbyTaskMap(final String consumer,
+                                                                 final Iterable<TaskId> standbys,
+                                                                 final Iterable<TaskId> tasksRevoked,
+                                                                 final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                                 final ClientState clientState) {
         final Map<TaskId, Set<TopicPartition>> standbyTaskMap = new HashMap<>();
         for (final TaskId task : standbys) {
             standbyTaskMap.put(task, partitionsForTask.get(task));
+        }
+        for (final TaskId task : tasksRevoked) {
+            log.info(
+                "Adding removed active task {} as a standby for {} until it is safely revoked in followup rebalance",
+                task,
+                consumer
+            );
+            standbyTaskMap.put(task, partitionsForTask.get(task));
+
+            // This has no effect on the assignment, as we'll never consult the ClientState again, but
+            // it does perform a useful assertion that the it's legal to assign this task as a standby to this instance
+            clientState.assignStandby(task);
         }
         return standbyTaskMap;
     }
