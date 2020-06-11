@@ -214,9 +214,7 @@
               files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
 
     <suppress checks="JavaNCSS"
-              files="KStreamKStreamJoinTest.java"/>
-    <suppress checks="JavaNCSS"
-              files="SmokeTestDriver.java"/>
+              files="(KStreamKStreamJoinTest|SmokeTestDriver|TaskManagerTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="EosTestDriver|KStreamKStreamJoinTest.java|RelationalSmokeTest.java|SmokeTestDriver.java|KStreamKStreamLeftJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>

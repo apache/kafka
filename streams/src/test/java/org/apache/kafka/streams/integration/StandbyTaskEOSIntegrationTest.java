@@ -48,7 +48,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -92,7 +91,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @Test
-    public void surviveWithOneTaskAsStandby() throws InterruptedException, IOException {
+    public void surviveWithOneTaskAsStandby() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(

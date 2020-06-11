@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
@@ -36,13 +34,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -86,7 +82,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.checkOrder;
@@ -104,6 +99,7 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -632,6 +628,108 @@ public class TaskManagerTest {
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
         verify(stateManager);
+    }
+
+    @Test
+    public void shouldCommitNonCorruptedTasksOnTaskCorruptedException() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+
+        final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final StateMachineTask nonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+
+        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>(taskId00Assignment);
+        assignment.putAll(taskId01Assignment);
+
+        // `handleAssignment`
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
+            .andStubReturn(asList(corruptedTask, nonCorruptedTask));
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+
+        replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        assertThat(nonCorruptedTask.state(), is(Task.State.RUNNING));
+        nonCorruptedTask.setCommitNeeded();
+
+        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+
+        assertTrue(nonCorruptedTask.commitPrepared);
+    }
+
+    @Test
+    public void shouldNotCommitNonRunningNonCorruptedTasks() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+
+        final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final StateMachineTask nonRunningNonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+
+        nonRunningNonCorruptedTask.setCommitNeeded();
+
+        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>(taskId00Assignment);
+        assignment.putAll(taskId01Assignment);
+
+        // `handleAssignment`
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
+            .andStubReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+        assertThat(nonRunningNonCorruptedTask.state(), is(Task.State.CREATED));
+
+        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+
+        verify(activeTaskCreator);
+        assertFalse(nonRunningNonCorruptedTask.commitPrepared);
+    }
+
+    @Test
+    public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+
+        final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
+        final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+                throw new TaskMigratedException("You dropped out of the group!", new RuntimeException());
+            }
+        };
+
+        // handleAssignment
+        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singleton(corruptedStandby));
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId01Assignment))).andStubReturn(singleton(runningNonCorruptedActive));
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+
+        // make sure this will be committed and throw
+        assertThat(runningNonCorruptedActive.state(), is(Task.State.RUNNING));
+        assertThat(corruptedStandby.state(), is(Task.State.RUNNING));
+
+        runningNonCorruptedActive.setCommitNeeded();
+
+        assertThrows(TaskMigratedException.class, () -> taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions)));
+
+        assertThat(corruptedStandby.state(), is(Task.State.CREATED));
     }
 
     @Test
@@ -2572,7 +2670,8 @@ public class TaskManagerTest {
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
-                                                   final ChangelogReader changeLogReader, final boolean changeLogUpdateRequired) {
+                                                   final ChangelogReader changeLogReader,
+                                                   final boolean changeLogUpdateRequired) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.resume(assignment);

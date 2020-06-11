@@ -182,6 +182,24 @@ public class TaskManager {
         closeAndRevive(corruptedActiveTasks);
     }
 
+    private void closeAndRevive(final Map<Task, Collection<TopicPartition>> taskWithChangelogs) {
+        for (final Map.Entry<Task, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
+            final Task task = entry.getKey();
+
+            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
+            final Collection<TopicPartition> corruptedPartitions = entry.getValue();
+            task.markChangelogAsCorrupted(corruptedPartitions);
+
+            try {
+                task.suspend();
+            } catch (final RuntimeException swallow) {
+                log.error("Error suspending corrupted task {} ", task.id(), swallow);
+            }
+            task.closeDirty();
+            task.revive();
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -349,24 +367,6 @@ public class TaskManager {
             }
         }
 
-    }
-
-    private void closeAndRevive(final Map<Task, Collection<TopicPartition>> taskWithChangelogs) {
-        for (final Map.Entry<Task, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
-            final Task task = entry.getKey();
-
-            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-            final Collection<TopicPartition> corruptedPartitions = entry.getValue();
-            task.markChangelogAsCorrupted(corruptedPartitions);
-
-            try {
-                task.suspend();
-            } catch (final RuntimeException swallow) {
-                log.error("Error suspending corrupted task {} ", task.id(), swallow);
-            }
-            task.closeDirty();
-            task.revive();
-        }
     }
 
     private void cleanUpTaskProducer(final Task task,
