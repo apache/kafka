@@ -517,6 +517,9 @@ public class InternalTopologyBuilder {
         if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
             throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
         }
+        if (globalStateBuilders.containsKey(storeBuilder.name())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeBuilder.name());
+        }
 
         stateFactories.put(storeBuilder.name(), new StateStoreFactory<>(storeBuilder));
 
