@@ -16,27 +16,28 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
-    protected Set<TopicPartition> inputPartitions;
-    protected ProcessorTopology topology;
 
     protected final TaskId id;
+    protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
+
+    protected Set<TopicPartition> inputPartitions;
 
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
@@ -44,45 +45,10 @@ public abstract class AbstractTask implements Task {
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions) {
         this.id = id;
-        this.stateMgr = stateMgr;
         this.topology = topology;
-        this.inputPartitions = inputPartitions;
+        this.stateMgr = stateMgr;
         this.stateDirectory = stateDirectory;
-    }
-
-    @Override
-    public TaskId id() {
-        return id;
-    }
-
-    @Override
-    public Set<TopicPartition> inputPartitions() {
-        return inputPartitions;
-    }
-
-    @Override
-    public Collection<TopicPartition> changelogPartitions() {
-        return stateMgr.changelogPartitions();
-    }
-
-    @Override
-    public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-        stateMgr.markChangelogAsCorrupted(partitions);
-    }
-
-    @Override
-    public StateStore getStore(final String name) {
-        return stateMgr.getStore(name);
-    }
-
-    @Override
-    public boolean isClosed() {
-        return state() == State.CLOSED;
-    }
-
-    @Override
-    public final Task.State state() {
-        return state;
+        this.inputPartitions = inputPartitions;
     }
 
     @Override
@@ -92,6 +58,43 @@ public abstract class AbstractTask implements Task {
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
         }
+    }
+
+    @Override
+    public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        stateMgr.markChangelogAsCorrupted(partitions);
+    }
+
+    @Override
+    public final TaskId id() {
+        return id;
+    }
+
+    @Override
+    public final Task.State state() {
+        return state;
+    }
+
+    @Override
+    public void updateInputPartitions(final Set<TopicPartition> topicPartitions,
+                                      final Map<String, List<String>> nodeToSourceTopics) {
+        this.inputPartitions = topicPartitions;
+        topology.updateSourceTopics(nodeToSourceTopics);
+    }
+
+    @Override
+    public Set<TopicPartition> inputPartitions() {
+        return inputPartitions;
+    }
+
+    @Override
+    public StateStore getStore(final String name) {
+        return stateMgr.getStore(name);
+    }
+
+    @Override
+    public Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
     }
 
     final void transitionTo(final Task.State newState) {
@@ -117,11 +120,5 @@ public abstract class AbstractTask implements Task {
                 log.debug("Ignoring error in unclean {}", name);
             }
         }
-    }
-
-    @Override
-    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
-        this.inputPartitions = topicPartitions;
-        topology.updateSourceTopics(nodeToSourceTopics);
     }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +28,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -97,13 +97,9 @@ public interface Task {
         }
     }
 
-    TaskId id();
 
-    State state();
 
-    boolean isActive();
-
-    boolean isClosed();
+    // idempotent life-cycle methods
 
     /**
      * @throws LockException could happen when multi-threads within the single instance, could retry
@@ -116,82 +112,44 @@ public interface Task {
      */
     void completeRestoration();
 
-    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
-
-    boolean commitNeeded();
-
-    /**
-     * @throws StreamsException fatal error, should close the thread
-     */
-    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
-
-    void postCommit();
-
     void suspend();
 
     /**
-     *
      * @throws StreamsException fatal error, should close the thread
      */
     void resume();
 
-    /**
-     * Must be idempotent.
-     */
-    void closeClean();
-
-    /**
-     * Must be idempotent.
-     */
     void closeDirty();
 
-    /**
-     * Updates input partitions and topology after rebalance
-     */
-    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics);
+    void closeClean();
 
-    /**
-     * Attempt a clean close but do not close the underlying state
-     */
-    void closeAndRecycleState();
+
+    // non-idempotent life-cycle methods
 
     /**
      * Revive a closed task to a created one; should never throw an exception
      */
     void revive();
 
-    StateStore getStore(final String name);
-
-    Set<TopicPartition> inputPartitions();
-
     /**
-     * @return any changelog partitions associated with this task
+     * Attempt a clean close but do not close the underlying state
      */
-    Collection<TopicPartition> changelogPartitions();
-
-    /**
-     * @return the offsets of all the changelog partitions associated with this task,
-     *         indicating the current positions of the logged state stores of the task.
-     */
-    Map<TopicPartition, Long> changelogOffsets();
+    void closeAndRecycleState();
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
-    }
 
-    default void recordProcessBatchTime(final long processBatchTime) {}
+    // runtime methods (using in RUNNING state)
 
-    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
     default boolean process(final long wallClockTime) {
         return false;
     }
 
-    default boolean commitRequested() {
-        return false;
-    }
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
 
     default boolean maybePunctuateStreamTime() {
         return false;
@@ -200,5 +158,54 @@ public interface Task {
     default boolean maybePunctuateSystemTime() {
         return false;
     }
+
+    boolean commitNeeded();
+
+    default boolean commitRequested() {
+        return false;
+    }
+
+    /**
+     * @throws StreamsException fatal error, should close the thread
+     */
+    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
+
+    void postCommit();
+
+    default Map<TopicPartition, Long> purgeableOffsets() {
+        return Collections.emptyMap();
+    }
+
+
+    // task status inquiry
+
+    TaskId id();
+
+    State state();
+
+    boolean isActive();
+
+    /**
+     * Updates input partitions after a rebalance
+     */
+    void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics);
+
+    Set<TopicPartition> inputPartitions();
+
+    /**
+     * @return any changelog partitions associated with this task
+     */
+    Collection<TopicPartition> changelogPartitions();
+
+
+    // IQ related methods
+
+    StateStore getStore(final String name);
+
+    /**
+     * @return the offsets of all the changelog partitions associated with this task,
+     *         indicating the current positions of the logged state stores of the task.
+     */
+    Map<TopicPartition, Long> changelogOffsets();
 
 }

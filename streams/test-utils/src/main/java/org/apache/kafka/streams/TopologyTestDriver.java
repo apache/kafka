@@ -501,17 +501,17 @@ public class TopologyTestDriver implements Closeable {
 
             task = new StreamTask(
                 TASK_ID,
-                new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
-                consumer,
-                streamsConfig,
-                streamsMetrics,
                 stateDirectory,
-                cache,
-                mockWallClockTime,
                 stateManager,
-                recordCollector,
-                context
+                new HashSet<>(partitionsByInputTopic.values()),
+                streamsConfig,
+                context,
+                cache,
+                streamsMetrics,
+                mockWallClockTime,
+                consumer,
+                recordCollector
             );
             task.initializeIfNeeded();
             task.completeRestoration();
