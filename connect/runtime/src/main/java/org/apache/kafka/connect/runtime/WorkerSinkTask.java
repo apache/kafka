@@ -558,6 +558,12 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
+            // if errors raised from the operator were swallowed by the task implementation, an
+            // exception needs to be thrown to kill the task indicating the tolerance was exceeded
+            if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
+                throw new ConnectException("Tolerance exceeded in error handler",
+                    retryWithToleranceOperator.error());
+            }
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
