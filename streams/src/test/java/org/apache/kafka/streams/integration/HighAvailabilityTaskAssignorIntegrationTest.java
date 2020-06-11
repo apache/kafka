@@ -206,16 +206,11 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                     assignmentLock.lock();
                     try {
                         if (assignmentsCompleted.get() > assignmentsBeforeScaleOut) {
-                            if (assignmentsStable.get(assignmentsBeforeScaleOut + 1)) {
-                                throw new NoRetryException(
-                                    new AssertionError(
-                                        "the first assignment after adding a node" +
-                                            " should be unstable while we warm up the state."
-                                    )
-                                );
-                            } else {
-                                return true;
-                            }
+                            assertFalseNoRetry(
+                                assignmentsStable.get(assignmentsBeforeScaleOut + 1),
+                                "the first assignment after adding a node should be unstable while we warm up the state."
+                            );
+                            return true;
                         } else {
                             return false;
                         }
@@ -242,6 +237,16 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             assertThat(instance1TotalRestored.get(), is(0L));
             // Belt-and-suspenders check that we never even attempt to restore any records.
             assertThat(instance1NumRestored.get(), is(-1L));
+        }
+    }
+
+    private void assertFalseNoRetry(final boolean assertion, final String message) {
+        if (assertion) {
+            throw new NoRetryException(
+                new AssertionError(
+                    message
+                )
+            );
         }
     }
 
