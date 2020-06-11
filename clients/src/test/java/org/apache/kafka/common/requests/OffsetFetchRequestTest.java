@@ -56,8 +56,8 @@ public class OffsetFetchRequestTest {
         builder = new OffsetFetchRequest.Builder(
             groupId,
             false,
-            partitions
-        );
+            partitions,
+            false);
     }
 
     @Test
@@ -102,7 +102,7 @@ public class OffsetFetchRequestTest {
     public void testConstructorFailForUnsupportedRequireStable() {
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             // The builder needs to be initialized every cycle as the internal data `requireStable` flag is flipped.
-            builder = new OffsetFetchRequest.Builder(groupId, true, null);
+            builder = new OffsetFetchRequest.Builder(groupId, true, null, false);
             final short finalVersion = version;
             if (version < 2) {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
@@ -116,6 +116,20 @@ public class OffsetFetchRequestTest {
                 } else {
                     assertTrue(request.requireStable());
                 }
+            }
+        }
+    }
+
+    @Test
+    public void testBuildThrowForUnsupportedRequireStable() {
+        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            builder = new OffsetFetchRequest.Builder(groupId, true, null, true);
+            if (version < 7) {
+                final short finalVersion = version;
+                assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
+            } else {
+                OffsetFetchRequest request = builder.build(version);
+                assertTrue(request.requireStable());
             }
         }
     }

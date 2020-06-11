@@ -484,6 +484,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public String toString() {
         return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
+                "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
+                "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
                 "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
 

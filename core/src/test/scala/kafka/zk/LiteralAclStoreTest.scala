@@ -67,7 +67,7 @@ class LiteralAclStoreTest {
   @Test
   def shouldDecodeResourceUsingTwoPartLogic(): Unit = {
     val resource = new ResourcePattern(GROUP, "PREFIXED:this, including the PREFIXED part, is a valid two part group name", LITERAL)
-    val encoded = (resource.resourceType +  AclEntry.ResourceSeparator + resource.name).getBytes(UTF_8)
+    val encoded = (resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name).getBytes(UTF_8)
 
     val actual = store.changeStore.decode(encoded)
 

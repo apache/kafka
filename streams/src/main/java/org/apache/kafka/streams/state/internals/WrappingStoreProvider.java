@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StoreQueryParams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -29,17 +29,17 @@ import java.util.List;
 public class WrappingStoreProvider implements StateStoreProvider {
 
     private final List<StreamThreadStateStoreProvider> storeProviders;
-    private StoreQueryParams storeQueryParams;
+    private StoreQueryParameters storeQueryParameters;
 
     WrappingStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
-                          final StoreQueryParams storeQueryParams) {
+                          final StoreQueryParameters storeQueryParameters) {
         this.storeProviders = storeProviders;
-        this.storeQueryParams = storeQueryParams;
+        this.storeQueryParameters = storeQueryParameters;
     }
 
     //visible for testing
-    public void setStoreQueryParams(final StoreQueryParams storeQueryParams) {
-        this.storeQueryParams = storeQueryParams;
+    public void setStoreQueryParameters(final StoreQueryParameters storeQueryParameters) {
+        this.storeQueryParameters = storeQueryParameters;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
                               final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider provider : storeProviders) {
-            final List<T> stores = provider.stores(storeQueryParams);
+            final List<T> stores = provider.stores(storeQueryParameters);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {

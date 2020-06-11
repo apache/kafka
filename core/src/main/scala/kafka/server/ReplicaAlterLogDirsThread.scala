@@ -22,7 +22,7 @@ import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
-import kafka.log.LogAppendInfo
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -34,8 +34,8 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse}
 
-import scala.collection.JavaConverters._
-import scala.collection.{mutable, Map, Seq, Set}
+import scala.jdk.CollectionConverters._
+import scala.collection.{Map, Seq, Set, mutable}
 
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
@@ -91,7 +91,7 @@ class ReplicaAlterLogDirsThread(name: String,
       Request.FutureLocalReplicaId,
       request.minBytes,
       request.maxBytes,
-      request.version <= 2,
+      false,
       request.fetchData.asScala.toSeq,
       UnboundedQuota,
       processResponseCallback,
@@ -116,15 +116,33 @@ class ReplicaAlterLogDirsThread(name: String,
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
         topicPartition, fetchOffset, futureLog.logEndOffset))
 
-    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
+    val logAppendInfo = if (records.sizeInBytes() > 0)
+      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
+    else
+      None
+
     futureLog.updateHighWatermark(partitionData.highWatermark)
-    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset)
+    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset, LeaderOffsetIncremented)
 
     if (partition.maybeReplaceCurrentWithFutureReplica())
       removePartitions(Set(topicPartition))
 
     quota.record(records.sizeInBytes)
     logAppendInfo
+  }
+
+  override def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): Set[TopicPartition] = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      // It is possible that the log dir fetcher completed just before this call, so we
+      // filter only the partitions which still have a future log dir.
+      val filteredFetchStates = initialFetchStates.filter { case (tp, _) =>
+        replicaMgr.futureLogExists(tp)
+      }
+      super.addPartitions(filteredFetchStates)
+    } finally {
+      partitionMapLock.unlock()
+    }
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {

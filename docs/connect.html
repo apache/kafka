@@ -32,7 +32,7 @@
 
     <h3><a id="connect_user" href="#connect_user">8.2 User Guide</a></h3>
 
-    <p>The quickstart provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
+    <p>The <a href="../quickstart">quickstart</a> provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
 
     <h4><a id="connect_running" href="#connect_running">Running Kafka Connect</a></h4>
 
@@ -56,7 +56,9 @@
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
-    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
+    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of the producers used by Kafka source tasks and the consumers used by Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>producer.</code> and <code>consumer.</code> respectively. The only Kafka client parameter that is inherited without a prefix from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sources and once for Kafka sinks.</p> 
+    
+    <p>Starting with 2.3.0, client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
 
     <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).</p>
 
@@ -171,8 +173,8 @@
     <ul>
         <li>InsertField - Add a field using either static data or record metadata</li>
         <li>ReplaceField - Filter or rename fields</li>
-        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc)</li>
-        <li>ValueToKey</li>
+        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc) or custom replacement (non-empty string or numeric value only)</li>
+        <li>ValueToKey - Replace the record key with a new key formed from a subset of fields in the record value</li>
         <li>HoistField - Wrap the entire event as a single field inside a Struct or a Map</li>
         <li>ExtractField - Extract a specific field from Struct and Map and include only this field in results</li>
         <li>SetSchemaMetadata - modify the schema name or version</li>
@@ -239,6 +241,8 @@
         <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
         <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
+        <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
+        <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
@@ -246,6 +250,12 @@
     <ul>
         <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
         <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
+    </ul>
+
+    <p>The following is a supported REST request at the top-level (root) endpoint:</p>
+
+    <ul>
+        <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
@@ -299,7 +309,7 @@
     }
     </pre>
 
-    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code></p>:
+    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code>:</p>
 
     <pre class="brush: java;">
     @Override
@@ -487,7 +497,7 @@
     Schema schema = SchemaBuilder.struct().name(NAME)
         .field("name", Schema.STRING_SCHEMA)
         .field("age", Schema.INT_SCHEMA)
-        .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+        .field("admin", SchemaBuilder.bool().defaultValue(false).build())
         .build();
 
     Struct struct = new Struct(schema)
@@ -574,6 +584,10 @@
 
     <p>
     In most cases, connector and task states will match, though they may be different for short periods of time when changes are occurring or if tasks have failed. For example, when a connector is first started, there may be a noticeable delay before the connector and its tasks have all transitioned to the RUNNING state. States will also diverge when tasks fail since Connect does not automatically restart failed tasks. To restart a connector/task manually, you can use the restart APIs listed above. Note that if you try to restart a task while a rebalance is taking place, Connect will return a 409 (Conflict) status code. You can retry after the rebalance completes, but it might not be necessary since rebalances effectively restart all the connectors and tasks in the cluster.
+    </p>
+
+    <p>
+    Starting with 2.5.0, Kafka Connect uses the <code>status.storage.topic</code> to also store information related to the topics that each connector is using. Connect Workers use these per-connector topic status updates to respond to requests to the REST endpoint <code>GET /connectors/{name}/topics</code> by returning the set of topic names that a connector is using. A request to the REST endpoint <code>PUT /connectors/{name}/topics/reset</code> resets the set of active topics for a connector and allows a new set to be populated, based on the connector's latest pattern of topic usage. Upon connector deletion, the set of the connector's active topics is also deleted. Topic tracking is enabled by default but can be disabled by setting <code>topic.tracking.enable=false</code>. If you want to disallow requests to reset the active topics of connectors during runtime, set the Worker property <code>topic.tracking.allow.reset=false</code>.
     </p>
 
     <p>

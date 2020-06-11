@@ -187,7 +187,8 @@ public final class Stores {
      *                              is not stored with the records, so this value is used to compute the keys that
      *                              the store returns. No effort is made to validate this parameter, so you must be
      *                              careful to set it the same as the windowed keys you're actually storing.
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
@@ -226,7 +227,8 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period)
      * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
@@ -251,7 +253,8 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period)
      * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
@@ -321,6 +324,8 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period.
      * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */

@@ -43,10 +43,12 @@ public class OffsetFetchRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
 
         public final OffsetFetchRequestData data;
+        private final boolean throwOnFetchStableOffsetsUnsupported;
 
         public Builder(String groupId,
                        boolean requireStable,
-                       List<TopicPartition> partitions) {
+                       List<TopicPartition> partitions,
+                       boolean throwOnFetchStableOffsetsUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
 
             final List<OffsetFetchRequestTopic> topics;
@@ -69,6 +71,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                             .setGroupId(groupId)
                             .setRequireStable(requireStable)
                             .setTopics(topics);
+            this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
         boolean isAllTopicPartitions() {
@@ -83,11 +86,16 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
 
             if (data.requireStable() && version < 7) {
-                log.info("Fallback the requireStable flag to false as broker " +
-                             "only supports OffsetFetchRequest version {}. Need " +
-                             "v7 or newer to enable this feature", version);
+                if (throwOnFetchStableOffsetsUnsupported) {
+                    throw new UnsupportedVersionException("Broker unexpectedly " +
+                        "doesn't support requireStable flag on version " + version);
+                } else {
+                    log.trace("Fallback the requireStable flag to false as broker " +
+                                  "only supports OffsetFetchRequest version {}. Need " +
+                                  "v7 or newer to enable this feature", version);
 
-                return new OffsetFetchRequest(data.setRequireStable(false), version);
+                    return new OffsetFetchRequest(data.setRequireStable(false), version);
+                }
             }
 
             return new OffsetFetchRequest(data, version);

@@ -29,6 +29,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addMinAndMaxAndP99AndP90ToSensor;
 
 public class ProcessorNodeMetrics {
     private ProcessorNodeMetrics() {}
@@ -46,6 +47,12 @@ public class ProcessorNodeMetrics {
     private static final String SUPPRESSION_EMIT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + SUPPRESSION_EMIT_DESCRIPTION;
     private static final String SUPPRESSION_EMIT_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + SUPPRESSION_EMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
+    private static final String IDEMPOTENT_UPDATE_SKIP = "idempotent-update-skip";
+    private static final String IDEMPOTENT_UPDATE_SKIP_DESCRIPTION = "skipped idempotent updates";
+    private static final String IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION;
+    private static final String IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION =
+            RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
     private static final String PROCESS = "process";
     private static final String PROCESS_DESCRIPTION = "calls to process";
@@ -92,6 +99,15 @@ public class ProcessorNodeMetrics {
     private static final String LATE_RECORD_DROP_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + LATE_RECORD_DROP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
+    private static final String RECORD_E2E_LATENCY = "record-e2e-latency";
+    private static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
+        "end-to-end latency of a record, measuring by comparing the record timestamp with the "
+            + "system time when it has been fully processed by the node";
+    private static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    private static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    private static final String RECORD_E2E_LATENCY_P99_DESCRIPTION = "The 99th percentile " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    private static final String RECORD_E2E_LATENCY_P90_DESCRIPTION = "The 90th percentile " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+
     public static Sensor suppressionEmitSensor(final String threadId,
                                                final String taskId,
                                                final String processorNodeId,
@@ -103,6 +119,22 @@ public class ProcessorNodeMetrics {
             SUPPRESSION_EMIT,
             SUPPRESSION_EMIT_RATE_DESCRIPTION,
             SUPPRESSION_EMIT_TOTAL_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
+    }
+
+    public static Sensor skippedIdempotentUpdatesSensor(final String threadId,
+            final String taskId,
+            final String processorNodeId,
+            final StreamsMetricsImpl streamsMetrics) {
+        return throughputSensor(
+            threadId,
+            taskId,
+            processorNodeId,
+            IDEMPOTENT_UPDATE_SKIP,
+            IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION,
+            IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION,
             RecordingLevel.DEBUG,
             streamsMetrics
         );
@@ -137,7 +169,7 @@ public class ProcessorNodeMetrics {
         addInvocationRateAndCountToSensor(
             parentSensor,
             TASK_LEVEL_GROUP,
-            streamsMetrics.nodeLevelTagMap(threadId, taskId, ROLLUP_VALUE),
+            streamsMetrics.taskLevelTagMap(threadId, taskId),
             PROCESS,
             PROCESS_RATE_DESCRIPTION,
             PROCESS_TOTAL_DESCRIPTION
@@ -265,6 +297,26 @@ public class ProcessorNodeMetrics {
             return forwardSensor(threadId, taskId, processorNodeId, streamsMetrics);
         }
         return processAtSourceSensor(threadId, taskId, processorNodeId, streamsMetrics);
+    }
+
+    public static Sensor recordE2ELatencySensor(final String threadId,
+                                                final String taskId,
+                                                final String processorNodeId,
+                                                final RecordingLevel recordingLevel,
+                                                final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, RECORD_E2E_LATENCY, recordingLevel);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        addMinAndMaxAndP99AndP90ToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            RECORD_E2E_LATENCY,
+            RECORD_E2E_LATENCY_MIN_DESCRIPTION,
+            RECORD_E2E_LATENCY_MAX_DESCRIPTION,
+            RECORD_E2E_LATENCY_P99_DESCRIPTION,
+            RECORD_E2E_LATENCY_P90_DESCRIPTION
+        );
+        return sensor;
     }
 
     private static Sensor throughputAndLatencySensorWithParent(final String threadId,

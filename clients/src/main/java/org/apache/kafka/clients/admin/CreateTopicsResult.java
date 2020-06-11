@@ -35,7 +35,7 @@ public class CreateTopicsResult {
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
 
-    CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
+    protected CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
         this.futures = futures;
     }
 
@@ -94,7 +94,7 @@ public class CreateTopicsResult {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::replicationFactor);
     }
 
-    static class TopicMetadataAndConfig {
+    public static class TopicMetadataAndConfig {
         private final ApiException exception;
         private final int numPartitions;
         private final int replicationFactor;

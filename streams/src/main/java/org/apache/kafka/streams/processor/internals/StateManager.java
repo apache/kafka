@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 interface StateManager {
     File baseDir();
@@ -45,6 +45,8 @@ interface StateManager {
     Map<TopicPartition, Long> changelogOffsets();
 
     void close() throws IOException;
+
+    TaskType taskType();
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);

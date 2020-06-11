@@ -104,7 +104,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
                       outputTopic: String,
                       waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
 
-    import collection.JavaConverters._
+    import _root_.scala.jdk.CollectionConverters._
 
     // Publish user-region information.
     val userRegionsProducerConfig: Properties = getUserRegionsProducerConfig()

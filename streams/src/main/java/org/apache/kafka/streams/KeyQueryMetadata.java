@@ -34,9 +34,8 @@ public class KeyQueryMetadata {
      * Sentinel to indicate that the KeyQueryMetadata is currently unavailable. This can occur during rebalance
      * operations.
      */
-    public static final KeyQueryMetadata NOT_AVAILABLE = new KeyQueryMetadata(new HostInfo("unavailable", -1),
-            Collections.emptySet(),
-            -1);
+    public static final KeyQueryMetadata NOT_AVAILABLE =
+        new KeyQueryMetadata(HostInfo.unavailable(), Collections.emptySet(), -1);
 
     private final HostInfo activeHost;
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -29,21 +30,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 public class MockInternalTopicManager extends InternalTopicManager {
 
-    final public Map<String, Integer> readyTopics = new HashMap<>();
-    final private MockConsumer<byte[], byte[]> restoreConsumer;
+    public final Map<String, Integer> readyTopics = new HashMap<>();
+    private final MockConsumer<byte[], byte[]> restoreConsumer;
+    private final boolean mockCreateInternalTopics;
 
     public MockInternalTopicManager(final StreamsConfig streamsConfig,
-                                    final MockConsumer<byte[], byte[]> restoreConsumer) {
+                                    final MockConsumer<byte[], byte[]> restoreConsumer,
+                                    final boolean mockCreateInternalTopics) {
         super(Admin.create(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
+        this.mockCreateInternalTopics = mockCreateInternalTopics;
     }
 
     @Override
-    public void makeReady(final Map<String, InternalTopicConfig> topics) {
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         for (final InternalTopicConfig topic : topics.values()) {
             final String topicName = topic.name();
             final int numberOfPartitions = topic.numberOfPartitions().get();
@@ -56,6 +59,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
             restoreConsumer.updatePartitions(topicName, partitions);
         }
+        return mockCreateInternalTopics ? topics.keySet() : Collections.emptySet();
     }
 
     @Override

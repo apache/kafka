@@ -42,7 +42,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val zookeeperChroot = "/kafka-chroot-for-unittest"
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     val zooKeeperConnect = props.get("zookeeper.connect")
-    props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
+    props.put("zookeeper.connect", zooKeeperConnect.toString + zookeeperChroot)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
 
     val pathExists = zkClient.pathExists(zookeeperChroot)

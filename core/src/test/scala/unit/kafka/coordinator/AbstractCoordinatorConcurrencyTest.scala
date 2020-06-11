@@ -36,7 +36,7 @@ import org.easymock.EasyMock
 import org.junit.{After, Before}
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
 

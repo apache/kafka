@@ -35,6 +35,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
+import scala.annotation.nowarn
+
 /**
  * General helper functions!
  *
@@ -240,7 +242,7 @@ object CoreUtils {
   /**
    * Returns a list of duplicated items
    */
-  def duplicates[T](s: Traversable[T]): Iterable[T] = {
+  def duplicates[T](s: Iterable[T]): Iterable[T] = {
     s.groupBy(identity)
       .map { case (k, l) => (k, l.size)}
       .filter { case (_, l) => l > 1 }
@@ -309,4 +311,12 @@ object CoreUtils {
         map.putIfAbsent(key, value).getOrElse(value)
     }
   }
+
+  @nowarn("cat=unused") // see below for explanation
+  def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
+    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppres the unused warning
+    import scala.collection.compat._
+    elements.groupMapReduce(key)(f)(reduce)
+  }
+
 }

@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object AssignmentStateTest extends AbstractPartitionTest {
 
@@ -90,7 +90,6 @@ class AssignmentStateTest(isr: List[Integer], replicas: List[Integer],
 
   @Test
   def testPartitionAssignmentStatus(): Unit = {
-    val controllerId = 0
     val controllerEpoch = 3
 
     val leaderState = new LeaderAndIsrPartitionState()
@@ -112,7 +111,7 @@ class AssignmentStateTest(isr: List[Integer], replicas: List[Integer],
     if (original.nonEmpty)
       partition.assignmentState = SimpleAssignmentState(original)
     // do the test
-    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints)
     assertEquals(isReassigning, partition.isReassigning)
     if (adding.nonEmpty)
       adding.foreach(r => assertTrue(partition.isAddingReplica(r)))

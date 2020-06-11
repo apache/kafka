@@ -109,7 +109,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
             // only add state store if the source KTable should be materialized
             final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
-            if (ktableSource.queryableName() != null) {
+            if (ktableSource.materialized()) {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
 
                 if (shouldReuseSourceTopicForChangelog) {

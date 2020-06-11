@@ -20,7 +20,6 @@
 
 package kafka.metrics
 
-import com.yammer.metrics.Metrics
 import java.io.File
 import java.nio.file.Files
 
@@ -52,7 +51,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
         Files.createDirectories(csvDir.toPath())
-        underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
+        underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true
           startReporter(metricsConfig.pollingIntervalSecs)
@@ -79,7 +78,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         underlying.shutdown()
         running = false
         info("Stopped Kafka CSV metrics reporter")
-        underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
+        underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
       }
     }
   }

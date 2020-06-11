@@ -112,7 +112,9 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     }
 
     @Override
-    public void close() {}
+    public void close() {
+        if (sslFactory != null) sslFactory.close();
+    }
 
     protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
                                                     String host, ChannelMetadataRegistry metadataRegistry) throws IOException {

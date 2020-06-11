@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Objects;
-import java.util.Set;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -36,6 +34,9 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Objects;
+import java.util.Set;
+
 class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedStream<K, V> {
 
     static final String REDUCE_NAME = "KSTREAM-REDUCE-";
@@ -46,19 +47,19 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     final String userProvidedRepartitionTopicName;
 
     KGroupedStreamImpl(final String name,
-                       final Set<String> sourceNodes,
+                       final Set<String> subTopologySourceNodes,
                        final GroupedInternal<K, V> groupedInternal,
                        final boolean repartitionRequired,
                        final StreamsGraphNode streamsGraphNode,
                        final InternalStreamsBuilder builder) {
-        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, streamsGraphNode, builder);
         this.repartitionRequired = repartitionRequired;
         this.userProvidedRepartitionTopicName = groupedInternal.name();
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             groupedInternal,
             repartitionRequired,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             streamsGraphNode
         );
@@ -192,7 +193,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         return new TimeWindowedKStreamImpl<>(
             windows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             keySerde,
             valSerde,
@@ -207,7 +208,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         return new SessionWindowedKStreamImpl<>(
             windows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             keySerde,
             valSerde,
@@ -231,7 +232,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     @Override
     public <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        return new CogroupedKStreamImpl<K, Vout>(name, sourceNodes, streamsGraphNode, builder)
+        return new CogroupedKStreamImpl<K, Vout>(name, subTopologySourceNodes, streamsGraphNode, builder)
             .cogroup(this, aggregator);
     }
 }

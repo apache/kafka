@@ -17,8 +17,8 @@ import java.util
 import java.util.Collections
 import java.util.concurrent._
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.KafkaConfig
@@ -36,7 +36,7 @@ import org.apache.kafka.server.authorizer._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.{Assert, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object SslAdminIntegrationTest {
@@ -217,19 +217,19 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     client = Admin.create(createConfig())
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
-    assertFalse(results.values().asScala.exists(_.isDone))
+    assertFalse(results.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
 
     testSemaphore.acquire()
     val results2 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
-    assertFalse(results2.values().asScala.exists(_.isDone))
+    assertFalse(results2.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     assertEquals(0, results2.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results2.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl3), results2.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
@@ -259,7 +259,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def purgatoryMetric(name: String): Int = {
-    val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
     val metrics = allMetrics.filter { case (metricName, _) =>
       metricName.getMBeanName.contains("delayedOperation=AlterAcls") && metricName.getMBeanName.contains(s"name=$name")
     }.values.toList

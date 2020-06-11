@@ -19,6 +19,24 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_260_notable" href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
+<ul>
+    <li>Kafka Streams adds a new processing mode (requires broker 2.5 or newer) that improves application
+        scalability using exactly-once guarantees
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>)
+    </li>
+    <li>TLSv1.3 has been enabled by default for Java 11 or newer. The client and server will negotiate TLSv1.3 if
+        both support it and fallback to TLSv1.2 otherwise. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-573%3A+Enable+TLSv1.3+by+default">KIP-573</a> for more details.
+    </li>
+    <li>The default value for the <code>client.dns.lookup</code> configuration has been changed from <code>default</code>
+        to <code>use_all_dns_ips</code>. If a hostname resolves to multiple IP addresses, clients and brokers will now
+        attempt to connect to each IP in sequence until the connection is successfully established. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-602%3A+Change+default+value+for+client.dns.lookup">KIP-602</a>
+        for more details.
+    </li>
+</ul>
+
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
 <ul>
     <li>When <code>RebalanceProtocol#COOPERATIVE</code> is used, <code>Consumer#poll</code> can still return data
@@ -30,6 +48,19 @@
         <code>zookeeper.session.timeout.ms</code> has been increased from 6s to 18s and
         <code>replica.lag.time.max.ms</code> from 10s to 30s.</li>
     <li>New DSL operator <code>cogroup()</code> has been added for aggregating multiple streams together at once.</li>
+    <li>Added a new <code>KStream.toTable()</code> API to translate an input event stream into a KTable.</li>
+    <li>Added a new Serde type <code>Void</code> to represent null keys or null values from input topic.</li>
+    <li>Deprecated <code>UsePreviousTimeOnInvalidTimestamp</code> and replaced it with <code>UsePartitionTimeOnInvalidTimeStamp</code>.</li>
+    <li>Improved exactly-once semantics by adding a pending offset fencing mechanism and stronger transactional commit
+        consistency check, which greatly simplifies the implementation of a scalable exactly-once application.
+        We also added a new exactly-once semantics code example under
+        <a href="https://github.com/apache/kafka/tree/2.5/examples">examples</a> folder. Check out
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>
+        for the full details.</li>
+    <li>Added a new public api <code>KafkaStreams.queryMetadataForKey(String, K, Serializer) to get detailed information on the key being queried.
+        It provides information about the partition number where the key resides in addition to hosts containing the active and standby partitions for the key.</code></li>
+    <li>Provided support to query stale stores (for high availability) and the stores belonging to a specific partition by deprecating <code>KafkaStreams.store(String, QueryableStoreType)</code> and replacing it with <code>KafkaStreams.store(StoreQueryParameters)</code>.</li>
+    <li>Added a new public api to access lag information for stores local to an instance with <code>KafkaStreams.allLocalStorePartitionLags()</code>.</li>
     <li>Scala 2.11 is no longer supported. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-531%3A+Drop+support+for+Scala+2.11+in+Kafka+2.5">KIP-531</a>
         for details.</li>
@@ -37,6 +68,20 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-504+-+Add+new+Java+Authorizer+Interface">KIP-504</a>
         for details of the new Java authorizer API added in 2.4.0.  Note that <code>kafka.security.auth.Authorizer</code>
         and <code>kafka.security.auth.SimpleAclAuthorizer</code> were deprecated in 2.4.0.
+    </li>
+    <li>TLSv1 and TLSv1.1 have been disabled by default since these have known security vulnerabilities. Only TLSv1.2 is now
+        enabled by default. You can continue to use TLSv1 and TLSv1.1 by explicitly enabling these in the configuration options
+        <code>ssl.protocol</code> and <code>ssl.enabled.protocols</code>.
+    </li>
+    <li>ZooKeeper has been upgraded to 3.5.7, and a ZooKeeper upgrade from 3.4.X to 3.5.7 can fail if there are no snapshot files in the 3.4 data directory.
+        This usually happens in test upgrades where ZooKeeper 3.5.7 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
+        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+        A fix is given in <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>, which is to set <code>snapshot.trust.empty=true</code>
+        config in <code>zookeeper.properties</code> before the upgrade.
+    </li>
+    <li>ZooKeeper version 3.5.7 supports TLS-encrypted connectivity to ZooKeeper both with or without client certificates,
+        and additional Kafka configurations are available to take advantage of this.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-515%3A+Enable+ZK+client+to+use+the+new+TLS+supported+authentication">KIP-515</a> for details.
     </li>
 </ul>
 

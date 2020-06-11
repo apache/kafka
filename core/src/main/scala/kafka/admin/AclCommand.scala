@@ -34,8 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 
-import scala.collection.JavaConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.io.StdIn
 
@@ -147,8 +146,9 @@ object AclCommand extends Logging {
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
+              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+            }.filter { case (_, acls) => acls.nonEmpty }
 
             for ((resource, acls) <- filteredResourceToAcls)
               println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
@@ -186,14 +186,26 @@ object AclCommand extends Logging {
   class AuthorizerService(val authorizerClassName: String, val opts: AclCommandOptions) extends AclCommandService with Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
-      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
-      val authorizerProperties =
+      // It is possible that zookeeper.set.acl could be true without SASL if mutual certificate authentication is configured.
+      // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
+      // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
+      // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
+      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
+      val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
           defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
         } else {
           defaultProps
         }
+      val authorizerProperties =
+        if (opts.options.has(opts.zkTlsConfigFile)) {
+          // load in TLS configs both with and without the "authorizer." prefix
+          val validKeys = (KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList ++ KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.map("authorizer." + _).toList).asJava
+          authorizerPropertiesWithoutTls ++ Utils.loadProps(opts.options.valueOf(opts.zkTlsConfigFile), validKeys).asInstanceOf[java.util.Map[String, Any]].asScala
+        }
+        else
+          authorizerPropertiesWithoutTls
 
       val authZ = AuthorizerUtils.createAuthorizer(authorizerClassName)
       try {
@@ -210,7 +222,7 @@ object AclCommand extends Logging {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
           authorizer.createAcls(null,aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
-            result.exception.asScala.foreach { exception =>
+            result.exception.ifPresent { exception =>
               println(s"Error while adding ACLs: ${exception.getMessage}")
               println(Utils.stackTrace(exception))
             }
@@ -251,8 +263,9 @@ object AclCommand extends Logging {
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
+              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+            }.filter { case (_, acls) => acls.nonEmpty }
 
             for ((resource, acls) <- filteredResourceToAcls)
               println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
@@ -269,12 +282,12 @@ object AclCommand extends Logging {
         authorizer.deleteAcls(null, aclBindingFilters)
       }
       result.asScala.map(_.toCompletableFuture.get).foreach { result =>
-        result.exception.asScala.foreach { exception =>
+        result.exception.ifPresent { exception =>
           println(s"Error while removing ACLs: ${exception.getMessage}")
           println(Utils.stackTrace(exception))
         }
-        result.aclBindingDeleteResults.asScala.foreach { deleteResult =>
-          deleteResult.exception.asScala.foreach { exception =>
+        result.aclBindingDeleteResults.forEach { deleteResult =>
+          deleteResult.exception.ifPresent { exception =>
             println(s"Error while removing ACLs: ${exception.getMessage}")
             println(Utils.stackTrace(exception))
           }
@@ -430,20 +443,20 @@ object AclCommand extends Logging {
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
+      opts.options.valuesOf(opts.topicOpt).forEach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
 
     if (patternType == PatternType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
       resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
+      opts.options.valuesOf(opts.groupOpt).forEach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
 
     if (opts.options.has(opts.transactionalIdOpt))
-      opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
+      opts.options.valuesOf(opts.transactionalIdOpt).forEach(transactionalId =>
         resourceFilters += new ResourcePatternFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, patternType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
+      opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
@@ -584,6 +597,13 @@ object AclCommand extends Logging {
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")
 
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
+
+    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+      "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
+        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
+        ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
+      .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
 
     options = parser.parse(args: _*)
 

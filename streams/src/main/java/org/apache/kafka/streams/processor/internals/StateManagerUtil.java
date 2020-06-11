@@ -16,21 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
-
-import java.io.IOException;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
+/**
+ * Shared functions to handle state store registration and cleanup between
+ * active and standby tasks.
+ */
 final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
@@ -41,7 +46,7 @@ final class StateManagerUtil {
     }
 
     /**
-     * @throws StreamsException If the store's change log does not contain the partition
+     * @throws StreamsException If the store's changelog does not contain the partition
      */
     static void registerStateStores(final Logger log,
                                     final String logPrefix,
@@ -66,26 +71,16 @@ final class StateManagerUtil {
         }
         log.debug("Acquired state directory lock");
 
+        final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
+
+        stateMgr.registerStateStores(topology.stateStores(), processorContext);
+        log.debug("Registered state stores");
+
         // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
         // the state stores have been registered; we should not try to load at the state manager construction time.
         // See https://issues.apache.org/jira/browse/KAFKA-8574
-        for (final StateStore store : topology.stateStores()) {
-            processorContext.uninitialize();
-            store.init(processorContext, store);
-            log.trace("Registered state store {}", store.name());
-        }
-        stateMgr.initializeStoreOffsetsFromCheckpoint();
+        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
         log.debug("Initialized state stores");
-    }
-
-    static void wipeStateStores(final Logger log, final ProcessorStateManager stateMgr) {
-        // we can just delete the whole dir of the task, including the state store images and the checkpoint files
-        try {
-            Utils.delete(stateMgr.baseDir());
-        } catch (final IOException fatalException) {
-            // since it is only called under dirty close, we always swallow the exception
-            log.warn("Failed to wiping state stores for task {}", stateMgr.taskId());
-        }
     }
 
     /**
@@ -94,31 +89,46 @@ final class StateManagerUtil {
     static void closeStateManager(final Logger log,
                                   final String logPrefix,
                                   final boolean closeClean,
+                                  final boolean eosEnabled,
                                   final ProcessorStateManager stateMgr,
-                                  final StateDirectory stateDirectory) {
-        ProcessorStateException exception = null;
-        log.trace("Closing state manager");
+                                  final StateDirectory stateDirectory,
+                                  final TaskType taskType) {
+        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
+        final boolean wipeStateStore = !closeClean && eosEnabled;
 
         final TaskId id = stateMgr.taskId();
+        log.trace("Closing state manager for {} task {}", taskType, id);
+
+        final AtomicReference<ProcessorStateException> firstException = new AtomicReference<>(null);
         try {
-            stateMgr.close();
-        } catch (final ProcessorStateException e) {
-            exception = e;
-        } finally {
-            try {
-                stateDirectory.unlock(id);
-            } catch (final IOException e) {
-                if (exception == null) {
-                    exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
+            if (stateDirectory.lock(id)) {
+                try {
+                    stateMgr.close();
+
+                    if (wipeStateStore) {
+                        log.debug("Wiping state stores for {} task {}", taskType, id);
+                        // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
+                        // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
+                        // need to re-bootstrap the restoration from the beginning
+                        Utils.delete(stateMgr.baseDir());
+                    }
+                } catch (final ProcessorStateException e) {
+                    firstException.compareAndSet(null, e);
+                } finally {
+                    stateDirectory.unlock(id);
                 }
             }
+        } catch (final IOException e) {
+            final ProcessorStateException exception = new ProcessorStateException(
+                String.format("%sFatal error while trying to close the state manager for task %s", logPrefix, id), e
+            );
+            firstException.compareAndSet(null, exception);
+
         }
 
+        final ProcessorStateException exception = firstException.get();
         if (exception != null) {
-            if (closeClean)
-                throw exception;
-            else
-                log.warn("Closing standby task " + id + " uncleanly throws an exception " + exception);
+            throw exception;
         }
     }
 }

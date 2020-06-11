@@ -70,7 +70,7 @@ case class Resource(resourceType: ResourceType, name: String, patternType: Patte
     * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, PatternType)]]
     */
   @deprecated("Use Resource(ResourceType, String, PatternType", "Since 2.0")
-  def this(resourceType: ResourceType, name: String) {
+  def this(resourceType: ResourceType, name: String) = {
     this(resourceType, name, PatternType.LITERAL)
   }
 

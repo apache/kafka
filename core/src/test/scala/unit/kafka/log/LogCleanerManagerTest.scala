@@ -54,6 +54,11 @@ class LogCleanerManagerTest extends Logging {
     override def allCleanerCheckpoints: Map[TopicPartition, Long] = {
       cleanerCheckpoints.toMap
     }
+
+    override def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]): Unit = {
+      val (tp, offset) = update.getOrElse(throw new IllegalArgumentException("update=None argument not yet handled"))
+      cleanerCheckpoints.put(tp, offset)
+    }
   }
 
   @After
@@ -204,7 +209,7 @@ class LogCleanerManagerTest extends Logging {
     val tp = new TopicPartition("foo", 0)
     val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
 
-    logs.get(tp).maybeIncrementLogStartOffset(10L)
+    logs.get(tp).maybeIncrementLogStartOffset(10L, ClientRecordDeletion)
 
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
@@ -227,13 +232,14 @@ class LogCleanerManagerTest extends Logging {
 
     assertEquals(1, log.logSegments.size)
 
-    log.maybeIncrementLogStartOffset(2L)
+    log.maybeIncrementLogStartOffset(2L, ClientRecordDeletion)
 
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
 
-    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(2L, filthiestLog.firstDirtyOffset)
+    // The active segment is uncleanable and hence not filthy from the POV of the CleanerManager.
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals(None, filthiestLog)
   }
 
   @Test
@@ -257,8 +263,9 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 3L)
 
-    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(3L, filthiestLog.firstDirtyOffset)
+    // These segments are uncleanable and hence not filthy
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals(None, filthiestLog)
   }
 
   /**
@@ -423,8 +430,8 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   /**
@@ -453,8 +460,8 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   /**
@@ -478,8 +485,27 @@ class LogCleanerManagerTest extends Logging {
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
-    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
-    assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset)
+  }
+
+  @Test
+  def testCleanableOffsetsNeedsCheckpointReset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
+    logs.get(tp).maybeIncrementLogStartOffset(10L, ClientRecordDeletion)
+
+    var lastCleanOffset = Some(15L)
+    var cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertFalse("Checkpoint offset should not be reset if valid", cleanableOffsets.forceUpdateCheckpoint)
+
+    logs.get(tp).maybeIncrementLogStartOffset(20L, ClientRecordDeletion)
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertTrue("Checkpoint offset needs to be reset if less than log start offset", cleanableOffsets.forceUpdateCheckpoint)
+
+    lastCleanOffset = Some(25L)
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
+    assertTrue("Checkpoint offset needs to be reset if greater than log end offset", cleanableOffsets.forceUpdateCheckpoint)
   }
 
   @Test
@@ -505,8 +531,8 @@ class LogCleanerManagerTest extends Logging {
     time.sleep(compactionLag + 1)
     // although the compaction lag has been exceeded, the undecided data should not be cleaned
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(0L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(0L, cleanableOffsets.firstUncleanableDirtyOffset)
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0,
@@ -516,15 +542,15 @@ class LogCleanerManagerTest extends Logging {
 
     // the first segment should now become cleanable immediately
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(3L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(3L, cleanableOffsets.firstUncleanableDirtyOffset)
 
     time.sleep(compactionLag + 1)
 
     // the second segment becomes cleanable after the compaction lag
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
-    assertEquals(0L, cleanableOffsets._1)
-    assertEquals(4L, cleanableOffsets._2)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset)
+    assertEquals(4L, cleanableOffsets.firstUncleanableDirtyOffset)
   }
 
   @Test
@@ -574,14 +600,53 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(tp).get)
   }
 
+  /**
+   * Logs with invalid checkpoint offsets should update their checkpoint offset even if the log doesn't need cleaning
+   */
+  @Test
+  def testCheckpointUpdatedForInvalidOffsetNoCleaning(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
+
+    logs.get(tp).maybeIncrementLogStartOffset(20L, ClientRecordDeletion)
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 15L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals("Log should not be selected for cleaning", None, filthiestLog)
+    assertEquals("Unselected log should have checkpoint offset updated", 20L, cleanerCheckpoints.get(tp).get)
+  }
+
+  /**
+   * Logs with invalid checkpoint offsets should update their checkpoint offset even if they aren't selected
+   * for immediate cleaning
+   */
+  @Test
+  def testCheckpointUpdatedForInvalidOffsetNotSelected(): Unit = {
+    val tp0 = new TopicPartition("foo", 0)
+    val tp1 = new TopicPartition("foo", 1)
+    val partitions = Seq(tp0, tp1)
+
+    // create two logs, one with an invalid offset, and one that is dirtier than the log with an invalid offset
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    logs.get(tp0).maybeIncrementLogStartOffset(15L, ClientRecordDeletion)
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp0, 10L)
+    cleanerCheckpoints.put(tp1, 5L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals("Dirtier log should be selected", tp1, filthiestLog.topicPartition)
+    assertEquals("Unselected log should have checkpoint offset updated", 15L, cleanerCheckpoints.get(tp0).get)
+  }
+
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(topicPartition, log)
-    new LogCleanerManager(Array(logDir), logs, null)
+    new LogCleanerManager(Seq(logDir), logs, null)
   }
 
   private def createCleanerManagerMock(pool: Pool[TopicPartition, Log]): LogCleanerManagerMock = {
-    new LogCleanerManagerMock(Array(logDir), pool, null)
+    new LogCleanerManagerMock(Seq(logDir), pool, null)
   }
 
   private def createLog(segmentSize: Int,

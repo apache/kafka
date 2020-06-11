@@ -44,12 +44,7 @@ import java.util.stream.Collectors;
  * A mock network client for use testing code
  */
 public class MockClient implements KafkaClient {
-    public static final RequestMatcher ALWAYS_TRUE = new RequestMatcher() {
-        @Override
-        public boolean matches(AbstractRequest body) {
-            return true;
-        }
-    };
+    public static final RequestMatcher ALWAYS_TRUE = body -> true;
 
     private static class FutureResponse {
         private final Node node;
@@ -220,15 +215,17 @@ public class MockClient implements KafkaClient {
             AbstractRequest.Builder<?> builder = request.requestBuilder();
             short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                     builder.latestAllowedVersion());
-            AbstractRequest abstractRequest = request.requestBuilder().build(version);
-            if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest + " with prepared response " + futureResp.responseBody);
 
             UnsupportedVersionException unsupportedVersionException = null;
-            if (futureResp.isUnsupportedRequest)
-                unsupportedVersionException = new UnsupportedVersionException("Api " +
-                        request.apiKey() + " with version " + version);
-
+            if (futureResp.isUnsupportedRequest) {
+                unsupportedVersionException = new UnsupportedVersionException(
+                        "Api " + request.apiKey() + " with version " + version);
+            } else {
+                AbstractRequest abstractRequest = request.requestBuilder().build(version);
+                if (!futureResp.requestMatcher.matches(abstractRequest))
+                    throw new IllegalStateException("Request matcher did not match next-in-line request "
+                            + abstractRequest + " with prepared response " + futureResp.responseBody);
+            }
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
                     unsupportedVersionException, null, futureResp.responseBody);
@@ -644,7 +641,7 @@ public class MockClient implements KafkaClient {
         public void update(Time time, MetadataUpdate update) {
             MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
             maybeCheckExpectedTopics(update, builder);
-            metadata.update(update.updateResponse, time.milliseconds());
+            metadata.updateWithCurrentRequestVersion(update.updateResponse, false, time.milliseconds());
             this.lastUpdate = update;
         }
 

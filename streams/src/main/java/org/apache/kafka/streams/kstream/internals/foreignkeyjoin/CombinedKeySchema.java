@@ -23,27 +23,37 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.nio.ByteBuffer;
+import java.util.function.Supplier;
 
 /**
  * Factory for creating CombinedKey serializers / deserializers.
  */
 public class CombinedKeySchema<KO, K> {
-    private final String serdeTopic;
+    private final Supplier<String> undecoratedPrimaryKeySerdeTopicSupplier;
+    private final Supplier<String> undecoratedForeignKeySerdeTopicSupplier;
+    private String primaryKeySerdeTopic;
+    private String foreignKeySerdeTopic;
     private Serializer<K> primaryKeySerializer;
     private Deserializer<K> primaryKeyDeserializer;
     private Serializer<KO> foreignKeySerializer;
     private Deserializer<KO> foreignKeyDeserializer;
 
-    public CombinedKeySchema(final String serdeTopic, final Serde<KO> foreignKeySerde, final Serde<K> primaryKeySerde) {
-        this.serdeTopic = serdeTopic;
-        primaryKeySerializer = primaryKeySerde.serializer();
-        primaryKeyDeserializer = primaryKeySerde.deserializer();
-        foreignKeyDeserializer = foreignKeySerde.deserializer();
-        foreignKeySerializer = foreignKeySerde.serializer();
+    public CombinedKeySchema(final Supplier<String> foreignKeySerdeTopicSupplier,
+                             final Serde<KO> foreignKeySerde,
+                             final Supplier<String> primaryKeySerdeTopicSupplier,
+                             final Serde<K> primaryKeySerde) {
+        undecoratedPrimaryKeySerdeTopicSupplier = primaryKeySerdeTopicSupplier;
+        undecoratedForeignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
+        primaryKeySerializer = primaryKeySerde == null ? null : primaryKeySerde.serializer();
+        primaryKeyDeserializer = primaryKeySerde == null ? null : primaryKeySerde.deserializer();
+        foreignKeyDeserializer = foreignKeySerde == null ? null : foreignKeySerde.deserializer();
+        foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context) {
+        primaryKeySerdeTopic = undecoratedPrimaryKeySerdeTopicSupplier.get();
+        foreignKeySerdeTopic = undecoratedForeignKeySerdeTopicSupplier.get();
         primaryKeySerializer = primaryKeySerializer == null ? (Serializer<K>) context.keySerde().serializer() : primaryKeySerializer;
         primaryKeyDeserializer = primaryKeyDeserializer == null ? (Deserializer<K>) context.keySerde().deserializer() : primaryKeyDeserializer;
         foreignKeySerializer = foreignKeySerializer == null ? (Serializer<KO>) context.keySerde().serializer() : foreignKeySerializer;
@@ -54,10 +64,12 @@ public class CombinedKeySchema<KO, K> {
         //The serialization format - note that primaryKeySerialized may be null, such as when a prefixScan
         //key is being created.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
-        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(serdeTopic, foreignKey);
+        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic,
+                                                                               foreignKey);
 
         //? bytes
-        final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(serdeTopic, primaryKey);
+        final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(primaryKeySerdeTopic,
+                                                                               primaryKey);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length + primaryKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);
@@ -74,11 +86,11 @@ public class CombinedKeySchema<KO, K> {
         final int foreignKeyLength = dataBuffer.getInt();
         final byte[] foreignKeyRaw = new byte[foreignKeyLength];
         dataBuffer.get(foreignKeyRaw, 0, foreignKeyLength);
-        final KO foreignKey = foreignKeyDeserializer.deserialize(serdeTopic, foreignKeyRaw);
+        final KO foreignKey = foreignKeyDeserializer.deserialize(foreignKeySerdeTopic, foreignKeyRaw);
 
         final byte[] primaryKeyRaw = new byte[dataArray.length - foreignKeyLength - Integer.BYTES];
         dataBuffer.get(primaryKeyRaw, 0, primaryKeyRaw.length);
-        final K primaryKey = primaryKeyDeserializer.deserialize(serdeTopic, primaryKeyRaw);
+        final K primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerdeTopic, primaryKeyRaw);
         return new CombinedKey<>(foreignKey, primaryKey);
     }
 
@@ -86,7 +98,7 @@ public class CombinedKeySchema<KO, K> {
         //The serialization format. Note that primaryKeySerialized is not required/used in this function.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
 
-        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(serdeTopic, key);
+        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic, key);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);

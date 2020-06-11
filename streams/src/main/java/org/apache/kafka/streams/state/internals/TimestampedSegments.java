@@ -51,4 +51,10 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
             return newSegment;
         }
     }
+
+    @Override
+    public void openExisting(final InternalProcessorContext context, final long streamTime) {
+        metricsRecorder.init(context.metrics(), context.taskId());
+        super.openExisting(context, streamTime);
+    }
 }

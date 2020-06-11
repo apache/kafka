@@ -17,8 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -33,15 +33,12 @@ public final class RequestUtils {
 
     static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
         int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                Optional.empty() : Optional.of(leaderEpoch);
-        return leaderEpochOpt;
+        return getLeaderEpoch(leaderEpoch);
     }
 
     static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
-        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
             Optional.empty() : Optional.of(leaderEpoch);
-        return leaderEpochOpt;
     }
 
     public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {

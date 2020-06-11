@@ -267,8 +267,13 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public void handshake() throws IOException {
-        if (state == State.NOT_INITALIZED)
-            startHandshake();
+        if (state == State.NOT_INITALIZED) {
+            try {
+                startHandshake();
+            } catch (SSLException e) {
+                maybeProcessHandshakeFailure(e, false, null);
+            }
+        }
         if (ready())
             throw renegotiationException();
         if (state == State.CLOSING)

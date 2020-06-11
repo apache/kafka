@@ -29,7 +29,8 @@ import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinator
 import org.junit.Assert._
 import org.junit.{After, Ignore, Test}
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
 /**
@@ -83,6 +84,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * 1. Produce a bunch of messages
    * 2. Then consume the messages while killing and restarting brokers at random
    */
+  @nowarn("cat=deprecation")
   def consumeWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
@@ -379,6 +381,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     checkCloseDuringRebalance("group1", topic, executor, true)
   }
 
+  @nowarn("cat=deprecation")
   private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {

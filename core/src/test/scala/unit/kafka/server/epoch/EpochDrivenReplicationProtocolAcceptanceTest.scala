@@ -36,7 +36,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
 import scala.collection.Seq
 

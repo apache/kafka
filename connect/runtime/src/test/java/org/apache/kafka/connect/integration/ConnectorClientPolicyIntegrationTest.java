@@ -29,7 +29,6 @@ import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -49,7 +48,6 @@ public class ConnectorClientPolicyIntegrationTest {
     private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 1;
     private static final String CONNECTOR_NAME = "simple-conn";
-
 
     @After
     public void close() {
@@ -73,7 +71,7 @@ public class ConnectorClientPolicyIntegrationTest {
     @Test
     public void testCreateWithAllowedOverridesForPrincipalPolicy() throws Exception {
         Map<String, String> props = basicConnectorConfig();
-        props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAIN");
+        props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT");
         assertPassCreateConnector("Principal", props);
     }
 
@@ -85,7 +83,7 @@ public class ConnectorClientPolicyIntegrationTest {
         assertPassCreateConnector("All", props);
     }
 
-    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) throws IOException {
+    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) throws InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
@@ -106,10 +104,13 @@ public class ConnectorClientPolicyIntegrationTest {
 
         // start the clusters
         connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
+
         return connect;
     }
 
-    private void assertFailCreateConnector(String policy, Map<String, String> props) throws IOException {
+    private void assertFailCreateConnector(String policy, Map<String, String> props) throws InterruptedException {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
             connect.configureConnector(CONNECTOR_NAME, props);
@@ -121,10 +122,12 @@ public class ConnectorClientPolicyIntegrationTest {
         }
     }
 
-    private void assertPassCreateConnector(String policy, Map<String, String> props) throws IOException {
+    private void assertPassCreateConnector(String policy, Map<String, String> props) throws InterruptedException {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
             connect.configureConnector(CONNECTOR_NAME, props);
+            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                    "Connector tasks did not start in time.");
         } catch (ConnectRestException e) {
             fail("Should be able to create connector");
         } finally {

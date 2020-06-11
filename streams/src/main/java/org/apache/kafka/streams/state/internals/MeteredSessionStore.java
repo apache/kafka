@@ -69,7 +69,6 @@ public class MeteredSessionStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        //noinspection unchecked
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
@@ -229,8 +228,11 @@ public class MeteredSessionStore<K, V>
 
     @Override
     public void close() {
-        super.close();
-        streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+        try {
+            wrapped().close();
+        } finally {
+            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+        }
     }
 
     private Bytes keyBytes(final K key) {

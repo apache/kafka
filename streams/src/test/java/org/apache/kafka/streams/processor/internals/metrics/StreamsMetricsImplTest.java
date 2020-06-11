@@ -114,6 +114,7 @@ public class StreamsMetricsImplTest {
     private final String description1 = "description number one";
     private final String description2 = "description number two";
     private final String description3 = "description number three";
+    private final String description4 = "description number four";
     private final Map<String, String> clientLevelTags = mkMap(mkEntry("client-id", CLIENT_ID));
     private final MetricName metricName1 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, description1, clientLevelTags);
@@ -998,6 +999,20 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    public void shouldAddMinAndMaxAndP99AndP90MetricsToSensor() {
+        StreamsMetricsImpl
+            .addMinAndMaxAndP99AndP90ToSensor(sensor, group, tags, metricNamePrefix, description1, description2, description3, description4);
+
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 42.0;
+        verifyMetric(metricNamePrefix + "-min", description1, valueToRecord1, valueToRecord2, valueToRecord1);
+        verifyMetric(metricNamePrefix + "-max", description2, valueToRecord1, valueToRecord2, valueToRecord2);
+        verifyMetricWithinError(metricNamePrefix + "-p99", description3, valueToRecord1, valueToRecord2, valueToRecord2, 1.0);
+        verifyMetricWithinError(metricNamePrefix + "-p90", description4, valueToRecord1, valueToRecord2, valueToRecord2, 1.0);
+        assertThat(metrics.metrics().size(), equalTo(4 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
     public void shouldReturnMetricsVersionCurrent() {
         assertThat(
             new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_LATEST).version(),
@@ -1014,10 +1029,10 @@ public class StreamsMetricsImplTest {
     }
 
     private void verifyMetric(final String name,
-                              final String description,
-                              final double valueToRecord1,
-                              final double valueToRecord2,
-                              final double expectedMetricValue) {
+                               final String description,
+                               final double valueToRecord1,
+                               final double valueToRecord2,
+                               final double expectedMetricValue) {
         final KafkaMetric metric = metrics
             .metric(new MetricName(name, group, description, tags));
         assertThat(metric, is(notNullValue()));
@@ -1027,6 +1042,25 @@ public class StreamsMetricsImplTest {
         assertThat(
             metric.measurable().measure(new MetricConfig(), time.milliseconds()),
             equalTo(expectedMetricValue)
+        );
+    }
+
+    private void verifyMetricWithinError(final String name,
+                                         final String description,
+                                         final double valueToRecord1,
+                                         final double valueToRecord2,
+                                         final double expectedMetricValue,
+                                         final double acceptableError) {
+        final KafkaMetric metric = metrics
+            .metric(new MetricName(name, group, description, tags));
+        assertThat(metric, is(notNullValue()));
+        assertThat(metric.metricName().description(), equalTo(description));
+        sensor.record(valueToRecord1, time.milliseconds());
+        sensor.record(valueToRecord2, time.milliseconds());
+        assertEquals(
+            expectedMetricValue,
+            metric.measurable().measure(new MetricConfig(), time.milliseconds()),
+            1.0
         );
     }
 

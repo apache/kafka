@@ -48,6 +48,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private final String name;
     private final String metricScope;
     private Sensor expiredRecordSensor;
+    private InternalProcessorContext context;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
@@ -72,7 +73,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
+        this.context = (InternalProcessorContext) context;
+
+        final StreamsMetricsImpl metrics = this.context.metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
@@ -97,7 +100,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record();
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {

@@ -109,9 +109,6 @@ public class WorkerTaskTest {
         workerTask.close();
         expectLastCall();
 
-        workerTask.releaseResources();
-        EasyMock.expectLastCall();
-
         statusListener.onShutdown(taskId);
         expectLastCall();
 
@@ -151,9 +148,6 @@ public class WorkerTaskTest {
         EasyMock.expectLastCall();
 
         workerTask.close();
-        EasyMock.expectLastCall();
-
-        workerTask.releaseResources();
         EasyMock.expectLastCall();
 
         replay(workerTask);
@@ -218,9 +212,6 @@ public class WorkerTaskTest {
 
         workerTask.close();
         expectLastCall();
-
-        workerTask.releaseResources();
-        EasyMock.expectLastCall();
 
         // there should be no call to onShutdown()
 

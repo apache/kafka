@@ -18,8 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
-import joptsimple.OptionException
-import kafka.utils.TestUtils
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
@@ -52,11 +51,46 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testDescribeWithMultipleSubActions(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+    var exitStatus: Option[Int] = None
+    var exitMessage: Option[String] = None
+    Exit.setExitProcedure { (status, err) =>
+      exitStatus = Some(status)
+      exitMessage = err
+      throw new RuntimeException
+    }
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
-    getConsumerGroupService(cgcArgs)
+    try {
+      ConsumerGroupCommand.main(cgcArgs)
+    } catch {
+      case e: RuntimeException => //expected
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    assertEquals(Some(1), exitStatus)
+    assertTrue(exitMessage.get.contains("Option [describe] takes at most one of these options"))
+  }
+
+  @Test
+  def testDescribeWithStateValue(): Unit = {
+    var exitStatus: Option[Int] = None
+    var exitMessage: Option[String] = None
+    Exit.setExitProcedure { (status, err) =>
+      exitStatus = Some(status)
+      exitMessage = err
+      throw new RuntimeException
+    }
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--all-groups", "--state", "Stable")
+    try {
+      ConsumerGroupCommand.main(cgcArgs)
+    } catch {
+      case e: RuntimeException => //expected
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    assertEquals(Some(1), exitStatus)
+    assertTrue(exitMessage.get.contains("Option [describe] does not take a value for [state]"))
   }
 
   @Test
@@ -582,7 +616,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       TestUtils.grabConsoleOutputAndError(service.describeGroups())
       fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -602,7 +636,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupOffsets(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e : ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 
@@ -622,12 +656,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupMembers(group, false)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException])// OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         try {
           service.collectGroupMembers(group, true)
           fail("The consumer group command should fail due to low initialization timeout (verbose)")
         } catch {
-          case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+          case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
         }
     }
   }
@@ -648,7 +682,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       service.collectGroupState(group)
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: ExecutionException => assert(e.getCause.isInstanceOf[TimeoutException]) // OK
+      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
     }
   }
 

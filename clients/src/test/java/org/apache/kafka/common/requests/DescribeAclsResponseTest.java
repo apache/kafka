@@ -145,8 +145,8 @@ public class DescribeAclsResponseTest {
 
     private static DescribeAclsResource buildResource(String name, ResourceType type, PatternType patternType, List<AclDescription> acls) {
         return new DescribeAclsResource()
-            .setName(name)
-            .setType(type.code())
+            .setResourceName(name)
+            .setResourceType(type.code())
             .setPatternType(patternType.code())
             .setAcls(acls);
     }

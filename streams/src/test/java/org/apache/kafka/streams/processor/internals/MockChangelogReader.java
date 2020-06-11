@@ -43,17 +43,12 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void transitToRestoreActive() {
+    public void enforceRestoreActive() {
         // do nothing
     }
 
     @Override
     public void transitToUpdateStandby() {
-        // do nothing
-    }
-
-    @Override
-    public void updateLimitOffsets() {
         // do nothing
     }
 
@@ -69,7 +64,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void remove(final Collection<TopicPartition> partitions) {
+    public void unregister(final Collection<TopicPartition> partitions) {
         restoringPartitions.removeAll(partitions);
 
         for (final TopicPartition partition : partitions) {

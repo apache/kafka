@@ -154,6 +154,14 @@ public interface ConsumerPartitionAssignor {
         public ByteBuffer userData() {
             return userData;
         }
+
+        @Override
+        public String toString() {
+            return "Assignment(" +
+                    "partitions=" + partitions +
+                    (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
+                    ')';
+        }
     }
 
     final class GroupSubscription {

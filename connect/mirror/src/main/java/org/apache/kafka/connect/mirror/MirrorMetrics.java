@@ -100,12 +100,10 @@ class MirrorMetrics implements AutoCloseable {
     private final Map<String, GroupMetrics> groupMetrics = new HashMap<>();
     private final String source;
     private final String target;
-    private final Set<String> groups;
 
     MirrorMetrics(MirrorTaskConfig taskConfig) {
         this.target = taskConfig.targetClusterAlias();
         this.source = taskConfig.sourceClusterAlias();
-        this.groups = taskConfig.taskConsumerGroups();
         this.metrics = new Metrics();
 
         // for side-effect

@@ -27,7 +27,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.

@@ -21,6 +21,7 @@ import java.io.File
 
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.DescribeLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
@@ -43,7 +44,7 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     createTopic(topic, partitionNum, 1)
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
-    val request = new DescribeLogDirsRequest.Builder(null).build()
+    val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
     val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
     val logDirInfos = response.logDirInfos()
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -49,11 +50,15 @@ public class SslConfigs {
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
-            + "Default setting is TLSv1.2, which is fine for most cases. "
-            + "Allowed values in recent JVMs are TLSv1.2 and TLSv1.3. TLS, TLSv1.1, SSL, SSLv2 and SSLv3 "
-            + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
+        + "The default is 'TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. "
+        + "This value should be fine for most use cases. "
+        + "Allowed values in recent JVMs are 'TLSv1.2' and 'TLSv1.3'. 'TLS', 'TLSv1.1', 'SSL', 'SSLv2' and 'SSLv3' "
+        + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities. "
+        + "With the default value for this config and 'ssl.enabled.protocols', clients will downgrade to 'TLSv1.2' if "
+        + "the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', clients will not use 'TLSv1.3' even "
+        + "if it is one of the values in ssl.enabled.protocols and the server only supports 'TLSv1.3'.";
 
-    public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
+    public static final String DEFAULT_SSL_PROTOCOL;
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
@@ -63,8 +68,22 @@ public class SslConfigs {
             + "By default all the available cipher suites are supported.";
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
-    public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections.";
-    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
+    public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
+        + "The default is 'TLSv1.2,TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. With the "
+        + "default value for Java 11, clients and servers will prefer TLSv1.3 if both support it and fallback "
+        + "to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most "
+        + "cases. Also see the config documentation for `ssl.protocol`.";
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS;
+
+    static {
+        if (Java.IS_JAVA11_COMPATIBLE) {
+            DEFAULT_SSL_PROTOCOL = "TLSv1.3";
+            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
+        } else {
+            DEFAULT_SSL_PROTOCOL = "TLSv1.2";
+            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
+        }
+    }
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
@@ -110,6 +129,9 @@ public class SslConfigs {
     public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG = "ssl.secure.random.implementation";
     public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_DOC = "The SecureRandom PRNG implementation to use for SSL cryptography operations. ";
 
+    public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = "ssl.engine.factory.class";
+    public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
+
     /**
      * @deprecated As of 1.0.0. This field will be removed in a future major release.
      */
@@ -136,7 +158,8 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
-                .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC);
+                .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
+                .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC);
     }
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
@@ -157,5 +180,6 @@ public class SslConfigs {
             SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
             SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
             SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
-            SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
+            SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+            SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
 }

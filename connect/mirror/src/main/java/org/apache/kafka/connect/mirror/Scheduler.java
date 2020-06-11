@@ -39,7 +39,7 @@ class Scheduler implements AutoCloseable {
         this.timeout = timeout;
     }
 
-    Scheduler(Class clazz, Duration timeout) {
+    Scheduler(Class<?> clazz, Duration timeout) {
         this("Scheduler for " + clazz.getSimpleName(), timeout);
     }
 

@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, Topology}
 import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, KTable, Materialized}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.
@@ -176,10 +176,10 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */
-  def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],
-                     topic: String,
-                     consumed: Consumed[_, _],
-                     stateUpdateSupplier: ProcessorSupplier[_, _]): StreamsBuilderJ =
+  def addGlobalStore[K, V](storeBuilder: StoreBuilder[_ <: StateStore],
+                           topic: String,
+                           consumed: Consumed[K, V],
+                           stateUpdateSupplier: ProcessorSupplier[K, V]): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()

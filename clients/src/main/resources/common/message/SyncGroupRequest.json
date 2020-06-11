@@ -24,7 +24,7 @@
   // Version 4 is the first flexible version.
   //
   // Starting from version 5, the client sends the Protocol Type and the Protocol Name
-  // to the broker (KIP-599). The broker will reject the request if they are inconsistent
+  // to the broker (KIP-559). The broker will reject the request if they are inconsistent
   // with the Type and Name known by the broker.
   "validVersions": "0-5",
   "flexibleVersions": "4+",

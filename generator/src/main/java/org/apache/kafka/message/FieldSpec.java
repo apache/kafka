@@ -102,10 +102,11 @@ public final class FieldSpec {
 
         this.about = about == null ? "" : about;
         if (!this.fields().isEmpty()) {
-            if (!this.type.isArray()) {
-                throw new RuntimeException("Non-array field " + name + " cannot have fields");
+            if (!this.type.isArray() && !this.type.isStruct()) {
+                throw new RuntimeException("Non-array or Struct field " + name + " cannot have fields");
             }
         }
+
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {
@@ -120,6 +121,9 @@ public final class FieldSpec {
             }
         }
         this.tag = Optional.ofNullable(tag);
+        if (this.tag.isPresent() && mapKey) {
+            throw new RuntimeException("Tagged fields cannot be used as keys.");
+        }
         checkTagInvariants();
 
         this.zeroCopy = zeroCopy;
@@ -225,6 +229,11 @@ public final class FieldSpec {
     @JsonProperty("ignorable")
     public boolean ignorable() {
         return ignorable;
+    }
+
+    @JsonProperty("entityType")
+    public EntityType entityType() {
+        return entityType;
     }
 
     @JsonProperty("about")
