@@ -207,8 +207,9 @@ public class WorkerConfig extends AbstractConfig {
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors\n" 
-            + "Warning: Config providers will not take effect if used for the value of this " 
-            + "property, and instead the raw, non-transformed value will be used.";
+            + "Do not use config provider variables in this property, since the raw path is used "
+            + "by the worker's scanner before config providers are initialized and used to "
+            + "replace variables.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
@@ -389,9 +390,10 @@ public class WorkerConfig extends AbstractConfig {
         String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
-                "Config providers do not work with the plugin.path property. The raw value '{}' " 
-                    + "will be used for plugin scanning, as opposed to the transformed value '{}'. " 
-                    + "See https://issues.apache.org/jira/browse/KAFKA-9845 for more information.",
+                "Variables cannot be used in the 'plugin.path' property, since the property is "
+                + "used by plugin scanning before the config providers that replace the " 
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "opposed to the transformed value '{}', and this may cause unexpected results.",
                 rawPluginPath,
                 transformedPluginPath
             );
