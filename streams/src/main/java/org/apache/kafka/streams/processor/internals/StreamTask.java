@@ -470,7 +470,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
-        suspend();
+        // Stream tasks should have already been suspended and their consumed offsets committed before recycling
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();

@@ -218,6 +218,7 @@ public class TaskManager {
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
         final Set<Task> tasksToRecycle = new HashSet<>();
+        final Set<Task> dirtyTasks = new HashSet<>();
 
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
@@ -227,37 +228,31 @@ public class TaskManager {
         // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
-        final Set<Task> tasksToClose = new HashSet<>();
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        final Set<Task> additionalTasksForCommitting = new HashSet<>();
-        final Set<Task> dirtyTasks = new HashSet<>();
-
         for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
-                if (task.commitNeeded()) {
-                    additionalTasksForCommitting.add(task);
-                }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
                 // check for tasks that were owned previously but have changed active/standby status
             } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
-                if (task.commitNeeded()) {
-                    additionalTasksForCommitting.add(task);
-                }
                 tasksToRecycle.add(task);
             } else {
                 try {
-                    task.suspend();
                     if (task.commitNeeded()) {
-                        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                        if (!committableOffsets.isEmpty()) {
-                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        if (task.isActive()) {
+                            log.error("Active task {} was revoked and should have already been committed", task.id());
+                            throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
+                        } else {
+                            task.suspend();
+                            task.prepareCommit();
+                            task.postCommit();
                         }
                     }
-                    tasksToClose.add(task);
+                    completeTaskCloseClean(task);
+                    cleanUpTaskProducer(task, taskCloseExceptions);
+                    tasks.remove(task.id());
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
@@ -271,54 +266,15 @@ public class TaskManager {
             }
         }
 
-        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            try {
-                for (final Task task : additionalTasksForCommitting) {
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
-                }
-
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-
-                for (final Task task : additionalTasksForCommitting) {
-                    task.postCommit();
-                }
-            } catch (final RuntimeException e) {
-                log.error("Failed to batch commit tasks, " +
-                    "will close all tasks involved in this commit as dirty by the end", e);
-                dirtyTasks.addAll(additionalTasksForCommitting);
-                dirtyTasks.addAll(tasksToClose);
-
-                tasksToClose.clear();
-                // Just add first taskId to re-throw by the end.
-                taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
-            }
-        }
-
-        for (final Task task : tasksToClose) {
-            try {
-                completeTaskCloseClean(task);
-                cleanUpTaskProducer(task, taskCloseExceptions);
-                tasks.remove(task.id());
-            } catch (final RuntimeException e) {
-                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
-                log.error(uncleanMessage, e);
-                taskCloseExceptions.put(task.id(), e);
-                // We've already recorded the exception (which is the point of clean).
-                // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                dirtyTasks.add(task);
-            }
-        }
-
         for (final Task oldTask : tasksToRecycle) {
             final Task newTask;
             try {
                 if (oldTask.isActive()) {
+                    // If active, the task should have already been suspended and committed during handleRevocation
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                 } else {
+                    oldTask.suspend();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -472,42 +428,35 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
-        final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
+        final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        for (final Task task : tasks.values()) {
-            if (remainingPartitions.containsAll(task.inputPartitions())) {
+        for (final Task task : activeTaskIterable()) {
+            if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 task.suspend();
-                if (task.commitNeeded()) {
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
-                }
-            } else if (task.isActive() && task.commitNeeded()) {
+            }
+            if (task.commitNeeded()) {
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
             }
-            remainingPartitions.removeAll(task.inputPartitions());
+            remainingRevokedPartitions.removeAll(task.inputPartitions());
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
         }
 
-        for (final Task task : tasks.values()) {
-            if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                task.postCommit();
-            }
+        for (final TaskId committedTaskId : consumedOffsetsAndMetadataPerTask.keySet()) {
+            final Task task = tasks.get(committedTaskId);
+            task.postCommit();
         }
 
-        if (!remainingPartitions.isEmpty()) {
+        if (!remainingRevokedPartitions.isEmpty()) {
             log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
                          "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingPartitions);
+                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
     }
 
