@@ -21,10 +21,13 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -1868,6 +1871,86 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
         EasyMock.verify(adminClient);
+    }
+
+    @Test
+    public void shouldRequestEndOffsetsForPreexistingChangelogs() {
+        final Set<TopicPartition> changelogs = mkSet(
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 0),
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 1),
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 2)
+        );
+        adminClient = EasyMock.createMock(AdminClient.class);
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(changelogs.stream().collect(Collectors.toMap(
+            tp -> tp,
+            tp -> {
+                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
+                expect(info.offset()).andStubReturn(Long.MAX_VALUE);
+                EasyMock.replay(info);
+                return info;
+            }))
+        );
+        final Capture<Map<TopicPartition, OffsetSpec>> capturedChangelogs = EasyMock.newCapture();
+
+        expect(adminClient.listOffsets(EasyMock.capture(capturedChangelogs))).andStubReturn(result);
+        expect(result.all()).andReturn(allFuture);
+
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor1");
+
+        subscriptions.put("consumer10",
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode()
+            ));
+
+        EasyMock.replay(result);
+        configureDefault();
+        overwriteInternalTopicManagerWithMock(false);
+
+        partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
+
+        EasyMock.verify(adminClient);
+        assertThat(
+            capturedChangelogs.getValue().keySet(),
+            equalTo(changelogs)
+        );
+    }
+
+    @Test
+    public void shouldRequestCommittedOffsetsForPreexistingSourceChangelogs() {
+        final Set<TopicPartition> changelogs = mkSet(
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 0),
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 1),
+            new TopicPartition(APPLICATION_ID + "-store-changelog", 2)
+        );
+
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        streamsBuilder.table("topic1", Materialized.as("store"));
+
+        subscriptions.put("consumer10",
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode()
+            ));
+
+        final Consumer<byte[], byte[]> consumerClient = EasyMock.createMock(Consumer.class);
+
+        createDefaultMockTaskManager();
+        EasyMock.expect(taskManager.mainConsumer()).andStubReturn(consumerClient);
+        configurePartitionAssignorWith(singletonMap(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE));
+        overwriteInternalTopicManagerWithMock(false);
+
+        EasyMock.expect(consumerClient.committed(changelogs))
+            .andStubReturn(changelogs.stream().collect(Collectors.toMap(tp -> tp, tp -> new OffsetAndMetadata(Long.MAX_VALUE))));
+
+        EasyMock.replay(consumerClient);
+        partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
+
+        EasyMock.verify(consumerClient);
     }
 
     private static ByteBuffer encodeFutureSubscription() {

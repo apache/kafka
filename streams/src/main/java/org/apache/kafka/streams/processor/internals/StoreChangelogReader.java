@@ -45,6 +45,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
+
 /**
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
  * restoring active tasks. It manages the restore consumer, including its assigned partitions, when to pause / resume
@@ -546,23 +548,14 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
-        if (partitions.isEmpty())
-            return Collections.emptyMap();
-
         final Map<TopicPartition, Long> committedOffsets;
         try {
-            // those do not have a committed offset would default to 0
-            committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
         } catch (final TimeoutException e) {
-            // if it timed out we just retry next time.
+            // if it timed out we just retry next time
             return Collections.emptyMap();
-        } catch (final KafkaException e) {
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
-
         lastUpdateOffsetTime = time.milliseconds();
-
         return committedOffsets;
     }
 
