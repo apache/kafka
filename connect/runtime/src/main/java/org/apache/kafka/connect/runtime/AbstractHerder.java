@@ -61,6 +61,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -95,6 +97,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
+    private final ExecutorService connectorExecutor;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -111,6 +114,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.connectorExecutor = Executors.newCachedThreadPool();
     }
 
     @Override
@@ -130,6 +134,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
+        this.connectorExecutor.shutdown();
     }
 
     @Override
@@ -310,12 +315,23 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
-        return validateConnectorConfig(connectorProps, true);
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback) {
+        validateConnectorConfig(connectorProps, callback, true);
     }
 
     @Override
-    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback, boolean doLog) {
+        connectorExecutor.submit(() -> {
+            try {
+                ConfigInfos result = validateConnectorConfig(connectorProps, doLog);
+                callback.onCompletion(null, result);
+            } catch (Throwable t) {
+                callback.onCompletion(t, null);
+            }
+        });
+    }
+
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
