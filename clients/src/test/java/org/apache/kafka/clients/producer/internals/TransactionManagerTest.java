@@ -113,6 +113,7 @@ public class TransactionManagerTest {
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
+    private static final long RETRY_BACKOFF_MAX_MS = 1000L;
 
     private final String transactionalId = "foobar";
     private final int transactionTimeoutMs = 1121;
@@ -155,7 +156,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, autoDowngrade);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, 1000, apiVersions, autoDowngrade);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -164,7 +165,7 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
-                deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+                1000, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
@@ -412,7 +413,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * 0.2);
     }
 
     @Test
@@ -437,7 +438,39 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * 0.2);
+    }
+
+    @Test
+    public void testExponentialRetryBackoff() {
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
+        runUntil(() -> !client.hasPendingResponses());
+
+        TransactionManager.TxnRequestHandler coordinatorHandler = transactionManager.nextRequest(false);
+        TransactionManager.TxnRequestHandler partitionHandler = transactionManager.nextRequest(false);
+        transactionManager.enqueueRequest(partitionHandler);
+        transactionManager.enqueueRequest(coordinatorHandler);
+        assertNotNull(partitionHandler);
+
+        for (int i = 0; partitionHandler.retryBackoffMs() < RETRY_BACKOFF_MAX_MS; i++) {
+            long expected = (long) Math.min(RETRY_BACKOFF_MAX_MS, DEFAULT_RETRY_BACKOFF_MS * Math.pow(2, i));
+            assertEquals(expected, partitionHandler.retryBackoffMs(), expected * 0.2);
+
+            prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+            prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
+            runUntil(() -> !client.hasPendingResponses());
+        }
+        assertEquals(RETRY_BACKOFF_MAX_MS, partitionHandler.retryBackoffMs(), RETRY_BACKOFF_MAX_MS * 0.2);
     }
 
     @Test(expected = IllegalStateException.class)

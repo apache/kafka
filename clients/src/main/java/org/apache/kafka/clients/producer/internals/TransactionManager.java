@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.utils.GeometricProgression;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -214,7 +215,7 @@ public class TransactionManager {
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
     // error for the first AddPartitionsRequest in a transaction.
-    private final long retryBackoffMs;
+    private final GeometricProgression retryBackoff;
 
     // The retryBackoff is overridden to the following value if the first AddPartitions receives a
     // CONCURRENT_TRANSACTIONS error.
@@ -289,6 +290,7 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
+                              long retryBackoffMaxMs,
                               final ApiVersions apiVersions,
                               final boolean autoDowngradeTxnCommit) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
@@ -304,7 +306,7 @@ public class TransactionManager {
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
         this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;
@@ -1112,7 +1114,7 @@ public class TransactionManager {
         return false;
     }
 
-    private void enqueueRequest(TxnRequestHandler requestHandler) {
+    void enqueueRequest(TxnRequestHandler requestHandler) {
         log.debug("Enqueuing transactional request {}", requestHandler.requestBuilder());
         pendingRequests.add(requestHandler);
     }
@@ -1213,6 +1215,8 @@ public class TransactionManager {
     abstract class TxnRequestHandler implements RequestCompletionHandler {
         protected final TransactionalRequestResult result;
         private boolean isRetry = false;
+        private int attempts = 0;
+        private long retryBackoffMs = retryBackoff.term(0);
 
         TxnRequestHandler(TransactionalRequestResult result) {
             this.result = result;
@@ -1248,12 +1252,14 @@ public class TransactionManager {
         void reenqueue() {
             synchronized (TransactionManager.this) {
                 this.isRetry = true;
+                this.attempts++;
+                this.retryBackoffMs = retryBackoff.term(attempts);
                 enqueueRequest(this);
             }
         }
 
         long retryBackoffMs() {
-            return retryBackoffMs;
+            return this.retryBackoffMs;
         }
 
         @Override
@@ -1300,6 +1306,8 @@ public class TransactionManager {
         boolean isRetry() {
             return isRetry;
         }
+
+        int Attempts() { return attempts; }
 
         boolean isEndTxn() {
             return false;
@@ -1377,7 +1385,7 @@ public class TransactionManager {
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             super("AddPartitionsToTxn");
             this.builder = builder;
-            this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
+            this.retryBackoffMs = TransactionManager.this.retryBackoff.term(0);
         }
 
         @Override
@@ -1396,7 +1404,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
-            retryBackoffMs = TransactionManager.this.retryBackoffMs;
+            retryBackoffMs = TransactionManager.this.retryBackoff.term(this.Attempts());
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -1462,7 +1470,7 @@ public class TransactionManager {
 
         @Override
         public long retryBackoffMs() {
-            return Math.min(TransactionManager.this.retryBackoffMs, this.retryBackoffMs);
+            return this.retryBackoffMs;
         }
 
         private void maybeOverrideRetryBackoffMs() {

@@ -416,11 +416,12 @@ public class RecordAccumulatorTest {
             // Re-enqueue the batch
             now = time.milliseconds();
             accum.reenqueue(batch, now + lingerMs + 1);
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffInitMs * Math.pow(2, i));
 
-            assertEquals("Backoff value should fall in this range",
-                    Math.min(retryBackoffMaxMs, retryBackoffInitMs * Math.pow(2, i)),
+            assertEquals("Backoff value should fall in the range",
+                    expected,
                     batch.retryBackoffMs(),
-                    retryBackoffInitMs * Math.pow(2, i) * 0.2);
+                    expected * 0.2);
             // Get the new backoff
             currentRetryBackoffMs = batch.retryBackoffMs();
             // Should backoff
