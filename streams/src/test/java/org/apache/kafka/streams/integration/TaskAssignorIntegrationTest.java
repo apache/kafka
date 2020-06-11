@@ -61,8 +61,7 @@ public class TaskAssignorIntegrationTest {
     public TestName testName = new TestName();
 
     // Just a dummy implementation so we can check the config
-    public static final class MyTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor {
-    }
+    public static final class MyTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor { }
 
     @SuppressWarnings("unchecked")
     @Test
