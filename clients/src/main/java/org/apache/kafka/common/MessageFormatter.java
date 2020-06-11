@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common;
 
+import java.io.Closeable;
 import java.io.PrintStream;
+import java.util.Map;
 import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -30,18 +32,30 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * __transaction_state and the MirrorMaker2 topics.
  *
  */
-public interface MessageFormatter {
+public interface MessageFormatter extends Configurable, Closeable {
 
     /**
-     * Initializes the MessageFormatter
+     * Initialises the MessageFormatter
      * @param props Properties to configure the formatter
+     * @deprecated Use configure() instead, this method is for backward compatibility with the older Formatter interface
      */
+    @Deprecated
     default public void init(Properties props) {}
+
+    /**
+     * Configures the MessageFormatter
+     * @param configs Map to configure the formatter
+     */
+    default public void configure(Map<String, ?> configs) {
+        Properties properties = new Properties();
+        properties.putAll(configs);
+        init(properties);
+    }
 
     /**
      * Parses and formats a record for display
      * @param consumerRecord the record to format
-     * @param output the print stream used to display the record
+     * @param output the print stream used to output the record
      */
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output);
 

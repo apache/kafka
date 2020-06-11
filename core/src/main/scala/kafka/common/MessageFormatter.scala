@@ -23,6 +23,6 @@ package kafka.common
   *
   * This is used by the `ConsoleConsumer`.
   */
-@deprecated("This class is deprecated and will be replaced by org.apache.kafka.common.MessageFormatter.", "2.6.0")
+@deprecated("This class is deprecated and will be replaced by org.apache.kafka.common.MessageFormatter.", "2.7.0")
 trait MessageFormatter extends org.apache.kafka.common.MessageFormatter {
 }

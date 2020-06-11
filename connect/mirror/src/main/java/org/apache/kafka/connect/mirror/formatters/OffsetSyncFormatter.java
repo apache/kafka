@@ -26,9 +26,6 @@ public class OffsetSyncFormatter implements MessageFormatter {
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> record, PrintStream output) {
-        OffsetSync offsetSync = OffsetSync.deserializeRecord(record);
-        output.println("Topic: " + offsetSync.topicPartition()
-            + ", Upstream offset: " + offsetSync.upstreamOffset()
-            + ", Downstream offset: " + offsetSync.downstreamOffset());
+        output.println(OffsetSync.deserializeRecord(record));
     }
 }

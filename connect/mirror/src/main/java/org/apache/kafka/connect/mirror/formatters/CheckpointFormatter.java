@@ -26,11 +26,6 @@ public class CheckpointFormatter implements MessageFormatter {
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> record, PrintStream output) {
-        Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-        output.println("Group: " + checkpoint.consumerGroupId()
-            + ", TopicPartition: " + checkpoint.topicPartition()
-            + ", Upstream offset: " + checkpoint.upstreamOffset()
-            + ", Downstream offset: " + checkpoint.downstreamOffset()
-            + ", Metadata: " + checkpoint.metadata());
+        output.println(Checkpoint.deserializeRecord(record));
     }
 }

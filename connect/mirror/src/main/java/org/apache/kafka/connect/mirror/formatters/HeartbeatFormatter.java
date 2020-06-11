@@ -26,9 +26,6 @@ public class HeartbeatFormatter implements MessageFormatter {
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> record, PrintStream output) {
-        Heartbeat heartbeat = Heartbeat.deserializeRecord(record);
-        output.println("Source alias: " + heartbeat.sourceClusterAlias()
-            + ", Target alias: " + heartbeat.targetClusterAlias()
-            + ", Timestamp: " + heartbeat.timestamp());
+        output.println(Heartbeat.deserializeRecord(record));
     }
 }
