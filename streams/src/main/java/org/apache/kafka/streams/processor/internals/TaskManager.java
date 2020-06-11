@@ -475,10 +475,11 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
                 task.suspend();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                if (task.commitNeeded()) {
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                    if (!committableOffsets.isEmpty()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    }
                 }
             } else if (task.isActive() && task.commitNeeded()) {
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
@@ -697,12 +698,13 @@ public class TaskManager {
             if (clean) {
                 try {
                     task.suspend();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                    tasksToClose.add(task);
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    if (task.commitNeeded()) {
+                        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                        if (!committableOffsets.isEmpty()) {
+                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        }
                     }
+                    tasksToClose.add(task);
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
                     closeTaskDirty(task);
@@ -721,7 +723,9 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                task.postCommit();
+                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
+                    task.postCommit();
+                }
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);

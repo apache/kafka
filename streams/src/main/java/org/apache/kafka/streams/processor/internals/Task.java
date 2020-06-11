@@ -66,11 +66,11 @@ public interface Task {
      * </pre>
      */
     enum State {
-        CREATED(1, 4),         // 0
-        RESTORING(2, 3, 4),    // 1
-        RUNNING(3),            // 2
-        SUSPENDED(1, 4),       // 3
-        CLOSED(0);             // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
+        CREATED(1, 3, 4),         // 0
+        RESTORING(2, 3, 4),       // 1
+        RUNNING(3),               // 2
+        SUSPENDED(1, 3, 4),       // 3
+        CLOSED(0);                // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
