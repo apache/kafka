@@ -232,12 +232,12 @@ object ConsumerPerformance extends LazyLogging {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2 * 1024 * 1024)
-    val numThreadsOpt = parser.accepts("threads", "Number of processing threads. It has not been implemented.")
+    val numThreadsOpt = parser.accepts("threads", "DEPRECATED AND IGNORED: Number of processing threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10)
-    val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads. It has not been implemented.")
+    val numFetchersOpt = parser.accepts("num-fetch-threads", "DEPRECATED AND IGNORED: Number of fetcher threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
@@ -258,7 +258,7 @@ object ConsumerPerformance extends LazyLogging {
     options = parser.parse(args: _*)
 
     if(options.has(numThreadsOpt) || options.has(numFetchersOpt))
-      println("WARNING: option threads and num-fetch-threads has not been implemented.")
+      println("WARNING: option threads and num-fetch-threads have been deprecated and ignored")
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
