@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.utils.GeometricProgression;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -72,7 +73,7 @@ public final class RecordAccumulator {
     private final int batchSize;
     private final CompressionType compression;
     private final int lingerMs;
-    private final long retryBackoffMs;
+    private final GeometricProgression retryBackoff;
     private final int deliveryTimeoutMs;
     private final BufferPool free;
     private final Time time;
@@ -94,8 +95,9 @@ public final class RecordAccumulator {
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
      *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
-     * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
-     *        exhausting all retries in a short period of time.
+     * @param retryBackoffMs The starting value of an artificial delay time to retry the produce request upon receiving
+     *        an error. This avoids exhausting all retries in a short period of time.
+     * @param retryBackoffMaxMs The upper bound of retryBackoffMs
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
@@ -107,6 +109,7 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              int lingerMs,
                              long retryBackoffMs,
+                             long retryBackoffMaxMs,
                              int deliveryTimeoutMs,
                              Metrics metrics,
                              String metricGrpName,
@@ -122,7 +125,7 @@ public final class RecordAccumulator {
         this.batchSize = batchSize;
         this.compression = compression;
         this.lingerMs = lingerMs;
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;
@@ -327,7 +330,8 @@ public final class RecordAccumulator {
      * whether the batch has reached deliveryTimeoutMs or not. Hence we do not do the delivery timeout check here.
      */
     public void reenqueue(ProducerBatch batch, long now) {
-        batch.reenqueued(now);
+        long newRetryBackoffMs = retryBackoff.term(batch.attempts());
+        batch.reenqueued(newRetryBackoffMs, now);
         Deque<ProducerBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             if (transactionManager != null)
@@ -461,6 +465,7 @@ public final class RecordAccumulator {
                         unknownLeaderTopics.add(part.topic());
                     } else if (!readyNodes.contains(leader) && !isMuted(part)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
+                        long retryBackoffMs = batch.retryBackoffMs();
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         boolean full = deque.size() > 1 || batch.isFull();
@@ -564,7 +569,7 @@ public final class RecordAccumulator {
                     continue;
 
                 // first != null
-                boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < retryBackoffMs;
+                boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < first.retryBackoffMs();
                 // Only drain the batch if it is not during backoff period.
                 if (backoff)
                     continue;

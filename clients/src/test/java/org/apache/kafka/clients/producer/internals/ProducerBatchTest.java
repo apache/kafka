@@ -250,7 +250,7 @@ public class ProducerBatchTest {
     public void testBatchExpirationAfterReenqueue() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set batch.retry = true
-        batch.reenqueued(now);
+        batch.reenqueued(0, now);
         // Set `now` to 2ms before the create time.
         assertFalse(batch.hasReachedDeliveryTimeout(10240, now - 2L));
     }
