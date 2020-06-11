@@ -381,6 +381,42 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    public void shouldNotAllowToAddStoresWithSameNameWhenFirstStoreIsGlobal() {
+        final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("store", false).withLoggingDisabled();
+        builder.addGlobalStore(
+                storeBuilder,
+                "global-store",
+                null,
+                null,
+                null,
+                "global-topic",
+                "global-processor",
+                new MockProcessorSupplier<>());
+        try {
+            builder.addStateStore(storeBuilder);
+            fail("Should throw TopologyException with store name conflict");
+        } catch (final TopologyException expected) { /* ok */ }
+    }
+
+    @Test
+    public void shouldNotAllowToAddStoresWithSameNameWhenSecondStoreIsGlobal() {
+        final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("store", false).withLoggingDisabled();
+        builder.addStateStore(storeBuilder);
+        try {
+            builder.addGlobalStore(
+                    storeBuilder,
+                    "global-store",
+                    null,
+                    null,
+                    null,
+                    "global-topic",
+                    "global-processor",
+                    new MockProcessorSupplier<>());
+            fail("Should throw TopologyException with store name conflict");
+        } catch (final TopologyException expected) { /* ok */ }
+    }
+
+    @Test
     public void testAddStateStore() {
         builder.addStateStore(storeBuilder);
         builder.setApplicationId("X");
