@@ -112,10 +112,19 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void suspend() {
         log.trace("No-op suspend with state {}", state());
-        if (state() == State.RUNNING) {
-            transitionTo(State.SUSPENDED);
-        } else if (state() == State.RESTORING) {
-            throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
+        switch (state()) {
+            case CREATED:
+            case RUNNING:
+            case SUSPENDED:
+                transitionTo(State.SUSPENDED);
+                break;
+
+            case RESTORING:
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while suspending standby task " + id);
         }
     }
 
@@ -175,7 +184,7 @@ public class StandbyTask extends AbstractTask implements Task {
         suspend();
         prepareCommit();
 
-        if (state() == State.CREATED || state() == State.SUSPENDED) {
+        if (state() == State.SUSPENDED) {
             stateMgr.recycle();
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);

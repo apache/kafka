@@ -248,12 +248,13 @@ public class TaskManager {
             } else {
                 try {
                     task.suspend();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                    tasksToClose.add(task);
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    if (task.commitNeeded()) {
+                        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                        if (!committableOffsets.isEmpty()) {
+                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        }
                     }
+                    tasksToClose.add(task);
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",

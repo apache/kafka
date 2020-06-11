@@ -250,14 +250,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void suspend() {
         switch (state()) {
             case CREATED:
-            case SUSPENDED:
-                log.info("Skip suspending since state is {}", state());
-
-                break;
-
             case RESTORING:
+            case SUSPENDED:
                 transitionTo(State.SUSPENDED);
-                log.info("Suspended restoring");
+                log.info("Suspended {}", state());
 
                 break;
 
@@ -475,17 +471,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeAndRecycleState() {
         suspend();
-        prepareCommit();
-        writeCheckpointIfNeed();
+
+        if (commitNeeded()) {
+            prepareCommit();
+            writeCheckpointIfNeed();
+        }
 
         switch (state()) {
-            case CREATED:
             case SUSPENDED:
                 stateMgr.recycle();
                 recordCollector.close();
 
                 break;
 
+            case CREATED:
             case RESTORING: // we should have transitioned to `SUSPENDED` already
             case RUNNING: // we should have transitioned to `SUSPENDED` already
             case CLOSED:
@@ -528,7 +527,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void writeCheckpointIfNeed() {
         if (commitNeeded) {
-            throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
+            throw new IllegalStateException("A checkpoint should only be written if a commit has.");
         }
         if (checkpoint != null) {
             stateMgr.checkpoint(checkpoint);
@@ -550,8 +549,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         switch (state()) {
-            case CREATED:
-            case RESTORING:
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector
                 // if the latter throws and we re-close dirty which would close the state manager again.
@@ -577,6 +574,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 log.trace("Skip closing since state is {}", state());
                 return;
 
+            case CREATED:
+            case RESTORING:
             case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
 
