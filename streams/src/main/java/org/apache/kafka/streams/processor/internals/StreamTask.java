@@ -521,8 +521,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void writeCheckpointIfNeed() {
         if (commitNeeded) {
-            throw new IllegalStateException("A checkpoint should only be written if the previous commit has completed"
-                                                + " and there is no new commit needed.");
+            log.error("Tried to write a checkpoint with pending uncommitted data, should complete the commit first.");
+            throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
         }
         if (checkpoint != null) {
             stateMgr.checkpoint(checkpoint);

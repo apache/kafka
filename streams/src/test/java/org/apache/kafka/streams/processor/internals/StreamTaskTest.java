@@ -87,6 +87,10 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
+import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
+import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
+import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
@@ -329,14 +333,14 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(RESTORING, task.state());
         assertFalse(source1.initialized);
         assertFalse(source2.initialized);
 
         // initialize should be idempotent
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(RESTORING, task.state());
 
         task.completeRestoration();
 
@@ -958,6 +962,7 @@ public class StreamTaskTest {
     @Test
     public void shouldFailOnCommitIfTaskIsClosed() {
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.suspend();
         task.transitionTo(Task.State.CLOSED);
 
         final IllegalStateException thrown = assertThrows(
@@ -1299,7 +1304,7 @@ public class StreamTaskTest {
 
         task.resume();
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(RESTORING, task.state());
         assertFalse(source1.initialized);
         assertFalse(source2.initialized);
 
@@ -1506,6 +1511,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
         assertThrows(IllegalStateException.class, task::prepareCommit);
 
+        task.transitionTo(Task.State.SUSPENDED);
         task.transitionTo(Task.State.CLOSED);
         assertThrows(IllegalStateException.class, task::prepareCommit);
     }
@@ -1515,6 +1521,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
         assertThrows(IllegalStateException.class, task::postCommit);
 
+        task.transitionTo(Task.State.SUSPENDED);
         task.transitionTo(Task.State.CLOSED);
         assertThrows(IllegalStateException.class, task::postCommit);
     }
@@ -1695,7 +1702,7 @@ public class StreamTaskTest {
 
         assertThrows(ProcessorStateException.class, task::prepareCommit);
 
-        assertEquals(Task.State.RESTORING, task.state());
+        assertEquals(RESTORING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -1788,27 +1795,54 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRecycleTask() {
-        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
-        recordCollector.flush();
-        EasyMock.expectLastCall();
-        stateManager.flush();
-        EasyMock.expectLastCall();
-        stateManager.checkpoint(Collections.emptyMap());
-        EasyMock.expectLastCall();
+    public void shouldOnlyRecycleSuspendedTasks() {
         stateManager.recycle();
-        EasyMock.expectLastCall();
         recordCollector.close();
-        EasyMock.expectLastCall();
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig(false, "100"), true);
-        task.initializeIfNeeded();
-        task.completeRestoration();
+        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // CREATED
 
-        task.closeAndRecycleState();
+        task.initializeIfNeeded();
+        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RESTORING
+
+        task.completeRestoration();
+        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RUNNING
+
+        task.suspend();
+        task.closeAndRecycleState(); // SUSPENDED
 
         EasyMock.verify(stateManager, recordCollector);
+    }
+
+    @Test
+    public void shouldAlwaysSuspendCreatedTasks() {
+        EasyMock.replay(stateManager);
+        task = createStatefulTask(createConfig(false, "100"), true);
+        assertThat(task.state(), equalTo(CREATED));
+        task.suspend();
+        assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldAlwaysSuspendRestoringTasks() {
+        EasyMock.replay(stateManager);
+        task = createStatefulTask(createConfig(false, "100"), true);
+        task.initializeIfNeeded();
+        assertThat(task.state(), equalTo(RESTORING));
+        task.suspend();
+        assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldAlwaysSuspendRunningTasks() {
+        EasyMock.replay(stateManager);
+        task = createFaultyStatefulTask(createConfig(false, "100"));
+        task.initializeIfNeeded();
+        task.completeRestoration();
+        assertThat(task.state(), equalTo(RUNNING));
+        assertThrows(RuntimeException.class , () -> task.suspend());
+        assertThat(task.state(), equalTo(SUSPENDED));
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {

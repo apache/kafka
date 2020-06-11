@@ -195,7 +195,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
     private void close(final boolean clean) {
         switch (state()) {
-            case CREATED:
             case SUSPENDED:
                 executeAndMaybeSwallow(
                     clean,
@@ -218,6 +217,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 log.trace("Skip closing since state is {}", state());
                 return;
 
+            case CREATED:
             case RESTORING: // a StandbyTask is never in RESTORING state
             case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);

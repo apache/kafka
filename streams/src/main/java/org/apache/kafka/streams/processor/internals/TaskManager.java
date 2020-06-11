@@ -215,19 +215,20 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
-        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
-        final Set<Task> tasksToRecycle = new HashSet<>();
-        final Set<Task> dirtyTasks = new HashSet<>();
-
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
 
-        // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
+        final LinkedList<Task> tasksToClose = new LinkedList<>();
+        final Set<Task> tasksToRecycle = new HashSet<>();
+        final Set<Task> dirtyTasks = new HashSet<>();
+
+        // first rectify all existing tasks
         for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
@@ -235,46 +236,49 @@ public class TaskManager {
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
-                // check for tasks that were owned previously but have changed active/standby status
             } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
+                // check for tasks that were owned previously but have changed active/standby status
                 tasksToRecycle.add(task);
             } else {
-                try {
-                    if (task.commitNeeded()) {
-                        if (task.isActive()) {
-                            log.error("Active task {} was revoked and should have already been committed", task.id());
-                            throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
-                        } else {
-                            task.suspend();
-                            task.prepareCommit();
-                            task.postCommit();
-                        }
+                tasksToClose.add(task);
+            }
+        }
+
+        for (final Task task : tasksToClose) {
+            try {
+                task.suspend(); // Should be a no-op for active tasks, unless we hit an exception during handleRevocation
+                if (task.commitNeeded()) {
+                    if (task.isActive()) {
+                        log.error("Active task {} was revoked and should have already been committed", task.id());
+                        throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
+                    } else {
+                        task.prepareCommit();
+                        task.postCommit();
                     }
-                    completeTaskCloseClean(task);
-                    cleanUpTaskProducer(task, taskCloseExceptions);
-                    tasks.remove(task.id());
-                } catch (final RuntimeException e) {
-                    final String uncleanMessage = String.format(
-                        "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
-                        task.id());
-                    log.error(uncleanMessage, e);
-                    taskCloseExceptions.put(task.id(), e);
-                    // We've already recorded the exception (which is the point of clean).
-                    // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                    dirtyTasks.add(task);
                 }
+                completeTaskCloseClean(task);
+                cleanUpTaskProducer(task, taskCloseExceptions);
+                tasks.remove(task.id());
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format(
+                    "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
+                    task.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.put(task.id(), e);
+                // We've already recorded the exception (which is the point of clean).
+                // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
+                dirtyTasks.add(task);
             }
         }
 
         for (final Task oldTask : tasksToRecycle) {
             final Task newTask;
             try {
+                oldTask.suspend(); // Should be a no-op for active tasks, unless we hit an exception during handleRevocation
                 if (oldTask.isActive()) {
-                    // If active, the task should have already been suspended and committed during handleRevocation
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                 } else {
-                    oldTask.suspend();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -425,6 +429,11 @@ public class TaskManager {
     }
 
     /**
+     * Handle the revoked partitions and prepare for closing the associated tasks in {@link #handleAssignment(Map, Map)}
+     * We should commit the revoked tasks now as we will not officially own them anymore when {@link #handleAssignment(Map, Map)}
+     * is called. Note that only active task partitions are passed in from the rebalance listener, so we only need to
+     * consider/commit active tasks here
+     *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
