@@ -1925,8 +1925,7 @@ public class KafkaAdminClient extends AdminClient {
             Integer broker = nodeFor(resource);
             brokerFutures.compute(broker, (key, value) -> {
                 if (value == null) {
-                    // Only BROKER and BROKER_LOGGER configs are broker-specific
-                    value = new HashMap<>(broker != null ? 2 : 16);
+                    value = new HashMap<>();
                 }
                 value.put(resource, new KafkaFutureImpl<>());
                 return value;
@@ -2034,46 +2033,6 @@ public class KafkaAdminClient extends AdminClient {
                 throw new IllegalArgumentException("Unexpected config source " + source);
         }
         return configSource;
-    }
-
-    private ConfigEntry.ConfigType configType(DescribeConfigsResponse.ConfigType type) {
-        if (type == null) {
-            return ConfigEntry.ConfigType.UNKNOWN;
-        }
-
-        ConfigEntry.ConfigType configType;
-        switch (type) {
-            case BOOLEAN:
-                configType = ConfigEntry.ConfigType.BOOLEAN;
-                break;
-            case CLASS:
-                configType = ConfigEntry.ConfigType.CLASS;
-                break;
-            case DOUBLE:
-                configType = ConfigEntry.ConfigType.DOUBLE;
-                break;
-            case INT:
-                configType = ConfigEntry.ConfigType.INT;
-                break;
-            case LIST:
-                configType = ConfigEntry.ConfigType.LIST;
-                break;
-            case LONG:
-                configType = ConfigEntry.ConfigType.LONG;
-                break;
-            case PASSWORD:
-                configType = ConfigEntry.ConfigType.PASSWORD;
-                break;
-            case SHORT:
-                configType = ConfigEntry.ConfigType.SHORT;
-                break;
-            case STRING:
-                configType = ConfigEntry.ConfigType.STRING;
-                break;
-            default:
-                configType = ConfigEntry.ConfigType.UNKNOWN;
-        }
-        return configType;
     }
 
     @Override

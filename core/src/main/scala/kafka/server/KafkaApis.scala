@@ -2586,7 +2586,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
         .setErrorMessage(error.message)
-        .setConfigs(util.Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+        .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
         .setResourceName(resource.resourceName)
         .setResourceType(resource.resourceType)
     }
