@@ -37,7 +37,7 @@ public interface MessageFormatter extends Configurable, Closeable {
     /**
      * Initialises the MessageFormatter
      * @param props Properties to configure the formatter
-     * @deprecated Use configure() instead, this method is for backward compatibility with the older Formatter interface
+     * @deprecated Use {@link #configure(Map)} instead, this method is for backward compatibility with the older Formatter interface
      */
     @Deprecated
     default public void init(Properties props) {}
