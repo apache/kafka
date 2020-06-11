@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashSet;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -74,6 +73,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1452,17 +1452,18 @@ public class StreamTaskTest {
 
         task = new StreamTask(
             taskId,
-            mkSet(partition1, repartition),
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            mkSet(partition1, repartition),
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
+        );
 
         task.initializeIfNeeded();
         task.completeRestoration();
@@ -1777,7 +1778,7 @@ public class StreamTaskTest {
         final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
         newPartitions.add(new TopicPartition("newTopic", 0));
 
-        task.update(newPartitions, mkMap(
+        task.updateInputPartitions(newPartitions, mkMap(
             mkEntry(source1.name(), asList(topic1, "newTopic")),
             mkEntry(source2.name(), singletonList(topic2)))
         );
@@ -1828,17 +1829,18 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            mkSet(partition1),
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            mkSet(partition1),
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
+        );
     }
 
     private StreamTask createDisconnectedTask(final StreamsConfig config) {
@@ -1867,17 +1869,18 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            partitions,
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            partitions,
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
+        );
     }
 
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
@@ -1897,17 +1900,18 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            partitions,
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            partitions,
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
+        );
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -1933,17 +1937,18 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            partitions,
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            partitions,
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
+        );
     }
 
     private StreamTask createStatelessTask(final StreamsConfig config,
@@ -1972,17 +1977,18 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            partitions,
             topology,
-            consumer,
-            config,
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion),
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context);
+            partitions,
+            config,
+            context,
+            cache,
+            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion),
+            time,
+            consumer,
+            recordCollector
+        );
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {

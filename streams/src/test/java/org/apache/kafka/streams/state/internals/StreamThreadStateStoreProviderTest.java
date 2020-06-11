@@ -390,17 +390,18 @@ public class StreamThreadStateStoreProviderTest {
         );
         return new StreamTask(
             taskId,
-            partitions,
             topology,
-            clientSupplier.consumer,
-            streamsConfig,
-            streamsMetrics,
             stateDirectory,
-            EasyMock.createNiceMock(ThreadCache.class),
-            new MockTime(),
             stateManager,
-            recordCollector,
-            context);
+            partitions,
+            streamsConfig,
+            context,
+            EasyMock.createNiceMock(ThreadCache.class),
+            streamsMetrics,
+            new MockTime(),
+            clientSupplier.consumer,
+            recordCollector
+        );
     }
 
     private void mockThread(final boolean initialized) {

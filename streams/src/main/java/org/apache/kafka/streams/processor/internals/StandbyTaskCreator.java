@@ -94,7 +94,7 @@ class StandbyTaskCreator {
                     dummyCache
                 );
 
-                createdTasks.add(createStandbyTask(taskId, partitions, topology, stateManager, context));
+                createdTasks.add(createStandbyTask(taskId, topology, stateManager, partitions, context));
             } else {
                 log.trace(
                     "Skipped standby task {} with assigned partitions {} " +
@@ -117,28 +117,28 @@ class StandbyTaskCreator {
 
         return createStandbyTask(
             streamTask.id(),
-            partitions,
             builder.buildSubtopology(streamTask.id.topicGroupId),
             stateManager,
+            partitions,
             context
         );
     }
 
     StandbyTask createStandbyTask(final TaskId taskId,
-                                  final Set<TopicPartition> partitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
+                                  final Set<TopicPartition> partitions,
                                   final InternalProcessorContext context) {
         final StandbyTask task = new StandbyTask(
             taskId,
-            partitions,
             topology,
-            config,
-            streamsMetrics,
-            stateManager,
             stateDirectory,
+            stateManager,
+            partitions,
+            config,
+            context,
             dummyCache,
-            context
+            streamsMetrics
         );
 
         log.trace("Created task {} with assigned partitions {}", taskId, partitions);

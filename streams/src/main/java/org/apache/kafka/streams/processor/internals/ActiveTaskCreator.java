@@ -230,17 +230,17 @@ class ActiveTaskCreator {
 
         final StreamTask task = new StreamTask(
             taskId,
-            partitions,
             topology,
-            consumer,
-            config,
-            streamsMetrics,
             stateDirectory,
-            cache,
-            time,
             stateManager,
-            recordCollector,
-            context
+            partitions,
+            config,
+            context,
+            cache,
+            streamsMetrics,
+            time,
+            consumer,
+            recordCollector
         );
 
         log.trace("Created task {} with assigned partitions {}", taskId, partitions);

@@ -479,14 +479,15 @@ public class StandbyTaskTest {
 
         return new StandbyTask(
             taskId,
-            Collections.singleton(partition),
             topology,
-            config,
-            streamsMetrics,
-            stateManager,
             stateDirectory,
+            stateManager,
+            Collections.singleton(partition),
+            config,
+            context,
             cache,
-            context);
+            streamsMetrics
+        );
     }
 
     private MetricName setupCloseTaskMetric() {

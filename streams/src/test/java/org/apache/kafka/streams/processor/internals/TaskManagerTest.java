@@ -2706,7 +2706,8 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        public void updateInputPartitions(final Set<TopicPartition> topicPartitions,
+                                          final Map<String, List<String>> nodeToSourceTopics) {
             inputPartitions = topicPartitions;
         }
 
