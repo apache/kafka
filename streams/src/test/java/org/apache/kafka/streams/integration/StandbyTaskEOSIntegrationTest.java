@@ -92,7 +92,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @Test
-    public void surviveWithOneTaskAsStandby() throws ExecutionException, InterruptedException, IOException {
+    public void surviveWithOneTaskAsStandby() throws InterruptedException, IOException {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
@@ -112,8 +112,6 @@ public class StandbyTaskEOSIntegrationTest {
             final KafkaStreams streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
             final KafkaStreams streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
         ) {
-
-
             streamInstanceOne.start();
 
             streamInstanceTwo.start();

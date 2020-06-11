@@ -153,23 +153,33 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
-        for (final Map.Entry<TaskId, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
-            final TaskId taskId = entry.getKey();
+    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> tasksWithChangelogs) throws TaskMigratedException {
+        final Map<Task, Collection<TopicPartition>> corruptedStandbyTasks = new HashMap<>();
+        final Map<Task, Collection<TopicPartition>> corruptedActiveTasks = new HashMap<>();
+
+        for (final Map.Entry<TaskId, Collection<TopicPartition>> taskEntry : tasksWithChangelogs.entrySet()) {
+            final TaskId taskId = taskEntry.getKey();
             final Task task = tasks.get(taskId);
-
-            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-            final Collection<TopicPartition> corruptedPartitions = entry.getValue();
-            task.markChangelogAsCorrupted(corruptedPartitions);
-
-            try {
-                task.suspend();
-            } catch (final RuntimeException swallow) {
-                log.error("Error suspending corrupted task {} ", task.id(), swallow);
+            if (task.isActive()) {
+                corruptedActiveTasks.put(task, taskEntry.getValue());
+            } else {
+                corruptedStandbyTasks.put(task, taskEntry.getValue());
             }
-            task.closeDirty();
-            task.revive();
         }
+
+        // Make sure to clean up any corrupted standby tasks in their entirety before committing
+        // since TaskMigrated can be thrown and the resulting handleLostAll will only clean up active tasks
+        closeAndRevive(corruptedStandbyTasks);
+
+        commit(tasks()
+                   .values()
+                   .stream()
+                   .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                   .filter(t -> !tasksWithChangelogs.containsKey(t.id()))
+                   .collect(Collectors.toSet())
+        );
+
+        closeAndRevive(corruptedActiveTasks);
     }
 
     /**
@@ -339,6 +349,24 @@ public class TaskManager {
             }
         }
 
+    }
+
+    private void closeAndRevive(final Map<Task, Collection<TopicPartition>> taskWithChangelogs) {
+        for (final Map.Entry<Task, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
+            final Task task = entry.getKey();
+
+            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
+            final Collection<TopicPartition> corruptedPartitions = entry.getValue();
+            task.markChangelogAsCorrupted(corruptedPartitions);
+
+            try {
+                task.suspend();
+            } catch (final RuntimeException swallow) {
+                log.error("Error suspending corrupted task {} ", task.id(), swallow);
+            }
+            task.closeDirty();
+            task.revive();
+        }
     }
 
     private void cleanUpTaskProducer(final Task task,

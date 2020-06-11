@@ -557,14 +557,6 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.commit(
-                        taskManager.tasks()
-                            .values()
-                            .stream()
-                            .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                            .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
-                            .collect(Collectors.toSet())
-                    );
                     taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
