@@ -94,6 +94,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    protected volatile boolean running = false;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -129,6 +130,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
     }
 
     @Override
