@@ -16,27 +16,19 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
- * <p>Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * InvalidStateStoreException not thrown directly but only following sub-classes:</p>
- * {@link StreamsNotStartedException}, {@link StreamsRebalancingException},
- * {@link StateStoreMigratedException}, {@link StateStoreNotAvailableException},
- * {@link UnknownStateStoreException}, {@link InvalidStateStorePartitionException}
+ * Indicate query a state store when Kafka Streams state is {@link org.apache.kafka.streams.KafkaStreams.State#CREATED CREATED}.
+ * User can just retry and wait until to {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING}
  */
-public class InvalidStateStoreException extends StreamsException {
+public class StreamsNotStartedException extends InvalidStateStoreException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    public InvalidStateStoreException(final String message) {
+    public StreamsNotStartedException(final String message) {
         super(message);
     }
 
-    public InvalidStateStoreException(final String message, final Throwable throwable) {
+    public StreamsNotStartedException(final String message, final Throwable throwable) {
         super(message, throwable);
-    }
-
-    public InvalidStateStoreException(final Throwable throwable) {
-        super(throwable);
     }
 }

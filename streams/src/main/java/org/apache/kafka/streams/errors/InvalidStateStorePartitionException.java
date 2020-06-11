@@ -16,27 +16,20 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
- * <p>Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * InvalidStateStoreException not thrown directly but only following sub-classes:</p>
- * {@link StreamsNotStartedException}, {@link StreamsRebalancingException},
- * {@link StateStoreMigratedException}, {@link StateStoreNotAvailableException},
- * {@link UnknownStateStoreException}, {@link InvalidStateStorePartitionException}
+ * Indicates that the specific state store being queried via
+ * {@link org.apache.kafka.streams.StoreQueryParameters} used an invalid partition.
  */
-public class InvalidStateStoreException extends StreamsException {
+public class InvalidStateStorePartitionException extends InvalidStateStoreException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    public InvalidStateStoreException(final String message) {
+    public InvalidStateStorePartitionException(final String message) {
         super(message);
     }
 
-    public InvalidStateStoreException(final String message, final Throwable throwable) {
+    public InvalidStateStorePartitionException(final String message, final Throwable throwable) {
         super(message, throwable);
     }
 
-    public InvalidStateStoreException(final Throwable throwable) {
-        super(throwable);
-    }
 }
