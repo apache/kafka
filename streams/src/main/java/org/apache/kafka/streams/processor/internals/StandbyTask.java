@@ -182,8 +182,6 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void closeAndRecycleState() {
         suspend();
-        prepareCommit();
-
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
         } else {

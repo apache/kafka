@@ -471,12 +471,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeAndRecycleState() {
         suspend();
-
-        if (commitNeeded()) {
-            prepareCommit();
-            writeCheckpointIfNeed();
-        }
-
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
@@ -485,8 +479,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case CREATED:
-            case RESTORING: // we should have transitioned to `SUSPENDED` already
-            case RUNNING: // we should have transitioned to `SUSPENDED` already
+            case RESTORING:
+            case RUNNING:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while recycling active task " + id);
             default:
@@ -527,7 +521,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void writeCheckpointIfNeed() {
         if (commitNeeded) {
-            throw new IllegalStateException("A checkpoint should only be written if a commit has.");
+            throw new IllegalStateException("A checkpoint should only be written if the previous commit has completed"
+                                                + " and there is no new commit needed.");
         }
         if (checkpoint != null) {
             stateMgr.checkpoint(checkpoint);

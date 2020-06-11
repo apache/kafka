@@ -244,6 +244,9 @@ public class TaskManager {
                 standbyTasksToCreate.remove(task.id());
                 // check for tasks that were owned previously but have changed active/standby status
             } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
+                if (task.commitNeeded()) {
+                    additionalTasksForCommitting.add(task);
+                }
                 tasksToRecycle.add(task);
             } else {
                 try {
