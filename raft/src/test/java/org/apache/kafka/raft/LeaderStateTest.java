@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.OptionalLong;
 
@@ -119,4 +120,17 @@ public class LeaderStateTest {
         assertEquals(OptionalLong.of(20L), state.highWatermark());
     }
 
+    @Test
+    public void testGetNonLeaderFollowersByFetchOffsetDescending() {
+        int node1 = 1;
+        int node2 = 2;
+        LeaderState state = new LeaderState(localId, epoch, 10L, Utils.mkSet(localId, node1, node2));
+        state.updateLocalEndOffset(15L);
+        assertEquals(OptionalLong.empty(), state.highWatermark());
+        state.updateEndOffset(node1, 10L);
+        state.updateEndOffset(node2, 15L);
+
+        // Leader should not be included; the follower with larger offset should be prioritized.
+        assertEquals(Arrays.asList(node2, node1), state.nonLeaderVotersByDescendingFetchOffset());
+    }
 }

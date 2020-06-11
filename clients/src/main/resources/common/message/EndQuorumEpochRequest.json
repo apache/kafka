@@ -26,6 +26,8 @@
     {"name": "LeaderId", "type": "int32", "versions": "0+",
       "about": "The current leader ID or -1 if there is a vote in progress"},
     {"name": "LeaderEpoch", "type": "int32", "versions": "0+",
-      "about": "The current epoch"}
+      "about": "The current epoch"},
+    {"name": "PreferredSuccessors", "type": "[]int32", "versions": "0+",
+      "about": "A sorted list of preferred successors to start the election"}
   ]
 }

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -78,8 +79,7 @@ public class LeaderState implements EpochState {
 
     private boolean updateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
-        ArrayList<ReplicaState> followersByDescendingFetchOffset = new ArrayList<>(this.voterReplicaStates.values());
-        Collections.sort(followersByDescendingFetchOffset);
+        List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
         int indexOfHw = voterReplicaStates.size() / 2;
         OptionalLong highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
@@ -113,6 +113,18 @@ public class LeaderState implements EpochState {
         // To be resilient to system time shifts we do not strictly require the timestamp be monotonically increasing
         state.lastFetchTimestamp = OptionalLong.of(Math.max(state.lastFetchTimestamp.orElse(-1L), timestamp));
         return quorumMajorityFetchTimestamp();
+    }
+
+    public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
+        return followersByDescendingFetchOffset().stream()
+                   .filter(state -> state.nodeId != localId)
+                   .map(state -> state.nodeId).collect(Collectors.toList());
+    }
+
+    private List<ReplicaState> followersByDescendingFetchOffset() {
+        List<ReplicaState> followersByDescendingFetchOffset = new ArrayList<>(this.voterReplicaStates.values());
+        Collections.sort(followersByDescendingFetchOffset);
+        return followersByDescendingFetchOffset;
     }
 
     /**
