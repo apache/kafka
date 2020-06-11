@@ -98,7 +98,7 @@ public final class AssignmentTestUtils {
      * Builds a UUID by repeating the given number n. For valid n, it is guaranteed that the returned UUIDs satisfy
      * the same relation relative to others as their parameter n does: iff n < m, then uuidForInt(n) < uuidForInt(m)
      */
-    static UUID uuidForInt(final int n) {
+    public static UUID uuidForInt(final int n) {
         return new UUID(0, n);
     }
 

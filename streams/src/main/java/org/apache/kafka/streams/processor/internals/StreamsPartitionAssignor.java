@@ -462,8 +462,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             for (final String topic : topicsInfo.sourceTopics) {
-                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) &&
-                        !metadata.topics().contains(topic)) {
+                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) && !metadata.topics().contains(topic)) {
                     log.error("Source topic {} is missing/unknown during rebalance, please make sure all source topics " +
                                   "have been pre-created before starting the Streams application. Returning error {}",
                                   topic, AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.name());

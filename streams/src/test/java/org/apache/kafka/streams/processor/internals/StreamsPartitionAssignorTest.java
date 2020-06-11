@@ -150,7 +150,7 @@ public class StreamsPartitionAssignorTest {
     private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
     private final TopicPartition t3p3 = new TopicPartition("topic3", 3);
 
-    private final List<PartitionInfo> infos = asList(
+    private final List<PartitionInfo> partitionInfos = asList(
         new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
         new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
         new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
@@ -163,14 +163,15 @@ public class StreamsPartitionAssignorTest {
         new PartitionInfo("topic3", 3, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final SubscriptionInfo defaultSubscriptionInfo = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS);
-
     private final Cluster metadata = new Cluster(
         "cluster",
         Collections.singletonList(Node.noNode()),
-        infos,
+        partitionInfos,
         emptySet(),
-        emptySet());
+        emptySet()
+    );
+
+    private final SubscriptionInfo defaultSubscriptionInfo = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS);
 
     private final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
@@ -2024,10 +2025,10 @@ public class StreamsPartitionAssignorTest {
         streamsBuilder.table("topic1", Materialized.as("store"));
 
         subscriptions.put("consumer10",
-            new Subscription(
-                singletonList("topic1"),
-                defaultSubscriptionInfo.encode()
-            ));
+                          new Subscription(
+                              singletonList("topic1"),
+                              defaultSubscriptionInfo.encode()
+                          ));
 
         final Consumer<byte[], byte[]> consumerClient = EasyMock.createMock(Consumer.class);
 
@@ -2150,7 +2151,7 @@ public class StreamsPartitionAssignorTest {
             final String topic = changelogTopics.get(i);
             final int numPartitions = topicsNumPartitions.get(i);
             for (int partition = 0; partition < numPartitions; ++partition) {
-                changelogEndOffsets.put(new TopicPartition(topic, partition), Long.MAX_VALUE);
+                changelogEndOffsets.put(new TopicPartition(topic, partition), 100_000L);
             }
         }
         return changelogEndOffsets;
