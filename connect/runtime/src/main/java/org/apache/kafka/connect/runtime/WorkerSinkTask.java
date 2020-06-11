@@ -54,7 +54,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -287,10 +286,9 @@ class WorkerSinkTask extends WorkerTask {
         SinkConnectorConfig.validate(taskConfig);
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
-            String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
-            Arrays.setAll(topics, i -> topics[i].trim());
-            consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-            log.debug("{} Initializing and starting task for topics {}", this, topics);
+            List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
+            consumer.subscribe(topics, new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics {}", this, Utils.join(topics, ", "));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);

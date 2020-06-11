@@ -318,6 +318,36 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @Test(expected = ConfigException.class)
+    public void testConfigValidationTopicsWithDlq() {
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
+        replayAll();
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSinkConnector.class.getName());
+        config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
+        config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
+
+        herder.validateConnectorConfig(config);
+
+        verifyAll();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testConfigValidationTopicsRegexWithDlq() {
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
+        replayAll();
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSinkConnector.class.getName());
+        config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
+        config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
+
+        herder.validateConnectorConfig(config);
+
+        verifyAll();
+    }
+
     @Test()
     public void testConfigValidationTransformsExtendResults() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
