@@ -169,7 +169,11 @@ object BrokerIdZNode {
     FeatureZNode.asJavaMap(brokerInfo
       .get(FeaturesKey)
       .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
-      .map(theMap => theMap.view.mapValues(_.view.mapValues(_.asInstanceOf[Short]).toMap).toMap)
+      .map(theMap => theMap.map {
+         case(featureName, versionsInfo) => featureName -> versionsInfo.map {
+           case(label, version) => label -> version.asInstanceOf[Short]
+         }.toMap
+      }.toMap)
       .getOrElse(Map[String, Map[String, Short]]()))
   }
 
@@ -860,9 +864,11 @@ object FeatureZNode {
 
   def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
     scalaMap
-      .view.mapValues(_.view.mapValues(scalaShort => java.lang.Short.valueOf(scalaShort)).toMap.asJava)
-      .toMap
-      .asJava
+      .map {
+        case(featureName, versionInfo) => featureName -> versionInfo.map {
+          case(label, version) => label -> java.lang.Short.valueOf(version)
+        }.asJava
+      }.asJava
   }
 
   /**
@@ -909,8 +915,11 @@ object FeatureZNode {
         }
         val features = asJavaMap(
           featuresMap
-            .map(theMap => theMap.view.mapValues(_.view.mapValues(_.asInstanceOf[Short]).toMap).toMap)
-            .getOrElse(Map[String, Map[String, Short]]()))
+            .map(theMap => theMap.map {
+              case (featureName, versionInfo) => featureName -> versionInfo.map {
+                case (label, version) => label -> version.asInstanceOf[Short]
+              }
+            }).getOrElse(Map[String, Map[String, Short]]()))
 
         val statusInt = featureInfo
           .get(StatusKey)

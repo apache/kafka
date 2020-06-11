@@ -71,7 +71,7 @@ object SupportedFeatures extends Logging {
    *                    is empty, it means there were no feature incompatibilities found.
    */
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
-    val incompatibilities = finalized.features.asScala.collect {
+    val incompatibilities = finalized.features.asScala.map {
       case (feature, versionLevels) => {
         val supportedVersions = supportedFeatures.get(feature)
         if (supportedVersions == null) {
