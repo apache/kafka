@@ -157,7 +157,11 @@ public class TaskManager {
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
 
-            task.prepareCloseDirty();
+            try {
+                task.suspend();
+            } catch (final RuntimeException swallow) {
+                log.error("Error suspending corrupted task {} ", task.id(), swallow);
+            }
             task.closeDirty();
             task.revive();
         }
@@ -210,9 +214,8 @@ public class TaskManager {
                 tasksToRecycle.add(task);
             } else {
                 try {
-                    task.prepareCloseClean();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task
-                        .committableOffsetsAndMetadata();
+                    task.suspend();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
 
                     tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
@@ -234,8 +237,7 @@ public class TaskManager {
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
             try {
                 for (final Task task : additionalTasksForCommitting) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
                     if (!committableOffsets.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
@@ -436,22 +438,19 @@ public class TaskManager {
         final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
 
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        final Set<Task> suspended = new HashSet<>();
         for (final Task task : tasks.values()) {
             if (remainingPartitions.containsAll(task.inputPartitions())) {
-                task.prepareSuspend();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                task.suspend();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
-                suspended.add(task);
-            } else {
-                if (task.isActive() && task.commitNeeded()) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
+            } else if (task.isActive() && task.commitNeeded()) {
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
             }
             remainingPartitions.removeAll(task.inputPartitions());
@@ -463,11 +462,7 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                if (suspended.contains(task)) {
-                    task.suspend();
-                } else {
-                    task.postCommit();
-                }
+                task.postCommit();
             }
         }
 
@@ -623,7 +618,11 @@ public class TaskManager {
     }
 
     private void closeTaskDirty(final Task task) {
-        task.prepareCloseDirty();
+        try {
+            task.suspend();
+        } catch (final RuntimeException swallow) {
+            log.error("Error suspending dirty task {} ", task.id(), swallow);
+        }
         cleanupTask(task);
         task.closeDirty();
     }
@@ -655,8 +654,8 @@ public class TaskManager {
         for (final Task task : tasks.values()) {
             if (clean) {
                 try {
-                    task.prepareCloseClean();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.committableOffsetsAndMetadata();
+                    task.suspend();
+                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
 
                     tasksToClose.add(task);
                     if (!committableOffsets.isEmpty()) {
@@ -680,6 +679,7 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
+                task.postCommit();
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
@@ -802,8 +802,7 @@ public class TaskManager {
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
             for (final Task task : tasks) {
                 if (task.commitNeeded()) {
-                    task.prepareCommit();
-                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.committableOffsetsAndMetadata();
+                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
                     if (!offsetAndMetadata.isEmpty()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
                     }

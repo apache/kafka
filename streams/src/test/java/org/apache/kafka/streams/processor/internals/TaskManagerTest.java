@@ -423,7 +423,7 @@ public class TaskManagerTest {
     public void shouldCloseDirtyActiveUnassignedSuspendedTasksWhenErrorCommittingRevokedTask() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("KABOOM!");
             }
         };
@@ -604,7 +604,8 @@ public class TaskManagerTest {
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
             }
         };
@@ -948,7 +949,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignmentActive, Collections.emptyMap());
 
         assertThat(task00.commitNeeded, is(true));
-        assertThat(task10.commitPrepared, is(false));
     }
 
     @Test
@@ -1070,10 +1070,11 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPassUpIfExceptionDuringPrepareSuspend() {
+    public void shouldPassUpIfExceptionDuringSuspend() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void prepareSuspend() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("KABOOM!");
             }
         };
@@ -1087,7 +1088,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task00.state(), is(Task.State.SUSPENDED));
 
         verify(consumer);
     }
@@ -1107,22 +1108,14 @@ public class TaskManagerTest {
                 return singletonList(changelog);
             }
         };
-        final AtomicBoolean prepareClosedDirtyTask01 = new AtomicBoolean(false);
-        final AtomicBoolean prepareClosedDirtyTask02 = new AtomicBoolean(false);
-        final AtomicBoolean prepareClosedDirtyTask03 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask01 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask02 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask01.set(true);
             }
 
             @Override
@@ -1133,14 +1126,9 @@ public class TaskManagerTest {
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask02.set(true);
             }
 
             @Override
@@ -1151,14 +1139,9 @@ public class TaskManagerTest {
         };
         final Task task03 = new StateMachineTask(taskId03, taskId03Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask03.set(true);
             }
 
             @Override
@@ -1215,12 +1198,10 @@ public class TaskManagerTest {
             RuntimeException.class,
             () -> taskManager.shutdown(true)
         );
+        assertThat(exception.getMessage(), equalTo("Unexpected exception while closing task"));
 
-        assertThat(prepareClosedDirtyTask01.get(), is(true));
         assertThat(closedDirtyTask01.get(), is(true));
-        assertThat(prepareClosedDirtyTask02.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
-        assertThat(prepareClosedDirtyTask03.get(), is(true));
         assertThat(closedDirtyTask03.get(), is(true));
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(task01.state(), is(Task.State.CLOSED));
@@ -1346,7 +1327,7 @@ public class TaskManagerTest {
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("task 0_1 prepare commit boom!");
             }
         };
@@ -1451,13 +1432,15 @@ public class TaskManagerTest {
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
             }
         };
@@ -1817,7 +1800,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromActiveCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -1844,7 +1827,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromStandbyCommit() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -2273,14 +2256,16 @@ public class TaskManagerTest {
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t2 close exception", new RuntimeException());
             }
         };
@@ -2303,14 +2288,16 @@ public class TaskManagerTest {
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
             }
         };
@@ -2332,14 +2319,16 @@ public class TaskManagerTest {
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public void prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new KafkaException("Kaboom for t2!", new RuntimeException());
             }
         };
@@ -2553,7 +2542,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 return offsets;
             }
         };
@@ -2677,8 +2666,9 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void prepareCommit() {
+        public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
             commitPrepared = true;
+            return committableOffsets;
         }
 
         @Override
@@ -2687,11 +2677,10 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void prepareSuspend() {}
-
-        @Override
         public void suspend() {
-            transitionTo(State.SUSPENDED);
+            if (state() == State.RUNNING) {
+                transitionTo(State.SUSPENDED);
+            }
         }
 
         @Override
@@ -2700,12 +2689,6 @@ public class TaskManagerTest {
                 transitionTo(State.RUNNING);
             }
         }
-
-        @Override
-        public void prepareCloseClean() {}
-
-        @Override
-        public void prepareCloseDirty() {}
 
         @Override
         public void closeClean() {
@@ -2732,11 +2715,6 @@ public class TaskManagerTest {
                 throw new IllegalStateException("Cannot set CommittableOffsetsAndMetadate for StandbyTasks");
             }
             this.committableOffsets = committableOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
-            return committableOffsets;
         }
 
         @Override
