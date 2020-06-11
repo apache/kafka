@@ -112,6 +112,8 @@ import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.anEmptyMap;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1619,16 +1621,15 @@ public class StreamsPartitionAssignorTest {
 
         // The new consumer's assignment should be empty until c1 has the chance to revoke its partitions/tasks
         assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
-        assertThat(
-            AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()),
-            equalTo(new AssignmentInfo(
-                LATEST_SUPPORTED_VERSION,
-                emptyList(),
-                emptyMap(),
-                emptyMap(),
-                emptyMap(),
-                0
-            )));
+
+        final AssignmentInfo actualAssignment = AssignmentInfo.decode(assignment.get(CONSUMER_2).userData());
+        assertThat(actualAssignment.version(), is(LATEST_SUPPORTED_VERSION));
+        assertThat(actualAssignment.activeTasks(), empty());
+        // Note we're not asserting anything about standbys. If the assignor gave an active task to CONSUMER_2, it would
+        // be converted to a standby, but we don't know whether the assignor will do that.
+        assertThat(actualAssignment.partitionsByHost(), anEmptyMap());
+        assertThat(actualAssignment.standbyPartitionByHost(), anEmptyMap());
+        assertThat(actualAssignment.errCode(), is(0));
     }
 
     @Test
