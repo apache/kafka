@@ -1784,8 +1784,18 @@ class Log(@volatile private var _dir: File,
   private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
-    deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
-      reason = s"retention time ${config.retentionMs}ms breach")
+
+    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
+      if (startMs - segment.largestTimestamp > config.retentionMs) {
+        info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+          s" retentionMs breach. Largest timestamp of segment is ${segment.largestTimestamp}")
+        true
+      } else {
+        false
+      }
+    }
+
+    deleteOldSegments(shouldDelete, reason = s"retention time ${config.retentionMs}ms breach")
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1794,6 +1804,8 @@ class Log(@volatile private var _dir: File,
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
       if (diff - segment.size >= 0) {
         diff -= segment.size
+        info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+          s" retentionSize breach. Segment size is ${segment.size}")
         true
       } else {
         false
@@ -1804,8 +1816,15 @@ class Log(@volatile private var _dir: File,
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
-    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
-      nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
+    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
+      if (nextSegmentOpt.exists(_.baseOffset <= logStartOffset)) {
+        info (s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+          s" startOffset breach. logStartOffset is ${logStartOffset}")
+        true
+      } else {
+        false
+      }
+    }
 
     deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
   }
