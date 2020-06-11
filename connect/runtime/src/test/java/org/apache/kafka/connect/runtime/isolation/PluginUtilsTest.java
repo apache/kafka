@@ -168,7 +168,6 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.storage.StringConverterConfig",
             //"org.apache.kafka.connect.transforms.", isolated by default
             "org.apache.kafka.connect.transforms.Transformation",
-            "org.apache.kafka.connect.transforms.predicates.Predicate",
             "org.apache.kafka.connect.util.",
             "org.apache.kafka.connect.util.ConnectorUtils"
         );
