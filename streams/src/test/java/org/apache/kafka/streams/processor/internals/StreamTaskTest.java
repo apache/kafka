@@ -529,8 +529,10 @@ public class StreamTaskTest {
             task.maybeRecordE2ELatency(0L, sourceNode);
         }
 
-        assertEquals((double) p99Metric.metricValue(), 99d, 5.0);
-        assertEquals((double) p90Metric.metricValue(), 90d, 5.0);
+        final double expectedAccuracy = 0.25d; // Make sure it's accurate to within 25% of the expected value
+
+        assertEquals((double) p99Metric.metricValue(), 99d, 99 * expectedAccuracy);
+        assertEquals((double) p90Metric.metricValue(), 90d, 90 * expectedAccuracy);
     }
 
     @Test
