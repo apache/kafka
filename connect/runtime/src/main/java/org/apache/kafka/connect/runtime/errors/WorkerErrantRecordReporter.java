@@ -99,8 +99,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
                 valLength, key, value, headers);
         }
 
-        Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
-            SinkTask.class, consumerRecord, error);
+        Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT, SinkTask.class, consumerRecord, error);
 
         if (!future.isDone()) {
             futures.add(future);
