@@ -92,6 +92,7 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void start() {
         log.info("Herder starting");
         startServices();
+        running = true;
         log.info("Herder started");
     }
 
@@ -114,6 +115,7 @@ public class StandaloneHerder extends AbstractHerder {
             worker.stopConnector(connName);
         }
         stopServices();
+        running = false;
         log.info("Herder stopped");
     }
 

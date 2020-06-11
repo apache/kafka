@@ -59,6 +59,8 @@ public interface Herder {
 
     void stop();
 
+    boolean isRunning();
+
     /**
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note

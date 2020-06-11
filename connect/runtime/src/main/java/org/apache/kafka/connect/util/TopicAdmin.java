@@ -18,11 +18,16 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeConfigsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -39,13 +44,16 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 /**
  * Utility to simplify creating and managing topics via the {@link Admin}.
@@ -373,6 +381,162 @@ public class TopicAdmin implements AutoCloseable {
             }
         });
         return existingTopics;
+    }
+
+    /**
+     * Verify the named topic uses only compaction for the cleanup policy.
+     *
+     * @param topic             the name of the topic
+     * @param workerTopicConfig the name of the worker configuration that specifies the topic name
+     * @return true if the admin client could be used to verify the topic setting, or false if
+     *         the verification could not be performed, likely because the admin client principal
+     *         did not have the required permissions or because the broker was older than 0.11.0.0
+     * @throws ConfigException if the actual topic setting did not match the required setting
+     */
+    public boolean verifyTopicCleanupPolicyOnlyCompact(String topic, String workerTopicConfig,
+            String topicPurpose) {
+        Set<String> cleanupPolicies = topicCleanupPolicy(topic);
+        if (cleanupPolicies.isEmpty()) {
+            log.info("Unable to use admin client to verify the cleanup policy of '{}' "
+                      + "topic is '{}', either because the broker is an older "
+                      + "version or because the Kafka principal used for Connect "
+                      + "internal topics does not have the required permission to "
+                      + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+            return false;
+        }
+        Set<String> expectedPolicies = Collections.singleton(TopicConfig.CLEANUP_POLICY_COMPACT);
+        if (!cleanupPolicies.equals(expectedPolicies)) {
+            String expectedPolicyStr = String.join(",", expectedPolicies);
+            String cleanupPolicyStr = String.join(",", cleanupPolicies);
+            String msg = String.format("Topic '%s' supplied via the '%s' property is required "
+                    + "to have '%s=%s' to guarantee consistency and durability of "
+                    + "%s, but found the topic currently has '%s=%s'. Continuing would likely "
+                    + "result in eventually losing %s and problems restarting this Connect "
+                    + "cluster in the future. Change the '%s' property in the "
+                    + "Connect worker configurations to use a topic with '%s=%s'.",
+                    topic, workerTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr,
+                    topicPurpose, TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicyStr, topicPurpose,
+                    workerTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, expectedPolicyStr);
+            throw new ConfigException(msg);
+        }
+        return true;
+    }
+
+    /**
+     * Get the cleanup policy for a topic.
+     *
+     * @param topic the name of the topic
+     * @return the set of cleanup policies set for the topic; may be empty if the topic does not
+     *         exist or the topic's cleanup policy could not be retrieved
+     */
+    public Set<String> topicCleanupPolicy(String topic) {
+        Config topicConfig = describeTopicConfig(topic);
+        if (topicConfig == null) {
+            // The topic must not exist
+            log.debug("Unable to find topic '{}' when getting cleanup policy", topic);
+            return Collections.emptySet();
+        }
+        ConfigEntry entry = topicConfig.get(CLEANUP_POLICY_CONFIG);
+        if (entry != null && entry.value() != null) {
+            String policyStr = entry.value();
+            log.debug("Found cleanup.policy={} for topic '{}'", policyStr, topic);
+            return Arrays.stream(policyStr.split(","))
+                         .map(String::trim)
+                         .filter(s -> !s.isEmpty())
+                         .map(String::toLowerCase)
+                         .collect(Collectors.toSet());
+        }
+        // This is unexpected, as the topic config should include the cleanup.policy even if
+        // the topic settings don't override the broker's log.cleanup.policy. But just to be safe.
+        log.debug("Found no cleanup.policy for topic '{}'", topic);
+        return Collections.emptySet();
+    }
+
+    /**
+     * Attempt to fetch the topic configuration for the given topic.
+     * Apache Kafka added support for describing topic configurations in 0.11.0.0, so this method
+     * works as expected with that and later versions. With brokers older than 0.11.0.0, this method
+     * is unable get the topic configurations and always returns a null value.
+     *
+     * <p>If the topic does not exist, a null value is returned.
+     *
+     * @param topic the name of the topic for which the topic configuration should be obtained
+     * @return the topic configuration if the topic exists, or null if the topic did not exist
+     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
+     *         thread is interrupted while attempting to perform this operation
+     * @throws ConnectException if a non retriable error occurs
+     */
+    public Config describeTopicConfig(String topic) {
+        return describeTopicConfigs(topic).get(topic);
+    }
+
+    /**
+     * Attempt to fetch the topic configurations for the given topics.
+     * Apache Kafka added support for describing topic configurations in 0.11.0.0, so this method
+     * works as expected with that and later versions. With brokers older than 0.11.0.0, this method
+     * is unable get the topic configurations and always returns an empty set.
+     *
+     * <p>An entry with a null Config is placed into the resulting map for any topic that does
+     * not exist on the brokers.
+     *
+     * @param topicNames the topics to obtain configurations
+     * @return the map of topic configurations for each existing topic, or an empty map if none
+     * of the topics exist
+     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
+     *         thread is interrupted while attempting to perform this operation
+     * @throws ConnectException if a non retriable error occurs
+     */
+    public Map<String, Config> describeTopicConfigs(String... topicNames) {
+        if (topicNames == null) {
+            return Collections.emptyMap();
+        }
+        Collection<String> topics = Arrays.stream(topicNames)
+                                          .filter(Objects::nonNull)
+                                          .map(String::trim)
+                                          .filter(s -> !s.isEmpty())
+                                          .collect(Collectors.toList());
+        if (topics.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String bootstrapServers = bootstrapServers();
+        String topicNameList = topics.stream().collect(Collectors.joining(", "));
+        Collection<ConfigResource> resources = topics.stream()
+                                                     .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
+                                                     .collect(Collectors.toList());
+
+        Map<ConfigResource, KafkaFuture<Config>> newResults = admin.describeConfigs(resources, new DescribeConfigsOptions()).values();
+
+        // Iterate over each future so that we can handle individual failures like when some topics don't exist
+        Map<String, Config> result = new HashMap<>();
+        newResults.forEach((resource, configs) -> {
+            String topic = resource.name();
+            try {
+                result.put(topic, configs.get());
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException) {
+                    log.debug("Topic '{}' does not exist on the brokers at {}", topic, bootstrapServers);
+                    result.put(topic, null);
+                } else if (cause instanceof ClusterAuthorizationException || cause instanceof TopicAuthorizationException) {
+                    log.debug("Not authorized to describe topic config for topic '{}' on brokers at {}", topic, bootstrapServers);
+                } else if (cause instanceof UnsupportedVersionException) {
+                    log.debug("API to describe topic config for topic '{}' is unsupported on brokers at {}", topic, bootstrapServers);
+                } else if (cause instanceof TimeoutException) {
+                    String msg = String.format("Timed out while waiting to describe topic config for topic '%s' on brokers at %s",
+                            topic, bootstrapServers);
+                    throw new RetriableException(msg, e);
+                } else {
+                    String msg = String.format("Error while attempting to describe topic config for topic '%s' on brokers at %s",
+                            topic, bootstrapServers);
+                    throw new ConnectException(msg, e);
+                }
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                String msg = String.format("Interrupted while attempting to describe topic configs '%s'", topicNameList);
+                throw new RetriableException(msg, e);
+            }
+        });
+        return result;
     }
 
     @Override

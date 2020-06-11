@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -27,6 +28,9 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -36,11 +40,14 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,6 +57,8 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -261,6 +270,187 @@ public class TopicAdminTest {
         }
     }
 
+    @Test
+    public void describeTopicConfigShouldReturnEmptyMapWhenNoTopicsAreSpecified() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithUnsupportedVersion(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<String, Config> results = admin.describeTopicConfigs();
+            assertTrue(results.isEmpty());
+        }
+    }
+
+    @Test
+    public void describeTopicConfigShouldReturnEmptyMapWhenUnsupportedVersionFailure() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithUnsupportedVersion(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<String, Config> results = admin.describeTopicConfigs(newTopic.name());
+            assertTrue(results.isEmpty());
+        }
+    }
+
+    @Test
+    public void describeTopicConfigShouldReturnEmptyMapWhenClusterAuthorizationFailure() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithClusterAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<String, Config> results = admin.describeTopicConfigs(newTopic.name());
+            assertTrue(results.isEmpty());
+        }
+    }
+
+    @Test
+    public void describeTopicConfigShouldReturnEmptyMapWhenTopicAuthorizationFailure() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithTopicAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<String, Config> results = admin.describeTopicConfigs(newTopic.name());
+            assertTrue(results.isEmpty());
+        }
+    }
+
+    @Test
+    public void describeTopicConfigShouldReturnMapWithNullValueWhenTopicDoesNotExist() {
+        NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (TopicAdmin admin = new TopicAdmin(null, new MockAdminClient(cluster.nodes(), cluster.nodeById(0)))) {
+            Map<String, Config> results = admin.describeTopicConfigs(newTopic.name());
+            assertFalse(results.isEmpty());
+            assertEquals(1, results.size());
+            assertNull(results.get("myTopic"));
+        }
+    }
+
+    @Test
+    public void describeTopicConfigShouldReturnTopicConfigWhenTopicExists() {
+        String topicName = "myTopic";
+        NewTopic newTopic = TopicAdmin.defineTopic(topicName)
+                                      .config(Collections.singletonMap("foo", "bar"))
+                                      .partitions(1)
+                                      .compacted()
+                                      .build();
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            Map<String, Config> result = admin.describeTopicConfigs(newTopic.name());
+            assertFalse(result.isEmpty());
+            assertEquals(1, result.size());
+            Config config = result.get("myTopic");
+            assertNotNull(config);
+            config.entries().forEach(entry -> {
+                assertEquals(newTopic.configs().get(entry.name()), entry.value());
+            });
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenBrokerVersionIsUnsupported() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithUnsupportedVersion(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenClusterAuthorizationError() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithClusterAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnFalseWhenTopicAuthorizationError() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeConfigsResponseWithTopicAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertFalse(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldReturnTrueWhenTopicHasCorrectPolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            assertTrue(result);
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeletePolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            ConfigException e = assertThrows(ConfigException.class, () -> {
+                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            });
+            assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
+        }
+    }
+
+    @Test
+    public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeleteAndCompactPolicy() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete,compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            ConfigException e = assertThrows(ConfigException.class, () -> {
+                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
+            });
+            assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
+        }
+    }
+
+    @Test
+    public void verifyingGettingTopicCleanupPolicies() {
+        String topicName = "myTopic";
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
+        Cluster cluster = createCluster(1);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            Set<String> policies = admin.topicCleanupPolicy("myTopic");
+            assertEquals(1, policies.size());
+            assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, policies.iterator().next());
+        }
+    }
+
     private Cluster createCluster(int numNodes) {
         HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
@@ -363,4 +553,33 @@ public class TopicAdminTest {
         }
         return new MetadataResponse(response);
     }
+
+    private DescribeConfigsResponse describeConfigsResponseWithUnsupportedVersion(NewTopic... topics) {
+        return describeConfigsResponse(new ApiError(Errors.UNSUPPORTED_VERSION, "This version of the API is not supported"), topics);
+    }
+
+    private DescribeConfigsResponse describeConfigsResponseWithClusterAuthorizationException(NewTopic... topics) {
+        return describeConfigsResponse(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
+    private DescribeConfigsResponse describeConfigsResponseWithTopicAuthorizationException(NewTopic... topics) {
+        return describeConfigsResponse(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
+    private DescribeConfigsResponse describeConfigsResponse(ApiError error, NewTopic... topics) {
+        if (error == null) error = new ApiError(Errors.NONE, "");
+        Map<ConfigResource, DescribeConfigsResponse.Config> configs = new HashMap<>();
+        for (NewTopic topic : topics) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic.name());
+            DescribeConfigsResponse.ConfigSource source = DescribeConfigsResponse.ConfigSource.TOPIC_CONFIG;
+            Collection<DescribeConfigsResponse.ConfigEntry> entries = new ArrayList<>();
+            topic.configs().forEach((k, v) -> new DescribeConfigsResponse.ConfigEntry(
+                    k, v, source, false, false, Collections.emptySet()
+            ));
+            DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error, entries);
+            configs.put(resource, config);
+        }
+        return new DescribeConfigsResponse(1000, configs);
+    }
+
 }
