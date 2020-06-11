@@ -273,7 +273,6 @@ public class WorkerConnector implements Runnable {
             statusListener.onFailure(connName, t);
         } finally {
             ctx.close();
-            shutdownLatch.countDown();
             metrics.close();
         }
     }
