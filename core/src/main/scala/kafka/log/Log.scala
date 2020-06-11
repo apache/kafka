@@ -1702,11 +1702,12 @@ class Log(@volatile private var _dir: File,
    *                  (if there is one) and returns true iff it is deletable
    * @return The number of segments deleted
    */
-  private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean, reason: String): Int = {
+  private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean) = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
       if (deletable.nonEmpty) {
-        info(s"Found deletable segments with base offsets [${deletable.map(_.baseOffset).mkString(",")}] due to $reason")
+        info(s"Found deletable segments with base offsets" +
+          s" [${deletable.map(_.baseOffset).mkString(",")}]. Deleting ${deletable.size} segments.")
         deleteSegments(deletable)
       } else 0
     }
@@ -1787,15 +1788,21 @@ class Log(@volatile private var _dir: File,
 
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
       if (startMs - segment.largestTimestamp > config.retentionMs) {
-        info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-          s" retentionMs breach. Largest timestamp of segment is ${segment.largestTimestamp}")
+        segment.largestRecordTimestamp match {
+          case Some(ts) =>
+            info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+              s" retentionMs breach. Largest record timestamp of segment is $ts")
+          case None =>
+            info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+              s" retentionMs breach. Last modified timestamp of segment is ${segment.lastModified}")
+        }
         true
       } else {
         false
       }
     }
 
-    deleteOldSegments(shouldDelete, reason = s"retention time ${config.retentionMs}ms breach")
+    deleteOldSegments(shouldDelete)
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1812,13 +1819,13 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    deleteOldSegments(shouldDelete, reason = s"retention size in bytes ${config.retentionSize} breach")
+    deleteOldSegments(shouldDelete)
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
       if (nextSegmentOpt.exists(_.baseOffset <= logStartOffset)) {
-        info (s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
+        info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
           s" startOffset breach. logStartOffset is ${logStartOffset}")
         true
       } else {
@@ -1826,7 +1833,7 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
+    deleteOldSegments(shouldDelete)
   }
 
   def isFuture: Boolean = dir.getName.endsWith(Log.FutureDirSuffix)
