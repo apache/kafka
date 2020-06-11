@@ -667,7 +667,7 @@ class GroupCoordinatorTest {
 
     val groupMetadata = group(groupId)
     assertEquals(Empty, groupMetadata.currentState)
-    assertEquals(0, groupMetadata.allMembers.size)
+    assertTrue(groupMetadata.allMembers.isEmpty)
   }
 
   @Test
@@ -1358,7 +1358,7 @@ class GroupCoordinatorTest {
       CompletingRebalance,
       Some(protocolType)
     )
-    assertEquals(1, getGroup(groupId).allMembers.size)
+    assertEquals(Set(leaderRejoinGroupResult.memberId), getGroup(groupId).allMembers)
     assertNotEquals(null, getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
   }
@@ -1378,6 +1378,12 @@ class GroupCoordinatorTest {
     assertEquals(2, dynamicJoinResult.generationId)
     assertGroupState(groupState = CompletingRebalance)
 
+    assertEquals(Set(rebalanceResult.leaderId, rebalanceResult.followerId,
+      dynamicJoinResult.memberId), getGroup(groupId).allMembers)
+    assertEquals(Set(leaderInstanceId.get, followerInstanceId.get),
+      getGroup(groupId).allStaticMembers)
+    assertEquals(Set(dynamicJoinResult.memberId), getGroup(groupId).allDynamicMembers)
+
     // Send a special leave group request from static follower, moving group towards PreparingRebalance
     EasyMock.reset(replicaManager)
     val followerLeaveGroupResults = singleLeaveGroup(groupId, rebalanceResult.followerId)
@@ -1386,8 +1392,9 @@ class GroupCoordinatorTest {
 
     timer.advanceClock(DefaultRebalanceTimeout + 1)
     // Only static leader is maintained, and group is stuck at PreparingRebalance stage
-    assertEquals(1, getGroup(groupId).allMembers.size)
+    assertTrue(getGroup(groupId).allDynamicMembers.isEmpty)
     assertEquals(Set(rebalanceResult.leaderId), getGroup(groupId).allMembers)
+    assertTrue(getGroup(groupId).allDynamicMembers.isEmpty)
     assertEquals(2, getGroup(groupId).generationId)
     assertGroupState(groupState = PreparingRebalance)
   }
@@ -2101,12 +2108,14 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    //Starting sync group leader
+    // Starting sync group leader
     EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
     timer.advanceClock(100)
-    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
+    assertEquals(Set(firstMemberId), groupCoordinator.groupManager.getGroup(groupId).get.allMembers)
+    assertEquals(groupCoordinator.groupManager.getGroup(groupId).get.allMembers,
+      groupCoordinator.groupManager.getGroup(groupId).get.allDynamicMembers)
     assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
     val group = groupCoordinator.groupManager.getGroup(groupId).get
 
@@ -2125,7 +2134,7 @@ class GroupCoordinatorTest {
     EasyMock.replay(replicaManager)
 
     // advance clock to timeout the pending member
-    assertEquals(1, group.allMembers.size)
+    assertEquals(Set(firstMemberId), group.allMembers)
     assertEquals(1, group.numPending)
     timer.advanceClock(300)
 
@@ -2139,7 +2148,7 @@ class GroupCoordinatorTest {
 
     // at this point the second member should have been removed from pending list (session timeout),
     // and the group should be in Stable state with only the first member in it.
-    assertEquals(1, group.allMembers.size)
+    assertEquals(Set(firstMemberId), group.allMembers)
     assertEquals(0, group.numPending)
     assertEquals(Stable, group.currentState)
     assertTrue(group.has(firstMemberId))
@@ -2245,6 +2254,7 @@ class GroupCoordinatorTest {
 
     assertGroupState(groupState = CompletingRebalance)
     assertEquals(2, group().allMembers.size)
+    assertEquals(2, group().allDynamicMembers.size)
     assertEquals(0, group().numPending)
   }
 

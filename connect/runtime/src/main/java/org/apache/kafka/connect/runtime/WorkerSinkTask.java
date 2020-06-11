@@ -56,7 +56,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -175,8 +174,12 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
-    protected void releaseResources() {
-        sinkTaskMetricsGroup.close();
+    public void removeMetrics() {
+        try {
+            sinkTaskMetricsGroup.close();
+        } finally {
+            super.removeMetrics();
+        }
     }
 
     @Override
@@ -285,10 +288,9 @@ class WorkerSinkTask extends WorkerTask {
         SinkConnectorConfig.validate(taskConfig);
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
-            String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
-            Arrays.setAll(topics, i -> topics[i].trim());
-            consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-            log.debug("{} Initializing and starting task for topics {}", this, topics);
+            List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
+            consumer.subscribe(topics, new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics {}", this, Utils.join(topics, ", "));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);
@@ -556,6 +558,12 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
+            // if errors raised from the operator were swallowed by the task implementation, an
+            // exception needs to be thrown to kill the task indicating the tolerance was exceeded
+            if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
+                throw new ConnectException("Tolerance exceeded in error handler",
+                    retryWithToleranceOperator.error());
+            }
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);

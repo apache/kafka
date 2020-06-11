@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -99,6 +99,8 @@ public class StandbyTask extends AbstractTask implements Task {
             processorContext.initialize();
 
             log.info("Initialized");
+        } else if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while initializing standby task " + id);
         }
     }
 
@@ -108,17 +110,20 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void prepareSuspend() {
-        log.trace("No-op prepareSuspend with state {}", state());
-    }
-
-    @Override
     public void suspend() {
         log.trace("No-op suspend with state {}", state());
+        if (state() == State.RUNNING) {
+            transitionTo(State.SUSPENDED);
+        } else if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
+        }
     }
 
     @Override
     public void resume() {
+        if (state() == State.RESTORING) {
+            throw new IllegalStateException("Illegal state " + state() + " while resuming standby task " + id);
+        }
         log.trace("No-op resume with state {}", state());
     }
 
@@ -129,18 +134,20 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void prepareCommit() {
-        if (state() == State.RUNNING) {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+        if (state() == State.RUNNING || state() == State.SUSPENDED) {
             stateMgr.flush();
             log.info("Task ready for committing");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
+
+        return Collections.emptyMap();
     }
 
     @Override
     public void postCommit() {
-        if (state() == State.RUNNING) {
+        if (state() == State.RUNNING || state() == State.SUSPENDED) {
             // since there's no written offsets we can checkpoint with empty map,
             // and the state current offset would be used to checkpoint
             stateMgr.checkpoint(Collections.emptyMap());
@@ -152,72 +159,23 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void prepareCloseClean() {
-        prepareClose(true);
-
-        log.info("Prepared clean close");
-    }
-
-    @Override
-    public void prepareCloseDirty() {
-        prepareClose(false);
-
-        log.info("Prepared dirty close");
-    }
-
-    /**
-     * 1. commit if we are running and clean close;
-     * 2. close the state manager.
-     *
-     * @throws TaskMigratedException all the task has been migrated
-     * @throws StreamsException fatal error, should close the thread
-     */
-    private void prepareClose(final boolean clean) {
-        switch (state()) {
-            case CREATED:
-            case CLOSED:
-                log.trace("Skip prepare closing since state is {}", state());
-                return;
-
-            case RUNNING:
-                if (clean) {
-                    stateMgr.flush();
-                }
-
-                break;
-
-            case RESTORING:
-            case SUSPENDED:
-                throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
-
-            default:
-                throw new IllegalStateException("Unknown state " + state() + " while closing standby task " + id);
-        }
-    }
-
-    @Override
     public void closeClean() {
         close(true);
-
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
         close(false);
-
         log.info("Closed dirty");
     }
 
     @Override
     public void closeAndRecycleState() {
-        prepareClose(true);
+        suspend();
+        prepareCommit();
 
-        if (state() == State.CREATED || state() == State.RUNNING) {
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state current offset would be used to checkpoint
-            stateMgr.checkpoint(Collections.emptyMap());
-            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+        if (state() == State.CREATED || state() == State.SUSPENDED) {
             stateMgr.recycle();
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
@@ -232,13 +190,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private void close(final boolean clean) {
         switch (state()) {
             case CREATED:
-            case RUNNING:
-                if (clean) {
-                    // since there's no written offsets we can checkpoint with empty map,
-                    // and the state current offset would be used to checkpoint
-                    stateMgr.checkpoint(Collections.emptyMap());
-                    offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
-                }
+            case SUSPENDED:
                 executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
@@ -260,8 +212,8 @@ public class StandbyTask extends AbstractTask implements Task {
                 log.trace("Skip closing since state is {}", state());
                 return;
 
-            case RESTORING:
-            case SUSPENDED:
+            case RESTORING: // a StandbyTask is never in RESTORING state
+            case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
 
             default:

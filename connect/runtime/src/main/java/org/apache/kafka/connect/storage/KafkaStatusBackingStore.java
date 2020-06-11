@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -197,7 +198,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             public void run() {
                 log.debug("Creating admin client to manage Connect internal status topic");
                 try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    admin.createTopics(topicDescription);
+                    // Create the topic if it doesn't exist
+                    Set<String> newTopics = admin.createTopics(topicDescription);
+                    if (!newTopics.contains(topic)) {
+                        // It already existed, so check that the topic cleanup policy is compact only and not delete
+                        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                        admin.verifyTopicCleanupPolicyOnlyCompact(topic,
+                                DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
+                    }
                 }
             }
         };

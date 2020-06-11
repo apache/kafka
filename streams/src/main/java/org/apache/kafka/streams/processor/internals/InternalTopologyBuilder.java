@@ -517,6 +517,9 @@ public class InternalTopologyBuilder {
         if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
             throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
         }
+        if (globalStateBuilders.containsKey(storeBuilder.name())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeBuilder.name());
+        }
 
         stateFactories.put(storeBuilder.name(), new StateStoreFactory<>(storeBuilder));
 
@@ -677,8 +680,11 @@ public class InternalTopologyBuilder {
         if (nodeFactories.containsKey(processorName)) {
             throw new TopologyException("Processor " + processorName + " is already added.");
         }
-        if (stateFactories.containsKey(storeName) || globalStateBuilders.containsKey(storeName)) {
-            throw new TopologyException("StateStore " + storeName + " is already added.");
+        if (stateFactories.containsKey(storeName)) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeName);
+        }
+        if (globalStateBuilders.containsKey(storeName)) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
         if (loggingEnabled) {
             throw new TopologyException("StateStore " + storeName + " for global table must not have logging enabled.");
@@ -1787,6 +1793,13 @@ public class InternalTopologyBuilder {
                 }
             }
             return topicConfigs;
+        }
+
+        /**
+         * Returns the topic names for any optimized source changelogs
+         */
+        public Set<String> sourceTopicChangelogs() {
+            return sourceTopics.stream().filter(stateChangelogTopics::containsKey).collect(Collectors.toSet());
         }
 
         @Override

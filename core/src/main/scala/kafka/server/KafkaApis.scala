@@ -1662,9 +1662,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else if (!apiVersionRequest.isValid)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
-      else
-        ApiVersionsResponse.apiVersionsResponse(requestThrottleMs,
-          config.interBrokerProtocolVersion.recordVersion.value)
+      else {
+        val supportedFeatures = SupportedFeatures.get
+        val finalizedFeatures = FinalizedFeatureCache.get
+        if (finalizedFeatures.isEmpty) {
+          ApiVersionsResponse.apiVersionsResponse(
+            requestThrottleMs,
+            config.interBrokerProtocolVersion.recordVersion.value,
+            supportedFeatures)
+        } else {
+          ApiVersionsResponse.apiVersionsResponse(
+            requestThrottleMs,
+            config.interBrokerProtocolVersion.recordVersion.value,
+            supportedFeatures,
+            finalizedFeatures.get.features,
+            finalizedFeatures.get.epoch)
+        }
+      }
     }
     sendResponseMaybeThrottle(request, createResponseCallback)
   }

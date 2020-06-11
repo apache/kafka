@@ -423,26 +423,6 @@ public class PartitionGroupTest {
     }
 
     @Test
-    public void shouldCleanPartitionsOnClose() {
-        final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
-        group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
-
-        group.close();
-
-        assertThat(group.numBuffered(), equalTo(0));
-        assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
-        assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
-
-        // The partition1 should still be able to find.
-        assertThat(group.addRawRecords(partition1, list), equalTo(3));
-    }
-
-    @Test
     public void shouldUpdatePartitionQueuesShrink() {
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
                 new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
