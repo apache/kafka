@@ -1795,6 +1795,13 @@ public class InternalTopologyBuilder {
             return topicConfigs;
         }
 
+        /**
+         * Returns the topic names for any optimized source changelogs
+         */
+        public Set<String> sourceTopicChangelogs() {
+            return sourceTopics.stream().filter(stateChangelogTopics::containsKey).collect(Collectors.toSet());
+        }
+
         @Override
         public boolean equals(final Object o) {
             if (o instanceof TopicsInfo) {
