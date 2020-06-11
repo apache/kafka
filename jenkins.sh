@@ -75,3 +75,8 @@ cd streams.examples \
 $mvn compile \
     || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
 
+# Run coverage
+./gradlew reportCoverage
+
+# Upload coverage reports to Codecov
+bash <(curl -s https://codecov.io/bash)
