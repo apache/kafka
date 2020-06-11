@@ -119,6 +119,8 @@ public interface SinkTaskContext {
      * @return the reporter; null if no error reporter has been configured for the connector
      * @since 2.6
      */
-    ErrantRecordReporter errantRecordReporter();
+    default ErrantRecordReporter errantRecordReporter() {
+        return null;
+    }
 
 }

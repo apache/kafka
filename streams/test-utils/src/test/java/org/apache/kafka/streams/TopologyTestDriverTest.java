@@ -22,10 +22,13 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.SystemTime;
@@ -70,6 +73,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -709,6 +713,56 @@ public class TopologyTestDriverTest {
             testDriver.readRecord(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
         assertThat(result2.getValue(), equalTo(source2Value));
+    }
+
+    @Test
+    public void shouldPassRecordHeadersIntoSerializersAndDeserializers() {
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
+
+        final AtomicBoolean passedHeadersToKeySerializer = new AtomicBoolean(false);
+        final AtomicBoolean passedHeadersToValueSerializer = new AtomicBoolean(false);
+        final AtomicBoolean passedHeadersToKeyDeserializer = new AtomicBoolean(false);
+        final AtomicBoolean passedHeadersToValueDeserializer = new AtomicBoolean(false);
+
+        final Serializer<byte[]> keySerializer = new ByteArraySerializer() {
+            @Override
+            public byte[] serialize(final String topic, final Headers headers, final byte[] data) {
+                passedHeadersToKeySerializer.set(true);
+                return serialize(topic, data);
+            }
+        };
+        final Serializer<byte[]> valueSerializer = new ByteArraySerializer() {
+            @Override
+            public byte[] serialize(final String topic, final Headers headers, final byte[] data) {
+                passedHeadersToValueSerializer.set(true);
+                return serialize(topic, data);
+            }
+        };
+
+        final Deserializer<byte[]> keyDeserializer = new ByteArrayDeserializer() {
+            @Override
+            public byte[] deserialize(final String topic, final Headers headers, final byte[] data) {
+                passedHeadersToKeyDeserializer.set(true);
+                return deserialize(topic, data);
+            }
+        };
+        final Deserializer<byte[]> valueDeserializer = new ByteArrayDeserializer() {
+            @Override
+            public byte[] deserialize(final String topic, final Headers headers, final byte[] data) {
+                passedHeadersToValueDeserializer.set(true);
+                return deserialize(topic, data);
+            }
+        };
+
+        final TestInputTopic<byte[], byte[]> inputTopic = testDriver.createInputTopic(SOURCE_TOPIC_1, keySerializer, valueSerializer);
+        final TestOutputTopic<byte[], byte[]> outputTopic = testDriver.createOutputTopic(SINK_TOPIC_1, keyDeserializer, valueDeserializer);
+        inputTopic.pipeInput(testRecord1);
+        outputTopic.readRecord();
+
+        assertThat(passedHeadersToKeySerializer.get(), equalTo(true));
+        assertThat(passedHeadersToValueSerializer.get(), equalTo(true));
+        assertThat(passedHeadersToKeyDeserializer.get(), equalTo(true));
+        assertThat(passedHeadersToValueDeserializer.get(), equalTo(true));
     }
 
     @Test

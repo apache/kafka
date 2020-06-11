@@ -143,6 +143,7 @@
 
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.common.acl" />
+      <allow pkg="org.apache.kafka.common.feature" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />

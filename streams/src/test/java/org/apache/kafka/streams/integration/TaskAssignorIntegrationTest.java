@@ -26,9 +26,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -75,21 +77,23 @@ public class TaskAssignorIntegrationTest {
 
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + testId;
+        final String inputTopic = "input" + testId;
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, "input");
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
         // Maybe I'm paranoid, but I don't want the compiler deciding that my lambdas are equal to the identity
         // function and defeating my identity check
         final AtomicInteger compilerDefeatingReference = new AtomicInteger(0);
 
         // the implementation doesn't matter, we're just going to verify the reference.
-        final AssignorConfiguration.AssignmentListener configuredAssignmentListener =
+        final AssignmentListener configuredAssignmentListener =
             stable -> compilerDefeatingReference.incrementAndGet();
 
         final Properties properties = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
                 mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
@@ -100,7 +104,7 @@ public class TaskAssignorIntegrationTest {
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input");
+        builder.stream(inputTopic);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.start();
@@ -125,8 +129,7 @@ public class TaskAssignorIntegrationTest {
 
             final Field assignmentListenerField = StreamsPartitionAssignor.class.getDeclaredField("assignmentListener");
             assignmentListenerField.setAccessible(true);
-            final AssignorConfiguration.AssignmentListener actualAssignmentListener =
-                (AssignorConfiguration.AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
+            final AssignmentListener actualAssignmentListener = (AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
 
             final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("taskAssignorSupplier");
             taskAssignorSupplierField.setAccessible(true);

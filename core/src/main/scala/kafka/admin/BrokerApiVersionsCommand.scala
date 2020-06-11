@@ -222,7 +222,7 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
           Type.STRING,
-          ClientDnsLookup.DEFAULT.toString,
+          ClientDnsLookup.USE_ALL_DNS_IPS.toString,
           in(ClientDnsLookup.DEFAULT.toString,
             ClientDnsLookup.USE_ALL_DNS_IPS.toString,
             ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString),
@@ -296,7 +296,7 @@ object BrokerApiVersionsCommand {
         DefaultSendBufferBytes,
         DefaultReceiveBufferBytes,
         requestTimeoutMs,
-        ClientDnsLookup.DEFAULT,
+        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         new ApiVersions,

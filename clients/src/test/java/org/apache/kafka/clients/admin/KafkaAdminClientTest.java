@@ -34,6 +34,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -50,6 +52,7 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -62,6 +65,9 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -101,6 +107,7 @@ import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
@@ -272,7 +279,7 @@ public class KafkaAdminClientTest {
 
     private static Cluster mockBootstrapCluster() {
         return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
+                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
@@ -501,6 +508,21 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testCreateTopicsPartialResponse() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
+                    prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            CreateTopicsResult topicsResult = env.adminClient().createTopics(
+                    asList(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2))),
+                           new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
+                    new CreateTopicsOptions().timeoutMs(10000));
+            topicsResult.values().get("myTopic").get();
+            TestUtils.assertFutureThrows(topicsResult.values().get("myTopic2"), ApiException.class);
+        }
+    }
+
+    @Test
     public void testCreateTopicsRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
@@ -590,6 +612,21 @@ public class KafkaAdminClientTest {
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteTopicsPartialResponse() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
+                    prepareDeleteTopicsResponse("myTopic", Errors.NONE));
+            Map<String, KafkaFuture<Void>> values = env.adminClient().deleteTopics(asList("myTopic", "myOtherTopic"),
+                    new DeleteTopicsOptions()).values();
+            values.get("myTopic").get();
+
+            TestUtils.assertFutureThrows(values.get("myOtherTopic"), ApiException.class);
         }
     }
 
@@ -3521,6 +3558,84 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
         }
+    }
+
+    @Test
+    public void testAlterReplicaLogDirsSuccess() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.NONE, 0);
+
+            TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr0, "/data0");
+            logDirs.put(tpr1, "/data1");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+            assertNull(result.values().get(tpr0).get());
+            assertNull(result.values().get(tpr1).get());
+        }
+    }
+
+    @Test
+    public void testAlterReplicaLogDirsLogDirNotFound() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 0);
+            createAlterLogDirsResponse(env, env.cluster().nodeById(1), Errors.LOG_DIR_NOT_FOUND, 0);
+
+            TopicPartitionReplica tpr0 = new TopicPartitionReplica("topic", 0, 0);
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 0, 1);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr0, "/data0");
+            logDirs.put(tpr1, "/data1");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+            assertNull(result.values().get(tpr0).get());
+            TestUtils.assertFutureError(result.values().get(tpr1), LogDirNotFoundException.class);
+        }
+    }
+
+    @Test
+    public void testAlterReplicaLogDirsUnrequested() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 1, 2);
+
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 1, 0);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr1, "/data1");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+            assertNull(result.values().get(tpr1).get());
+        }
+    }
+
+    @Test
+    public void testAlterReplicaLogDirsPartialResponse() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            createAlterLogDirsResponse(env, env.cluster().nodeById(0), Errors.NONE, 1);
+
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 1, 0);
+            TopicPartitionReplica tpr2 = new TopicPartitionReplica("topic", 2, 0);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr1, "/data1");
+            logDirs.put(tpr2, "/data1");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+            assertNull(result.values().get(tpr1).get());
+            TestUtils.assertFutureThrows(result.values().get(tpr2), ApiException.class);
+        }
+    }
+
+    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {
+        env.kafkaClient().prepareResponseFrom(new AlterReplicaLogDirsResponse(
+                new AlterReplicaLogDirsResponseData().setResults(singletonList(
+                        new AlterReplicaLogDirTopicResult()
+                                .setTopicName("topic")
+                                .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
+                                        new AlterReplicaLogDirPartitionResult()
+                                                .setPartitionIndex(partitionId)
+                                                .setErrorCode(error.code())).collect(Collectors.toList()))))), node);
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,

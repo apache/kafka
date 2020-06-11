@@ -17,16 +17,14 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,10 +35,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
@@ -50,7 +46,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
-    private Set<S> bulkLoadSegments;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -186,8 +181,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(this.context, observedStreamTime);
 
-        bulkLoadSegments = new HashSet<>(segments.allSegments());
-
         // register and possibly restore the state from the logs
         context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
 
@@ -249,17 +242,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
-                // This handles the case that state store is moved to a new client and does not
-                // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
-                // will only close the database and open it again with bulk loading enabled.
-                if (!bulkLoadSegments.contains(segment) && context.taskType() == TaskType.ACTIVE) {
-                    segment.toggleDbForBulkLoading(true);
-                    // If the store does not exist yet, the getOrCreateSegmentIfLive will call openDB that
-                    // makes the open flag for the newly created store.
-                    // if the store does exist already, then toggleDbForBulkLoading will make sure that
-                    // the store is already open here.
-                    bulkLoadSegments = new HashSet<>(segments.allSegments());
-                }
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(record, batch);
@@ -271,32 +253,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return writeBatchMap;
     }
 
-    private void toggleForBulkLoading(final boolean prepareForBulkload) {
-        for (final S segment : segments.allSegments()) {
-            segment.toggleDbForBulkLoading(prepareForBulkload);
-        }
-    }
-
-    private class RocksDBSegmentsBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+    private class RocksDBSegmentsBatchingRestoreCallback implements BatchingStateRestoreCallback {
 
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             restoreAllInternal(records);
-        }
-
-        @Override
-        public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
-            toggleForBulkLoading(true);
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition,
-                                 final String storeName,
-                                 final long totalRestored) {
-            toggleForBulkLoading(false);
         }
     }
 }
