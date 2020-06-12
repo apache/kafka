@@ -697,6 +697,10 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"))
     assertEquals(2, simpleDescribeOutputRows.size)
 
+    // let's wait until the LAIR is NOT propagated
+    TestUtils.waitUntilTrue(() => !adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().containsKey(tp),
+      "Reassignment is NOT completed")
+
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
     assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
