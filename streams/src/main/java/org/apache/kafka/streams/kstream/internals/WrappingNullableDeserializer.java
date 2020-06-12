@@ -18,6 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 
-public interface WrappingNullableDeserializer<Outer, Inner> extends Deserializer<Outer> {
-    void setIfUnset(final Deserializer<Inner> defaultDeserializer);
+public interface WrappingNullableDeserializer<Outer, InnerK, InnerV> extends Deserializer<Outer> {
+    void setIfUnset(final Deserializer<InnerK> defaultKeyDeserializer, final Deserializer<InnerV> defaultValueDeserializer);
 }
