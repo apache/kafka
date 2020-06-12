@@ -400,7 +400,7 @@ public class FetchSessionHandler {
      */
     public boolean handleResponse(FetchResponse<?> response) {
         if (response.error() != Errors.NONE) {
-            log.info("Node {} was unable to process the fetch request with {}: {}.",
+            log.trace("Node {} was unable to process the fetch request with {}: {}.",
                 node, nextMetadata, response.error());
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
                 nextMetadata = FetchMetadata.INITIAL;
