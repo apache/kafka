@@ -174,25 +174,22 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
+              files="(StreamThreadTest).java"/>
 
     <suppress checks="MethodLength"
-              files="(EosBetaUpgradeIntegrationTest|KStreamKTableJoinIntegrationTest|KStreamKStreamJoinTest|KStreamWindowAggregateTest|RocksDBWindowStoreTest).java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
 
-    <suppress checks="BooleanExpressionComplexity"
-              files="SmokeTestDriver.java"/>
-
     <suppress checks="CyclomaticComplexity"
-              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest|RelationalSmokeTest|SmokeTestDriver).java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest|RelationalSmokeTest).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|SmokeTestDriver|TaskManagerTest).java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|TaskManagerTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(EosBetaUpgradeIntegrationTest|EosTestDriver|KStreamKStreamJoinTest|RelationalSmokeTest|SmokeTestDriver|KStreamKStreamLeftJoinTest|KTableKTableForeignKeyJoinIntegrationTest).java"/>
+              files="(EosBetaUpgradeIntegrationTest|EosTestDriver|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RelationalSmokeTest).java"/>
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
