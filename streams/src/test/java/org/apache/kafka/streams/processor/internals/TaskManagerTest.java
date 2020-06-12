@@ -101,6 +101,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -252,6 +253,10 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
+            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
+        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         expectLockObtainedFor(taskId00);
@@ -259,7 +264,12 @@ public class TaskManagerTest {
         replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
-        handleAssignment(taskId00Assignment, emptyMap(), emptyMap());
+        final StateMachineTask runningTask = handleAssignment(
+            taskId00Assignment,
+            emptyMap(),
+            emptyMap()
+        ).get(taskId00);
+        runningTask.setChangelogOffsets(changelogOffsets);
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
@@ -413,7 +423,7 @@ public class TaskManagerTest {
     public void shouldCloseDirtyActiveUnassignedSuspendedTasksWhenErrorCommittingRevokedTask() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("KABOOM!");
             }
         };
@@ -446,7 +456,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() throws Exception {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
@@ -456,6 +466,17 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01)).anyTimes();
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
+
+        makeTaskFolders(taskId00.toString(), taskId01.toString());
+        expectLockObtainedFor(taskId00, taskId01);
+
+        // The second attempt will return empty tasks.
+        makeTaskFolders();
+        expectLockObtainedFor();
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(emptySet());
+        assertThat(taskManager.lockedTaskDirectories(), Matchers.is(mkSet(taskId00, taskId01)));
 
         // `handleLostAll`
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
@@ -473,6 +494,13 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), is(singletonMap(taskId01, task01)));
+
+        // The locked task map will not be cleared.
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
+
+        taskManager.handleRebalanceStart(emptySet());
+
+        assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
     }
 
     @Test
@@ -576,7 +604,8 @@ public class TaskManagerTest {
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
             }
         };
@@ -643,6 +672,30 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
 
         verify(activeTaskCreator);
+    }
+
+    @Test
+    public void shouldUpdateInputPartitionsAfterRebalance() {
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
+        expectRestoreToBeCompleted(consumer, changeLogReader, false);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
+        replay(activeTaskCreator, consumer, changeLogReader);
+
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+
+        final Set<TopicPartition> newPartitionsSet = mkSet(t1p1);
+        final Map<TaskId, Set<TopicPartition>> taskIdSetMap = singletonMap(taskId00, newPartitionsSet);
+        taskManager.handleAssignment(taskIdSetMap, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertEquals(newPartitionsSet, task00.inputPartitions());
+        verify(activeTaskCreator, consumer, changeLogReader);
     }
 
     @Test
@@ -896,7 +949,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignmentActive, Collections.emptyMap());
 
         assertThat(task00.commitNeeded, is(true));
-        assertThat(task10.commitPrepared, is(false));
     }
 
     @Test
@@ -933,9 +985,6 @@ public class TaskManagerTest {
 
         consumer.commitSync(expectedCommittedOffsets);
         expectLastCall().andThrow(new RuntimeException("Something went wrong!"));
-
-        changeLogReader.remove(singleton(t1p1));
-        expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
@@ -1021,10 +1070,11 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPassUpIfExceptionDuringPrepareSuspend() {
+    public void shouldPassUpIfExceptionDuringSuspend() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void prepareSuspend() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("KABOOM!");
             }
         };
@@ -1038,7 +1088,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task00.state(), is(Task.State.SUSPENDED));
 
         verify(consumer);
     }
@@ -1058,22 +1108,14 @@ public class TaskManagerTest {
                 return singletonList(changelog);
             }
         };
-        final AtomicBoolean prepareClosedDirtyTask01 = new AtomicBoolean(false);
-        final AtomicBoolean prepareClosedDirtyTask02 = new AtomicBoolean(false);
-        final AtomicBoolean prepareClosedDirtyTask03 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask01 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask02 = new AtomicBoolean(false);
         final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask01.set(true);
             }
 
             @Override
@@ -1084,14 +1126,9 @@ public class TaskManagerTest {
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask02.set(true);
             }
 
             @Override
@@ -1102,14 +1139,9 @@ public class TaskManagerTest {
         };
         final Task task03 = new StateMachineTask(taskId03, taskId03Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
-            }
-
-            @Override
-            public void prepareCloseDirty() {
-                super.prepareCloseDirty();
-                prepareClosedDirtyTask03.set(true);
             }
 
             @Override
@@ -1121,9 +1153,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
             .andReturn(asList(task00, task01, task02, task03)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
@@ -1169,12 +1198,10 @@ public class TaskManagerTest {
             RuntimeException.class,
             () -> taskManager.shutdown(true)
         );
+        assertThat(exception.getMessage(), equalTo("Unexpected exception while closing task"));
 
-        assertThat(prepareClosedDirtyTask01.get(), is(true));
         assertThat(closedDirtyTask01.get(), is(true));
-        assertThat(prepareClosedDirtyTask02.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
-        assertThat(prepareClosedDirtyTask03.get(), is(true));
         assertThat(closedDirtyTask03.get(), is(true));
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(task01.state(), is(Task.State.CLOSED));
@@ -1205,9 +1232,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall().andThrow(new RuntimeException("whatever"));
@@ -1259,9 +1283,6 @@ public class TaskManagerTest {
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall();
@@ -1306,7 +1327,7 @@ public class TaskManagerTest {
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("task 0_1 prepare commit boom!");
             }
         };
@@ -1411,22 +1432,21 @@ public class TaskManagerTest {
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("migrated", new RuntimeException("cause"));
             }
         };
         final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new RuntimeException("oops");
             }
         };
 
         resetToStrict(changeLogReader);
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        // make sure we also remove the changelog partitions from the changelog reader
-        changeLogReader.remove(eq(singletonList(changelog)));
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01, task02)).anyTimes();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
         expectLastCall().andThrow(new RuntimeException("whatever 0"));
@@ -1780,7 +1800,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromActiveCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -1807,7 +1827,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromStandbyCommit() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public void prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -2236,14 +2256,16 @@ public class TaskManagerTest {
     public void shouldThrowTaskMigratedWhenAllTaskCloseExceptionsAreTaskMigrated() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t2 close exception", new RuntimeException());
             }
         };
@@ -2266,14 +2288,16 @@ public class TaskManagerTest {
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
             }
         };
@@ -2295,14 +2319,16 @@ public class TaskManagerTest {
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
         final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new TaskMigratedException("t1 close exception", new RuntimeException());
             }
         };
 
         final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false) {
             @Override
-            public Map<TopicPartition, Long> prepareCloseClean() {
+            public void suspend() {
+                super.suspend();
                 throw new KafkaException("Kaboom for t2!", new RuntimeException());
             }
         };
@@ -2516,7 +2542,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 return offsets;
             }
         };
@@ -2537,11 +2563,16 @@ public class TaskManagerTest {
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
+        expectRestoreToBeCompleted(consumer, changeLogReader, true);
+    }
+
+    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
+                                                   final ChangelogReader changeLogReader, final boolean changeLogUpdateRequired) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         expect(consumer.assignment()).andReturn(assignment);
         consumer.resume(assignment);
         expectLastCall();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
+        expect(changeLogReader.completedChangelogs()).andReturn(emptySet()).times(changeLogUpdateRequired ? 1 : 0, 1);
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
@@ -2581,6 +2612,7 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
+
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
         StateMachineTask(final TaskId id,
@@ -2601,11 +2633,17 @@ public class TaskManagerTest {
         public void initializeIfNeeded() {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
+                if (!active) {
+                    transitionTo(State.RUNNING);
+                }
             }
         }
 
         @Override
         public void completeRestoration() {
+            if (state() == State.RUNNING) {
+                return;
+            }
             transitionTo(State.RUNNING);
         }
 
@@ -2628,8 +2666,9 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void prepareCommit() {
+        public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
             commitPrepared = true;
+            return committableOffsets;
         }
 
         @Override
@@ -2638,11 +2677,10 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void prepareSuspend() {}
-
-        @Override
         public void suspend() {
-            transitionTo(State.SUSPENDED);
+            if (state() == State.RUNNING) {
+                transitionTo(State.SUSPENDED);
+            }
         }
 
         @Override
@@ -2653,15 +2691,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> prepareCloseClean() {
-            return Collections.emptyMap();
-        }
-
-        @Override
-        public void prepareCloseDirty() {}
-
-        @Override
-        public void closeClean(final Map<TopicPartition, Long> checkpoint) {
+        public void closeClean() {
             transitionTo(State.CLOSED);
         }
 
@@ -2670,16 +2700,21 @@ public class TaskManagerTest {
             transitionTo(State.CLOSED);
         }
 
+        @Override
+        public void closeAndRecycleState() {
+            transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+            inputPartitions = topicPartitions;
+        }
+
         void setCommittableOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> committableOffsets) {
             if (!active) {
                 throw new IllegalStateException("Cannot set CommittableOffsetsAndMetadate for StandbyTasks");
             }
             this.committableOffsets = committableOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
-            return committableOffsets;
         }
 
         @Override

@@ -24,6 +24,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -840,6 +842,8 @@ public abstract class AbstractWindowBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
+        final Time time = new SystemTime();
+        context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
         windowStore.init(context, windowStore);
 

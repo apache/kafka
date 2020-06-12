@@ -56,7 +56,7 @@ public class KStreamTransformTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext<Object, Object> context) {
+                public void init(final ProcessorContext context) {
                     context.schedule(
                         Duration.ofMillis(1),
                         PunctuationType.WALL_CLOCK_TIME,
@@ -122,7 +122,7 @@ public class KStreamTransformTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext<Object, Object> context) {
+                public void init(final ProcessorContext context) {
                     context.schedule(
                         Duration.ofMillis(1),
                         PunctuationType.WALL_CLOCK_TIME,

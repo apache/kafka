@@ -20,7 +20,7 @@ package org.apache.kafka.message;
 import java.util.Optional;
 
 public interface FieldType {
-    String STRUCT_PREFIX = "[]";
+    String ARRAY_PREFIX = "[]";
 
     final class BoolFieldType implements FieldType {
         static final BoolFieldType INSTANCE = new BoolFieldType();
@@ -268,8 +268,8 @@ public interface FieldType {
             case BytesFieldType.NAME:
                 return BytesFieldType.INSTANCE;
             default:
-                if (string.startsWith(STRUCT_PREFIX)) {
-                    String elementTypeString = string.substring(STRUCT_PREFIX.length());
+                if (string.startsWith(ARRAY_PREFIX)) {
+                    String elementTypeString = string.substring(ARRAY_PREFIX.length());
                     if (elementTypeString.length() == 0) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");

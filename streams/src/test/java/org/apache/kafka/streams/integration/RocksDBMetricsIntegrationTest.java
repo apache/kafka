@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -113,7 +114,7 @@ public class RocksDBMetricsIntegrationTest {
     public String processingGuarantee;
 
     @Rule
-    public TestName name = new TestName();
+    public TestName testName = new TestName();
 
     @Before
     public void before() throws Exception {
@@ -154,10 +155,8 @@ public class RocksDBMetricsIntegrationTest {
 
     private Properties streamsConfig() {
         final Properties streamsConfiguration = new Properties();
-        final String suffix = name.getMethodName()
-            .replace('[', '_')
-            .replace(']', '_');
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + suffix);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());

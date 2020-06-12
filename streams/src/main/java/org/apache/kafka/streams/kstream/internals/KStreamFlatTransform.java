@@ -23,6 +23,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {
 
@@ -37,6 +40,11 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
         return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return transformerSupplier.stores();
+    }
+
     public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends AbstractProcessor<KIn, VIn> {
 
         private final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
@@ -46,7 +54,7 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
         }
 
         @Override
-        public void init(final ProcessorContext<Object, Object> context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             transformer.init(context);
         }

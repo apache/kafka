@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -51,7 +52,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * then it is wrapped into a ConnectException and rethrown to the caller.
  * <p>
  */
-public class RetryWithToleranceOperator {
+public class RetryWithToleranceOperator implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
@@ -81,6 +82,23 @@ public class RetryWithToleranceOperator {
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+    }
+
+    public Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                      ConsumerRecord<byte[], byte[]> consumerRecord,
+                                      Throwable error) {
+
+        markAsFailed();
+        context.consumerRecord(consumerRecord);
+        context.currentContext(stage, executingClass);
+        context.error(error);
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            errorHandlingMetrics.recordError();
+            throw new ConnectException("Tolerance exceeded in error handler", error);
+        }
+        return errantRecordFuture;
     }
 
     /**
@@ -189,9 +207,8 @@ public class RetryWithToleranceOperator {
         totalFailures++;
     }
 
-    // Visible for testing
     @SuppressWarnings("fallthrough")
-    boolean withinToleranceLimits() {
+    public boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -269,5 +286,19 @@ public class RetryWithToleranceOperator {
      */
     public boolean failed() {
         return this.context.failed();
+    }
+
+    /**
+     * Returns the error encountered when processing the current stage.
+     *
+     * @return the error encountered when processing the current stage
+     */
+    public Throwable error() {
+        return this.context.error();
+    }
+
+    @Override
+    public void close() {
+        this.context.close();
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -34,10 +35,21 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     private Set<MemberToRemove> members;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
+        if (members.isEmpty()) {
+            throw new IllegalArgumentException("Invalid empty members has been provided");
+        }
         this.members = new HashSet<>(members);
+    }
+
+    public RemoveMembersFromConsumerGroupOptions() {
+        this.members = Collections.emptySet();
     }
 
     public Set<MemberToRemove> members() {
         return members;
+    }
+
+    public boolean removeAll() {
+        return members.isEmpty();
     }
 }

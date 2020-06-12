@@ -76,7 +76,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
-    private RecordCollector collector;
+    private InternalProcessorContext context;
     private String changelogTopic;
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
@@ -189,8 +189,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         taskId = context.taskId().toString();
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-        streamsMetrics = internalProcessorContext.metrics();
+        this.context = (InternalProcessorContext) context;
+        streamsMetrics = this.context.metrics();
 
         threadId = Thread.currentThread().getName();
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
@@ -209,10 +209,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         );
 
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        if (loggingEnabled) {
-            collector = ((RecordCollector.Supplier) context).recordCollector();
-            changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
-        }
+        changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition;
@@ -262,27 +259,28 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
 
-        collector.send(
-            changelogTopic,
-            key,
-            buffer.array(),
-            V_2_CHANGELOG_HEADERS,
-            partition,
-            null,
-            KEY_SERIALIZER,
-            VALUE_SERIALIZER
+        ((RecordCollector.Supplier) context).recordCollector().send(
+                changelogTopic,
+                key,
+                buffer.array(),
+                V_2_CHANGELOG_HEADERS,
+                partition,
+                null,
+                KEY_SERIALIZER,
+                VALUE_SERIALIZER
         );
     }
 
     private void logTombstone(final Bytes key) {
-        collector.send(changelogTopic,
-                       key,
-                       null,
-                       null,
-                       partition,
-                       null,
-                       KEY_SERIALIZER,
-                       VALUE_SERIALIZER
+        ((RecordCollector.Supplier) context).recordCollector().send(
+                changelogTopic,
+                key,
+                null,
+                null,
+                partition,
+                null,
+                KEY_SERIALIZER,
+                VALUE_SERIALIZER
         );
     }
 
@@ -550,8 +548,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private void updateBufferMetrics() {
-        bufferSizeSensor.record(memBufferSize);
-        bufferCountSensor.record(index.size());
+        bufferSizeSensor.record(memBufferSize, context.currentSystemTimeMs());
+        bufferCountSensor.record(index.size(), context.currentSystemTimeMs());
     }
 
     @Override

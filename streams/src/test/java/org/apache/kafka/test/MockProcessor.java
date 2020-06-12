@@ -56,7 +56,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     }
 
     @Override
-    public void init(final ProcessorContext<Object, Object> context) {
+    public void init(final ProcessorContext context) {
         super.init(context);
         if (scheduleInterval > 0L) {
             scheduleCancellable = context.schedule(

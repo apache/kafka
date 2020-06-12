@@ -218,7 +218,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                 trace("Sending message with null value and offset %d.".format(data.offset))
               }
               val records = messageHandler.handle(toBaseConsumerRecord(data))
-              records.asScala.foreach(producer.send)
+              records.forEach(producer.send)
               maybeFlushAndCommitOffsets()
             }
           } catch {

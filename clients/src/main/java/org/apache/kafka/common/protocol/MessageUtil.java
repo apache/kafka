@@ -18,10 +18,12 @@
 package org.apache.kafka.common.protocol;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.List;
 import java.util.UUID;
 
 public final class MessageUtil {
@@ -153,5 +155,29 @@ public final class MessageUtil {
                 "type, but got " + node.getNodeType());
         }
         return node.asDouble();
+    }
+
+    public static byte[] duplicate(byte[] array) {
+        if (array == null) {
+            return null;
+        }
+        byte[] newArray = new byte[array.length];
+        System.arraycopy(array, 0, newArray, 0, array.length);
+        return newArray;
+    }
+
+    /**
+     * Compare two RawTaggedFields lists.
+     * A null list is equivalent to an empty one in this context.
+     */
+    public static boolean compareRawTaggedFields(List<RawTaggedField> first,
+                                                 List<RawTaggedField> second) {
+        if (first == null) {
+            return second == null || second.isEmpty();
+        } else if (second == null) {
+            return first.isEmpty();
+        } else {
+            return first.equals(second);
+        }
     }
 }

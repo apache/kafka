@@ -21,7 +21,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public interface KTableValueGetter<K, V> {
 
-    void init(ProcessorContext<Void, Void> context);
+    void init(ProcessorContext context);
 
     ValueAndTimestamp<V> get(K key);
 

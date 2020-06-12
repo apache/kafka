@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 
 import java.io.File;
 import java.util.Map;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public class StateManagerStub implements StateManager {
 
@@ -58,5 +59,10 @@ public class StateManagerStub implements StateManager {
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {}
+
+    @Override
+    public TaskType taskType() {
+        return null;
+    }
 
 }

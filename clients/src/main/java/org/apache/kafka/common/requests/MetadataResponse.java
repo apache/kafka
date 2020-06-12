@@ -374,7 +374,7 @@ public class MetadataResponse extends AbstractResponse {
         @Override
         public String toString() {
             return "PartitionMetadata(" +
-                    ", error=" + error +
+                    "error=" + error +
                     ", partition=" + topicPartition +
                     ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
@@ -430,6 +430,7 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
+
     public static MetadataResponse prepareResponse(short version, int throttleTimeMs,
                                                    Collection<Node> brokers, String clusterId, int controllerId,
                                                    List<TopicMetadata> topicMetadataList,
@@ -442,7 +443,8 @@ public class MetadataResponse extends AbstractResponse {
     public static MetadataResponse prepareResponse(boolean hasReliableLeaderEpochs, int throttleTimeMs,
                                                    Collection<Node> brokers, String clusterId, int controllerId,
                                                    List<TopicMetadata> topicMetadataList,
-                                                   int clusterAuthorizedOperations) {
+                                                   int clusterAuthorizedOperations,
+                                                   short responseVersion) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
         brokers.forEach(broker ->
@@ -477,12 +479,14 @@ public class MetadataResponse extends AbstractResponse {
             }
             responseData.topics().add(metadataResponseTopic);
         });
-        return new MetadataResponse(responseData, hasReliableLeaderEpochs);
+        return new MetadataResponse(responseData, hasReliableLeaderEpochs, responseVersion);
     }
 
     public static MetadataResponse prepareResponse(int throttleTimeMs,
                                                    List<MetadataResponseTopic> topicMetadataList,
-                                                   Collection<Node> brokers, String clusterId, int controllerId,
+                                                   Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);

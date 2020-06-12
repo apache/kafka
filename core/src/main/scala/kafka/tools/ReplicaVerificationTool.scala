@@ -414,7 +414,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     }
 
     if (fetchResponse != null) {
-      fetchResponse.responseData.asScala.foreach { case (tp, partitionData) =>
+      fetchResponse.responseData.forEach { (tp, partitionData) =>
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
     } else {
@@ -479,7 +479,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
       consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-      ClientDnsLookup.DEFAULT,
+      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
       new ApiVersions,

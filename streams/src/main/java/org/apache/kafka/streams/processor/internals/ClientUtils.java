@@ -17,27 +17,40 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
+
+    public static final class QuietAdminClientConfig extends AdminClientConfig {
+        QuietAdminClientConfig(final StreamsConfig streamsConfig) {
+            // If you just want to look up admin configs, you don't care about the clientId
+            super(streamsConfig.getAdminConfigs("dummy"), false);
+        }
+    }
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -86,27 +99,60 @@ public class ClientUtils {
         return result;
     }
 
-    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsetsWithoutTimeout(final Collection<TopicPartition> partitions,
-                                                                                           final Admin adminClient) {
-        return fetchEndOffsets(partitions, adminClient, null);
+    /**
+     * @throws StreamsException if the consumer throws an exception
+     * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
+     */
+    public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
+                                                                  final Consumer<byte[], byte[]> consumer) {
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        final Map<TopicPartition, Long> committedOffsets;
+        try {
+            // those which do not have a committed offset would default to 0
+            committedOffsets = consumer.committed(partitions).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+        } catch (final TimeoutException e) {
+            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
+            throw e;
+        } catch (final KafkaException e) {
+            LOG.warn("The committed offsets request failed.", e);
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        }
+
+        return committedOffsets;
     }
 
-    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
-                                                                             final Admin adminClient,
-                                                                             final Duration timeout) {
-        final Map<TopicPartition, ListOffsetsResultInfo> endOffsets;
+    public static KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> fetchEndOffsetsFuture(final Collection<TopicPartition> partitions,
+                                                                                                final Admin adminClient) {
+        return adminClient.listOffsets(
+            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
+            .all();
+    }
+
+    /**
+     * A helper method that wraps the {@code Future#get} call and rethrows any thrown exception as a StreamsException
+     * @throws StreamsException if the admin client request throws an exception
+     */
+    public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture) {
         try {
-            final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> future =  adminClient.listOffsets(
-                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
-                                                                                        .all();
-            if (timeout == null) {
-                endOffsets = future.get();
-            } else {
-                endOffsets = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            }
-        } catch (final TimeoutException | RuntimeException | InterruptedException | ExecutionException e) {
+            return endOffsetsFuture.get();
+        } catch (final RuntimeException | InterruptedException | ExecutionException e) {
+            LOG.warn("The listOffsets request failed.", e);
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
-        return endOffsets;
+    }
+
+    /**
+     * @throws StreamsException if the admin client request throws an exception
+     */
+    public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
+                                                                             final Admin adminClient) {
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
     }
 }

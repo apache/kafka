@@ -144,7 +144,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, headerConverter,
                 new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
 
         recordsReturned = 0;
     }
@@ -187,7 +187,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             for (SinkRecord rec : recs) {
                 SinkRecord referenceSinkRecord
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
-                assertEquals(referenceSinkRecord, rec);
+                InternalSinkRecord referenceInternalSinkRecord =
+                    new InternalSinkRecord(null, referenceSinkRecord);
+                assertEquals(referenceInternalSinkRecord, rec);
                 offset++;
             }
         }

@@ -50,7 +50,7 @@ import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
 
-    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext<Object, Object> context);
+    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
 
     protected InternalMockProcessorContext context;
     protected KeyValueStore<Integer, String> store;

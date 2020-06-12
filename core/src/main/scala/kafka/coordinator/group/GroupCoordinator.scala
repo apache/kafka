@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Map, Seq, immutable, mutable}
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
 
 /**
@@ -797,12 +797,17 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleListGroups(): (Errors, List[GroupOverview]) = {
+  def handleListGroups(states: Set[String]): (Errors, List[GroupOverview]) = {
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
-      (errorCode, groupManager.currentGroups.map(_.overview).toList)
+      // if states is empty, return all groups
+      val groups = if (states.isEmpty)
+        groupManager.currentGroups
+      else
+        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      (errorCode, groups.map(_.overview).toList)
     }
   }
 
@@ -1141,12 +1146,16 @@ class GroupCoordinator(val brokerId: Int,
 
   def onCompleteJoin(group: GroupMetadata): Unit = {
     group.inLock {
-      // remove dynamic members who haven't joined the group yet
-      group.notYetRejoinedMembers.filterNot(_.isStaticMember) foreach { failedMember =>
-        removeHeartbeatForLeavingMember(group, failedMember)
-        group.remove(failedMember.memberId)
-        group.removeStaticMember(failedMember.groupInstanceId)
-        // TODO: cut the socket connection to the client
+      val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
+      if (notYetRejoinedDynamicMembers.nonEmpty) {
+        info(s"Group ${group.groupId} remove dynamic members " +
+          s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
+
+        notYetRejoinedDynamicMembers.values foreach { failedMember =>
+          removeHeartbeatForLeavingMember(group, failedMember)
+          group.remove(failedMember.memberId)
+          // TODO: cut the socket connection to the client
+        }
       }
 
       if (group.is(Dead)) {

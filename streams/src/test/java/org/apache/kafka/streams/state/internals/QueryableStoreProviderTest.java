@@ -30,6 +30,9 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.HashMap;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertNotNull;
 
 public class QueryableStoreProviderTest {
@@ -38,12 +41,15 @@ public class QueryableStoreProviderTest {
     private final String windowStore = "window-store";
     private QueryableStoreProvider storeProvider;
     private HashMap<String, StateStore> globalStateStores;
+    private final int numStateStorePartitions = 2;
 
     @Before
     public void before() {
         final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub(false);
-        theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
-        theStoreProvider.addStore(windowStore, new NoOpWindowStore());
+        for (int partition = 0; partition < numStateStorePartitions; partition++) {
+            theStoreProvider.addStore(keyValueStore, partition, new NoOpReadOnlyStore<>());
+            theStoreProvider.addStore(windowStore, partition, new NoOpWindowStore());
+        }
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
@@ -88,5 +94,37 @@ public class QueryableStoreProviderTest {
         assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType("global", QueryableStoreTypes.keyValueStore())));
     }
 
+    @Test
+    public void shouldReturnKVStoreWithPartitionWhenItExists() {
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore()).withPartition(numStateStorePartitions - 1)));
+    }
 
+    @Test
+    public void shouldThrowExceptionWhenKVStoreWithPartitionDoesntExists() {
+        final int partition = numStateStorePartitions + 1;
+        final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
+                storeProvider.getStore(
+                        StoreQueryParameters
+                                .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
+                                .withPartition(partition))
+        );
+        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
+    }
+
+    @Test
+    public void shouldReturnWindowStoreWithPartitionWhenItExists() {
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore()).withPartition(numStateStorePartitions - 1)));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenWindowStoreWithPartitionDoesntExists() {
+        final int partition = numStateStorePartitions + 1;
+        final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
+                storeProvider.getStore(
+                        StoreQueryParameters
+                                .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
+                                .withPartition(partition))
+        );
+        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
+    }
 }

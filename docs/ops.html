@@ -229,7 +229,7 @@
   </ul>
 
   <p>
-  --reset-offsets also has following scenarios to choose from (atleast one scenario must be selected):
+  --reset-offsets also has following scenarios to choose from (at least one scenario must be selected):
   <ul>
     <li>
       --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
@@ -273,7 +273,7 @@
   <p>
 
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
-  <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
+  <code>--zookeeper</code> instead of <code>--bootstrap-server</code>:
 
   <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
@@ -477,19 +477,25 @@
   Throttle was removed.</pre>
 
   <p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
-      configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker
+      configuration used to manage the throttling process. First pair refers to the throttle value itself. This is configured, at a broker
       level, using the dynamic properties: </p>
 
-  <pre class="brush: text;">leader.replication.throttled.rate
-  follower.replication.throttled.rate</pre>
+  <pre class="brush: text;">
+    leader.replication.throttled.rate
+    follower.replication.throttled.rate
+  </pre>
 
-  <p>There is also an enumerated set of throttled replicas: </p>
+  <p>Then there is the configuration pair of enumerated sets of throttled replicas: </p>
 
-  <pre class="brush: text;">leader.replication.throttled.replicas
-  follower.replication.throttled.replicas</pre>
+  <pre class="brush: text;">
+    leader.replication.throttled.replicas
+    follower.replication.throttled.replicas
+  </pre>
 
-  <p>Which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions.sh
-      (discussed below). </p>
+  <p>Which are configured per topic. </p>
+
+  <p>All four config values are automatically assigned by kafka-reassign-partitions.sh (discussed below).</p>
+
   <p>To view the throttle limit configuration:</p>
 
   <pre class="brush: bash;">
@@ -676,7 +682,7 @@
 
   From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
-  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
+  At the time this is written, LinkedIn is running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
   <pre class="brush: text;">
   -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
   -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
@@ -794,7 +800,7 @@
   control your broker or application as well as the platform on which these are running. Note that authentication is disabled for
   JMX by default in Kafka and security configs must be overridden for production deployments by setting the environment variable
   <code>KAFKA_JMX_OPTS</code> for processes started using the CLI or by setting appropriate Java system properties. See
-  <a href=https://docs.oracle.com/javase/8/docs/technotes/guides/management/agent.html">Monitoring and Management Using JMX Technology</a>
+  <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/management/agent.html">Monitoring and Management Using JMX Technology</a>
   for details on securing JMX.
   <p>
   We do graphing and alerting on the following metrics:
@@ -886,7 +892,7 @@
         <td></td>
       </tr>
       <tr>
-        <td># of under replicated partitions (|ISR| &lt |all replicas|)</td>
+        <td># of under replicated partitions (the number of non-reassigning replicas - the number of ISR &gt 0)</td>
         <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
         <td>0</td>
       </tr>
@@ -1103,6 +1109,21 @@
         <td>Consumer Group Count, per State</td>
         <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
         <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+      </tr>
+      <tr>
+        <td>Number of reassigning partitions</td>
+        <td>kafka.server:type=ReplicaManager,name=ReassigningPartitions</td>
+        <td>The number of reassigning leader partitions on a broker.</td>
+      </tr>
+      <tr>
+        <td>Outgoing byte rate of reassignment traffic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Incoming byte rate of reassignment traffic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
+        <td></td>
       </tr>
   </tbody></table>
 

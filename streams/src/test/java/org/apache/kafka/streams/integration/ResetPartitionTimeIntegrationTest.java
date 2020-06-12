@@ -45,17 +45,18 @@ import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -92,21 +93,20 @@ public class ResetPartitionTimeIntegrationTest {
     public String processingGuarantee;
 
     @Rule
-    public TestName name = new TestName();
+    public TestName testName = new TestName();
 
     @Test
     public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
-        final String appId = name.getMethodName();
+        final String appId = "app-" + safeUniqueTestName(getClass(), testName);
         final String input = "input";
         final String outputRaw = "output-raw";
 
         cleanStateBeforeTest(CLUSTER, 2, input, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE))
-               .to(outputRaw);
+        builder
+            .stream(input, Consumed.with(STRING_SERDE, STRING_SERDE))
+            .to(outputRaw);
 
         final Properties streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MaxTimestampExtractor.class);
@@ -122,13 +122,13 @@ public class ResetPartitionTimeIntegrationTest {
             // start sending some records to have partition time committed 
             produceSynchronouslyToPartitionZero(
                 input,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k3", "v3", 5000)
                 )
             );
             verifyOutput(
                 outputRaw,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k3", "v3", 5000)
                 )
             );
@@ -143,20 +143,20 @@ public class ResetPartitionTimeIntegrationTest {
             // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(
                 input,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );
             assertThat(lastRecordedTimestamp, is(5000L));
         } finally {
             kafkaStreams.close();
-            cleanStateAfterTest(CLUSTER, kafkaStreams);
+            quietlyCleanStateAfterTest(CLUSTER, kafkaStreams);
         }
     }
 

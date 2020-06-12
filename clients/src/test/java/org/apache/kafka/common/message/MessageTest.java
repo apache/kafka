@@ -61,6 +61,7 @@ import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -620,12 +621,27 @@ public final class MessageTest {
         message.setMyNullableString("notNull");
         message.setMyInt16((short) 3);
         message.setMyString("test string");
+        SimpleExampleMessageData duplicate = message.duplicate();
+        assertEquals(duplicate, message);
+        assertEquals(message, duplicate);
+        duplicate.setMyTaggedIntArray(Collections.singletonList(123));
+        assertFalse(duplicate.equals(message));
+        assertFalse(message.equals(duplicate));
 
         testAllMessageRoundTripsFromVersion((short) 2, message);
     }
 
     private void testAllMessageRoundTrips(Message message) throws Exception {
+        testDuplication(message);
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
+    }
+
+    private void testDuplication(Message message) {
+        Message duplicate = message.duplicate();
+        assertEquals(duplicate, message);
+        assertEquals(message, duplicate);
+        assertEquals(duplicate.hashCode(), message.hashCode());
+        assertEquals(message.hashCode(), duplicate.hashCode());
     }
 
     private void testAllMessageRoundTripsBeforeVersion(short beforeVersion, Message message, Message expected) throws Exception {
@@ -945,5 +961,26 @@ public final class MessageTest {
         }
         assertEquals("Expected the serialized size to be " + size +
             ", but it was " + buf.position(), size, buf.position());
+    }
+
+    @Test
+    public void testCompareWithUnknownTaggedFields() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
+        createTopics.setTimeoutMs(123);
+        CreateTopicsRequestData createTopics2 = new CreateTopicsRequestData();
+        createTopics2.setTimeoutMs(123);
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
+        // Call the accessor, which will create a new empty list.
+        createTopics.unknownTaggedFields();
+        // Verify that the equalities still hold after the new empty list has been created.
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
+        createTopics.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
+        assertFalse(createTopics.equals(createTopics2));
+        assertFalse(createTopics2.equals(createTopics));
+        createTopics2.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
+        assertEquals(createTopics, createTopics2);
+        assertEquals(createTopics2, createTopics);
     }
 }

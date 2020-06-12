@@ -102,6 +102,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -145,6 +146,12 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
  * Topology topology = ...
  * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
  * }</pre>
+ *
+ * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
+ * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
+ * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
+ * after each input record.
  *
  * <h2>Processing messages</h2>
  * <p>
@@ -376,7 +383,7 @@ public class TopologyTestDriver implements Closeable {
             "test-client",
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
         );
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(mockWallClockTime));
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
 
         return streamsMetrics;
@@ -425,8 +432,8 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig
             );
 
-            final GlobalProcessorContextImpl<Object, Object> globalProcessorContext =
-                new GlobalProcessorContextImpl<>(streamsConfig, globalStateManager, streamsMetrics, cache);
+            final GlobalProcessorContextImpl globalProcessorContext =
+                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -483,6 +490,15 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig.defaultProductionExceptionHandler(),
                 streamsMetrics
             );
+
+            final InternalProcessorContext context = new ProcessorContextImpl(
+                TASK_ID,
+                streamsConfig,
+                stateManager,
+                streamsMetrics,
+                cache
+            );
+
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByInputTopic.values()),
@@ -494,11 +510,12 @@ public class TopologyTestDriver implements Closeable {
                 cache,
                 mockWallClockTime,
                 stateManager,
-                recordCollector
+                recordCollector,
+                context
             );
             task.initializeIfNeeded();
             task.completeRestoration();
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
+            task.processorContext().setRecordContext(new ProcessorRecordContext(
                 0L,
                 -1L,
                 -1,
@@ -596,8 +613,8 @@ public class TopologyTestDriver implements Closeable {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
-                task.prepareCommit();
-                commit(task.committableOffsetsAndMetadata());
+                commit(task.prepareCommit());
+                task.postCommit();
                 captureOutputsAndReEnqueueInternalResults();
             }
             if (task.hasRecordsQueued()) {
@@ -742,8 +759,8 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
-            task.prepareCommit();
-            commit(task.committableOffsetsAndMetadata());
+            commit(task.prepareCommit());
+            task.postCommit();
         }
         completeAllProcessableWork();
     }
@@ -785,8 +802,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             return null;
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
@@ -855,6 +872,21 @@ public class TopologyTestDriver implements Closeable {
         return new TestOutputTopic<>(this, topicName, keyDeserializer, valueDeserializer);
     }
 
+    /**
+     * Get all the names of all the topics to which records have been produced during the test run.
+     * <p>
+     * Call this method after piping the input into the test driver to retrieve the full set of topic names the topology
+     * produced records to.
+     * <p>
+     * The returned set of topic names may include user (e.g., output) and internal (e.g., changelog, repartition) topic
+     * names.
+     *
+     * @return the set of topic names the topology has produced to
+     */
+    public final Set<String> producedTopicNames() {
+        return Collections.unmodifiableSet(outputRecordsByTopic.keySet());
+    }
+
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {
         final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
@@ -874,8 +906,8 @@ public class TopologyTestDriver implements Closeable {
         if (record == null) {
             throw new NoSuchElementException("Empty topic: " + topic);
         }
-        final K key = keyDeserializer.deserialize(record.topic(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
@@ -969,7 +1001,7 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);
@@ -1148,8 +1180,8 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            final Map<TopicPartition, Long> checkpoint = task.prepareCloseClean();
-            task.closeClean(checkpoint);
+            task.suspend();
+            task.closeClean();
         }
         if (globalStateTask != null) {
             try {

@@ -54,7 +54,7 @@ public final class MessageDataGenerator {
         schemaGenerator.generateSchemas(message);
         messageFlexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
-            message.name() + "Data",
+            message.generatedClassName(),
             message.struct(),
             message.struct().versions());
         headerGenerator.generate();
@@ -111,6 +111,8 @@ public final class MessageDataGenerator {
         generateClassEquals(className, struct, false);
         buffer.printf("%n");
         generateClassHashCode(struct, isSetElement);
+        buffer.printf("%n");
+        generateClassDuplicate(className, struct);
         buffer.printf("%n");
         generateClassToString(className, struct);
         generateFieldAccessors(struct, isSetElement);
@@ -193,10 +195,16 @@ public final class MessageDataGenerator {
             collectionType(className), className);
         buffer.incrementIndent();
         generateHashSetZeroArgConstructor(className);
+        buffer.printf("%n");
         generateHashSetSizeArgConstructor(className);
+        buffer.printf("%n");
         generateHashSetIteratorConstructor(className);
+        buffer.printf("%n");
         generateHashSetFindMethod(className, struct);
+        buffer.printf("%n");
         generateHashSetFindAllMethod(className, struct);
+        buffer.printf("%n");
+        generateCollectionDuplicateMethod(className, struct);
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -207,7 +215,6 @@ public final class MessageDataGenerator {
         buffer.printf("super();%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        buffer.printf("%n");
     }
 
     private void generateHashSetSizeArgConstructor(String className) {
@@ -216,7 +223,6 @@ public final class MessageDataGenerator {
         buffer.printf("super(expectedNumElements);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        buffer.printf("%n");
     }
 
     private void generateHashSetIteratorConstructor(String className) {
@@ -226,7 +232,6 @@ public final class MessageDataGenerator {
         buffer.printf("super(iterator);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        buffer.printf("%n");
     }
 
     private void generateHashSetFindMethod(String className, StructSpec struct) {
@@ -239,7 +244,6 @@ public final class MessageDataGenerator {
         buffer.printf("return find(_key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        buffer.printf("%n");
     }
 
     private void generateHashSetFindAllMethod(String className, StructSpec struct) {
@@ -252,7 +256,6 @@ public final class MessageDataGenerator {
         buffer.printf("return findAll(_key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        buffer.printf("%n");
     }
 
     private void generateKeyElement(String className, StructSpec struct) {
@@ -271,6 +274,22 @@ public final class MessageDataGenerator {
             filter(f -> f.mapKey()).
             map(f -> String.format("%s %s", fieldConcreteJavaType(f), f.camelCaseName())).
             collect(Collectors.joining(", "));
+    }
+
+    private void generateCollectionDuplicateMethod(String className, StructSpec struct) {
+        headerGenerator.addImport(MessageGenerator.LIST_CLASS);
+        buffer.printf("public %s duplicate() {%n", collectionType(className));
+        buffer.incrementIndent();
+        buffer.printf("%s _duplicate = new %s(size());%n",
+            collectionType(className), collectionType(className));
+        buffer.printf("for (%s _element : this) {%n", className);
+        buffer.incrementIndent();
+        buffer.printf("_duplicate.add(_element.duplicate());%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.printf("return _duplicate;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
     }
 
     private void generateFieldDeclarations(StructSpec struct, boolean isSetElement) {
@@ -1417,8 +1436,8 @@ public final class MessageDataGenerator {
             alwaysEmitBlockScope(type.isString()).
             ifNull(() -> {
                 VersionConditional.forVersions(nullableVersions, possibleVersions).
-                    ifMember(__ -> {
-                        VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
+                    ifMember(presentVersions -> {
+                        VersionConditional.forVersions(fieldFlexibleVersions, presentVersions).
                             ifMember(___ -> {
                                 buffer.printf("_writable.writeUnsignedVarint(0);%n");
                             }).
@@ -1444,7 +1463,7 @@ public final class MessageDataGenerator {
                     lengthExpression = "_stringBytes.length";
                 } else if (type.isBytes()) {
                     if (zeroCopy) {
-                        lengthExpression = String.format("%s.remaining()", name, name);
+                        lengthExpression = String.format("%s.remaining()", name);
                     } else {
                         lengthExpression = String.format("%s.length", name);
                     }
@@ -2014,15 +2033,21 @@ public final class MessageDataGenerator {
             elementKeysAreEqual ? "elementKeysAreEqual" : "equals");
         buffer.incrementIndent();
         buffer.printf("if (!(obj instanceof %s)) return false;%n", className);
+        buffer.printf("%s other = (%s) obj;%n", className, className);
         if (!struct.fields().isEmpty()) {
-            buffer.printf("%s other = (%s) obj;%n", className, className);
             for (FieldSpec field : struct.fields()) {
                 if (!elementKeysAreEqual || field.mapKey()) {
                     generateFieldEquals(field);
                 }
             }
         }
-        buffer.printf("return true;%n");
+        if (elementKeysAreEqual) {
+            buffer.printf("return true;%n");
+        } else {
+            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+            buffer.printf("return MessageUtil.compareRawTaggedFields(_unknownTaggedFields, " +
+                "other._unknownTaggedFields);%n");
+        }
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -2109,6 +2134,83 @@ public final class MessageDataGenerator {
                           field.camelCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
+        }
+    }
+
+    private void generateClassDuplicate(String className, StructSpec struct) {
+        buffer.printf("@Override%n");
+        buffer.printf("public %s duplicate() {%n", className);
+        buffer.incrementIndent();
+        buffer.printf("%s _duplicate = new %s();%n", className, className);
+        for (FieldSpec field : struct.fields()) {
+            generateFieldDuplicate(new Target(field,
+                field.camelCaseName(),
+                field.camelCaseName(),
+                input -> String.format("_duplicate.%s = %s", field.camelCaseName(), input)));
+        }
+        buffer.printf("return _duplicate;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateFieldDuplicate(Target target) {
+        FieldSpec field = target.field();
+        if ((field.type() instanceof FieldType.BoolFieldType) ||
+                (field.type() instanceof FieldType.Int8FieldType) ||
+                (field.type() instanceof FieldType.Int16FieldType) ||
+                (field.type() instanceof FieldType.Int32FieldType) ||
+                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.Float64FieldType) ||
+                (field.type() instanceof FieldType.UUIDFieldType)) {
+            buffer.printf("%s;%n", target.assignmentStatement(target.sourceVariable()));
+        } else {
+            IsNullConditional cond = IsNullConditional.forName(target.sourceVariable()).
+                nullableVersions(target.field().nullableVersions()).
+                ifNull(() -> buffer.printf("%s;%n", target.assignmentStatement("null")));
+            if (field.type().isBytes()) {
+                if (field.zeroCopy()) {
+                    cond.ifShouldNotBeNull(() ->
+                        buffer.printf("%s;%n", target.assignmentStatement(
+                            String.format("%s.duplicate()", target.sourceVariable()))));
+                } else {
+                    cond.ifShouldNotBeNull(() -> {
+                        headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+                        buffer.printf("%s;%n", target.assignmentStatement(
+                            String.format("MessageUtil.duplicate(%s)",
+                                target.sourceVariable())));
+                    });
+                }
+            } else if (field.type().isStruct()) {
+                cond.ifShouldNotBeNull(() ->
+                    buffer.printf("%s;%n", target.assignmentStatement(
+                        String.format("%s.duplicate()", target.sourceVariable()))));
+            } else if (field.type().isString()) {
+                // Strings are immutable, so we don't need to duplicate them.
+                cond.ifShouldNotBeNull(() ->
+                    buffer.printf("%s;%n", target.assignmentStatement(
+                        target.sourceVariable())));
+            } else if (field.type().isArray()) {
+                cond.ifShouldNotBeNull(() -> {
+                    String newArrayName =
+                        String.format("new%s", field.capitalizedCamelCaseName());
+                    buffer.printf("%s %s = new %s(%s.size());%n",
+                        fieldConcreteJavaType(field), newArrayName,
+                        fieldConcreteJavaType(field), target.sourceVariable());
+                    FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                    buffer.printf("for (%s _element : %s) {%n",
+                        getBoxedJavaType(arrayType.elementType()), target.sourceVariable());
+                    buffer.incrementIndent();
+                    generateFieldDuplicate(target.arrayElementTarget(input ->
+                        String.format("%s.add(%s)", newArrayName, input)));
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                    buffer.printf("%s;%n", target.assignmentStatement(
+                        String.format("new%s", field.capitalizedCamelCaseName())));
+                });
+            } else {
+                throw new RuntimeException("Unhandled field type " + field.type());
+            }
+            cond.generate(buffer);
         }
     }
 
@@ -2310,13 +2412,7 @@ public final class MessageDataGenerator {
                     field.name() + ".  The only valid default for an array field " +
                         "is the empty array or null.");
             }
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (structRegistry.isStructArrayWithKeys(field)) {
-                return "new " + collectionType(arrayType.elementType().toString()) + "(0)";
-            } else {
-                headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
-                return "new ArrayList<" + getBoxedJavaType(arrayType.elementType()) + ">()";
-            }
+            return String.format("new %s(0)", fieldConcreteJavaType(field));
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }

@@ -382,6 +382,20 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     ))
   }
 
+  @Test
+  def testClientQuotasWithDefaultName(): Unit = {
+    // An entity using the name associated with the default entity name. The entity's name should be sanitized so
+    // that it does not conflict with the default entity name.
+    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.Default)).asJava)
+    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(20000.0))), validateOnly = false)
+    verifyDescribeEntityQuotas(entity, Map((ProducerByteRateProp -> 20000.0)))
+
+    // This should not match.
+    val result = describeClientQuotas(
+      ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)).asJava))
+    assert(result.isEmpty)
+  }
+
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
     val components = entity.entries.asScala.map(e => ClientQuotaFilterComponent.ofEntity(e._1, e._2))
     val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))

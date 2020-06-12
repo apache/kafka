@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -139,29 +141,20 @@ public class StateManagerUtilTest {
 
     @Test
     public void testRegisterStateStores() throws IOException {
-        expect(topology.stateStores())
-            .andReturn(Arrays.asList(new MockKeyValueStore("store1", false),
-                new MockKeyValueStore("store2", false)));
+        final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
+        final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
+        final List<StateStore> stateStores = Arrays.asList(store1, store2);
+
+        expect(topology.stateStores()).andReturn(stateStores);
 
         expect(stateManager.taskId()).andReturn(taskId);
 
         expect(stateDirectory.lock(taskId)).andReturn(true);
         expect(stateDirectory.directoryForTaskIsEmpty(taskId)).andReturn(true);
 
-        final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
-        final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
+        expect(topology.stateStores()).andReturn(stateStores);
 
-        expect(topology.stateStores()).andReturn(Arrays.asList(store1, store2));
-
-        processorContext.uninitialize();
-        expectLastCall();
-        processorContext.register(store1, store1.stateRestoreCallback);
-        expectLastCall();
-
-        processorContext.uninitialize();
-        expectLastCall();
-        processorContext.register(store2, store2.stateRestoreCallback);
-        expectLastCall();
+        stateManager.registerStateStores(stateStores, processorContext);
 
         stateManager.initializeStoreOffsetsFromCheckpoint(true);
         expectLastCall();
@@ -349,7 +342,6 @@ public class StateManagerUtilTest {
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() throws IOException {
         final File unknownFile = new File("/unknown/path");
         expect(stateManager.taskId()).andReturn(taskId);
-
         expect(stateDirectory.lock(taskId)).andReturn(false);
 
         expect(stateManager.baseDir()).andReturn(unknownFile);

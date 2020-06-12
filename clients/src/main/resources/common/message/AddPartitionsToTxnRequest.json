@@ -28,7 +28,7 @@
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Current epoch associated with the producer id." },
     { "name": "Topics", "type": "[]AddPartitionsToTxnTopic", "versions": "0+",
-      "about": "The partitions to add to the transation.", "fields": [
+      "about": "The partitions to add to the transaction.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",

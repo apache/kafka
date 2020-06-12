@@ -45,8 +45,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -56,7 +58,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -69,9 +70,10 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.CoreMatchers.is;
@@ -81,12 +83,18 @@ import static org.hamcrest.Matchers.equalTo;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class SuppressionDurabilityIntegrationTest {
+    private static final Logger LOG = LoggerFactory.getLogger(SuppressionDurabilityIntegrationTest.class);
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
         mkProperties(mkMap()),
         0L
     );
+
+    @Rule
+    public TestName testName = new TestName();
+
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
@@ -107,8 +115,8 @@ public class SuppressionDurabilityIntegrationTest {
 
     @Test
     public void shouldRecoverBufferAfterShutdown() {
-        final String testId = "-shouldRecoverBufferAfterShutdown";
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String testId = safeUniqueTestName(getClass(), testName);
+        final String appId = "appId_" + testId;
         final String input = "input" + testId;
         final String storeName = "counts";
         final String outputSuppressed = "output-suppressed" + testId;
@@ -243,7 +251,7 @@ public class SuppressionDurabilityIntegrationTest {
 
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 

@@ -95,6 +95,9 @@ object ImplicitConversions {
   implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
     Produced.`with`[K, V]
 
+  implicit def repartitionedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Repartitioned[K, V] =
+    Repartitioned.`with`[K, V]
+
   implicit def streamJoinFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
                                                           valueSerde: Serde[V],
                                                           otherValueSerde: Serde[VO]): StreamJoined[K, V, VO] =

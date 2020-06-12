@@ -35,7 +35,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     private final ProcessorTopology topology;
-    private final InternalProcessorContext<Object, Object> processorContext;
+    private final InternalProcessorContext processorContext;
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
@@ -43,7 +43,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final LogContext logContext;
 
     public GlobalStateUpdateTask(final ProcessorTopology topology,
-                                 final InternalProcessorContext<Object, Object> processorContext,
+                                 final InternalProcessorContext processorContext,
                                  final GlobalStateManager stateMgr,
                                  final DeserializationExceptionHandler deserializationExceptionHandler,
                                  final LogContext logContext) {

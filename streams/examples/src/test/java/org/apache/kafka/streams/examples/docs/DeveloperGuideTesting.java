@@ -153,12 +153,12 @@ public class DeveloperGuideTesting {
     }
 
     public static class CustomMaxAggregator implements Processor<String, Long> {
-        ProcessorContext<Object, Object> context;
+        ProcessorContext context;
         private KeyValueStore<String, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext<Object, Object> context) {
+        public void init(final ProcessorContext context) {
             this.context = context;
             context.schedule(Duration.ofSeconds(60), PunctuationType.WALL_CLOCK_TIME, time -> flushStore());
             context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, time -> flushStore());

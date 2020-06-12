@@ -21,26 +21,29 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
-import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
@@ -54,7 +57,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext
-    extends AbstractProcessorContext<Object, Object>
+    extends AbstractProcessorContext
     implements RecordCollector.Supplier {
 
     private final File stateDir;
@@ -63,6 +66,7 @@ public class InternalMockProcessorContext
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ToInternal toInternal = new ToInternal();
 
+    private TaskType taskType = TaskType.ACTIVE;
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
@@ -156,7 +160,8 @@ public class InternalMockProcessorContext
                                         final Serde<?> valSerde,
                                         final RecordCollector collector,
                                         final ThreadCache cache) {
-        this(stateDir,
+        this(
+            stateDir,
             keySerde,
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
@@ -173,17 +178,19 @@ public class InternalMockProcessorContext
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache) {
-        super(new TaskId(0, 0),
+        super(
+            new TaskId(0, 0),
             config,
             metrics,
             null,
-            cache);
+            cache
+        );
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
-        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
 
     @Override
@@ -348,31 +355,49 @@ public class InternalMockProcessorContext
         return recordContext.headers();
     }
 
-    public StateRestoreListener getRestoreListener(final String storeName) {
-        return getStateRestoreListener(restoreFuncs.get(storeName));
+    @Override
+    public TaskType taskType() {
+        return taskType;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        recordCollector().send(
+            storeName + "-changelog",
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER);
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        taskType = TaskType.ACTIVE;
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        taskType = TaskType.STANDBY;
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache().addDirtyEntryFlushListener(namespace, listener);
     }
 
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getRestoreListener(storeName);
-
-        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
-
         restoreCallback.restoreBatch(records);
-
-        restoreListener.onRestoreEnd(null, storeName, 0L);
-    }
-
-    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
-        if (restoreCallback instanceof StateRestoreListener) {
-            return (StateRestoreListener) restoreCallback;
-        }
-
-        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
 }

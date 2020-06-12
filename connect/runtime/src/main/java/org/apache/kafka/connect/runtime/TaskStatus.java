@@ -61,5 +61,12 @@ public class TaskStatus extends AbstractStatus<ConnectorTaskId> {
          */
         void onShutdown(ConnectorTaskId id);
 
+        /**
+         * Invoked after the task has been deleted. Can be called if the
+         * connector tasks have been reduced, or if the connector itself has
+         * been deleted.
+         * @param id The id of the task
+         */
+        void onDeletion(ConnectorTaskId id);
     }
 }

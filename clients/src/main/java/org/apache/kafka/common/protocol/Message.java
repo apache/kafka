@@ -148,4 +148,11 @@ public interface Message {
      * @return              The raw tagged fields.
      */
     List<RawTaggedField> unknownTaggedFields();
+
+    /**
+     * Make a deep copy of the message.
+     *
+     * @return              A copy of the message which does not share any mutable fields.
+     */
+    Message duplicate();
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,16 +61,26 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
+        Map<String, List<TopicPartition>> assignments = super.assign(partitionsPerTopic, subscriptions);
 
-        final Map<String, List<TopicPartition>> assignments = super.assign(partitionsPerTopic, subscriptions);
-        adjustAssignment(subscriptions, assignments);
+        Map<TopicPartition, String> partitionsTransferringOwnership = super.partitionsTransferringOwnership == null ?
+            computePartitionsTransferringOwnership(subscriptions, assignments) :
+            super.partitionsTransferringOwnership;
+
+        adjustAssignment(assignments, partitionsTransferringOwnership);
         return assignments;
     }
 
     // Following the cooperative rebalancing protocol requires removing partitions that must first be revoked from the assignment
-    private void adjustAssignment(final Map<String, Subscription> subscriptions,
-                                  final Map<String, List<TopicPartition>> assignments) {
+    private void adjustAssignment(Map<String, List<TopicPartition>> assignments,
+                                  Map<TopicPartition, String> partitionsTransferringOwnership) {
+        for (Map.Entry<TopicPartition, String> partitionEntry : partitionsTransferringOwnership.entrySet()) {
+            assignments.get(partitionEntry.getValue()).remove(partitionEntry.getKey());
+        }
+    }
 
+    private Map<TopicPartition, String> computePartitionsTransferringOwnership(Map<String, Subscription> subscriptions,
+                                                                               Map<String, List<TopicPartition>> assignments) {
         Map<TopicPartition, String> allAddedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
@@ -81,25 +90,20 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
             List<TopicPartition> ownedPartitions = subscriptions.get(consumer).ownedPartitions();
             List<TopicPartition> assignedPartitions = entry.getValue();
 
-            List<TopicPartition> addedPartitions = new ArrayList<>(assignedPartitions);
-            addedPartitions.removeAll(ownedPartitions);
-            for (TopicPartition tp : addedPartitions) {
-                allAddedPartitions.put(tp, consumer);
+            Set<TopicPartition> ownedPartitionsSet = new HashSet<>(ownedPartitions);
+            for (TopicPartition tp : assignedPartitions) {
+                if (!ownedPartitionsSet.contains(tp))
+                    allAddedPartitions.put(tp, consumer);
             }
 
-            final Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
-            revokedPartitions.removeAll(assignedPartitions);
-            allRevokedPartitions.addAll(revokedPartitions);
-        }
-
-        // remove any partitions to be revoked from the current assignment
-        for (TopicPartition tp : allRevokedPartitions) {
-            // if partition is being migrated to another consumer, don't assign it there yet
-            if (allAddedPartitions.containsKey(tp)) {
-                String assignedConsumer = allAddedPartitions.get(tp);
-                assignments.get(assignedConsumer).remove(tp);
+            Set<TopicPartition> assignedPartitionsSet = new HashSet<>(assignedPartitions);
+            for (TopicPartition tp : ownedPartitions) {
+                if (!assignedPartitionsSet.contains(tp))
+                    allRevokedPartitions.add(tp);
             }
         }
+
+        allAddedPartitions.keySet().retainAll(allRevokedPartitions);
+        return allAddedPartitions;
     }
-
 }

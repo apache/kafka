@@ -249,7 +249,7 @@ public class KeyValueStoreTestDriver<K, V> {
             final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override
-            public ThreadCache getCache() {
+            public ThreadCache cache() {
                 return cache;
             }
 
@@ -331,7 +331,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the processing context; never null
      * @see #addEntryToRestoreLog(Object, Object)
      */
-    public ProcessorContext<Object, Object> context() {
+    public ProcessorContext context() {
         return context;
     }
 

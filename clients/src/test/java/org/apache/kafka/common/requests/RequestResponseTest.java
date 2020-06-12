@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -38,6 +39,10 @@ import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
@@ -143,6 +148,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
+import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigType;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -229,9 +235,13 @@ public class RequestResponseTest {
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
-        checkRequest(createListGroupsRequest(), true);
-        checkErrorResponse(createListGroupsRequest(), new UnknownServerException(), true);
-        checkResponse(createListGroupsResponse(), 0, true);
+
+        for (short v = ApiKeys.LIST_GROUPS.oldestVersion(); v <= ApiKeys.LIST_GROUPS.latestVersion(); v++) {
+            checkRequest(createListGroupsRequest(v), false);
+            checkErrorResponse(createListGroupsRequest(v), new UnknownServerException(), true);
+            checkResponse(createListGroupsResponse(v), v, true);
+        }
+
         checkRequest(createDescribeGroupRequest(), true);
         checkErrorResponse(createDescribeGroupRequest(), new UnknownServerException(), true);
         checkResponse(createDescribeGroupResponse(), 0, true);
@@ -429,6 +439,9 @@ public class RequestResponseTest {
         checkResponse(createDescribeConfigsResponse(), 0, false);
         checkRequest(createDescribeConfigsRequest(1), true);
         checkRequest(createDescribeConfigsRequestWithConfigEntries(1), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(1), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(2), false);
+        checkRequest(createDescribeConfigsRequestWithDocumentation(3), false);
         checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException(), true);
         checkResponse(createDescribeConfigsResponse(), 1, false);
         checkDescribeConfigsResponseVersions();
@@ -464,6 +477,9 @@ public class RequestResponseTest {
         checkRequest(createOffsetDeleteRequest(), true);
         checkErrorResponse(createOffsetDeleteRequest(), new UnknownServerException(), true);
         checkResponse(createOffsetDeleteResponse(), 0, true);
+        checkRequest(createAlterReplicaLogDirsRequest(), true);
+        checkErrorResponse(createAlterReplicaLogDirsRequest(), new UnknownServerException(), true);
+        checkResponse(createAlterReplicaLogDirsResponse(), 0, true);
     }
 
     @Test
@@ -493,7 +509,12 @@ public class RequestResponseTest {
                 assertEquals(expectedEntry.value(), entry.value());
                 assertEquals(expectedEntry.isReadOnly(), entry.isReadOnly());
                 assertEquals(expectedEntry.isSensitive(), entry.isSensitive());
-                if (version == 1 || (expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG &&
+                if (version < 3) {
+                    assertEquals(ConfigType.UNKNOWN, entry.type());
+                } else {
+                    assertEquals(expectedEntry.type(), entry.type());
+                }
+                if (version == 1 || version == 3 || (expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG &&
                         expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
                     assertEquals(expectedEntry.source(), entry.source());
                 else
@@ -511,6 +532,10 @@ public class RequestResponseTest {
         DescribeConfigsResponse deserialized1 = (DescribeConfigsResponse) deserialize(response,
                 response.toStruct((short) 1), (short) 1);
         verifyDescribeConfigsResponse(response, deserialized1, 1);
+
+        DescribeConfigsResponse deserialized3 = (DescribeConfigsResponse) deserialize(response,
+            response.toStruct((short) 3), (short) 3);
+        verifyDescribeConfigsResponse(response, deserialized3, 3);
     }
 
     private void checkErrorResponse(AbstractRequest req, Throwable e, boolean checkEqualityAndHashCode) {
@@ -811,6 +836,13 @@ public class RequestResponseTest {
         assertTrue(request.isValid());
     }
 
+    @Test(expected = UnsupportedVersionException.class)
+    public void testListGroupRequestV3FailsWithStates() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setStatesFilter(asList(ConsumerGroupState.STABLE.name()));
+        new ListGroupsRequest.Builder(data).build((short) 3);
+    }
+
     @Test
     public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
@@ -1067,19 +1099,23 @@ public class RequestResponseTest {
         return new SyncGroupResponse(data);
     }
 
-    private ListGroupsRequest createListGroupsRequest() {
-        return new ListGroupsRequest.Builder(new ListGroupsRequestData()).build();
+    private ListGroupsRequest createListGroupsRequest(short version) {
+        ListGroupsRequestData data = new ListGroupsRequestData();
+        if (version >= 4)
+            data.setStatesFilter(Arrays.asList("Stable"));
+        return new ListGroupsRequest.Builder(data).build(version);
     }
 
-    private ListGroupsResponse createListGroupsResponse() {
-        return new ListGroupsResponse(
-                new ListGroupsResponseData()
-                        .setErrorCode(Errors.NONE.code())
-                        .setGroups(Collections.singletonList(
-                                new ListGroupsResponseData.ListedGroup()
-                                        .setGroupId("test-group")
-                                        .setProtocolType("consumer")
-                )));
+    private ListGroupsResponse createListGroupsResponse(int version) {
+        ListGroupsResponseData.ListedGroup group = new ListGroupsResponseData.ListedGroup()
+                .setGroupId("test-group")
+                .setProtocolType("consumer");
+        if (version >= 4)
+            group.setGroupState("Stable");
+        ListGroupsResponseData data = new ListGroupsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setGroups(Collections.singletonList(group));
+        return new ListGroupsResponse(data);
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
@@ -1134,7 +1170,6 @@ public class RequestResponseTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     private ListOffsetRequest createListOffsetRequest(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
@@ -1165,7 +1200,6 @@ public class RequestResponseTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private ListOffsetResponse createListOffsetResponse(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
@@ -1860,6 +1894,12 @@ public class RequestResponseTest {
         return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
+    private DescribeConfigsRequest createDescribeConfigsRequestWithDocumentation(int version) {
+        Map<ConfigResource, Collection<String>> resources = new HashMap<>();
+        resources.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), asList("foo", "bar"));
+        return new DescribeConfigsRequest.Builder(resources).includeDocumentation(true).build((short) version);
+    }
+
     private DescribeConfigsResponse createDescribeConfigsResponse() {
         Map<ConfigResource, DescribeConfigsResponse.Config> configs = new HashMap<>();
         List<DescribeConfigsResponse.ConfigSynonym> synonyms = emptyList();
@@ -1867,7 +1907,10 @@ public class RequestResponseTest {
                 new DescribeConfigsResponse.ConfigEntry("config_name", "config_value",
                         DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG, true, false, synonyms),
                 new DescribeConfigsResponse.ConfigEntry("another_name", "another value",
-                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms)
+                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms),
+                new DescribeConfigsResponse.ConfigEntry("yet_another_name", "yet another value",
+                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms,
+                            ConfigType.BOOLEAN, "some description")
         );
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new DescribeConfigsResponse.Config(
                 ApiError.NONE, configEntries));
@@ -2197,6 +2240,36 @@ public class RequestResponseTest {
         data.setTopics(topics);
 
         return new OffsetDeleteResponse(data);
+    }
+
+    private AlterReplicaLogDirsRequest createAlterReplicaLogDirsRequest() {
+        AlterReplicaLogDirsRequestData data = new AlterReplicaLogDirsRequestData();
+        data.dirs().add(
+                new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+                        .setPath("/data0")
+                        .setTopics(new AlterReplicaLogDirTopicCollection(Collections.singletonList(
+                                new AlterReplicaLogDirTopic()
+                                        .setPartitions(singletonList(0))
+                                        .setName("topic")
+                        ).iterator())
+                )
+        );
+        return new AlterReplicaLogDirsRequest.Builder(data).build((short) 0);
+    }
+
+    private AlterReplicaLogDirsResponse createAlterReplicaLogDirsResponse() {
+        AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData();
+        data.results().add(
+                new AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult()
+                        .setTopicName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
+                                        .setPartitionIndex(0)
+                                        .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                                )
+                        )
+        );
+        return new AlterReplicaLogDirsResponse(data);
     }
 
 }

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
@@ -299,7 +298,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @Test
     public void shouldGetAggregatedValuesFromValueGetter() {
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
-        getter.init(new ForwardingDisabledProcessorContext(context));
+        getter.init(context);
         context.setTime(0);
         processor.process("a", "1");
         context.setTime(GAP_MS + 1);

@@ -499,14 +499,8 @@ public class NetworkClient implements KafkaClient {
         String destination = clientRequest.destination();
         RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
-            int latestClientVersion = clientRequest.apiKey().latestVersion();
-            if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} with correlation id {} to node {}", clientRequest.apiKey(), request,
-                        clientRequest.correlationId(), destination);
-            } else {
-                log.debug("Using older server API v{} to send {} {} with correlation id {} to node {}",
-                        header.apiVersion(), clientRequest.apiKey(), request, clientRequest.correlationId(), destination);
-            }
+            log.debug("Sending {} request with header {} and timeout {} to node {}: {}",
+                clientRequest.apiKey(), header, clientRequest.requestTimeoutMs(), destination, request);
         }
         Send send = request.toSend(destination, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
@@ -843,10 +837,12 @@ public class NetworkClient implements KafkaClient {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
             AbstractResponse responseBody = parseResponse(req.header, receive.payload(), throttleTimeSensor, now);
-            if (log.isTraceEnabled()) {
-                log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
-                    req.header.apiKey(), req.header.correlationId(), responseBody);
+
+            if (log.isDebugEnabled()) {
+                log.debug("Received {} response from node {} for request with header {}: {}",
+                    req.header.apiKey(), req.destination, req.header, responseBody);
             }
+
             // If the received response includes a throttle delay, throttle the connection.
             maybeThrottle(responseBody, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && responseBody instanceof MetadataResponse)

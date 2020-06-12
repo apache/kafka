@@ -226,78 +226,78 @@ public class RocksDBMetricsRecorderTest {
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BYTES_WRITTEN)).andReturn(1L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BYTES_WRITTEN)).andReturn(2L);
-        bytesWrittenToDatabaseSensor.record(1 + 2);
+        bytesWrittenToDatabaseSensor.record(1 + 2, 0L);
         replay(bytesWrittenToDatabaseSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BYTES_READ)).andReturn(2L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BYTES_READ)).andReturn(3L);
-        bytesReadFromDatabaseSensor.record(2 + 3);
+        bytesReadFromDatabaseSensor.record(2 + 3, 0L);
         replay(bytesReadFromDatabaseSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(4L);
-        memtableBytesFlushedSensor.record(3 + 4);
+        memtableBytesFlushedSensor.record(3 + 4, 0L);
         replay(memtableBytesFlushedSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.MEMTABLE_HIT)).andReturn(1L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.MEMTABLE_MISS)).andReturn(2L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.MEMTABLE_HIT)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.MEMTABLE_MISS)).andReturn(4L);
-        memtableHitRatioSensor.record((double) 4 / (4 + 6));
+        memtableHitRatioSensor.record((double) 4 / (4 + 6), 0L);
         replay(memtableHitRatioSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(4L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(5L);
-        writeStallDurationSensor.record(4 + 5);
+        writeStallDurationSensor.record(4 + 5, 0L);
         replay(writeStallDurationSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT)).andReturn(5L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS)).andReturn(4L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS)).andReturn(2L);
-        blockCacheDataHitRatioSensor.record((double) 8 / (8 + 6));
+        blockCacheDataHitRatioSensor.record((double) 8 / (8 + 6), 0L);
         replay(blockCacheDataHitRatioSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT)).andReturn(4L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS)).andReturn(2L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT)).andReturn(2L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS)).andReturn(4L);
-        blockCacheIndexHitRatioSensor.record((double) 6 / (6 + 6));
+        blockCacheIndexHitRatioSensor.record((double) 6 / (6 + 6), 0L);
         replay(blockCacheIndexHitRatioSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT)).andReturn(2L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS)).andReturn(4L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS)).andReturn(5L);
-        blockCacheFilterHitRatioSensor.record((double) 5 / (5 + 9));
+        blockCacheFilterHitRatioSensor.record((double) 5 / (5 + 9), 0L);
         replay(blockCacheFilterHitRatioSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(2L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(4L);
-        bytesWrittenDuringCompactionSensor.record(2 + 4);
+        bytesWrittenDuringCompactionSensor.record(2 + 4, 0L);
         replay(bytesWrittenDuringCompactionSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(5L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(6L);
-        bytesReadDuringCompactionSensor.record(5 + 6);
+        bytesReadDuringCompactionSensor.record(5 + 6, 0L);
         replay(bytesReadDuringCompactionSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(5L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(7L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(4L);
-        numberOfOpenFilesSensor.record((5 + 7) - (3 + 4));
+        numberOfOpenFilesSensor.record((5 + 7) - (3 + 4), 0L);
         replay(numberOfOpenFilesSensor);
 
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(34L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(11L);
-        numberOfFileErrorsSensor.record(11 + 34);
+        numberOfFileErrorsSensor.record(11 + 34, 0L);
         replay(numberOfFileErrorsSensor);
 
         replay(statisticsToAdd1);
         replay(statisticsToAdd2);
 
-        recorder.record();
+        recorder.record(0L);
 
         verify(statisticsToAdd1);
         verify(statisticsToAdd2);
@@ -310,16 +310,16 @@ public class RocksDBMetricsRecorderTest {
         recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
         expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
-        memtableHitRatioSensor.record(0);
-        blockCacheDataHitRatioSensor.record(0);
-        blockCacheIndexHitRatioSensor.record(0);
-        blockCacheFilterHitRatioSensor.record(0);
+        memtableHitRatioSensor.record(0, 0L);
+        blockCacheDataHitRatioSensor.record(0, 0L);
+        blockCacheIndexHitRatioSensor.record(0, 0L);
+        blockCacheFilterHitRatioSensor.record(0, 0L);
         replay(memtableHitRatioSensor);
         replay(blockCacheDataHitRatioSensor);
         replay(blockCacheIndexHitRatioSensor);
         replay(blockCacheFilterHitRatioSensor);
 
-        recorder.record();
+        recorder.record(0L);
 
         verify(memtableHitRatioSensor);
         verify(blockCacheDataHitRatioSensor);

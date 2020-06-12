@@ -144,15 +144,16 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    /**
+     * Remove all metrics published by this task.
+     */
+    public void removeMetrics() {
+        taskMetricsGroup.close();
+    }
+
     protected abstract void execute();
 
     protected abstract void close();
-
-    /**
-     * Method called when this worker task has been completely closed, and when the subclass should clean up
-     * all resources.
-     */
-    protected abstract void releaseResources();
 
     protected boolean isStopping() {
         return stopping;
@@ -239,17 +240,9 @@ abstract class WorkerTask implements Runnable {
                 if (t instanceof Error)
                     throw (Error) t;
             } finally {
-                try {
-                    Thread.currentThread().setName(savedName);
-                    Plugins.compareAndSwapLoaders(savedLoader);
-                    shutdownLatch.countDown();
-                } finally {
-                    try {
-                        releaseResources();
-                    } finally {
-                        taskMetricsGroup.close();
-                    }
-                }
+                Thread.currentThread().setName(savedName);
+                Plugins.compareAndSwapLoaders(savedLoader);
+                shutdownLatch.countDown();
             }
         }
     }
@@ -434,6 +427,12 @@ abstract class WorkerTask implements Runnable {
         public void onShutdown(ConnectorTaskId id) {
             taskStateTimer.changeState(State.UNASSIGNED, time.milliseconds());
             delegateListener.onShutdown(id);
+        }
+
+        @Override
+        public void onDeletion(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.DESTROYED, time.milliseconds());
+            delegateListener.onDeletion(id);
         }
 
         public void recordState(TargetState state) {

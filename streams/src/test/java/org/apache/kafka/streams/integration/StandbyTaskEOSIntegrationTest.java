@@ -51,6 +51,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertTrue;
 
@@ -72,8 +73,8 @@ public class StandbyTaskEOSIntegrationTest {
     @Parameterized.Parameter
     public String eosConfig;
 
-    private final String appId = "eos-test-app";
-    private final String inputTopic = "input";
+    private String appId;
+    private String inputTopic;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
@@ -83,6 +84,9 @@ public class StandbyTaskEOSIntegrationTest {
 
     @Before
     public void createTopics() throws Exception {
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        appId = "app-" + safeTestName;
+        inputTopic = "input-" + safeTestName;
         CLUSTER.deleteTopicsAndWait(inputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
     }
@@ -159,10 +163,7 @@ public class StandbyTaskEOSIntegrationTest {
 
     private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
-        final String suffix = testName.getMethodName()
-            .replace('[', '_')
-            .replace(']', '_');
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId + suffix);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);

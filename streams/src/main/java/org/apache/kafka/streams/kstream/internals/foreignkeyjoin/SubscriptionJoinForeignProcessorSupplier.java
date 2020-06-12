@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
@@ -57,10 +56,10 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
             private KTableValueGetter<KO, VO> foreignValues;
 
             @Override
-            public void init(final ProcessorContext<Object, Object> context) {
+            public void init(final ProcessorContext context) {
                 super.init(context);
                 foreignValues = foreignValueGetterSupplier.get();
-                foreignValues.init(new ForwardingDisabledProcessorContext(context));
+                foreignValues.init(context);
             }
 
             @Override

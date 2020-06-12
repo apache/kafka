@@ -27,11 +27,12 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -84,6 +85,7 @@ public class RocksDBStoreTest {
     final static String METRICS_SCOPE = "metrics-scope";
 
     private File dir;
+    private final Time time = new MockTime();
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
@@ -102,7 +104,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             new StreamsConfig(props));
         rocksDBStore = getRocksDBStore();
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
     }
 
     @After
@@ -235,25 +237,6 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldRespectBulkloadOptionsDuringInit() {
-        rocksDBStore.init(context, rocksDBStore);
-
-        final StateRestoreListener restoreListener = context.getRestoreListener(rocksDBStore.name());
-
-        restoreListener.onRestoreStart(null, rocksDBStore.name(), 0L, 0L);
-
-        assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
-        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(1 << 30));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(1 << 30));
-
-        restoreListener.onRestoreEnd(null, rocksDBStore.name(), 0L);
-
-        assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(10));
-        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(20));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));
-    }
-
-    @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
@@ -325,36 +308,6 @@ public class RocksDBStoreTest {
             stringDeserializer.deserialize(
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
-    }
-
-    @Test
-    public void shouldTogglePrepareForBulkloadSetting() {
-        rocksDBStore.init(context, rocksDBStore);
-        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
-
-        restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have set bulk loading to true", rocksDBStore.isPrepareForBulkload());
-
-        restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
-    }
-
-    @Test
-    public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() {
-        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-
-        rocksDBStore.init(context, rocksDBStore);
-        context.restore(rocksDBStore.name(), entries);
-
-        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
-
-        restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have not set bulk loading to true", rocksDBStore.isPrepareForBulkload());
-
-        restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
     }
 
     @Test
@@ -554,7 +507,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
 
         enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);
@@ -596,7 +549,7 @@ public class RocksDBStoreTest {
     public void shouldVerifyThatMetricsGetMeasurementsFromRocksDB() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger();
+        final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST);

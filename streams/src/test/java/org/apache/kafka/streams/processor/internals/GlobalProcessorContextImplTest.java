@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -51,7 +52,7 @@ public class GlobalProcessorContextImplTest {
     private static final String UNKNOWN_STORE = "unknown-store";
     private static final String CHILD_PROCESSOR = "child";
 
-    private GlobalProcessorContextImpl<Object, Object> globalContext;
+    private GlobalProcessorContextImpl globalContext;
 
     private ProcessorNode<?, ?> child;
     private ProcessorRecordContext recordContext;
@@ -72,9 +73,10 @@ public class GlobalProcessorContextImplTest {
         expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).andReturn(mock(TimestampedWindowStore.class));
         expect(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).andReturn(mock(SessionStore.class));
         expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
+        expect(stateManager.taskType()).andStubReturn(TaskType.GLOBAL);
         replay(stateManager);
 
-        globalContext = new GlobalProcessorContextImpl<>(
+        globalContext = new GlobalProcessorContextImpl(
             streamsConfig,
             stateManager,
             null,

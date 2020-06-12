@@ -44,6 +44,7 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";
     private static final String RESOURCE_NAME_KEY_NAME = "resource_name";
     private static final String CONFIG_NAMES_KEY_NAME = "config_names";
+    private static final String INCLUDE_DOCUMENTATION = "include_documentation";
 
     private static final Schema DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
             new Field(RESOURCE_TYPE_KEY_NAME, INT8),
@@ -62,13 +63,24 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
      */
     private static final Schema DESCRIBE_CONFIGS_REQUEST_V2 = DESCRIBE_CONFIGS_REQUEST_V1;
 
+    private static final Schema DESCRIBE_CONFIGS_REQUEST_V3 = new Schema(
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0), "An array of config resources to be returned."),
+            new Field(INCLUDE_SYNONYMS, BOOLEAN),
+            new Field(INCLUDE_DOCUMENTATION, BOOLEAN));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1, DESCRIBE_CONFIGS_REQUEST_V2};
+        return new Schema[] {
+            DESCRIBE_CONFIGS_REQUEST_V0,
+            DESCRIBE_CONFIGS_REQUEST_V1,
+            DESCRIBE_CONFIGS_REQUEST_V2,
+            DESCRIBE_CONFIGS_REQUEST_V3
+        };
     }
 
     public static class Builder extends AbstractRequest.Builder<DescribeConfigsRequest> {
         private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
         private boolean includeSynonyms;
+        private boolean includeDocumentation;
 
         public Builder(Map<ConfigResource, Collection<String>> resourceToConfigNames) {
             super(ApiKeys.DESCRIBE_CONFIGS);
@@ -77,6 +89,11 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
 
         public Builder includeSynonyms(boolean includeSynonyms) {
             this.includeSynonyms = includeSynonyms;
+            return this;
+        }
+
+        public Builder includeDocumentation(boolean includeDocumentation) {
+            this.includeDocumentation = includeDocumentation;
             return this;
         }
 
@@ -93,17 +110,27 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
 
         @Override
         public DescribeConfigsRequest build(short version) {
-            return new DescribeConfigsRequest(version, resourceToConfigNames, includeSynonyms);
+            return new DescribeConfigsRequest(
+                version, resourceToConfigNames, includeSynonyms, includeDocumentation);
         }
     }
 
     private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
     private final boolean includeSynonyms;
+    private final boolean includeDocumentation;
 
-    public DescribeConfigsRequest(short version, Map<ConfigResource, Collection<String>> resourceToConfigNames, boolean includeSynonyms) {
+    public DescribeConfigsRequest(
+        short version, Map<ConfigResource, Collection<String>> resourceToConfigNames,
+        boolean includeSynonyms) {
+        this(version, resourceToConfigNames, includeSynonyms, false);
+    }
+    public DescribeConfigsRequest(
+        short version, Map<ConfigResource, Collection<String>> resourceToConfigNames,
+        boolean includeSynonyms, boolean includeDocumentation) {
         super(ApiKeys.DESCRIBE_CONFIGS, version);
         this.resourceToConfigNames = Objects.requireNonNull(resourceToConfigNames, "resourceToConfigNames");
         this.includeSynonyms = includeSynonyms;
+        this.includeDocumentation = includeDocumentation;
     }
 
     public DescribeConfigsRequest(Struct struct, short version) {
@@ -126,6 +153,7 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
             resourceToConfigNames.put(new ConfigResource(resourceType, resourceName), configNames);
         }
         this.includeSynonyms = struct.hasField(INCLUDE_SYNONYMS) ? struct.getBoolean(INCLUDE_SYNONYMS) : false;
+        this.includeDocumentation = struct.hasField(INCLUDE_DOCUMENTATION) ? struct.getBoolean(INCLUDE_DOCUMENTATION) : false;
     }
 
     public Collection<ConfigResource> resources() {
@@ -141,6 +169,10 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
 
     public boolean includeSynonyms() {
         return includeSynonyms;
+    }
+
+    public boolean includeDocumentation() {
+        return includeDocumentation;
     }
 
     @Override
@@ -160,6 +192,7 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
         }
         struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray(new Struct[0]));
         struct.setIfExists(INCLUDE_SYNONYMS, includeSynonyms);
+        struct.setIfExists(INCLUDE_DOCUMENTATION, includeDocumentation);
         return struct;
     }
 

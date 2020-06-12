@@ -52,7 +52,7 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void init(final InternalProcessorContext<Object, Object> context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         initialized = true;
     }

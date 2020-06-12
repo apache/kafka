@@ -371,10 +371,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         // Avoid using even-sized capacities, to get better key distribution.
         int newCapacity = (2 * expectedNumElements) + 1;
         // Don't use a capacity that is too small.
-        if (newCapacity < MIN_NONEMPTY_CAPACITY) {
-            return MIN_NONEMPTY_CAPACITY;
-        }
-        return newCapacity;
+        return Math.max(newCapacity, MIN_NONEMPTY_CAPACITY);
     }
 
     /**

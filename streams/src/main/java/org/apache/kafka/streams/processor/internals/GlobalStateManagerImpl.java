@@ -33,6 +33,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
@@ -222,7 +223,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         } finally {
             globalConsumer.unsubscribe();
         }
-
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -339,7 +339,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
     }
 
-
     @Override
     public void close() throws IOException {
         try {
@@ -394,6 +393,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
     }
 
+    @Override
+    public TaskType taskType() {
+        return TaskType.GLOBAL;
+    }
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {

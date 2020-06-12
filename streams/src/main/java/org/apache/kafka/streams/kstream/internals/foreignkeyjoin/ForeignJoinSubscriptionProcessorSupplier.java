@@ -61,10 +61,9 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
         private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
 
         @Override
-        public void init(final ProcessorContext<Object, Object> context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            final InternalProcessorContext<Object, Object> internalProcessorContext =
-                (InternalProcessorContext<Object, Object>) context;
+            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
                 internalProcessorContext.taskId().toString(),

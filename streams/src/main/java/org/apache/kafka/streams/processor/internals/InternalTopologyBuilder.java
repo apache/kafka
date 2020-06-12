@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -269,16 +270,7 @@ public class InternalTopologyBuilder {
 
         @Override
         public ProcessorNode<K, V> build() {
-            final List<String> sourceTopics = nodeToSourceTopics.get(name);
-
-            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
-            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
-            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
-            if (sourceTopics == null) {
-                return new SourceNode<>(name, Collections.singletonList(String.valueOf(pattern)), timestampExtractor, keyDeserializer, valDeserializer);
-            } else {
-                return new SourceNode<>(name, maybeDecorateInternalSourceTopics(sourceTopics), timestampExtractor, keyDeserializer, valDeserializer);
-            }
+            return new SourceNode<>(name, timestampExtractor, keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(final String topic) {
@@ -521,8 +513,12 @@ public class InternalTopologyBuilder {
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        if (!allowOverride && stateFactories.containsKey(storeBuilder.name())) {
-            throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
+        final StateStoreFactory<?> stateFactory = stateFactories.get(storeBuilder.name());
+        if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
+        }
+        if (globalStateBuilders.containsKey(storeBuilder.name())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeBuilder.name());
         }
 
         stateFactories.put(storeBuilder.name(), new StateStoreFactory<>(storeBuilder));
@@ -633,6 +629,41 @@ public class InternalTopologyBuilder {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
 
+    public void validateCopartition() {
+        // allCopartitionedSourceTopics take the list of co-partitioned nodes and
+        // replaces each processor name with the corresponding source topic name
+        final List<Set<String>> allCopartitionedSourceTopics =
+                copartitionSourceGroups
+                        .stream()
+                        .map(sourceGroup -> sourceGroup
+                                .stream()
+                                .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
+                                        Collections.emptyList()).stream())
+                                .collect(Collectors.toSet())
+                        ).collect(Collectors.toList());
+        for (final Set<String> copartition : allCopartitionedSourceTopics) {
+            final Map<String, Integer> numberOfPartitionsPerTopic = new HashMap<>();
+            copartition.forEach(topic -> {
+                final InternalTopicProperties prop = internalTopicNamesWithProperties.get(topic);
+                if (prop != null && prop.getNumberOfPartitions().isPresent()) {
+                    numberOfPartitionsPerTopic.put(topic, prop.getNumberOfPartitions().get());
+                }
+            });
+            if (!numberOfPartitionsPerTopic.isEmpty() && copartition.equals(numberOfPartitionsPerTopic.keySet())) {
+                final Collection<Integer> partitionNumbers = numberOfPartitionsPerTopic.values();
+                final Integer first = partitionNumbers.iterator().next();
+                for (final Integer partitionNumber : partitionNumbers) {
+                    if (!partitionNumber.equals(first)) {
+                        final String msg = String.format("Following topics do not have the same number of " +
+                                "partitions: [%s]", new TreeMap<>(numberOfPartitionsPerTopic));
+                        throw new TopologyException(msg);
+
+                    }
+                }
+            }
+        }
+    }
+
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
@@ -649,8 +680,11 @@ public class InternalTopologyBuilder {
         if (nodeFactories.containsKey(processorName)) {
             throw new TopologyException("Processor " + processorName + " is already added.");
         }
-        if (stateFactories.containsKey(storeName) || globalStateBuilders.containsKey(storeName)) {
-            throw new TopologyException("StateStore " + storeName + " is already added.");
+        if (stateFactories.containsKey(storeName)) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeName);
+        }
+        if (globalStateBuilders.containsKey(storeName)) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
         if (loggingEnabled) {
             throw new TopologyException("StateStore " + storeName + " for global table must not have logging enabled.");
@@ -1068,6 +1102,10 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
+    public Map<String, List<String>> nodeToSourceTopics() {
+        return Collections.unmodifiableMap(nodeToSourceTopics);
+    }
+
     private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
                                                                final Optional<Integer> numberOfPartitions) {
         return numberOfPartitions
@@ -1224,6 +1262,10 @@ public class InternalTopologyBuilder {
         return decoratedTopics;
     }
 
+    public String decoratePseudoTopic(final String topic) {
+        return decorateTopic(topic);
+    }
+
     private String decorateTopic(final String topic) {
         if (applicationId == null) {
             throw new TopologyException("there are internal topics and "
@@ -1257,6 +1299,10 @@ public class InternalTopologyBuilder {
 
     synchronized Pattern sourceTopicPattern() {
         return sourceTopicPattern;
+    }
+
+    public boolean hasNoNonGlobalTopology() {
+        return !usesPatternSubscription() && sourceTopicCollection().isEmpty();
     }
 
     private boolean isGlobalSource(final String nodeName) {
@@ -1747,6 +1793,13 @@ public class InternalTopologyBuilder {
                 }
             }
             return topicConfigs;
+        }
+
+        /**
+         * Returns the topic names for any optimized source changelogs
+         */
+        public Set<String> sourceTopicChangelogs() {
+            return sourceTopics.stream().filter(stateChangelogTopics::containsKey).collect(Collectors.toSet());
         }
 
         @Override

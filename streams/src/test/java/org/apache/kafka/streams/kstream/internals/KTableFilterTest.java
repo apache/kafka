@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.TestInputTopic;
@@ -151,8 +150,8 @@ public class KTableFilterTest {
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-            getter2.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table2.name)));
-            getter3.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table3.name)));
+            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
+            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
             inputTopic.pipeInput("A", 1, 5L);
             inputTopic.pipeInput("B", 1, 10L);
