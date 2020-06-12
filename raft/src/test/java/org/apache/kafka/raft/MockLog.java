@@ -120,17 +120,17 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Long appendAsLeader(Records records, int epoch) {
+    public LogAppendInfo appendAsLeader(Records records, int epoch) {
         long baseOffset = endOffset();
         AtomicLong offsetSupplier = new AtomicLong(baseOffset);
         for (RecordBatch batch : records.batches()) {
             List<LogEntry> entries = buildEntries(batch, record -> offsetSupplier.getAndIncrement());
             appendBatch(new LogBatch(epoch, batch.isControlBatch(), entries));
         }
-        return baseOffset;
+        return new LogAppendInfo(baseOffset, offsetSupplier.get() - 1);
     }
 
-    Long appendAsLeader(Collection<SimpleRecord> records, int epoch) {
+    LogAppendInfo appendAsLeader(Collection<SimpleRecord> records, int epoch) {
         long baseOffset = endOffset();
         long offset = baseOffset;
 
@@ -140,7 +140,7 @@ public class MockLog implements ReplicatedLog {
             offset += 1;
         }
         appendBatch(new LogBatch(epoch, false, entries));
-        return baseOffset;
+        return new LogAppendInfo(baseOffset, offset - 1);
     }
 
     private Long appendBatch(LogBatch batch) {
@@ -152,11 +152,15 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void appendAsFollower(Records records) {
+    public LogAppendInfo appendAsFollower(Records records) {
+        long baseOffset = endOffset();
+        long lastOffset = baseOffset;
         for (RecordBatch batch : records.batches()) {
             List<LogEntry> entries = buildEntries(batch, Record::offset);
             appendBatch(new LogBatch(batch.partitionLeaderEpoch(), batch.isControlBatch(), entries));
+            lastOffset = entries.get(entries.size() - 1).offset;
         }
+        return new LogAppendInfo(baseOffset, lastOffset);
     }
 
     public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
@@ -177,14 +181,16 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Records read(long startOffset, OptionalLong maxOffsetOpt) {
-        List<LogBatch> batches = readBatches(startOffset, maxOffsetOpt);
-        if (batches.isEmpty())
-            return MemoryRecords.EMPTY;
-
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        for (LogBatch batch : batches) {
-            buffer = batch.writeTo(buffer);
+
+        long maxOffset = maxOffsetOpt.orElse(endOffset());
+        for (LogBatch batch : log) {
+            // note start offset is inclusive while max offset is exclusive
+            if (batch.firstOffset() < maxOffset && batch.lastOffset() >= startOffset) {
+                buffer = batch.writeTo(buffer, startOffset, maxOffset);
+            }
         }
+
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);
     }
@@ -250,7 +256,7 @@ public class MockLog implements ReplicatedLog {
             return entries.get(entries.size() - 1);
         }
 
-        ByteBuffer writeTo(ByteBuffer buffer) {
+        ByteBuffer writeTo(ByteBuffer buffer, long startOffset, long maxOffset) {
             LogEntry first = first();
 
             MemoryRecordsBuilder builder = MemoryRecords.builder(
@@ -261,6 +267,12 @@ public class MockLog implements ReplicatedLog {
                 isControlBatch, epoch);
 
             for (LogEntry entry : entries) {
+                if (entry.offset < startOffset)
+                    continue;
+
+                if (entry.offset >= maxOffset)
+                    break;
+
                 if (isControlBatch) {
                     builder.appendControlRecordWithOffset(entry.offset, entry.record);
                 } else {

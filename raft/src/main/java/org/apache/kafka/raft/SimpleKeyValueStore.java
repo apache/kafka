@@ -168,6 +168,8 @@ public class SimpleKeyValueStore<K, V> implements ReplicatedStateMachine {
                         "before the record was committed"));
                 iter.remove();
             } else if (batch.lastOffset() >= offsetAndEpoch.offset) {
+                // comparing the last offset of the appended future with the batch last offset,
+                // if it is smaller then we know the appended records are replicated completely
                 future.complete(offsetAndEpoch);
                 iter.remove();
             } else {

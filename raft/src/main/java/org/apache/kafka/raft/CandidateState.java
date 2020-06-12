@@ -36,6 +36,10 @@ public class CandidateState implements EpochState {
         voteStates.put(localId, VoteState.GRANTED);
     }
 
+    public int localId() {
+        return localId;
+    }
+
     public int majoritySize() {
         return voteStates.size() / 2 + 1;
     }

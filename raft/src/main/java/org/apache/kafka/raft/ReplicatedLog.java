@@ -28,16 +28,18 @@ public interface ReplicatedLog {
      * be written atomically in a single batch or the call will fail and raise an
      * exception.
      *
-     * @return the base offset of the first appended record.
+     * @return the metadata information of the appended batch
      */
-    Long appendAsLeader(Records records, int epoch);
+    LogAppendInfo appendAsLeader(Records records, int epoch);
 
     /**
      * Append a set of records that were replicated from the leader. The main
      * difference from appendAsLeader is that we do not need to assign the epoch
      * or do additional validation.
+     *
+     * @return the metadata information of the appended batch
      */
-    void appendAsFollower(Records records);
+    LogAppendInfo appendAsFollower(Records records);
 
     /**
      * Read a set of records within a range of offsets.

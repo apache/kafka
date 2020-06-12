@@ -85,5 +85,4 @@ class KafkaFuturePurgatoryTest {
     assertTrue(future3.isDone)
     assertEquals((), future3.get())
   }
-
 }
