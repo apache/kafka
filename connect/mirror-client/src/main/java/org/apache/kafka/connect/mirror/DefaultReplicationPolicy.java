@@ -48,7 +48,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     @Override
     public String formatRemoteTopic(String sourceClusterAlias, String topic) {
-        return sourceClusterAlias + separator + topic + separator + "mirror";
+        return sourceClusterAlias + separator + topic + separator + SUFFIX;
     }
 
     @Override
@@ -70,7 +70,8 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
         }
         else if (topic.contains(separator + SUFFIX)) {
             return null;
-        } else {
+        } 
+        else {
             return topic.substring(source.length() + separator.length(), topic.length() - SUFFIX.length() - 1);
         }
     }
