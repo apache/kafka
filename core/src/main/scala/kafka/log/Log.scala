@@ -1791,10 +1791,12 @@ class Log(@volatile private var _dir: File,
         segment.largestRecordTimestamp match {
           case Some(ts) =>
             info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-              s" retentionMs breach. Largest record timestamp of segment is $ts")
+              s" retentionMs breach based on the largest record timestamp from the segment, which" +
+              s" is $ts")
           case None =>
             info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-              s" retentionMs breach. Last modified timestamp of segment is ${segment.lastModified}")
+              s" retentionMs breach based on the last modified timestamp from the segment, which" +
+              s" is ${segment.lastModified}")
         }
         true
       } else {
@@ -1812,7 +1814,8 @@ class Log(@volatile private var _dir: File,
       if (diff - segment.size >= 0) {
         diff -= segment.size
         info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-          s" retentionSize breach. Segment size is ${segment.size}")
+          s" retentionSize breach. Segment size is ${segment.size} and total log size after" +
+          s" deletion will be ${size - diff}")
         true
       } else {
         false
