@@ -193,7 +193,7 @@
 
     <h5><a id="connect_predicates" href="#connect_predicates">Predicates</a></h5>
 
-    <p>Transformations can be configured with prediates so that the transformation is applied only to messages which satisfy some condition. In particular, when combined with the <b>Filter</b> transformation predicates can be used to selectively filter out certain messages.</p>
+    <p>Transformations can be configured with predicates so that the transformation is applied only to messages which satisfy some condition. In particular, when combined with the <b>Filter</b> transformation predicates can be used to selectively filter out certain messages.</p>
 
     <p>Predicates are specified in the connector configuration.</p>
 
@@ -211,7 +211,7 @@
         <li>apply the ExtractField transformation with the field name 'other_field' to records in all topics <i>except</i> the topic 'bar'</li>
     </ul>
 
-    <p>To do this we need to first to filter out the records destined for the topic 'foo'. The Filter transformation removes records from further processing, and can use the TopicNameMatches predicate to apply the transformation only to records in topics which match a certain regular expression. TopicNameMatches's only configuration property is <code>pattern</code> which is a Java regular expression for matching against the topic name. The configuration would look like this:</p>
+    <p>To do this we need first to filter out the records destined for the topic 'foo'. The Filter transformation removes records from further processing, and can use the TopicNameMatches predicate to apply the transformation only to records in topics which match a certain regular expression. TopicNameMatches's only configuration property is <code>pattern</code> which is a Java regular expression for matching against the topic name. The configuration would look like this:</p>
 
     <pre class="brush: text;">
         transforms=Filter
@@ -248,7 +248,7 @@
     <ul>
         <li><code>TopicNameMatches</code> - matches records in a topic with a name matching a particular Java regular expression.</li>
         <li><code>HasHeaderKey</code> - matches records which have a header with the given key.</li>
-        <li><code>RecordIsTombstone</code> - matches tombstone records, that is, those will a null value.</li>
+        <li><code>RecordIsTombstone</code> - matches tombstone records, that is records with a null value.</li>
     </ul>
 
     <p>Details on how to configure each predicate are listed below:</p>
