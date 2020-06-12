@@ -160,7 +160,6 @@
     <suppress checks="NPathComplexity"
               files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
 
-    <!-- imported code -->
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
 
@@ -193,7 +192,6 @@
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
-
 
     <!-- Streams Test-Utils -->
     <suppress checks="ClassFanOutComplexity"
