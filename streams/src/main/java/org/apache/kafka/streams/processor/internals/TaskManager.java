@@ -434,31 +434,49 @@ public class TaskManager {
      * is called. Note that only active task partitions are passed in from the rebalance listener, so we only need to
      * consider/commit active tasks here
      *
+     * If eos-beta is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
+     *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> tasksToCommit = new HashSet<>();
+        final Set<Task> additionalTasksForCommitting = new HashSet<>();
+
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 task.suspend();
-            }
-            if (task.commitNeeded()) {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                if (task.commitNeeded()) {
+                    tasksToCommit.add(task);
                 }
+            } else if (task.commitNeeded()) {
+                additionalTasksForCommitting.add(task);
             }
             remainingRevokedPartitions.removeAll(task.inputPartitions());
+        }
+
+        // If using eos-beta, if we must commit any task then we must commit all of them
+        // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
+        if (processingMode ==  EXACTLY_ONCE_BETA && !tasksToCommit.isEmpty()) {
+            tasksToCommit.addAll(additionalTasksForCommitting);
+        }
+
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        for (final Task task : tasksToCommit) {
+            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+            if (!committableOffsets.isEmpty()) {
+                consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+            } else {
+                log.warn("Task {} claimed to need a commit but had no committable consumed offsets", task.id());
+            }
         }
 
         if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
         }
 
-        for (final TaskId committedTaskId : consumedOffsetsAndMetadataPerTask.keySet()) {
-            final Task task = tasks.get(committedTaskId);
+        for (final Task task : tasksToCommit) {
             task.postCommit();
         }
 
