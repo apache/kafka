@@ -32,6 +32,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     // In order to work with various metrics stores, we allow custom separators.
     public static final String SEPARATOR_CONFIG = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
     public static final String SEPARATOR_DEFAULT = ".";
+    public static final String SUFFIX = "mirror";
 
     private String separator = SEPARATOR_DEFAULT;
     private Pattern separatorPattern = Pattern.compile(Pattern.quote(SEPARATOR_DEFAULT));
@@ -47,7 +48,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     @Override
     public String formatRemoteTopic(String sourceClusterAlias, String topic) {
-        return sourceClusterAlias + separator + topic;
+        return sourceClusterAlias + separator + topic + separator + "mirror";
     }
 
     @Override
@@ -66,8 +67,11 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
         String source = topicSource(topic);
         if (source == null) {
             return null;
+        }
+        else if (topic.contains(separator + SUFFIX)) {
+            return null;
         } else {
-            return topic.substring(source.length() + separator.length());
+            return topic.substring(source.length() + separator.length(), topic.length() - SUFFIX.length() - 1);
         }
     }
 }
