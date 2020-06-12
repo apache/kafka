@@ -1841,7 +1841,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
         assertThat(task.state(), equalTo(RUNNING));
-        assertThrows(RuntimeException.class , () -> task.suspend());
+        assertThrows(RuntimeException.class, () -> task.suspend());
         assertThat(task.state(), equalTo(SUSPENDED));
     }
 

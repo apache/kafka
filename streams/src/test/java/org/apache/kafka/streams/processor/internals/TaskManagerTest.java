@@ -2579,8 +2579,9 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(assignment, Collections.emptyMap());
 
-        final RuntimeException thrown = assertThrows(RuntimeException.class,
-                                                     () ->taskManager.handleRevocation(asList(t1p0, t1p1)));
+        final RuntimeException thrown = assertThrows(
+            RuntimeException.class,
+            () -> taskManager.handleRevocation(asList(t1p0, t1p1)));
 
         assertThat(thrown.getMessage(), is("KABOOM!"));
         assertThat(task00.state(), is(Task.State.SUSPENDED));

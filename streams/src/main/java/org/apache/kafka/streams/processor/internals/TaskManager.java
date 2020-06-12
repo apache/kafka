@@ -678,15 +678,20 @@ public class TaskManager {
             }
         }
 
-        if (clean && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        try {
+            if (clean && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+            }
+            for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
+                final Task task = tasks.get(taskId);
+                task.postCommit();
+            }
+        } catch (final RuntimeException e) {
+            firstException.compareAndSet(null, e);
         }
 
         for (final Task task : tasksToClose) {
             try {
-                if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                    task.postCommit();
-                }
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
