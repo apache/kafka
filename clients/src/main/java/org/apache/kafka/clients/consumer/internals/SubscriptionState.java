@@ -949,19 +949,18 @@ public class SubscriptionState {
             }
         }
 
+        /**
+         * Return the valid states which this state can transition to
+         */
         Collection<FetchState> validTransitions();
 
         /**
-         * Test if this state is considered to have a position
-         *
-         * @return
+         * Test if this state has a position
          */
         boolean hasPosition();
 
         /**
          * Test if this state is considered to have a valid position which can be used for fetching
-         *
-         * @return
          */
         boolean hasValidPosition();
     }
