@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.resource.PatternType;
@@ -49,12 +50,14 @@ public class DescribeAclsResponse extends AbstractResponse {
     private final DescribeAclsResponseData data;
 
     public DescribeAclsResponse(DescribeAclsResponseData data, short version) {
+        super(ApiKeys.DESCRIBE_ACLS);
         validate(Optional.of(version));
         this.data = data;
     }
 
     // Skips version validation, should only be called when `version` is not available and the input is known to be valid
     DescribeAclsResponse(DescribeAclsResponseData data) {
+        super(ApiKeys.DESCRIBE_ACLS);
         validate(Optional.empty());
         this.data = data;
     }

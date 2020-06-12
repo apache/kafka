@@ -226,11 +226,13 @@ public class DescribeConfigsResponse extends LegacyAbstractResponse {
     private final Map<ConfigResource, Config> configs;
 
     public DescribeConfigsResponse(int throttleTimeMs, Map<ConfigResource, Config> configs) {
+        super(ApiKeys.DESCRIBE_CONFIGS);
         this.throttleTimeMs = throttleTimeMs;
         this.configs = Objects.requireNonNull(configs, "configs");
     }
 
     public DescribeConfigsResponse(Struct struct) {
+        super(ApiKeys.DESCRIBE_CONFIGS);
         throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         Object[] resourcesArray = struct.getArray(RESOURCES_KEY_NAME);
         configs = new HashMap<>(resourcesArray.length);

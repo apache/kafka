@@ -367,6 +367,7 @@ public class FetchResponse<T extends BaseRecords> extends LegacyAbstractResponse
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
                          int throttleTimeMs,
                          int sessionId) {
+        super(ApiKeys.FETCH);
         this.error = error;
         this.responseData = responseData;
         this.throttleTimeMs = throttleTimeMs;

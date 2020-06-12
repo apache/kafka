@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -34,6 +35,7 @@ public class SaslHandshakeResponse extends AbstractResponse {
     private final SaslHandshakeResponseData data;
 
     public SaslHandshakeResponse(SaslHandshakeResponseData data) {
+        super(ApiKeys.SASL_HANDSHAKE);
         this.data = data;
     }
 

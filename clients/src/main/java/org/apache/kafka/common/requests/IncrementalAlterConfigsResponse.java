@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -55,6 +56,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     private final IncrementalAlterConfigsResponseData data;
 
     public IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponseData data) {
+        super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
         this.data = data;
     }
 

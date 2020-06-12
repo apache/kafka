@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -49,10 +50,12 @@ public class OffsetCommitResponse extends AbstractResponse {
     private final OffsetCommitResponseData data;
 
     public OffsetCommitResponse(OffsetCommitResponseData data) {
+        super(ApiKeys.OFFSET_COMMIT);
         this.data = data;
     }
 
     public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+        super(ApiKeys.OFFSET_COMMIT);
         Map<String, OffsetCommitResponseTopic>
                 responseTopicDataMap = new HashMap<>();
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -36,6 +37,7 @@ public class InitProducerIdResponse extends AbstractResponse {
     public final InitProducerIdResponseData data;
 
     public InitProducerIdResponse(InitProducerIdResponseData data) {
+        super(ApiKeys.INIT_PRODUCER_ID);
         this.data = data;
     }
 

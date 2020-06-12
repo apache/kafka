@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EndTxnResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -40,6 +41,7 @@ public class EndTxnResponse extends AbstractResponse {
     public final EndTxnResponseData data;
 
     public EndTxnResponse(EndTxnResponseData data) {
+        super(ApiKeys.END_TXN);
         this.data = data;
     }
 

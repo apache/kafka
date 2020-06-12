@@ -43,6 +43,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     public final ApiVersionsResponseData data;
 
     public ApiVersionsResponse(ApiVersionsResponseData data) {
+        super(ApiKeys.API_VERSIONS);
         this.data = data;
     }
 

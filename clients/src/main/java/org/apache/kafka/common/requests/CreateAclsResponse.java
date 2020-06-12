@@ -30,6 +30,7 @@ public class CreateAclsResponse extends AbstractResponse {
     private final CreateAclsResponseData data;
 
     public CreateAclsResponse(CreateAclsResponseData data) {
+        super(ApiKeys.CREATE_ACLS);
         this.data = data;
     }
 

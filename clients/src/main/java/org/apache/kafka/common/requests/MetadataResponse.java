@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -69,6 +70,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        super(ApiKeys.METADATA);
         this.data = data;
         this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
@@ -478,7 +480,8 @@ public class MetadataResponse extends AbstractResponse {
         return new MetadataResponse(responseData, hasReliableLeaderEpochs);
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, List<MetadataResponseTopic> topicMetadataList,
+    public static MetadataResponse prepareResponse(int throttleTimeMs,
+                                                   List<MetadataResponseTopic> topicMetadataList,
                                                    Collection<Node> brokers, String clusterId, int controllerId,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
@@ -496,7 +499,7 @@ public class MetadataResponse extends AbstractResponse {
         responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
         topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
-        return new MetadataResponse(responseData);
+        return new MetadataResponse(responseData, true);
     }
 
     @Override

@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -29,6 +30,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     private final RenewDelegationTokenResponseData data;
 
     public RenewDelegationTokenResponse(RenewDelegationTokenResponseData data) {
+        super(ApiKeys.RENEW_DELEGATION_TOKEN);
         this.data = data;
     }
 

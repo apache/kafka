@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -40,6 +41,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private final FindCoordinatorResponseData data;
 
     public FindCoordinatorResponse(FindCoordinatorResponseData data) {
+        super(ApiKeys.FIND_COORDINATOR);
         this.data = data;
     }
 

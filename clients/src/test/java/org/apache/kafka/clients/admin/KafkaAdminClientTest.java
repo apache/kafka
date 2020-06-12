@@ -749,17 +749,18 @@ public class KafkaAdminClientTest {
 
             // Test a call where we get back ACL1 and ACL2.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()
-                .setResources(DescribeAclsResponse.aclsResources(asList(ACL1, ACL2)))));
+                .setResources(DescribeAclsResponse.aclsResources(asList(ACL1, ACL2))), ApiKeys.DESCRIBE_ACLS.latestVersion()));
             assertCollectionIs(env.adminClient().describeAcls(FILTER1).values().get(), ACL1, ACL2);
 
             // Test a call where we get back no results.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()));
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData(),
+                    ApiKeys.DESCRIBE_ACLS.latestVersion()));
             assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()
                 .setErrorCode(Errors.SECURITY_DISABLED.code())
-                .setErrorMessage("Security is disabled")));
+                .setErrorMessage("Security is disabled"), ApiKeys.DESCRIBE_ACLS.latestVersion()));
             TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
 
             // Test a call where we supply an invalid filter.
@@ -812,7 +813,8 @@ public class KafkaAdminClientTest {
                             DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
                         .setErrorCode(Errors.SECURITY_DISABLED.code())
-                        .setErrorMessage("No security")))));
+                        .setErrorMessage("No security"))),
+                    ApiKeys.DELETE_ACLS.latestVersion()));
             DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
@@ -833,7 +835,8 @@ public class KafkaAdminClientTest {
                             new DeleteAclsResponseData.DeleteAclsMatchingAcl()
                                 .setErrorCode(Errors.SECURITY_DISABLED.code())
                                 .setErrorMessage("No security"))),
-                    new DeleteAclsResponseData.DeleteAclsFilterResult()))));
+                    new DeleteAclsResponseData.DeleteAclsFilterResult())),
+                    ApiKeys.DELETE_ACLS.latestVersion()));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
@@ -845,7 +848,8 @@ public class KafkaAdminClientTest {
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
                         .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
-                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE)))))));
+                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))))),
+                    ApiKeys.DELETE_ACLS.latestVersion()));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);
@@ -1162,6 +1166,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     2,
+                    Collections.emptyList(),
                     MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
             env.kafkaClient().prepareResponse(response);
 
@@ -1170,6 +1175,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     3,
+                    Collections.emptyList(),
                     1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code());
             env.kafkaClient().prepareResponse(response2);
 
@@ -3316,7 +3322,7 @@ public class KafkaAdminClientTest {
             responseData.put(entity1, Collections.singletonMap("consumer_byte_rate", 10000.0));
             responseData.put(entity2, Collections.singletonMap("producer_byte_rate", 20000.0));
 
-            env.kafkaClient().prepareResponse(new DescribeClientQuotasResponse(responseData, 0));
+            env.kafkaClient().prepareResponse(DescribeClientQuotasResponse.fromQuotaEntities(responseData, 0));
 
             ClientQuotaFilter filter = ClientQuotaFilter.contains(asList(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, value)));
 
@@ -3356,6 +3362,7 @@ public class KafkaAdminClientTest {
             ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER));
     }
 
+    @Test
     public void testAlterClientQuotas() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -3369,7 +3376,7 @@ public class KafkaAdminClientTest {
             responseData.put(unauthorizedEntity, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Authorization failed"));
             responseData.put(invalidEntity, new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity"));
 
-            env.kafkaClient().prepareResponse(new AlterClientQuotasResponse(responseData, 0));
+            env.kafkaClient().prepareResponse(AlterClientQuotasResponse.from(responseData, 0));
 
             List<ClientQuotaAlteration> entries = new ArrayList<>(3);
             entries.add(new ClientQuotaAlteration(goodEntity, Collections.singleton(new ClientQuotaAlteration.Op("consumer_byte_rate", 10000.0))));

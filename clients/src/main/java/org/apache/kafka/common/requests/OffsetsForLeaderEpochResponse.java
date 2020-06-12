@@ -98,6 +98,7 @@ public class OffsetsForLeaderEpochResponse extends LegacyAbstractResponse {
     private final Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
 
     public OffsetsForLeaderEpochResponse(Struct struct) {
+        super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         this.epochEndOffsetsByPartition = new HashMap<>();
         for (Object topicAndEpocsObj : struct.get(TOPICS)) {
@@ -120,6 +121,7 @@ public class OffsetsForLeaderEpochResponse extends LegacyAbstractResponse {
     }
 
     public OffsetsForLeaderEpochResponse(int throttleTimeMs, Map<TopicPartition, EpochEndOffset> epochsByTopic) {
+        super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         this.throttleTimeMs = throttleTimeMs;
         this.epochEndOffsetsByPartition = epochsByTopic;
     }

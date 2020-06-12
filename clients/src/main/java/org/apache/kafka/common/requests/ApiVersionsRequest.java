@@ -61,7 +61,7 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     private final Short unsupportedRequestVersion;
 
-    public final ApiVersionsRequestData data;
+    private final ApiVersionsRequestData data;
 
     public ApiVersionsRequest(ApiVersionsRequestData data, short version) {
         this(data, version, null);
@@ -97,7 +97,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    public ApiVersionsRequestData data() {
         return data;
     }
 

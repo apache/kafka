@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -29,6 +30,7 @@ public class UpdateMetadataResponse extends AbstractResponse {
     private final UpdateMetadataResponseData data;
 
     public UpdateMetadataResponse(UpdateMetadataResponseData data) {
+        super(ApiKeys.UPDATE_METADATA);
         this.data = data;
     }
 

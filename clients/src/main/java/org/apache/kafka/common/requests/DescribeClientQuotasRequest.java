@@ -18,8 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData.ComponentData;
+import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
@@ -112,7 +114,11 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
 
     @Override
     public DescribeClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new DescribeClientQuotasResponse(throttleTimeMs, e);
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(Errors.forException(e).code())
+            .setErrorMessage(e.getMessage())
+            .setEntries(null));
     }
 
     public static DescribeClientQuotasRequest parse(ByteBuffer buffer, short version) {

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -28,6 +29,7 @@ public class ListGroupsResponse extends AbstractResponse {
     private final ListGroupsResponseData data;
 
     public ListGroupsResponse(ListGroupsResponseData data) {
+        super(ApiKeys.LIST_GROUPS);
         this.data = data;
     }
 

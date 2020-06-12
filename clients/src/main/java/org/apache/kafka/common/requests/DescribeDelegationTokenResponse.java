@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationToken;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationTokenRenewer;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -37,6 +38,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     private final DescribeDelegationTokenResponseData data;
 
     public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN);
         List<DescribedDelegationToken> describedDelegationTokenList = tokens
             .stream()
             .map(dt -> new DescribedDelegationToken()
@@ -64,6 +66,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     public DescribeDelegationTokenResponse(DescribeDelegationTokenResponseData data) {
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN);
         this.data = data;
     }
 

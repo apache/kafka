@@ -205,6 +205,7 @@ public class ProduceResponse extends LegacyAbstractResponse {
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
+        super(ApiKeys.PRODUCE);
         this.responses = responses;
         this.throttleTimeMs = throttleTimeMs;
     }
@@ -213,6 +214,7 @@ public class ProduceResponse extends LegacyAbstractResponse {
      * Constructor from a {@link Struct}.
      */
     public ProduceResponse(Struct struct) {
+        super(ApiKeys.PRODUCE);
         responses = new HashMap<>();
         for (Object topicResponse : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicRespStruct = (Struct) topicResponse;

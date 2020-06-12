@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -28,6 +29,7 @@ public class JoinGroupResponse extends AbstractResponse {
     private final JoinGroupResponseData data;
 
     public JoinGroupResponse(JoinGroupResponseData data) {
+        super(ApiKeys.JOIN_GROUP);
         this.data = data;
     }
 

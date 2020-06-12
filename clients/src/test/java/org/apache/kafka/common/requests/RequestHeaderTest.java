@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -97,9 +96,6 @@ public class RequestHeaderTest {
     }
 
     private ByteBuffer toBuffer(RequestHeader header) {
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
-        header.write(buffer, serializationCache);
-        return buffer;
+        return TestUtils.serializeRequestHeader(header);
     }
 }

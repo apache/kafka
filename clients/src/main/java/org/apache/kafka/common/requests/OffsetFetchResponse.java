@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -129,6 +130,7 @@ public class OffsetFetchResponse extends AbstractResponse {
      * @param responseData Fetched offset information grouped by topic-partition
      */
     public OffsetFetchResponse(int throttleTimeMs, Errors error, Map<TopicPartition, PartitionData> responseData) {
+        super(ApiKeys.OFFSET_FETCH);
         Map<String, OffsetFetchResponseTopic> offsetFetchResponseTopicMap = new HashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry : responseData.entrySet()) {
             String topicName = entry.getKey().topic();
@@ -154,6 +156,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public OffsetFetchResponse(OffsetFetchResponseData data, short version) {
+        super(ApiKeys.OFFSET_FETCH);
         this.data = data;
         // for version 2 and later use the top-level error code (in ERROR_CODE_KEY_NAME) from the response.
         // for older versions there is no top-level error in the response and all errors are partition errors,

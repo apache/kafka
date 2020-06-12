@@ -1584,11 +1584,11 @@ public class SaslAuthenticatorTest {
     public void testConvertListOffsetResponseToSaslHandshakeResponse() {
         ListOffsetResponse response = new ListOffsetResponse(0, Collections.singletonMap(new TopicPartition("topic", 0),
             new ListOffsetResponse.PartitionData(Errors.NONE, 0, 0, Optional.empty())));
-        ByteBuffer buffer = response.serialize(ApiKeys.LIST_OFFSETS, LIST_OFFSETS.latestVersion(), 0);
+        ByteBuffer buffer = response.serializeWithHeader(LIST_OFFSETS.latestVersion(), 0);
         final RequestHeader header0 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
-        Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header0));
+        Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(header0, buffer.duplicate()));
         final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
-        Assert.assertThrows(IllegalStateException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header1));
+        Assert.assertThrows(IllegalStateException.class, () -> NetworkClient.parseResponse(header1, buffer.duplicate()));
     }
     
     /**

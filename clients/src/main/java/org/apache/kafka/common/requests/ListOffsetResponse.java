@@ -197,11 +197,13 @@ public class ListOffsetResponse extends LegacyAbstractResponse {
     }
 
     public ListOffsetResponse(int throttleTimeMs, Map<TopicPartition, PartitionData> responseData) {
+        super(ApiKeys.LIST_OFFSETS);
         this.throttleTimeMs = throttleTimeMs;
         this.responseData = responseData;
     }
 
     public ListOffsetResponse(Struct struct) {
+        super(ApiKeys.LIST_OFFSETS);
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         responseData = new HashMap<>();
         for (Object topicResponseObj : struct.get(TOPICS)) {

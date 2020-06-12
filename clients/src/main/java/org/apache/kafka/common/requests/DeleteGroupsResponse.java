@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -42,6 +43,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     public final DeleteGroupsResponseData data;
 
     public DeleteGroupsResponse(DeleteGroupsResponseData data) {
+        super(ApiKeys.DELETE_GROUPS);
         this.data = data;
     }
 

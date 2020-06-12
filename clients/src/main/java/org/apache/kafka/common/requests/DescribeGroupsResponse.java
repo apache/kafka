@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
@@ -46,6 +47,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
     private DescribeGroupsResponseData data;
 
     public DescribeGroupsResponse(DescribeGroupsResponseData data) {
+        super(ApiKeys.DESCRIBE_GROUPS);
         this.data = data;
     }
 

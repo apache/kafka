@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -29,6 +30,7 @@ public class SyncGroupResponse extends AbstractResponse {
     public final SyncGroupResponseData data;
 
     public SyncGroupResponse(SyncGroupResponseData data) {
+        super(ApiKeys.SYNC_GROUP);
         this.data = data;
     }
 

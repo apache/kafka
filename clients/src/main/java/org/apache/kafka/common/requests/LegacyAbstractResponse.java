@@ -1,10 +1,15 @@
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public abstract class LegacyAbstractResponse extends AbstractResponse {
+
+    protected LegacyAbstractResponse(ApiKeys apiKey) {
+        super(apiKey);
+    }
 
     protected abstract Struct toStruct(short version);
 

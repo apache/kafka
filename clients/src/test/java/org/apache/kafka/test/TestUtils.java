@@ -26,7 +26,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -192,6 +195,20 @@ public class TestUtils {
         }
 
         return metadataResponse(nodes, clusterId, 0, topicMetadata);
+    }
+
+    public static ByteBuffer serializeRequestHeader(RequestHeader header) {
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
+        header.write(buffer, serializationCache);
+        return buffer;
+    }
+
+    public static ByteBuffer serializeMessage(Message message, short version) {
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(message.size(serializationCache, version));
+        message.write(new ByteBufferAccessor(buffer), serializationCache, version);
+        return buffer;
     }
 
     @FunctionalInterface

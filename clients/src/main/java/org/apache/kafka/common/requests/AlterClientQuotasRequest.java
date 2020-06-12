@@ -21,10 +21,12 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -85,11 +87,6 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public AlterClientQuotasRequest(Struct struct, short version) {
-        super(ApiKeys.ALTER_CLIENT_QUOTAS, version);
-        this.data = new AlterClientQuotasRequestData(struct, version);
-    }
-
     public Collection<ClientQuotaAlteration> entries() {
         List<ClientQuotaAlteration> entries = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
@@ -114,6 +111,11 @@ public class AlterClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
+    protected Message data() {
+        return data;
+    }
+
+    @Override
     public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ArrayList<ClientQuotaEntity> entities = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
@@ -123,11 +125,12 @@ public class AlterClientQuotasRequest extends AbstractRequest {
             }
             entities.add(new ClientQuotaEntity(entity));
         }
-        return new AlterClientQuotasResponse(entities, throttleTimeMs, e);
+        //FIXME
+        return null;
+//        return new AlterClientQuotasResponse(entities, throttleTimeMs, e);
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public static AlterClientQuotasRequest parse(ByteBuffer buffer, short version) {
+        return new AlterClientQuotasRequest(new AlterClientQuotasRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

@@ -33,6 +33,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     private final AlterConfigsResponseData data;
 
     public AlterConfigsResponse(AlterConfigsResponseData data) {
+        super(ApiKeys.ALTER_CONFIGS);
         this.data = data;
     }
 
@@ -61,7 +62,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     public static AlterConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterConfigsResponse(new AlterConfigsResponseData(new ByteBufferAccessor(buffer), version), version);
+        return new AlterConfigsResponse(new AlterConfigsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

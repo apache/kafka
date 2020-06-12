@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -28,6 +29,7 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
     private final ListPartitionReassignmentsResponseData data;
 
     public ListPartitionReassignmentsResponse(ListPartitionReassignmentsResponseData responseData) {
+        super(ApiKeys.LIST_PARTITION_REASSIGNMENTS);
         this.data = responseData;
     }
 

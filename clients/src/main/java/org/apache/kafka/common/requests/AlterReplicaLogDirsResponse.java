@@ -76,6 +76,7 @@ public class AlterReplicaLogDirsResponse extends LegacyAbstractResponse {
     private final int throttleTimeMs;
 
     public AlterReplicaLogDirsResponse(Struct struct) {
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS);
         throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         responses = new HashMap<>();
         for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
@@ -94,6 +95,7 @@ public class AlterReplicaLogDirsResponse extends LegacyAbstractResponse {
      * Constructor for version 0.
      */
     public AlterReplicaLogDirsResponse(int throttleTimeMs, Map<TopicPartition, Errors> responses) {
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS);
         this.throttleTimeMs = throttleTimeMs;
         this.responses = responses;
     }

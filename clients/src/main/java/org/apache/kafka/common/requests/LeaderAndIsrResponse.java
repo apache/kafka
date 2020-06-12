@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
@@ -38,6 +39,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     private final LeaderAndIsrResponseData data;
 
     public LeaderAndIsrResponse(LeaderAndIsrResponseData data) {
+        super(ApiKeys.LEADER_AND_ISR);
         this.data = data;
     }
 

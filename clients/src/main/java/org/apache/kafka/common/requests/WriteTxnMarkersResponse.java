@@ -54,8 +54,7 @@ import java.util.Map;
  */
 public class WriteTxnMarkersResponse extends AbstractResponse {
 
-    private final Map<Long, Map<TopicPartition, Errors>> errors;
-    public final WriteTxnMarkersResponseData data;
+    private final WriteTxnMarkersResponseData data;
 
     public WriteTxnMarkersResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
         super(ApiKeys.WRITE_TXN_MARKERS);
@@ -80,8 +79,6 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
                             .setTopics(new ArrayList<>(responseTopicDataMap.values()))
             );
         }
-
-        this.errors = errors;
         this.data = new WriteTxnMarkersResponseData()
                         .setMarkers(markers);
     }
@@ -89,16 +86,16 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     public WriteTxnMarkersResponse(WriteTxnMarkersResponseData data) {
         super(ApiKeys.WRITE_TXN_MARKERS);
         this.data = data;
-        //FIXME
     }
 
     @Override
-    protected Message data() {
+    public WriteTxnMarkersResponseData data() {
         return data;
     }
 
     public Map<TopicPartition, Errors> errors(long producerId) {
-        return errors.get(producerId);
+        return null;
+        //FIXME
     }
 
     @Override
@@ -108,13 +105,15 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
-        errors.values().forEach(allErrors ->
-            allErrors.values().forEach(error ->
-                updateErrorCounts(errorCounts, error)
-            )
-        );
-        return errorCounts;
+        //FIXME
+//        Map<Errors, Integer> errorCounts = new HashMap<>();
+//        errors.values().forEach(allErrors ->
+//            allErrors.values().forEach(error ->
+//                updateErrorCounts(errorCounts, error)
+//            )
+//        );
+//        return errorCounts;
+        return null;
     }
 
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {

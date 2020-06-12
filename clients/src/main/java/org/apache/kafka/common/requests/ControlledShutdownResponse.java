@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -40,6 +41,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
     private final ControlledShutdownResponseData data;
 
     public ControlledShutdownResponse(ControlledShutdownResponseData data) {
+        super(ApiKeys.CONTROLLED_SHUTDOWN);
         this.data = data;
     }
 
