@@ -25,12 +25,9 @@ import org.junit.Test;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
-<<<<<<< HEAD
 import java.util.ArrayList;
 import java.util.Arrays;
-=======
 import java.util.Collections;
->>>>>>> KAFKA-10023: Enforce broker-wide and per-listener connection creation rate
 import java.util.HashMap;
 import java.util.Map;
 
