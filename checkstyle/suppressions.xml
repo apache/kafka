@@ -140,41 +140,27 @@
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
-              files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
+              files="(KafkaStreams|KStreamImpl|KTableImpl).java"/>
 
     <suppress checks="MethodLength"
-              files="(EosBetaUpgradeIntegrationTest|KTableImpl|TaskManager).java"/>
+              files="(KTableImpl|TaskManager).java"/>
 
     <suppress checks="ParameterNumber"
-              files="StreamTask.java"/>
-    <suppress checks="ParameterNumber"
               files="StreamThread.java"/>
-    <suppress checks="ParameterNumber"
-              files="RocksDBWindowStoreSupplier.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(TopologyBuilder|KStreamImpl|StreamsPartitionAssignor|KafkaStreams|KTableImpl).java"/>
+              files="(KStreamImpl|KTableImpl).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="TopologyBuilder.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="StreamsPartitionAssignor.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="StreamThread.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="TaskManager.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="EosBetaUpgradeIntegrationTest.java"/>
+              files="(StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
 
     <suppress checks="StaticVariableName"
               files="StreamsMetricsImpl.java"/>
-    
-    <suppress checks="JavaNCSS"
-              files="(EosBetaUpgradeIntegrationTest|StreamsPartitionAssignor|TaskManager).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AssignorConfiguration|EosBetaUpgradeIntegrationTest|InternalTopologyBuilder|KafkaStreams|ProcessorStateManager|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
+              files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
 
+    <!-- imported code -->
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
 
@@ -186,19 +172,12 @@
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
               files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
-
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
               files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
 
     <suppress checks="MethodLength"
-              files="KStreamKTableJoinIntegrationTest.java"/>
-    <suppress checks="MethodLength"
-              files="KStreamKStreamJoinTest.java"/>
-    <suppress checks="MethodLength"
-              files="KStreamWindowAggregateTest.java"/>
-    <suppress checks="MethodLength"
-              files="RocksDBWindowStoreTest.java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKTableJoinIntegrationTest|KStreamKStreamJoinTest|KStreamWindowAggregateTest|RocksDBWindowStoreTest).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
@@ -207,17 +186,13 @@
               files="SmokeTestDriver.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="KStreamKStreamJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="RelationalSmokeTest.java|SmokeTestDriver.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest|RelationalSmokeTest|SmokeTestDriver).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(KStreamKStreamJoinTest|SmokeTestDriver|TaskManagerTest).java"/>
+              files="(EosBetaUpgradeIntegrationTest|KStreamKStreamJoinTest|SmokeTestDriver|TaskManagerTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="EosTestDriver|KStreamKStreamJoinTest.java|RelationalSmokeTest.java|SmokeTestDriver.java|KStreamKStreamLeftJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
+              files="(EosBetaUpgradeIntegrationTest|EosTestDriver|KStreamKStreamJoinTest|RelationalSmokeTest|SmokeTestDriver|KStreamKStreamLeftJoinTest|KTableKTableForeignKeyJoinIntegrationTest).java"/>
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
