@@ -2296,6 +2296,7 @@ public class KafkaConsumerTest {
                 subscription,
                 metadata,
                 retryBackoffMs,
+                1000,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,

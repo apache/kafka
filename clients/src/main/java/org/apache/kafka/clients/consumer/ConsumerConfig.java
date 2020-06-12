@@ -196,6 +196,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
     /**
+     * <code>retry.backoff.max.ms</code>
+     */
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
+
+    /**
      * <code>metrics.sample.window.ms</code>
      */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
@@ -423,6 +428,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        1000L,
+                                        atLeast(0L),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         "latest",

@@ -583,6 +583,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
@@ -695,6 +696,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.time = Time.SYSTEM;
             this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
 
             // load interceptors and make sure they get clientId
             Map<String, Object> userProvidedConfigs = config.originals();
@@ -832,6 +834,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   SubscriptionState subscriptions,
                   ConsumerMetadata metadata,
                   long retryBackoffMs,
+                  long retryBackoffMaxMs,
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
                   List<ConsumerPartitionAssignor> assignors,
@@ -849,6 +852,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions = subscriptions;
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
