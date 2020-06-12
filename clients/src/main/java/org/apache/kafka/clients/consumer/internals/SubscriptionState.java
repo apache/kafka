@@ -873,7 +873,7 @@ public class SubscriptionState {
         }
 
         private boolean hasPosition() {
-            return fetchState.hasPosition();
+            return position != null;
         }
 
         private boolean isPaused() {
