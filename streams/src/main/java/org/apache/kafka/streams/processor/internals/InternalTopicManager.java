@@ -55,6 +55,7 @@ public class InternalTopicManager {
     private final int retries;
     private final long retryBackOffMs;
 
+    @SuppressWarnings("deprecation") // TODO: remove in follow up PR when `RETRIES` is removed
     public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 

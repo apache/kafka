@@ -75,6 +75,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Map<String, String> storeToChangelogTopic;
     private final List<StateStore> globalStateStores;
 
+    @SuppressWarnings("deprecation") // TODO: remove in follow up PR when `RETRIES` is removed
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
                                   final Consumer<byte[], byte[]> globalConsumer,

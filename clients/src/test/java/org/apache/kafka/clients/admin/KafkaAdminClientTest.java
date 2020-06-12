@@ -666,6 +666,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testMetadataRetries() throws Exception {
         // We should continue retrying on metadata update failures in spite of retry configuration
@@ -1284,6 +1285,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testDescribeCluster() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
@@ -1323,6 +1325,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
@@ -1432,6 +1435,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testListConsumerGroupsMetadataFailure() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -1523,6 +1527,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testOffsetCommitNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -1594,6 +1599,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testDescribeConsumerGroupNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -1784,7 +1790,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeMultipleConsumerGroups() throws Exception {
+    public void testDescribeMultipleConsumerGroups() {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -1894,6 +1900,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testListConsumerGroupOffsetsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2005,6 +2012,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testDeleteConsumerGroupsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2168,6 +2176,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testDeleteConsumerGroupOffsetsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2452,6 +2461,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testRemoveMembersFromGroupNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
