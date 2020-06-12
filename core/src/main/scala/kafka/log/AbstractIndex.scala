@@ -184,8 +184,8 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
         try {
           val position = mmap.position()
 
-          /* Windows won't let us modify the file length while the file is mmapped :-( */
-          if (OperatingSystem.IS_WINDOWS)
+          /* Windows or z/OS won't let us modify the file length while the file is mmapped :-( */
+          if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
             safeForceUnmap()
           raf.setLength(roundedNewSize)
           _length = roundedNewSize
@@ -326,16 +326,16 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
   }
 
   /**
-   * Execute the given function in a lock only if we are running on windows. We do this
-   * because Windows won't let us resize a file while it is mmapped. As a result we have to force unmap it
+   * Execute the given function in a lock only if we are running on windows or z/OS. We do this
+   * because Windows or z/OS won't let us resize a file while it is mmapped. As a result we have to force unmap it
    * and this requires synchronizing reads.
    */
   protected def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if (OperatingSystem.IS_WINDOWS)
+    if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
       lock.lock()
     try fun
     finally {
-      if (OperatingSystem.IS_WINDOWS)
+      if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
         lock.unlock()
     }
   }

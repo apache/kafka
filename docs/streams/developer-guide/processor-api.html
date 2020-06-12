@@ -381,22 +381,18 @@
                 to generate input data streams into the topology, and sink processors with the specified Kafka topics to generate
                 output data streams out of the topology.</p>
             <p>Here is an example implementation:</p>
-            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Topology</span> <span class="n">builder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Topology</span><span class="o">();</span>
-
-<span class="c1">// add the source processor node that takes Kafka topic &quot;source-topic&quot; as input</span>
-<span class="n">builder</span><span class="o">.</span><span class="na">addSource</span><span class="o">(</span><span class="s">&quot;Source&quot;</span><span class="o">,</span> <span class="s">&quot;source-topic&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the WordCountProcessor node which takes the source processor as its upstream processor</span>
-    <span class="o">.</span><span class="na">addProcessor</span><span class="o">(</span><span class="s">&quot;Process&quot;</span><span class="o">,</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="n">WordCountProcessor</span><span class="o">(),</span> <span class="s">&quot;Source&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the count store associated with the WordCountProcessor processor</span>
-    <span class="o">.</span><span class="na">addStateStore</span><span class="o">(</span><span class="n">countStoreBuilder</span><span class="o">,</span> <span class="s">&quot;Process&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the sink processor node that takes Kafka topic &quot;sink-topic&quot; as output</span>
-    <span class="c1">// and the WordCountProcessor node as its upstream processor</span>
-    <span class="o">.</span><span class="na">addSink</span><span class="o">(</span><span class="s">&quot;Sink&quot;</span><span class="o">,</span> <span class="s">&quot;sink-topic&quot;</span><span class="o">,</span> <span class="s">&quot;Process&quot;</span><span class="o">);</span>
-</pre></div>
-            </div>
+            <pre class="brush: java">
+                Topology builder = new Topology();
+                // add the source processor node that takes Kafka topic "source-topic" as input
+                builder.addSource("Source", "source-topic")
+                    // add the WordCountProcessor node which takes the source processor as its upstream processor
+                    .addProcessor("Process", () -> new WordCountProcessor(), "Source")
+                    // add the count store associated with the WordCountProcessor processor
+                    .addStateStore(countStoreBuilder, "Process")
+                    // add the sink processor node that takes Kafka topic "sink-topic" as output
+                    // and the WordCountProcessor node as its upstream processor
+                    .addSink("Sink", "sink-topic", "Process");
+            </pre>
             <p>Here is a quick explanation of this example:</p>
             <ul class="simple">
                 <li>A source processor node named <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> is added to the topology using the <code class="docutils literal"><span class="pre">addSource</span></code> method, with one Kafka topic
@@ -409,7 +405,31 @@
                     as its upstream processor and writing to a separate <code class="docutils literal"><span class="pre">&quot;sink-topic&quot;</span></code> Kafka topic (note that users can also use another overloaded variant of <code class="docutils literal"><span class="pre">addSink</span></code>
                     to dynamically determine the Kafka topic to write to for each received record from the upstream processor).</li>
             </ul>
-            <p>In this topology, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an
+            <p>In some cases, it may be more convenient to add and connect a state store at the same time as you add the processor to the topology.
+                This can be done by implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
+                instead of calling <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code>, like this:
+            </p>
+            <pre class="brush: java">
+                Topology builder = new Topology();
+                // add the source processor node that takes Kafka "source-topic" as input
+                builder.addSource("Source", "source-topic")
+                    // add the WordCountProcessor node which takes the source processor as its upstream processor.
+                    // the ProcessorSupplier provides the count store associated with the WordCountProcessor
+                    .addProcessor("Process", new ProcessorSupplier&ltString, String&gt() {
+                        public Processor&ltString, String&gt get() {
+                            return new WordCountProcessor();
+                        }
+                        public Set&ltStoreBuilder&lt?&gt&gt stores() {
+                            return countStoreBuilder;
+                        }
+                    }, "Source")
+                    // add the sink processor node that takes Kafka topic "sink-topic" as output
+                    // and the WordCountProcessor node as its upstream processor
+                    .addSink("Sink", "sink-topic", "Process");
+            </pre>
+            <p>This allows for a processor to "own" state stores, effectively encapsulating their usage from the user wiring the topology.
+                Multiple processors that share a state store may provide the same store with this technique, as long as the <code class="docutils literal"><span class="pre">StoreBuilder</span></code> is the same <code class="docutils literal"><span class="pre">instance</span></code>.</p>
+            <p>In these topologies, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an
                 upstream processor of the <code class="docutils literal"><span class="pre">&quot;Sink&quot;</span></code> node.  As a result, whenever the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node forwards a newly fetched record from
                 Kafka to its downstream <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node, the <code class="docutils literal"><span class="pre">WordCountProcessor#process()</span></code> method is triggered to process the record and
                 update the associated state store. Whenever <code class="docutils literal"><span class="pre">context#forward()</span></code> is called in the

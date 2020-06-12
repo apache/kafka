@@ -421,7 +421,7 @@ public class Values {
                     if (value instanceof Number) {
                         // Not already a decimal, so treat it as a double ...
                         double converted = ((Number) value).doubleValue();
-                        return new BigDecimal(converted);
+                        return BigDecimal.valueOf(converted);
                     }
                     if (value instanceof String) {
                         return new BigDecimal(value.toString()).doubleValue();

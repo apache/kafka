@@ -93,7 +93,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def registerBroker(brokerInfo: BrokerInfo): Long = {
     val path = brokerInfo.path
     val stat = checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
-    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid (broker epoch): ${stat.getCzxid}")
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: " +
+      s"${brokerInfo.broker.endPoints.map(_.connectionString).mkString(",")}, czxid (broker epoch): ${stat.getCzxid}")
     stat.getCzxid
   }
 
@@ -355,13 +356,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
     def set(configData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),
-        ConfigEntityZNode.encode(config), ZkVersion.MatchAnyVersion)
+        configData, ZkVersion.MatchAnyVersion)
       retryRequestUntilConnected(setDataRequest)
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
       val path = ConfigEntityZNode.path(rootEntityType, sanitizedEntityName)
-      try createRecursive(path, ConfigEntityZNode.encode(config))
+      try createRecursive(path, configData)
       catch {
         case _: NodeExistsException => set(configData).maybeThrow
       }
@@ -1565,6 +1566,29 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     */
   def makeSurePersistentPathExists(path: String): Unit = {
     createRecursive(path, data = null, throwIfPathExists = false)
+  }
+
+  def createFeatureZNode(nodeContents: FeatureZNode): Unit = {
+    val createRequest = CreateRequest(
+      FeatureZNode.path,
+      FeatureZNode.encode(nodeContents),
+      defaultAcls(FeatureZNode.path),
+      CreateMode.PERSISTENT)
+    val response = retryRequestUntilConnected(createRequest)
+    response.maybeThrow
+  }
+
+  def updateFeatureZNode(nodeContents: FeatureZNode): Unit = {
+    val setRequest = SetDataRequest(
+      FeatureZNode.path,
+      FeatureZNode.encode(nodeContents),
+      ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setRequest)
+    response.maybeThrow
+  }
+
+  def deleteFeatureZNode(): Unit = {
+    deletePath(FeatureZNode.path, ZkVersion.MatchAnyVersion, false)
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

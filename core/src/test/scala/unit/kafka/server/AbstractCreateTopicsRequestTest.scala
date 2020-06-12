@@ -99,7 +99,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       s"${response.errorCounts().keySet().asScala.mkString(", ")},",
       response.errorCounts().keySet().asScala.find(_.code() > 0).isEmpty)
 
-    request.data().topics().asScala.foreach { case topic =>
+    request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
           new MetadataRequest.Builder(List(topic.name()).asJava, true).build()).topicMetadata.asScala

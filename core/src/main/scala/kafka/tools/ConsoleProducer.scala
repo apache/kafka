@@ -86,13 +86,14 @@ object ConsoleProducer {
 
     props ++= config.extraProducerProps
 
-    if(config.bootstrapServer != null)
+    if (config.bootstrapServer != null)
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     else
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
 
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
-    props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
+    if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 

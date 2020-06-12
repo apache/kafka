@@ -59,6 +59,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -76,6 +77,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtil.findAndVerifyWindowGrace;
 
@@ -971,14 +973,27 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //This occurs whenever the extracted foreignKey changes values.
         enableSendingOldValues();
 
-
-
         final NamedInternal renamed = new NamedInternal(joinName);
-        final String subscriptionTopicName = renamed.suffixWithOrElseGet("-subscription-registration", builder, SUBSCRIPTION_REGISTRATION) + TOPIC_SUFFIX;
-        final String subscriptionPrimaryKeySerdePseudoTopic = subscriptionTopicName + "-pk";
-        final String subscriptionForeignKeySerdePseudoTopic = subscriptionTopicName + "-fk";
-        final String valueHashSerdePseudoTopic = subscriptionTopicName + "-vh";
-        builder.internalTopologyBuilder.addInternalTopic(subscriptionTopicName);
+
+        final String subscriptionTopicName = renamed.suffixWithOrElseGet(
+            "-subscription-registration",
+            builder,
+            SUBSCRIPTION_REGISTRATION
+        ) + TOPIC_SUFFIX;
+
+        // the decoration can't be performed until we have the configuration available when the app runs,
+        // so we pass Suppliers into the components, which they can call at run time
+
+        final Supplier<String> subscriptionPrimaryKeySerdePseudoTopic =
+            () -> internalTopologyBuilder().decoratePseudoTopic(subscriptionTopicName + "-pk");
+
+        final Supplier<String> subscriptionForeignKeySerdePseudoTopic =
+            () -> internalTopologyBuilder().decoratePseudoTopic(subscriptionTopicName + "-fk");
+
+        final Supplier<String> valueHashSerdePseudoTopic =
+            () -> internalTopologyBuilder().decoratePseudoTopic(subscriptionTopicName + "-vh");
+
+        builder.internalTopologyBuilder.addInternalTopic(subscriptionTopicName, InternalTopicProperties.empty());
 
         final Serde<KO> foreignKeySerde = ((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde;
         final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(subscriptionPrimaryKeySerdePseudoTopic, keySerde);
@@ -1076,7 +1091,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
 
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
-        builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName);
+        builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
             new StreamSinkNode<>(

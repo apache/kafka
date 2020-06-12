@@ -32,7 +32,10 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -47,6 +50,7 @@ import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -57,19 +61,29 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    private final Properties streamsConfig;
     private final boolean materialized;
     private final boolean queriable;
+
+    private Properties streamsConfig;
 
     public KTableKTableForeignKeyJoinMaterializationIntegrationTest(final boolean materialized, final boolean queriable) {
         this.materialized = materialized;
         this.queriable = queriable;
+    }
+
+    @Rule
+    public TestName testName = new TestName();
+
+    @Before
+    public void before() {
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
+
 
     @Parameterized.Parameters(name = "materialized={0}, queriable={1}")
     public static Collection<Object[]> data() {

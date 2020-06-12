@@ -156,6 +156,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="ReplicaManager.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="LogManager.scala"/>
         <Package name="kafka.log"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
@@ -234,12 +241,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="org.apache.kafka.streams.internals.generated"/>
         </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
-    </Match>
-
-    <Match>
-        <!-- The code generator generates useless condition. Disable the check temporarily. -->
-        <Class name="org.apache.kafka.common.message.JoinGroupResponseData"/>
-        <Bug pattern="UC_USELESS_CONDITION"/>
     </Match>
 
     <Match>

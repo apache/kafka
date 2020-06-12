@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import json
 import os.path
 import re
@@ -31,7 +30,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
@@ -95,17 +94,20 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
+    def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT,
+                 interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
-                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None, extra_kafka_opts=""):
+                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
+                 extra_kafka_opts="", tls_version=None):
         """
         :param context: test context
         :param ZookeeperService zk:
         :param dict topics: which topics to create automatically
         :param str security_protocol: security protocol for clients to use
+        :param str tls_version: version of the TLS protocol.
         :param str interbroker_security_protocol: security protocol to use for broker-to-broker communication
         :param str client_sasl_mechanism: sasl mechanism for clients to use
         :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
@@ -129,6 +131,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.zk = zk
 
         self.security_protocol = security_protocol
+        self.tls_version = tls_version
         self.client_sasl_mechanism = client_sasl_mechanism
         self.topics = topics
         self.minikdc = None
@@ -215,7 +218,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                 zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                listener_security_config=self.listener_security_config)
+                                listener_security_config=self.listener_security_config,
+                                tls_version=self.tls_version)
         for port in self.port_mappings.values():
             if port.open:
                 config.enable_security_protocol(port.security_protocol)
@@ -354,14 +358,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def start_node(self, node, timeout_sec=60):
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
+
+        self.security_config.setup_node(node)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
+
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
         node.account.create_file(KafkaService.CONFIG_FILE, prop_file)
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
-
-        self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))

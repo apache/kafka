@@ -521,19 +521,21 @@ public class CachingSessionStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
-        assertFalse(iterator.hasNext());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class)) {
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
+            assertFalse(iterator.hasNext());
 
-        final List<String> messages = appender.getMessages();
-        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
-            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
-            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
     }
 
     private List<KeyValue<Windowed<Bytes>, byte[]>> addSessionsUntilOverflow(final String... sessionIds) {

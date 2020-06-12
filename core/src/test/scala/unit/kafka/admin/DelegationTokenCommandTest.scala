@@ -28,7 +28,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionException
 
@@ -62,7 +61,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }
 

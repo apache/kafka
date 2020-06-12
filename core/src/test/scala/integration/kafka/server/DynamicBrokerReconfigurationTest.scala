@@ -63,6 +63,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -204,7 +205,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     def verifySslConfig(prefix: String, expectedProps: Properties, configDesc: Config): Unit = {
-      KEYSTORE_PROPS.asScala.foreach { configName =>
+      KEYSTORE_PROPS.forEach { configName =>
         val desc = configEntry(configDesc, s"$prefix$configName")
         val isSensitive = configName.contains("password")
         verifyConfig(configName, desc, isSensitive, isReadOnly = prefix.nonEmpty, if (prefix.isEmpty) invalidSslProperties else sslProperties1)
@@ -520,7 +521,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MinInSyncReplicasProp, "3"))
     // Verify that all broker defaults have been updated again
     servers.foreach { server =>
-      props.asScala.foreach { case (k, v) =>
+      props.forEach { (k, v) =>
         assertEquals(s"Not reconfigured $k", v, server.config.originals.get(k).toString)
       }
     }
@@ -569,7 +570,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Verify that all broker defaults have been updated
     servers.foreach { server =>
-      props.asScala.foreach { case (k, v) =>
+      props.forEach { (k, v) =>
         assertEquals(s"Not reconfigured $k", server.config.originals.get(k).toString, v)
       }
     }
@@ -1203,7 +1204,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
-    consumer.assignment.asScala.foreach(consumer.position)
+    consumer.assignment.forEach(consumer.position(_))
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
@@ -1324,6 +1325,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }.mkString(",")
   }
 
+  @nowarn("cat=deprecation")
   private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
@@ -1350,6 +1352,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     assertTrue(s"Advertised listener update not propagated by controller: $endpoints", altered)
   }
 
+  @nowarn("cat=deprecation")
   private def alterConfigsOnServer(server: KafkaServer, props: Properties): Unit = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
@@ -1358,6 +1361,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
   }
 
+  @nowarn("cat=deprecation")
   private def alterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
@@ -1408,13 +1412,21 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     sslStoreProps.put(KafkaConfig.PasswordEncoderSecretProp, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
 
-    val args = Array("--zookeeper", kafkaConfig.zkConnect,
-      "--alter", "--add-config", sslStoreProps.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-      "--entity-type", "brokers",
-      "--entity-name", kafkaConfig.brokerId.toString)
-    ConfigCommand.main(args)
+    val entityType = ConfigType.Broker
+    val entityName = kafkaConfig.brokerId.toString
 
+    val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     val passwordEncoder = createPasswordEncoder(kafkaConfig, kafkaConfig.passwordEncoderSecret)
+
+    if (passwordConfigs.nonEmpty) {
+      passwordConfigs.foreach { configName =>
+        val encodedValue = passwordEncoder.encode(new Password(sslStoreProps.getProperty(configName)))
+        sslStoreProps.setProperty(configName, encodedValue)
+      }
+    }
+    sslStoreProps.remove(KafkaConfig.PasswordEncoderSecretProp)
+    adminZkClient.changeConfigs(entityType, entityName, sslStoreProps)
+
     val brokerProps = adminZkClient.fetchEntityConfig("brokers", kafkaConfig.brokerId.toString)
     assertEquals(4, brokerProps.size)
     assertEquals(sslProperties.get(SSL_KEYSTORE_TYPE_CONFIG),
@@ -1564,7 +1576,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val propsFile = TestUtils.tempFile()
     val propsWriter = new FileWriter(propsFile)
     try {
-      clientProps(SecurityProtocol.SSL).asScala.foreach {
+      clientProps(SecurityProtocol.SSL).forEach {
         case (k, v) => propsWriter.write(s"$k=$v\n")
       }
     } finally {
@@ -1699,7 +1711,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
           received += records.count
           if (!records.isEmpty) {
             lastBatch = records
-            records.partitions.asScala.foreach { tp =>
+            records.partitions.forEach { tp =>
               val partition = tp.partition
               records.records(tp).asScala.map(_.key.toInt).foreach { key =>
                 val prevKey = lastReceived.asScala.getOrElse(partition, partition - numPartitions)

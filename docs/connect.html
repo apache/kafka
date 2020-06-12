@@ -32,7 +32,7 @@
 
     <h3><a id="connect_user" href="#connect_user">8.2 User Guide</a></h3>
 
-    <p>The quickstart provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
+    <p>The <a href="../quickstart">quickstart</a> provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
 
     <h4><a id="connect_running" href="#connect_running">Running Kafka Connect</a></h4>
 
@@ -173,8 +173,8 @@
     <ul>
         <li>InsertField - Add a field using either static data or record metadata</li>
         <li>ReplaceField - Filter or rename fields</li>
-        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc)</li>
-        <li>ValueToKey</li>
+        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc) or custom replacement (non-empty string or numeric value only)</li>
+        <li>ValueToKey - Replace the record key with a new key formed from a subset of fields in the record value</li>
         <li>HoistField - Wrap the entire event as a single field inside a Struct or a Map</li>
         <li>ExtractField - Extract a specific field from Struct and Map and include only this field in results</li>
         <li>SetSchemaMetadata - modify the schema name or version</li>
@@ -309,7 +309,7 @@
     }
     </pre>
 
-    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code></p>:
+    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code>:</p>
 
     <pre class="brush: java;">
     @Override

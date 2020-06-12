@@ -31,6 +31,7 @@ import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
 import org.scalatest.Assertions.intercept
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -92,6 +93,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testInvalidAlterConfigsDueToPolicy(): Unit = {
     client = Admin.create(createConfig)

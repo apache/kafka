@@ -53,7 +53,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
-  override def setUp: Unit = {
+  override def setUp(): Unit = {
     // Do some Metrics Registry cleanup by removing the metrics that this test checks.
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605

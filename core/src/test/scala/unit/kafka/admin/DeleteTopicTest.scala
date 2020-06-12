@@ -27,13 +27,13 @@ import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
 import org.junit.{After, Test}
-import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.scalatest.Assertions.fail
+import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -227,9 +227,14 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
 
     // increase the partition count for topic
-    val topicCommandOptions = new TopicCommand.TopicCommandOptions(Array("--zookeeper", zkConnect, "--alter", "--topic", topic, "--partitions", "2"))
-    new ZookeeperTopicService(zkClient).alterTopic(topicCommandOptions)
-
+    val props = new Properties()
+    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    val adminClient = Admin.create(props)
+    try {
+      adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+    } catch {
+      case _: ExecutionException =>
+    }
     // trigger a controller switch now
     val previousControllerId = controllerId
 
@@ -246,6 +251,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     follower.startup()
     controller.startup()
     TestUtils.verifyTopicDeletion(zkClient, topic, 2, servers)
+    adminClient.close()
   }
 
 

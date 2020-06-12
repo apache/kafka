@@ -438,23 +438,23 @@ object ReassignPartitionsCommand extends Logging {
                                       targetReassignments: Seq[(TopicPartition, Seq[Int])])
                                       : (Map[TopicPartition, PartitionReassignmentState], Boolean) = {
     val currentReassignments = adminClient.
-      listPartitionReassignments().reassignments().get().asScala
+      listPartitionReassignments.reassignments.get().asScala
     val (foundReassignments, notFoundReassignments) = targetReassignments.partition {
       case (part, _) => currentReassignments.contains(part)
     }
     val foundResults: Seq[(TopicPartition, PartitionReassignmentState)] = foundReassignments.map {
       case (part, targetReplicas) => (part,
         new PartitionReassignmentState(
-          currentReassignments.get(part).get.replicas().
+          currentReassignments.get(part).get.replicas.
             asScala.map(i => i.asInstanceOf[Int]),
           targetReplicas,
           false))
     }
     val topicNamesToLookUp = new mutable.HashSet[String]()
     notFoundReassignments.foreach {
-      case (part, targetReplicas) =>
+      case (part, _) =>
         if (!currentReassignments.contains(part))
-          topicNamesToLookUp.add(part.topic())
+          topicNamesToLookUp.add(part.topic)
     }
     val topicDescriptions = adminClient.
       describeTopics(topicNamesToLookUp.asJava).values().asScala
@@ -462,14 +462,13 @@ object ReassignPartitionsCommand extends Logging {
       case (part, targetReplicas) =>
         currentReassignments.get(part) match {
           case Some(reassignment) => (part,
-            new PartitionReassignmentState(
-              reassignment.replicas().asScala.map(_.asInstanceOf[Int]),
+            PartitionReassignmentState(
+              reassignment.replicas.asScala.map(_.asInstanceOf[Int]),
               targetReplicas,
               false))
-          case None => {
-            (part, topicDescriptionFutureToState(part.partition(),
-              topicDescriptions(part.topic()), targetReplicas))
-          }
+          case None =>
+            (part, topicDescriptionFutureToState(part.partition,
+              topicDescriptions(part.topic), targetReplicas))
         }
     }
     val allResults = foundResults ++ notFoundResults
@@ -485,8 +484,8 @@ object ReassignPartitionsCommand extends Logging {
       if (topicDescription.partitions().size() < partition) {
         throw new ExecutionException("Too few partitions found", new UnknownTopicOrPartitionException())
       }
-      new PartitionReassignmentState(
-        topicDescription.partitions().get(partition).replicas().asScala.map(_.id),
+      PartitionReassignmentState(
+        topicDescription.partitions.get(partition).replicas.asScala.map(_.id),
         targetReplicas,
         true)
     } catch {
@@ -822,12 +821,11 @@ object ReassignPartitionsCommand extends Logging {
                                     topics: Seq[String])
                                     : Map[TopicPartition, Seq[Int]] = {
     adminClient.describeTopics(topics.asJava).all().get().asScala.flatMap {
-      case (topicName, topicDescription) => {
-        topicDescription.partitions().asScala.map {
-          info => (new TopicPartition(topicName, info.partition()),
-            info.replicas().asScala.map(_.id()))
+      case (topicName, topicDescription) =>
+        topicDescription.partitions.asScala.map {
+          info => (new TopicPartition(topicName, info.partition),
+            info.replicas.asScala.map(_.id))
         }
-      }
     }
   }
 
@@ -843,15 +841,14 @@ object ReassignPartitionsCommand extends Logging {
                                         partitions: Set[TopicPartition])
                                         : Map[TopicPartition, Seq[Int]] = {
     adminClient.describeTopics(partitions.map(_.topic).asJava).all().get().asScala.flatMap {
-      case (topicName, topicDescription) => {
-        topicDescription.partitions().asScala.flatMap {
-          info => if (partitions.contains(new TopicPartition(topicName, info.partition()))) {
+      case (topicName, topicDescription) =>
+        topicDescription.partitions.asScala.flatMap {
+          info => if (partitions.contains(new TopicPartition(topicName, info.partition))) {
             Some(new TopicPartition(topicName, info.partition()),
-                info.replicas().asScala.map(_.id()))
+                info.replicas.asScala.map(_.id))
           } else {
             None
           }
-        }
       }
     }
   }
@@ -871,13 +868,13 @@ object ReassignPartitionsCommand extends Logging {
                         brokers: Seq[Int],
                         enableRackAwareness: Boolean): Seq[BrokerMetadata] = {
     val brokerSet = brokers.toSet
-    val results = adminClient.describeCluster().nodes().get().asScala.
-      filter(node => brokerSet.contains(node.id())).
+    val results = adminClient.describeCluster().nodes.get().asScala.
+      filter(node => brokerSet.contains(node.id)).
       map {
-        node => if (enableRackAwareness && node.rack() != null) {
-          new BrokerMetadata(node.id(), Some(node.rack()))
+        node => if (enableRackAwareness && node.rack != null) {
+          BrokerMetadata(node.id, Some(node.rack))
         } else {
-          new BrokerMetadata(node.id(), None)
+          BrokerMetadata(node.id, None)
         }
       }.toSeq
     val numRackless = results.count(_.rack.isEmpty)
@@ -1064,9 +1061,9 @@ object ReassignPartitionsCommand extends Logging {
       listPartitionReassignments().reassignments().get().asScala
     val text = currentReassignments.keySet.toBuffer.sortWith(compareTopicPartitions).map { part =>
       val reassignment = currentReassignments(part)
-      val replicas = reassignment.replicas().asScala
-      val addingReplicas = reassignment.addingReplicas().asScala
-      val removingReplicas = reassignment.removingReplicas().asScala
+      val replicas = reassignment.replicas.asScala
+      val addingReplicas = reassignment.addingReplicas.asScala
+      val removingReplicas = reassignment.removingReplicas.asScala
       "%s: replicas: %s.%s%s".format(part, replicas.mkString(","),
         if (addingReplicas.isEmpty) "" else
           " adding: %s.".format(addingReplicas.mkString(",")),
@@ -1251,17 +1248,16 @@ object ReassignPartitionsCommand extends Logging {
     val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
     // Add the current reassignments to the move map.
     currentReassignments.foreach {
-      case (part, reassignment) => {
+      case (part, reassignment) =>
         val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
-        reassignment.replicas().asScala.foreach {
+        reassignment.replicas.forEach {
           replica => move.sources += replica
             move.destinations += replica
         }
-        reassignment.addingReplicas().asScala.foreach(move.destinations += _)
-        reassignment.removingReplicas().asScala.foreach(move.destinations -= _)
-        val partMoves = moveMap.getOrElseUpdate(part.topic(), new mutable.HashMap[Int, PartitionMove])
-        partMoves.put(part.partition(), move)
-      }
+        reassignment.addingReplicas.forEach(move.destinations += _)
+        reassignment.removingReplicas.forEach(move.destinations -= _)
+        val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
+        partMoves.put(part.partition, move)
     }
     // Add the proposed reassignments to the move map.  The proposals will overwrite
     // the current reassignments.
@@ -1729,7 +1725,7 @@ object ReassignPartitionsCommand extends Logging {
         opts.commandConfigOpt
       )
     )
-    opts.options.specs().asScala.foreach(opt => {
+    opts.options.specs.forEach(opt => {
       if (!opt.equals(action) &&
           !requiredArgs(action).contains(opt) &&
           !permittedArgs(action).contains(opt)) {
