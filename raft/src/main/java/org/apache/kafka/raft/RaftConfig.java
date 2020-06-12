@@ -170,5 +170,4 @@ public class RaftConfig extends AbstractConfig {
         return ClientUtils.parseAndValidateAddresses(getList(QUORUM_PREFIX + BOOTSTRAP_SERVERS_CONFIG),
             ClientDnsLookup.USE_ALL_DNS_IPS);
     }
-
 }

@@ -98,6 +98,10 @@ public class QuorumState {
         return voters.stream().filter(voterId -> voterId != localId).collect(Collectors.toSet());
     }
 
+    public Set<Integer> allVoters() {
+        return voters;
+    }
+
     public int epoch() {
         return state.epoch();
     }

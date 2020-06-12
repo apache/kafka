@@ -143,5 +143,4 @@ public class FollowerStateTest {
         state.updateHighWatermark(highWatermark);
         assertEquals(highWatermark, state.highWatermark());
     }
-
 }

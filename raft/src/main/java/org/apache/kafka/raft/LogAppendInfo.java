@@ -16,21 +16,16 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.record.Records;
+/**
+ * Metadata for the record batch appended to log
+ */
+public class LogAppendInfo {
 
-import java.util.concurrent.CompletableFuture;
+    public final long firstOffset;
+    public final long lastOffset;
 
-public interface RecordAppender {
-
-    /**
-     * Append a new entry to the log. The client must be in the leader state to
-     * accept an append: it is up to the {@link ReplicatedStateMachine} implementation
-     * to ensure this using {@link ReplicatedStateMachine#becomeLeader(int, RecordAppender)}.
-     *
-     * This method must be thread-safe.
-     *
-     * @param records The records to append to the log
-     * @return A future containing the last offset and epoch of the appended records (if successful)
-     */
-    CompletableFuture<OffsetAndEpoch> append(Records records);
+    public LogAppendInfo(long firstOffset, long lastOffset) {
+        this.firstOffset = firstOffset;
+        this.lastOffset = lastOffset;
+    }
 }

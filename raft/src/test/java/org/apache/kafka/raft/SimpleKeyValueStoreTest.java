@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -62,7 +63,7 @@ public class SimpleKeyValueStoreTest {
             .map(id -> new InetSocketAddress("localhost", 9990 + id))
             .collect(Collectors.toList());
 
-        return new KafkaRaftClient(channel, log, quorum, time, purgatory,
+        return new KafkaRaftClient(channel, log, quorum, time, new Metrics(time), purgatory,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, fetchTimeoutMs, retryBackoffMs, requestTimeoutMs,
             fetchMaxWaitMs, logContext, new Random());
@@ -70,13 +71,13 @@ public class SimpleKeyValueStoreTest {
 
     @Test
     public void testPutAndGet() throws Exception {
-        KafkaRaftClient manager = setupSingleNodeRaftManager();
+        KafkaRaftClient client = setupSingleNodeRaftManager();
         SimpleKeyValueStore<Integer, Integer> store = new SimpleKeyValueStore<>(
             new Serdes.IntegerSerde(), new Serdes.IntegerSerde());
-        manager.initialize(store);
+        client.initialize(store);
 
         CompletableFuture<OffsetAndEpoch> future = store.put(0, 1);
-        manager.poll();
+        client.poll();
 
         assertTrue(future.isDone());
         // The control record takes up one offset.
