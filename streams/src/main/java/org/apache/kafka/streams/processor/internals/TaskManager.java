@@ -224,7 +224,7 @@ public class TaskManager {
 
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
-        final LinkedList<Task> tasksToClose = new LinkedList<>();
+        final List<Task> tasksToClose = new LinkedList<>();
         final Set<Task> tasksToRecycle = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
 
@@ -444,16 +444,27 @@ public class TaskManager {
         final Set<Task> tasksToCommit = new HashSet<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
 
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
-                task.suspend();
-                if (task.commitNeeded()) {
-                    tasksToCommit.add(task);
+                try {
+                    task.suspend();
+                    if (task.commitNeeded()) {
+                        tasksToCommit.add(task);
+                    }
+                } catch (final RuntimeException e) {
+                    log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
+                    firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
                 }
             } else if (task.commitNeeded()) {
                 additionalTasksForCommitting.add(task);
             }
             remainingRevokedPartitions.removeAll(task.inputPartitions());
+        }
+
+        final RuntimeException exception = firstException.get();
+        if (exception != null) {
+            throw exception;
         }
 
         // If using eos-beta, if we must commit any task then we must commit all of them

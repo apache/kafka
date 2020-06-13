@@ -251,7 +251,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
             case RESTORING:
-            case SUSPENDED:
                 transitionTo(State.SUSPENDED);
                 log.info("Suspended {}", state());
 
@@ -267,6 +266,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
 
                 break;
+
+            case SUSPENDED:
+                log.info("Skip suspending since state is {}", state());
+
+                break;
+
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
@@ -470,7 +475,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
-        // Stream tasks should have already been suspended and their consumed offsets committed before recycling
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
@@ -533,16 +537,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     /**
      * <pre>
      * the following order must be followed:
-     *  1. checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
+     *  1. commit/checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
      *  2. then if we are closing on EOS and dirty, wipe out the state store directory
      *  3. finally release the state manager lock
      * </pre>
      */
     private void close(final boolean clean) {
-        if (clean) {
-            executeAndMaybeSwallow(true, this::writeCheckpointIfNeed, "state manager checkpoint", log);
+        if (clean && commitNeeded && checkpoint != null) {
+            log.debug("Tried to close clean but there was an active scheduled checkpoint, this means we failed to "
+            + "commit and should close as dirty instead");
+            throw new StreamsException("Tried to close dirty task as clean");
         }
-
         switch (state()) {
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector

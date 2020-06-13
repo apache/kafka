@@ -56,7 +56,7 @@ public interface Task {
      *          |            |              |     |
      *          |            v              |     |
      *          |     +------+--------+     |     |
-     *          +---->| Suspended (3) | ----+     |    //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *          +---> | Suspended (3) | ----+     |    //TODO Suspended(3) could be removed after we've stable on KIP-429
      *                +------+--------+           |
      *                       |                    |
      *                       v                    |
@@ -69,7 +69,7 @@ public interface Task {
         CREATED(1, 3),            // 0
         RESTORING(2, 3),          // 1
         RUNNING(3),               // 2
-        SUSPENDED(1, 3, 4),       // 3
+        SUSPENDED(1, 4),          // 3
         CLOSED(0);                // 4, we allow CLOSED to transit to CREATED to handle corrupted tasks
 
         private final Set<Integer> validTransitions = new HashSet<>();

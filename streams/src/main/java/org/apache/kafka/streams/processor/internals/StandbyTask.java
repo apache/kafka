@@ -111,12 +111,17 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void suspend() {
-        log.trace("No-op suspend with state {}", state());
         switch (state()) {
             case CREATED:
             case RUNNING:
-            case SUSPENDED:
                 transitionTo(State.SUSPENDED);
+                log.info("Suspended {}", state());
+
+                break;
+
+            case SUSPENDED:
+                log.info("Skip suspending since state is {}", state());
+
                 break;
 
             case RESTORING:
