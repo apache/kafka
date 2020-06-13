@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -46,13 +47,14 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import static org.junit.Assert.assertEquals;
@@ -567,19 +569,20 @@ public class TopicAdminTest {
     }
 
     private DescribeConfigsResponse describeConfigsResponse(ApiError error, NewTopic... topics) {
-        if (error == null) error = new ApiError(Errors.NONE, "");
-        Map<ConfigResource, DescribeConfigsResponse.Config> configs = new HashMap<>();
-        for (NewTopic topic : topics) {
-            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic.name());
-            DescribeConfigsResponse.ConfigSource source = DescribeConfigsResponse.ConfigSource.TOPIC_CONFIG;
-            Collection<DescribeConfigsResponse.ConfigEntry> entries = new ArrayList<>();
-            topic.configs().forEach((k, v) -> new DescribeConfigsResponse.ConfigEntry(
-                    k, v, source, false, false, Collections.emptySet()
-            ));
-            DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error, entries);
-            configs.put(resource, config);
-        }
-        return new DescribeConfigsResponse(1000, configs);
+        List<DescribeConfigsResponseData.DescribeConfigsResult> results = Stream.of(topics)
+                .map(topic -> new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setErrorCode(error.error().code())
+                        .setErrorMessage(error.message())
+                        .setResourceType(ConfigResource.Type.TOPIC.id())
+                        .setResourceName(topic.name())
+                        .setConfigs(topic.configs().entrySet()
+                                .stream()
+                                .map(e -> new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+                                        .setName(e.getKey())
+                                        .setValue(e.getValue()))
+                                .collect(Collectors.toList())))
+                .collect(Collectors.toList());
+        return new DescribeConfigsResponse(new DescribeConfigsResponseData().setThrottleTimeMs(1000).setResults(results));
     }
 
 }
