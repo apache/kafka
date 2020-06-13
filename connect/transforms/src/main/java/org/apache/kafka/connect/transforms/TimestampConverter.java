@@ -65,6 +65,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String FORMAT_CONFIG = "format";
     private static final String FORMAT_DEFAULT = "";
 
+    public static final String TIMEZONE_CONFIG = "timezone";
+    private static final String TIMEZONE_DEFAULT = "UTC";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
                     "The field containing the timestamp, or empty if the entire value is a timestamp")
@@ -72,7 +75,10 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
             .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
                     "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
-                            + "or used to parse the input if the input is a string.");
+                            + "or used to parse the input if the input is a string.")
+            .define(TIMEZONE_CONFIG, ConfigDef.Type.STRING, TIMEZONE_DEFAULT, ConfigDef.Importance.MEDIUM,
+                    "A TimeZone ID of the time zone to be used for converting the timestamp. "
+                            + "Used to generate the output when type=string or used to parse the input if the input is a string.");
 
     private static final String PURPOSE = "converting timestamp formats";
 
@@ -169,6 +175,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Date toType(Config config, Date orig) {
+                // Preserve date but set time fields to 0
                 Calendar result = Calendar.getInstance(UTC);
                 result.setTime(orig);
                 result.set(Calendar.HOUR_OF_DAY, 0);
@@ -195,6 +202,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Date toType(Config config, Date orig) {
+                // Preserve time but set date fields to 0
                 Calendar origCalendar = Calendar.getInstance(UTC);
                 origCalendar.setTime(orig);
                 Calendar result = Calendar.getInstance(UTC);
@@ -249,20 +257,22 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         final String field = simpleConfig.getString(FIELD_CONFIG);
         final String type = simpleConfig.getString(TARGET_TYPE_CONFIG);
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
+        String formatTimeZoneId = simpleConfig.getString(TIMEZONE_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
 
         if (!VALID_TYPES.contains(type)) {
             throw new ConfigException("Unknown timestamp type in TimestampConverter: " + type + ". Valid values are "
                     + Utils.join(VALID_TYPES, ", ") + ".");
         }
-        if (type.equals(TYPE_STRING) && formatPattern.trim().isEmpty()) {
+        if (type.equals(TYPE_STRING) && (formatPattern == null || formatPattern.trim().isEmpty())) {
             throw new ConfigException("TimestampConverter requires format option to be specified when using string timestamps");
         }
         SimpleDateFormat format = null;
         if (formatPattern != null && !formatPattern.trim().isEmpty()) {
+            TimeZone formatTimeZone = TimeZone.getTimeZone(formatTimeZoneId);
             try {
                 format = new SimpleDateFormat(formatPattern);
-                format.setTimeZone(UTC);
+                format.setTimeZone(formatTimeZone);
             } catch (IllegalArgumentException e) {
                 throw new ConfigException("TimestampConverter requires a SimpleDateFormat-compatible pattern for string timestamps: "
                         + formatPattern, e);
