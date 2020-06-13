@@ -571,8 +571,8 @@ public class NetworkClient implements KafkaClient {
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
-        handleTimeOutConnections(responses, updatedNow);
-        handleTimedOutRequests(responses, updatedNow);
+        handleTimeoutConnections(responses, updatedNow);
+        handleTimeoutRequests(responses, updatedNow);
         completeResponses(responses);
 
         return responses;
@@ -793,7 +793,7 @@ public class NetworkClient implements KafkaClient {
      * @param responses The list of responses to update
      * @param now The current time
      */
-    private void handleTimedOutRequests(List<ClientResponse> responses, long now) {
+    private void handleTimeoutRequests(List<ClientResponse> responses, long now) {
         List<String> nodeIds = this.inFlightRequests.nodesWithTimedOutRequests(now);
         for (String nodeId : nodeIds) {
             // close connection to the node
@@ -816,13 +816,16 @@ public class NetworkClient implements KafkaClient {
      * @param responses The list of responses to update
      * @param now The current time
      */
-    private void handleTimeOutConnections(List<ClientResponse> responses, long now) {
+    private void handleTimeoutConnections(List<ClientResponse> responses, long now) {
         Set<String> connectingNodes = connectionStates.connectingNodes();
         for (String nodeId: connectingNodes) {
             if (connectionStates.isConnectionSetupTimeout(nodeId, now)) {
-                // close connection to the node
                 this.selector.close(nodeId);
-                log.debug("Disconnecting from node {} due to socket connection setup timeout.", nodeId);
+                log.debug(
+                    "Disconnecting from node {} due to socket connection setup timeout. " +
+                    "The timeout value is {} ms.",
+                    nodeId,
+                    connectionStates.connectionSetupTimeoutMs(nodeId));
                 processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
             }
         }

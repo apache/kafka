@@ -243,17 +243,17 @@ object BrokerApiVersionsCommand {
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
         .define(
-          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
           ConfigDef.Type.LONG,
           DefaultSocketConnectionSetupMs,
           ConfigDef.Importance.MEDIUM,
-          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC)
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
         .define(
-          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
           ConfigDef.Type.LONG,
           DefaultSocketConnectionSetupMaxMs,
           ConfigDef.Importance.MEDIUM,
-          CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_DOC)
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
         .define(
           CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
           ConfigDef.Type.LONG,
@@ -285,8 +285,8 @@ object BrokerApiVersionsCommand {
         new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
-      val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG)
-      val connectionSetupTimeoutMaxMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG)
+      val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
+      val connectionSetupTimeoutMaxMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)

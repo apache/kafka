@@ -346,8 +346,8 @@ object KafkaConfig {
   val QueuedMaxRequestsProp = "queued.max.requests"
   val QueuedMaxBytesProp = "queued.max.request.bytes"
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
-  val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_CONFIG
-  val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_CONFIG
+  val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
+  val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   /** ********* Socket Server Configuration ***********/
@@ -621,8 +621,8 @@ object KafkaConfig {
   val QueuedMaxRequestsDoc = "The number of queued requests allowed for data-plane, before blocking the network threads"
   val QueuedMaxRequestBytesDoc = "The number of queued bytes allowed before no more requests are read"
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
-  val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MS_DOC
-  val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTIONS_SETUP_TIMEOUT_MAX_MS_DOC
+  val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
+  val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +

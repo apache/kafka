@@ -36,6 +36,10 @@ import java.util.Map;
  *
  */
 final class ClusterConnectionStates {
+    private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
+    private final static double RECONNECT_BACKOFF_JITTER = 0.2;
+    private final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
+    private final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private Set<String> connectingNodes;
@@ -47,9 +51,15 @@ final class ClusterConnectionStates {
                                    LogContext logContext) {
         this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoff = new GeometricProgression(
-                reconnectBackoffMs, 2, reconnectBackoffMaxMs, 0.2);
+                reconnectBackoffMs,
+                RECONNECT_BACKOFF_EXP_BASE,
+                reconnectBackoffMaxMs,
+                RECONNECT_BACKOFF_JITTER);
         this.connectionSetupTimeout = new GeometricProgression(
-                connectionSetupTimeoutMs, 2, connectionSetupTimeoutMaxMs, 0.2);
+                connectionSetupTimeoutMs,
+                CONNECTION_SETUP_TIMEOUT_EXP_BASE,
+                connectionSetupTimeoutMaxMs,
+                CONNECTION_SETUP_TIMEOUT_JITTER);
         this.nodeState = new HashMap<>();
         this.connectingNodes = new HashSet<>();
     }
@@ -165,14 +175,12 @@ final class ClusterConnectionStates {
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
-        nodeState.lastConnectAttemptMs = now;
-        nodeState.failedAttempts++;
-        nodeState.reconnectBackoffMs = reconnectBackoff.term(nodeState.failedAttempts - 1);
+        incrementReconnectBackoff(nodeState, now);
         if (nodeState.state == ConnectionState.CONNECTING) {
-            nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(nodeState.failedAttempts);
+            incrementConnectionSetupTimeout(nodeState);
             connectingNodes.remove(id);
         } else {
-            nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(0);
+            resetConnectionSetupTimeout(nodeState);
         }
         nodeState.state = ConnectionState.DISCONNECTED;
     }
@@ -237,9 +245,8 @@ final class ClusterConnectionStates {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.READY;
         nodeState.authenticationException = null;
-        nodeState.failedAttempts = 0;
-        nodeState.reconnectBackoffMs = reconnectBackoff.term(0);
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(0);
+        resetReconnectBackoff(nodeState);
+        resetConnectionSetupTimeout(nodeState);
         connectingNodes.remove(id);
     }
 
@@ -253,9 +260,7 @@ final class ClusterConnectionStates {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.authenticationException = exception;
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
-        nodeState.lastConnectAttemptMs = now;
-        nodeState.failedAttempts++;
-        nodeState.reconnectBackoffMs = reconnectBackoff.term(nodeState.failedAttempts - 1);
+        incrementReconnectBackoff(nodeState, now);
     }
 
     /**
@@ -315,6 +320,54 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Resets the failure count for a node and sets the reconnect backoff to the base
+     * value configured via reconnect.backoff.ms
+     *
+     * @param nodeState nodeState The node state object to update
+     */
+    private void resetReconnectBackoff(NodeConnectionState nodeState) {
+        nodeState.failedAttempts = 0;
+        nodeState.reconnectBackoffMs = reconnectBackoff.term(0);
+    }
+
+    /**
+     * Resets the failure count for a node and sets the connection setup timeout to the base
+     * value configured via socket.connection.setup.timeout.ms
+     *
+     * @param nodeState nodeState The node state object to update
+     */
+    private void resetConnectionSetupTimeout(NodeConnectionState nodeState) {
+        nodeState.failedConnectAttempts = 0;
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(0);
+    }
+
+    /**
+     * Increment the failure counter, update the node reconnect backoff exponentially,
+     * and record the current timestamp.
+     * The delay is reconnect.backoff.ms * 2**(failures - 1) * (+/- 20% random jitter)
+     * Up to a (pre-jitter) maximum of reconnect.backoff.max.ms
+     *
+     * @param nodeState The node state object to update
+     */
+    private void incrementReconnectBackoff(NodeConnectionState nodeState, long now) {
+        nodeState.reconnectBackoffMs = reconnectBackoff.term(nodeState.failedAttempts);
+        nodeState.failedAttempts++;
+        nodeState.lastConnectAttemptMs = now;
+    }
+
+    /**
+     * Increment the failure counter and update the node connection setup timeout exponentially.
+     * The delay is socket.connection.setup.timeout.ms * 2**(failures) * (+/- 20% random jitter)
+     * Up to a (pre-jitter) maximum of reconnect.backoff.max.ms
+     *
+     * @param nodeState The node state object to update
+     */
+    private void incrementConnectionSetupTimeout(NodeConnectionState nodeState) {
+        nodeState.failedConnectAttempts++;
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(nodeState.failedConnectAttempts);
+    }
+
+    /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
      * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
      * into account after `disconnected` is called.
@@ -361,8 +414,7 @@ final class ClusterConnectionStates {
         return nodeState == null ? 0 : nodeState.lastConnectAttemptMs;
     }
 
-    // Visible for testing
-    long connectionSetupTimeoutMs(String id) {
+    public long connectionSetupTimeoutMs(String id) {
         NodeConnectionState nodeState = this.nodeState.get(id);
         return nodeState.connectionSetupTimeoutMs;
     }
@@ -385,6 +437,7 @@ final class ClusterConnectionStates {
         AuthenticationException authenticationException;
         long lastConnectAttemptMs;
         long failedAttempts;
+        long failedConnectAttempts;
         long reconnectBackoffMs;
         long connectionSetupTimeoutMs;
         // Connection is being throttled if current time < throttleUntilTimeMs.
