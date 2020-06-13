@@ -35,7 +35,6 @@ public class ProcessorTopology {
     private final Map<String, SourceNode<?, ?>> sourceNodesByName;
     private final Map<String, SourceNode<?, ?>> sourceNodesByTopic;
     private final Map<String, SinkNode<?, ?>> sinksByTopic;
-    private final Set<String> terminalNodes;
     private final List<StateStore> stateStores;
     private final Set<String> repartitionTopics;
 
@@ -57,13 +56,6 @@ public class ProcessorTopology {
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
-
-        this.terminalNodes = new HashSet<>();
-        for (final ProcessorNode<?, ?> node : processorNodes) {
-            if (node.isTerminalNode()) {
-                terminalNodes.add(node.name());
-            }
-        }
 
         this.sourceNodesByName = new HashMap<>();
         for (final SourceNode<?, ?> source : sourceNodesByTopic.values()) {
@@ -89,10 +81,6 @@ public class ProcessorTopology {
 
     public SinkNode<?, ?> sink(final String topic) {
         return sinksByTopic.get(topic);
-    }
-
-    public Set<String> terminalNodes() {
-        return terminalNodes;
     }
 
     public List<ProcessorNode<?, ?>> processors() {

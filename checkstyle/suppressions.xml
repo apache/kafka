@@ -165,9 +165,6 @@
               files="TaskManager.java"/>
     <suppress checks="CyclomaticComplexity"
               files="EosBetaUpgradeIntegrationTest.java"/>
-
-    <suppress checks="StaticVariableName"
-              files="StreamsMetricsImpl.java"/>
     
     <suppress checks="JavaNCSS"
               files="(EosBetaUpgradeIntegrationTest|StreamsPartitionAssignor|TaskManager).java"/>

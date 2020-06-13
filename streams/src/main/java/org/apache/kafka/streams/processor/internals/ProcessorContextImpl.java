@@ -234,9 +234,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final V value) {
         setCurrentNode(child);
         child.process(key, value);
-        if (child.isTerminalNode()) {
-            streamTask.maybeRecordE2ELatency(timestamp(), child.name());
-        }
     }
 
     @Override

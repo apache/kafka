@@ -59,7 +59,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -134,19 +133,6 @@ public class ProcessorTopologyTest {
         assertNotNull(processorTopology.source("topic-3"));
 
         assertEquals(processorTopology.source("topic-2"), processorTopology.source("topic-3"));
-    }
-
-    @Test
-    public void shouldGetTerminalNodes() {
-        topology.addSource("source-1", "topic-1");
-        topology.addSource("source-2", "topic-2", "topic-3");
-        topology.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
-        topology.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1", "source-2");
-        topology.addSink("sink-1", "topic-3", "processor-1");
-
-        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
-
-        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
     }
 
     @Test

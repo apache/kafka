@@ -116,7 +116,7 @@ public final class Sensor {
         this.lastRecordTime = time.milliseconds();
         this.recordingLevel = recordingLevel;
         this.metricLock = new Object();
-        checkForest(new HashSet<>());
+        checkForest(new HashSet<Sensor>());
     }
 
     /* Validate that this sensor doesn't end up referencing itself */

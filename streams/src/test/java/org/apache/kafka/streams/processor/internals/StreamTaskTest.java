@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -89,7 +88,6 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -140,12 +138,11 @@ public class StreamTaskTest {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
+    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
+    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
-
-    private MockTime time = new MockTime();
-    private Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+    private final MockTime time = new MockTime();
 
     private StateDirectory stateDirectory;
     private StreamTask task;
@@ -441,101 +438,6 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRecordE2ELatencyOnProcessForSourceNodes() {
-        time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
-
-        final String sourceNode = source1.name();
-
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-
-        // e2e latency = 100
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
-        task.process(100L);
-
-        assertThat(maxMetric.metricValue(), equalTo(100d));
-    }
-
-    @Test
-    public void shouldRecordE2ELatencyOnProcessForTerminalNodes() {
-        time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
-
-        final String terminalNode = processorStreamTime.name();
-
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNode, StreamsConfig.METRICS_LATEST);
-
-        // e2e latency = 100
-        time.setCurrentTimeMs(100L);
-        task.maybeRecordE2ELatency(0L, terminalNode);
-
-        assertThat(maxMetric.metricValue(), equalTo(100d));
-    }
-
-    @Test
-    public void shouldRecordE2ELatencyMinAndMax() {
-        time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
-
-        final String sourceNode = source1.name();
-
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-        final Metric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-
-        assertThat(minMetric.metricValue(), equalTo(Double.NaN));
-        assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
-
-        // e2e latency = 10
-        time.setCurrentTimeMs(10L);
-        task.maybeRecordE2ELatency(0L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10d));
-        assertThat(maxMetric.metricValue(), equalTo(10d));
-
-        // e2e latency = 15
-        time.setCurrentTimeMs(25L);
-        task.maybeRecordE2ELatency(10L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10d));
-        assertThat(maxMetric.metricValue(), equalTo(15d));
-
-        // e2e latency = 25
-        time.setCurrentTimeMs(30L);
-        task.maybeRecordE2ELatency(5L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10d));
-        assertThat(maxMetric.metricValue(), equalTo(25d));
-
-        // e2e latency = 20
-        time.setCurrentTimeMs(40L);
-        task.maybeRecordE2ELatency(35L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(5d));
-        assertThat(maxMetric.metricValue(), equalTo(25d));
-    }
-
-    @Test
-    public void shouldRecordE2ELatencyPercentiles() {
-        time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
-
-        final String sourceNode = source1.name();
-
-        final Metric p99Metric = getProcessorMetric("record-e2e-latency", "%s-p99", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-        final Metric p90Metric = getProcessorMetric("record-e2e-latency", "%s-p90", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-
-        for (int i = 0; i < 100; i++) {
-            time.setCurrentTimeMs(i);
-            task.maybeRecordE2ELatency(0L, sourceNode);
-        }
-
-        final double expectedAccuracy = 0.25d; // Make sure it's accurate to within 25% of the expected value
-
-        assertEquals((double) p99Metric.metricValue(), 99d, 99 * expectedAccuracy);
-        assertEquals((double) p90Metric.metricValue(), 90d, 90 * expectedAccuracy);
-    }
-
-    @Test
     public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
@@ -663,28 +565,6 @@ public class StreamTaskTest {
                 )
             )
         ));
-    }
-
-    private Metric getProcessorMetric(final String operation,
-                                      final String nameFormat,
-                                      final String taskId,
-                                      final String processorNodeId,
-                                      final String builtInMetricsVersion) {
-
-        return getMetricByNameFilterByTags(
-            metrics.metrics(),
-            String.format(nameFormat, operation),
-            "stream-processor-node-metrics",
-            mkMap(
-                mkEntry("task-id", taskId),
-                mkEntry("processor-node-id", processorNodeId),
-                mkEntry(
-                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
-                        : THREAD_ID_TAG_0100_TO_24,
-                    Thread.currentThread().getName()
-                )
-            )
-        );
     }
 
     @Test

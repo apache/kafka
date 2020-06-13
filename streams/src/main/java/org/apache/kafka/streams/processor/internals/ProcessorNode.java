@@ -161,10 +161,6 @@ public class ProcessorNode<K, V> {
         maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
     }
 
-    public boolean isTerminalNode() {
-        return children.isEmpty();
-    }
-
     /**
      * @return a string representation of this node, useful for debugging.
      */
