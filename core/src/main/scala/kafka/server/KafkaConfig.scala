@@ -705,7 +705,7 @@ object KafkaConfig {
     s"may also be configured by prefixing the config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionCreationRateProp</code>." +
     "Broker-wide connection rate limit should be configured based on broker capacity while listener limits should be configured based on " +
     "application requirements. New connections will be throttled if either the listener or the broker limit is reached, with the exception " +
-    " of inter-broker listener. Connections on the inter-broker listener will be throttled only when the listener-level rate limit is reached. "
+    "of inter-broker listener. Connections on the inter-broker listener will be throttled only when the listener-level rate limit is reached."
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
     s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."

@@ -192,14 +192,15 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyConnectionRate(10, connRateLimit, "PLAINTEXT")
 
     // Set 7 conn/sec rate limit for each listener and verify it gets enforced
+    val listenerConnRateLimit = 7
     val plaintextListenerProp = s"${listener.configPrefix}${KafkaConfig.MaxConnectionCreationRateProp}"
-    props.put(s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}", "7")
-    props.put(plaintextListenerProp, "7")
-    reconfigureServers(props, perBrokerConfig = true, (plaintextListenerProp, "7"))
+    props.put(s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}", listenerConnRateLimit.toString)
+    props.put(plaintextListenerProp, listenerConnRateLimit.toString)
+    reconfigureServers(props, perBrokerConfig = true, (plaintextListenerProp, listenerConnRateLimit.toString))
 
     executor = Executors.newFixedThreadPool(newListenerNames.size)
     val futures = newListenerNames.map { listener =>
-      executor.submit((() => verifyConnectionRate(3, 7, listener)): Runnable)
+      executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener)): Runnable)
     }
     futures.foreach(_.get(35, TimeUnit.SECONDS))
 
@@ -213,7 +214,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val plaintextFuture = executor.submit((() =>
       verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
     val externalFuture = executor.submit((() =>
-      verifyConnectionRate(5, 7, "EXTERNAL")): Runnable)
+      verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
     plaintextFuture.get(35, TimeUnit.SECONDS)
     externalFuture.get(35, TimeUnit.SECONDS)
   }

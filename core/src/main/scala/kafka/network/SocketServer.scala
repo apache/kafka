@@ -1329,8 +1329,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       listenerThrottleTimeMs
     } else {
       val brokerThrottleTimeMs = recordAndGetThrottleTimeMs(brokerConnectionRateSensor, timeMs)
-      val throttleTimeMs = math.max(brokerThrottleTimeMs, listenerThrottleTimeMs)
-      throttleTimeMs
+      math.max(brokerThrottleTimeMs, listenerThrottleTimeMs)
     }
   }
 
@@ -1356,7 +1355,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def createConnectionRateQuotaSensor(quotaLimit: Int, listenerOpt: Option[String] = None): Sensor = {
     val quotaEntity = listenerOpt.getOrElse("broker")
     val sensor = metrics.sensor(s"ConnectionCreationRate-$quotaEntity", rateQuotaMetricConfig(quotaLimit))
-    sensor.add(connectionRateMetricName(listenerOpt), new Rate)
+    sensor.add(connectionRateMetricName(listenerOpt), new Rate, null, false)
     info(s"Created ConnectionCreationRate-$quotaEntity sensor, quotaLimit=$quotaLimit")
     sensor
   }
@@ -1385,7 +1384,6 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   private def rateQuotaMetricTags(listenerOpt: Option[String]): util.Map[String, String] = {
     val tags = new util.LinkedHashMap[String, String]
-    tags.put(JmxReporter.DO_NOT_REPORT_TAG, "")
     listenerOpt.foreach(listener => tags.put("listener", listener))
     tags
   }
@@ -1421,7 +1419,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     override def reconfigure(configs: util.Map[String, _]): Unit = {
       lock.synchronized {
         _maxConnections = maxConnections(configs)
-        updateConnectionRateQuota(maxConnectionCreationRate(configs), Some(listener.value()))
+        updateConnectionRateQuota(maxConnectionCreationRate(configs), Some(listener.value))
         lock.notifyAll()
       }
     }
@@ -1429,6 +1427,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     private def maxConnections(configs: util.Map[String, _]): Int = {
       Option(configs.get(KafkaConfig.MaxConnectionsProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
+
     private def maxConnectionCreationRate(configs: util.Map[String, _]): Int = {
       Option(configs.get(KafkaConfig.MaxConnectionCreationRateProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
