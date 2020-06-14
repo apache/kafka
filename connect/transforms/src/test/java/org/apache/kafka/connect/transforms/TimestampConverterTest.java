@@ -250,6 +250,22 @@ public class TimestampConverterTest {
         assertEquals(Schema.STRING_SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_STRING, transformed.value());
     }
+    
+    @Test
+    public void testWithSchemaTimestampToStringWithTimezone() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.FORMAT_CONFIG, "yyyy-MM-dd HH:mm:ss.SSS Z");
+        config.put(TimestampConverter.TIMEZONE_CONFIG, "GMT+1");
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
+
+        assertEquals(Schema.STRING_SCHEMA, transformed.valueSchema());
+
+        // Check that the hour has been converted to "1" because we use GMT+1 time zone. In UTC the hour would be 0.
+        assertEquals("1970-01-02 01:00:01.234 +0100", transformed.value());
+    }
+
 
     // Null-value conversions schemaless
 
