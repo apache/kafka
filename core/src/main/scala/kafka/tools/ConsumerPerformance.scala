@@ -245,7 +245,7 @@ object ConsumerPerformance extends LazyLogging {
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10)
-    val numFetchersOpt = parser.accepts("num-fetch-threads", "DEPRECATED, it might be complemented in the future. Number of fetcher threads.")
+    val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
