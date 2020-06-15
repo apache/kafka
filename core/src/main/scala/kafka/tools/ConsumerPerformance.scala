@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.util.control.Breaks._
 /**
@@ -45,7 +45,7 @@ object ConsumerPerformance extends LazyLogging {
     val totalMessagesRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
-    var joinGroupTimeInMs: Double = 0 
+    var joinGroupTimeInMs: Double = 0
 
     if (!config.hideHeader)
       printHeader(config.showDetailedStats)
