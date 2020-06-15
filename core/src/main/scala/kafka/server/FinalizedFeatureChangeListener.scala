@@ -25,7 +25,6 @@ import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler}
 import org.apache.kafka.common.internals.FatalExitError
 
 import scala.concurrent.TimeoutException
-import scala.util.control.Exception.ignoring
 
 /**
  * Listens to changes in the ZK feature node, via the ZK client. Whenever a change notification
@@ -143,10 +142,15 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
   private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name = name) {
     override def doWork(): Unit = {
       try {
-        ignoring(classOf[InterruptedException]) {
-          queue.take.updateLatestOrThrow()
-        }
+        queue.take.updateLatestOrThrow()
       } catch {
+        case ie: InterruptedException =>
+          // While the queue is empty and this thread is blocking on taking an item from the queue,
+          // a concurrent call to FinalizedFeatureChangeListener.close() could interrupt the thread
+          // and cause an InterruptedException to be raised from queue.take(). In such a case, it is
+          // safe to ignore the exception if the thread is being shutdown. We raise the exception
+          // here again, because, it is ignored by ShutdownableThread if it is shutting down.
+          throw ie
         case e: Exception => {
           error("Failed to process feature ZK node change event. The broker will eventually exit.", e)
           throw new FatalExitError(1)

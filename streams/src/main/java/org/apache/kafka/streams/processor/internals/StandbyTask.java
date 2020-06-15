@@ -137,7 +137,7 @@ public class StandbyTask extends AbstractTask implements Task {
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         if (state() == State.RUNNING || state() == State.SUSPENDED) {
             stateMgr.flush();
-            log.info("Task ready for committing");
+            log.debug("Prepared task for committing");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
@@ -152,7 +152,7 @@ public class StandbyTask extends AbstractTask implements Task {
             // and the state current offset would be used to checkpoint
             stateMgr.checkpoint(Collections.emptyMap());
             offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
-            log.info("Finalized commit");
+            log.debug("Finalized commit");
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while post committing standby task " + id);
         }
