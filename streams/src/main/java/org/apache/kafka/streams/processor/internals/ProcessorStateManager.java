@@ -247,6 +247,7 @@ public class ProcessorStateManager implements StateManager {
                         }
                     }
                 }  else {
+                    loadedCheckpoints.remove(store.changelogPartition);
                     log.debug("Skipping re-initialization of offset from checkpoint for recycled store {}",
                               store.stateStore.name());
                 }
