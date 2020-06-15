@@ -63,8 +63,9 @@ import static org.junit.Assert.assertTrue;
 public class MetadataTest {
 
     private long refreshBackoffMs = 100;
+    private long refreshBackoffMaxMs = 1000;
     private long metadataExpireMs = 1000;
-    private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+    private Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(),
             new ClusterResourceListeners());
 
     private static MetadataResponse emptyMetadataResponse() {
@@ -94,7 +95,7 @@ public class MetadataTest {
         }
 
         long largerOfBackoffAndExpire = Math.max(refreshBackoffMs, metadataExpireMs);
-        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+        Metadata metadata = new Metadata(refreshBackoffMs, 1000, metadataExpireMs, new LogContext(),
                 new ClusterResourceListeners());
 
         assertEquals(0, metadata.timeToNextUpdate(now));
@@ -124,7 +125,7 @@ public class MetadataTest {
     public void testUpdateMetadataAllowedImmediatelyAfterBootstrap() {
         MockTime time = new MockTime();
 
-        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+        Metadata metadata = new Metadata(refreshBackoffMs, 1000, metadataExpireMs, new LogContext(),
                 new ClusterResourceListeners());
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9002)));
 
@@ -149,17 +150,41 @@ public class MetadataTest {
         metadata.failedUpdate(now);
 
         // Backing off. Remaining time until next try should be returned.
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * 0.2);
 
         // Even though metadata update requested explicitly, still respects backoff.
         metadata.requestUpdate();
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * 0.2);
 
         // refreshBackoffMs elapsed.
-        now += refreshBackoffMs;
+        now += refreshBackoffMs * 1.2 + 1;
         // It should return 0 to let next try.
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
+    }
+
+    @Test
+    public void testExponentialRetryBackoff() {
+        long now = 10000;
+        long currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
+        
+        for (int i = 0; currentRefreshBackoffMs < refreshBackoffMaxMs * 0.8; i++) {
+            metadata.failedUpdate(now);
+            currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
+            long expected = (long) Math.min(refreshBackoffMaxMs, refreshBackoffMs * Math.pow(2, i));
+            assertEquals(expected, currentRefreshBackoffMs, expected * 0.2);
+        }
+
+        // Test the upper bound
+        assertEquals(refreshBackoffMaxMs, currentRefreshBackoffMs, refreshBackoffMaxMs * 0.2);
+
+        // Test if the timeout gets reset
+        now += 10000;
+        Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(now);
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, now);
+        currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
+        assertEquals(refreshBackoffMs, currentRefreshBackoffMs, refreshBackoffMs * 0.2);
     }
 
     /**
@@ -286,7 +311,7 @@ public class MetadataTest {
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), listeners);
+        metadata = new Metadata(refreshBackoffMs, 1000, metadataExpireMs, new LogContext(), listeners);
 
         String hostName = "www.example.com";
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
@@ -561,7 +586,7 @@ public class MetadataTest {
     public void testPartialMetadataUpdate() {
         Time time = new MockTime();
 
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+        metadata = new Metadata(refreshBackoffMs, 1000, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
                 @Override
                 protected MetadataRequest.Builder newMetadataRequestBuilderForNewTopics() {
                     return newMetadataRequestBuilder();
@@ -801,7 +826,7 @@ public class MetadataTest {
         Time time = new MockTime();
 
         final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+        metadata = new Metadata(refreshBackoffMs, 1000, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
                 @Override
                 protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
                     return retainTopics.get().contains(topic);

@@ -566,7 +566,7 @@ public class KafkaProducerTest {
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
         final Time time = new MockTime();
-        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, metadataIdleMs,
+        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, 1000, metadataExpireMs, metadataIdleMs,
                 new LogContext(), new ClusterResourceListeners(), time);
         final String topic = "topic";
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
@@ -600,7 +600,7 @@ public class KafkaProducerTest {
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
         final Time time = new MockTime();
-        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, metadataExpireMs, metadataIdleMs,
+        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, 1000, metadataExpireMs, metadataIdleMs,
                 new LogContext(), new ClusterResourceListeners(), time);
         final String topic = "topic";
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
@@ -1056,7 +1056,7 @@ public class KafkaProducerTest {
         String topicName = "test";
         Time time = Time.SYSTEM;
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, emptyMap());
-        ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, Long.MAX_VALUE,
+        ProducerMetadata metadata = new ProducerMetadata(0, 1000, Long.MAX_VALUE, Long.MAX_VALUE,
                 new LogContext(), new ClusterResourceListeners(), time);
         metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, time.milliseconds());
         MockClient client = new MockClient(time, metadata);
@@ -1213,7 +1213,7 @@ public class KafkaProducerTest {
     }
 
     private ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {
-        return new ProducerMetadata(refreshBackoffMs, expirationMs, defaultMetadataIdleMs,
+        return new ProducerMetadata(refreshBackoffMs, 1000, expirationMs, defaultMetadataIdleMs,
                 new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     }
 

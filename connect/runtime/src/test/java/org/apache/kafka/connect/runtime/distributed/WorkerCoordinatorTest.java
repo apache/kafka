@@ -120,7 +120,7 @@ public class WorkerCoordinatorTest {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 1000, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);

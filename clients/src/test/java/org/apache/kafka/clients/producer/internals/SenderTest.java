@@ -129,7 +129,7 @@ public class SenderTest {
     private TopicPartition tp1 = new TopicPartition("test", 1);
     private MockTime time = new MockTime();
     private int batchSize = 16 * 1024;
-    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, TOPIC_IDLE_MS,
+    private ProducerMetadata metadata = new ProducerMetadata(0, 1000, Long.MAX_VALUE, TOPIC_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), time);
     private MockClient client = new MockClient(time, metadata);
     private ApiVersions apiVersions = new ApiVersions();

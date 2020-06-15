@@ -419,6 +419,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.metadata = metadata;
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
+                        retryBackoffMaxMS,
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
