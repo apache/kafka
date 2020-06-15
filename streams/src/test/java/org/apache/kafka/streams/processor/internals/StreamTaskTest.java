@@ -1615,6 +1615,7 @@ public class StreamTaskTest {
         task.completeRestoration();
         task.suspend();
         task.prepareCommit();
+        task.postCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1640,6 +1641,7 @@ public class StreamTaskTest {
         task.completeRestoration();
         task.suspend();
         task.prepareCommit();
+        task.postCommit();
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
@@ -1669,6 +1671,7 @@ public class StreamTaskTest {
 
         task.suspend();
         task.prepareCommit();
+        task.postCommit();
         assertThrows(ProcessorStateException.class, () -> task.closeClean());
 
         final double expectedCloseTaskMetric = 0.0;
@@ -1676,7 +1679,7 @@ public class StreamTaskTest {
 
         EasyMock.verify(stateManager);
         EasyMock.reset(stateManager);
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(changelogPartition)).anyTimes();
+        EasyMock.expect(stateManager.changelogPartitions()).andStubReturn(Collections.singleton(changelogPartition));
         stateManager.close();
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);

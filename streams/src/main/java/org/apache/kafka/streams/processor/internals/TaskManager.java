@@ -246,7 +246,7 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                task.suspend(); // Should be a no-op for active tasks, unless we hit an exception during handleRevocation
+                task.suspend(); // Should be a no-op for active tasks since they're suspended in handleRevocation
                 if (task.commitNeeded()) {
                     if (task.isActive()) {
                         log.error("Active task {} was revoked and should have already been committed", task.id());
@@ -274,11 +274,11 @@ public class TaskManager {
         for (final Task oldTask : tasksToRecycle) {
             final Task newTask;
             try {
-                oldTask.suspend(); // Should be a no-op for active tasks, unless we hit an exception during handleRevocation
                 if (oldTask.isActive()) {
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                 } else {
+                    oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
