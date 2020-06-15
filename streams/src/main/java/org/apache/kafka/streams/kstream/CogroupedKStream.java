@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
@@ -43,9 +44,9 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * The added {@link KGroupedStream grouped KStream} must have the same number of partitions as all existing
      * streams of this {@code CogroupedKStream}.
-     * If this is not the case, you would need to call {@link KStream#through(String)} before
-     * {@link KStream#groupByKey() grouping} the {@link KStream}, using a pre-created topic with the "correct" number of
-     * partitions.
+     * If this is not the case, you would need to call {@link KStream#repartition(Repartitioned)} before
+     * {@link KStream#groupByKey() grouping} the {@link KStream} and specify the "correct" number of
+     * partitions via {@link Repartitioned} parameter.
      * <p>
      * The specified {@link Aggregator} is applied in the actual {@link #aggregate(Initializer) aggregation} step for
      * each input record and computes a new aggregate using the current aggregate (or for the very first record per key
@@ -230,7 +231,7 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
-     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double

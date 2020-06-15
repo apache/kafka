@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -138,9 +139,7 @@ class ActiveTaskCreator {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-            final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-            final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
-            final LogContext logContext = new LogContext(logPrefix);
+            final LogContext logContext = getLogContext(taskId);
 
             final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
 
@@ -155,48 +154,98 @@ class ActiveTaskCreator {
                 partitions
             );
 
-            final StreamsProducer streamsProducer;
-            if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
-                log.info("Creating producer client for task {}", taskId);
-                streamsProducer = new StreamsProducer(
-                    config,
-                    threadId,
-                    clientSupplier,
-                    taskId,
-                    null,
-                    logContext);
-                taskProducers.put(taskId, streamsProducer);
-            } else {
-                streamsProducer = threadProducer;
-            }
-
-            final RecordCollector recordCollector = new RecordCollectorImpl(
-                logContext,
+            final InternalProcessorContext context = new ProcessorContextImpl(
                 taskId,
-                streamsProducer,
-                config.defaultProductionExceptionHandler(),
-                streamsMetrics
-            );
-
-            final Task task = new StreamTask(
-                taskId,
-                partitions,
-                topology,
-                consumer,
                 config,
-                streamsMetrics,
-                stateDirectory,
-                cache,
-                time,
                 stateManager,
-                recordCollector
+                streamsMetrics,
+                cache
             );
 
-            log.trace("Created task {} with assigned partitions {}", taskId, partitions);
-            createdTasks.add(task);
-            createTaskSensor.record();
+            createdTasks.add(
+                createActiveTask(
+                    taskId,
+                    partitions,
+                    consumer,
+                    logContext,
+                    topology,
+                    stateManager,
+                    context
+                )
+            );
         }
         return createdTasks;
+    }
+
+    StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
+                                           final Set<TopicPartition> partitions,
+                                           final Consumer<byte[], byte[]> consumer) {
+        final InternalProcessorContext context = standbyTask.processorContext();
+        final ProcessorStateManager stateManager = standbyTask.stateMgr;
+        final LogContext logContext = getLogContext(standbyTask.id);
+
+        standbyTask.closeAndRecycleState();
+        stateManager.transitionTaskType(TaskType.ACTIVE, logContext);
+
+        return createActiveTask(
+            standbyTask.id,
+            partitions,
+            consumer,
+            logContext,
+            builder.buildSubtopology(standbyTask.id.topicGroupId),
+            stateManager,
+            context
+        );
+    }
+
+    private StreamTask createActiveTask(final TaskId taskId,
+                                        final Set<TopicPartition> partitions,
+                                        final Consumer<byte[], byte[]> consumer,
+                                        final LogContext logContext,
+                                        final ProcessorTopology topology,
+                                        final ProcessorStateManager stateManager,
+                                        final InternalProcessorContext context) {
+        final StreamsProducer streamsProducer;
+        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+            log.info("Creating producer client for task {}", taskId);
+            streamsProducer = new StreamsProducer(
+                config,
+                threadId,
+                clientSupplier,
+                taskId,
+                null,
+                logContext);
+            taskProducers.put(taskId, streamsProducer);
+        } else {
+            streamsProducer = threadProducer;
+        }
+
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            config.defaultProductionExceptionHandler(),
+            streamsMetrics
+        );
+
+        final StreamTask task = new StreamTask(
+            taskId,
+            partitions,
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context
+        );
+
+        log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+        createTaskSensor.record();
+        return task;
     }
 
     void closeThreadProducerIfNeeded() {
@@ -225,8 +274,8 @@ class ActiveTaskCreator {
         // and the producer object passed in here will be null. We would then iterate through
         // all the active tasks and add their metrics to the output metrics map.
         final Collection<StreamsProducer> producers = threadProducer != null ?
-                Collections.singleton(threadProducer) :
-                taskProducers.values();
+            Collections.singleton(threadProducer) :
+            taskProducers.values();
         return ClientUtils.producerMetrics(producers);
     }
 
@@ -240,4 +289,11 @@ class ActiveTaskCreator {
                                 .collect(Collectors.toSet());
         }
     }
+
+    private LogContext getLogContext(final TaskId taskId) {
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
+        return new LogContext(logPrefix);
+    }
+
 }

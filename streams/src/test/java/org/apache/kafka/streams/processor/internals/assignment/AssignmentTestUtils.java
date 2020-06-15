@@ -326,6 +326,10 @@ public final class AssignmentTestUtils {
         return new TaskSkewReport(maxTaskSkew, skewedSubtopologies, subtopologyToClientsWithPartition);
     }
 
+    static Matcher<ClientState> hasAssignedTasks(final int taskCount) {
+        return hasProperty("assignedTasks", ClientState::assignedTaskCount, taskCount);
+    }
+
     static Matcher<ClientState> hasActiveTasks(final int taskCount) {
         return hasProperty("activeTasks", ClientState::activeTaskCount, taskCount);
     }

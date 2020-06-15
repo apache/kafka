@@ -47,6 +47,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.analyzeTaskAssignmentBalance;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
@@ -54,6 +55,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasAssignedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,6 +81,61 @@ public class HighAvailabilityTaskAssignorTest {
     );
 
     @Test
+    public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
+        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), 1);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, clientState1),
+            mkEntry(UUID_2, clientState2),
+            mkEntry(UUID_3, clientState3)
+        );
+
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(11L, 2, 1, 60_000L)
+        );
+
+        assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState2, hasAssignedTasks(allTaskIds.size()));
+
+        assertThat(clientState3, hasAssignedTasks(2));
+
+        assertThat(unstable, is(true));
+    }
+
+    @Test
+    public void shouldSkipWarmupsWhenAcceptableLagIsMax() {
+        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1);
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1);
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, clientState1),
+            mkEntry(UUID_2, clientState2),
+            mkEntry(UUID_3, clientState3)
+        );
+
+        final boolean unstable = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTaskIds,
+            allTaskIds,
+            new AssignmentConfigs(Long.MAX_VALUE, 1, 1, 60_000L)
+        );
+
+        assertThat(clientState1, hasAssignedTasks(6));
+        assertThat(clientState2, hasAssignedTasks(6));
+        assertThat(clientState3, hasAssignedTasks(6));
+        assertThat(unstable, is(false));
+    }
+
+    @Test
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
@@ -90,7 +147,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -111,7 +168,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -131,7 +188,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -153,7 +210,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -182,7 +239,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -193,7 +250,7 @@ public class HighAvailabilityTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignActiveStatefulTasksEvenlyOverClientsAndStreamThreadsWithMoreStreamThreadsThanTasks() {
+    public void shouldAssignActiveStatefulTasksEvenlyOverClientsAndStreamThreadsWithEqualStreamThreadsPerClientAsTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, 9);
@@ -204,7 +261,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -229,7 +286,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(true));
@@ -259,7 +316,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 0L)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -280,7 +337,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
         );
 
         assertThat(unstable, is(false));
@@ -621,6 +678,130 @@ public class HighAvailabilityTaskAssignorTest {
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
         assertThat(probingRebalanceNeeded, is(true));
         assertThat(client2.standbyTaskCount(), equalTo(1));
+    }
+
+    @Test
+    public void shouldDistributeStatelessTasksEvenlyOverClientsWithEqualStreamThreadsPerClientAsTasksAndNoStatefulTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
+        final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
+
+        final Map<TaskId, Long> taskLags = new HashMap<>();
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), taskLags, 7);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, 7);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, 7);
+
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
+        );
+
+        assertValidAssignment(
+            0,
+            EMPTY_TASKS,
+            statelessTasks,
+            clientStates,
+            new StringBuilder()
+        );
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertThat(probingRebalanceNeeded, is(false));
+    }
+
+    @Test
+    public void shouldDistributeStatelessTasksEvenlyOverClientsWithLessStreamThreadsPerClientAsTasksAndNoStatefulTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
+        final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
+
+        final Map<TaskId, Long> taskLags = new HashMap<>();
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), taskLags, 2);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, 2);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, 2);
+
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
+        );
+
+        assertValidAssignment(
+            0,
+            EMPTY_TASKS,
+            statelessTasks,
+            clientStates,
+            new StringBuilder()
+        );
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertThat(probingRebalanceNeeded, is(false));
+    }
+
+    @Test
+    public void shouldDistributeStatelessTasksEvenlyOverClientsWithUnevenlyDistributedStreamThreadsAndNoStatefulTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
+        final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
+
+        final Map<TaskId, Long> taskLags = new HashMap<>();
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), taskLags, 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, 2);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, 3);
+
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
+        );
+
+        assertValidAssignment(
+            0,
+            EMPTY_TASKS,
+            statelessTasks,
+            clientStates,
+            new StringBuilder()
+        );
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertThat(probingRebalanceNeeded, is(false));
+    }
+
+    @Test
+    public void shouldDistributeStatelessTasksEvenlyWithPreviousAssignmentAndNoStatefulTasks() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = EMPTY_TASKS;
+        final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
+
+        final Map<TaskId, Long> taskLags = new HashMap<>();
+        final ClientState client1 = new ClientState(statelessTasks, emptySet(), taskLags, 3);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, 3);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, 3);
+
+        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+
+        final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(
+            clientStates,
+            allTasks,
+            statefulTasks,
+            new AssignmentConfigs(0L, 1, 0, 60_000L)
+        );
+
+        assertValidAssignment(
+            0,
+            EMPTY_TASKS,
+            statelessTasks,
+            clientStates,
+            new StringBuilder()
+        );
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertThat(probingRebalanceNeeded, is(false));
     }
 
     private static void assertHasNoActiveTasks(final ClientState... clients) {

@@ -28,6 +28,7 @@ import kafka.api.LeaderAndIsr
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.cluster.Partition
 import kafka.controller.KafkaController
+import kafka.coordinator.group.GroupOverview
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.SyncGroupCallback
 import kafka.coordinator.group.JoinGroupResult
@@ -255,17 +256,22 @@ class KafkaApisTest {
     expectNoThrottling()
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
-    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true)))
-        .andReturn(Map(configResource -> config))
+    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true), EasyMock.eq(false)))
+        .andReturn(
+          List(new DescribeConfigsResponseData.DescribeConfigsResult()
+            .setResourceName(configResource.name)
+            .setResourceType(configResource.`type`.id)
+            .setErrorCode(Errors.NONE.code)
+            .setConfigs(Collections.emptyList())))
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       adminManager)
 
-    val resourceToConfigNames = Map[ConfigResource, util.Collection[String]](
-      configResource -> Collections.emptyList[String])
-    val request = buildRequest(new DescribeConfigsRequest(requestHeader.apiVersion,
-      resourceToConfigNames.asJava, true))
+    val request = buildRequest(new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setIncludeSynonyms(true)
+      .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName("topic-1")
+        .setResourceType(ConfigResource.Type.TOPIC.id)).asJava)).build(requestHeader.apiVersion))
     createKafkaApis(authorizer = Some(authorizer)).handleDescribeConfigsRequest(request)
 
     verify(authorizer, adminManager)
@@ -1859,6 +1865,50 @@ class KafkaApisTest {
     EasyMock.verify(replicaManager)
   }
 
+  @Test
+  def testListGroupsRequest(): Unit = {
+    val overviews = List(
+      GroupOverview("group1", "protocol1", "Stable"),
+      GroupOverview("group2", "qwerty", "Empty")
+    )
+    val response = listGroupRequest(None, overviews)
+    assertEquals(2, response.data.groups.size)
+    assertEquals("Stable", response.data.groups.get(0).groupState)
+    assertEquals("Empty", response.data.groups.get(1).groupState)
+  }
+
+  @Test
+  def testListGroupsRequestWithState(): Unit = {
+    val overviews = List(
+      GroupOverview("group1", "protocol1", "Stable")
+    )
+    val response = listGroupRequest(Some("Stable"), overviews)
+    assertEquals(1, response.data.groups.size)
+    assertEquals("Stable", response.data.groups.get(0).groupState)
+  }
+
+  private def listGroupRequest(state: Option[String], overviews: List[GroupOverview]): ListGroupsResponse = {
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    val data = new ListGroupsRequestData()
+    if (state.isDefined)
+      data.setStatesFilter(Collections.singletonList(state.get))
+    val listGroupsRequest = new ListGroupsRequest.Builder(data).build()
+    val requestChannelRequest = buildRequest(listGroupsRequest)
+
+    val capturedResponse = expectNoThrottling()
+    val expectedStates: Set[String] = if (state.isDefined) Set(state.get) else Set()
+    EasyMock.expect(groupCoordinator.handleListGroups(expectedStates))
+      .andReturn((Errors.NONE, overviews))
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.LIST_GROUPS, listGroupsRequest, capturedResponse).asInstanceOf[ListGroupsResponse]
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    response
+  }
+
   /**
    * Return pair of listener names in the metadataCache: PLAINTEXT and LISTENER2 respectively.
    */
@@ -2015,5 +2065,48 @@ class KafkaApisTest {
   private def setupBasicMetadataCache(topic: String, numPartitions: Int): Unit = {
     val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0)
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+  }
+
+  @Test
+  def testAlterReplicaLogDirs(): Unit = {
+    val data = new AlterReplicaLogDirsRequestData()
+    val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+      .setPath("/foo")
+    dir.topics().add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic().setName("t0").setPartitions(asList(0, 1, 2)))
+    data.dirs().add(dir)
+    val alterReplicaLogDirsRequest = new AlterReplicaLogDirsRequest.Builder(
+      data
+    ).build()
+    val request = buildRequest(alterReplicaLogDirsRequest)
+
+    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val capturedResponse = expectNoThrottling()
+    val t0p0 = new TopicPartition("t0", 0)
+    val t0p1 = new TopicPartition("t0", 1)
+    val t0p2 = new TopicPartition("t0", 2)
+    val partitionResults = Map(
+      t0p0 -> Errors.NONE,
+      t0p1 -> Errors.LOG_DIR_NOT_FOUND,
+      t0p2 -> Errors.INVALID_TOPIC_EXCEPTION)
+    EasyMock.expect(replicaManager.alterReplicaLogDirs(EasyMock.eq(Map(
+      t0p0 -> "/foo",
+      t0p1 -> "/foo",
+      t0p2 -> "/foo"))))
+    .andReturn(partitionResults)
+    EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleAlterReplicaLogDirsRequest(request)
+
+    val response = readResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS, alterReplicaLogDirsRequest, capturedResponse)
+      .asInstanceOf[AlterReplicaLogDirsResponse]
+    assertEquals(partitionResults, response.data.results.asScala.flatMap { tr =>
+      tr.partitions().asScala.map { pr =>
+        new TopicPartition(tr.topicName, pr.partitionIndex) -> Errors.forCode(pr.errorCode)
+      }
+    }.toMap)
+    assertEquals(Map(Errors.NONE -> 1,
+      Errors.LOG_DIR_NOT_FOUND -> 1,
+      Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts)
   }
 }

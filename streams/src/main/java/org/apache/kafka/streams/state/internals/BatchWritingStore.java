@@ -14,31 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.test;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-public class MockBatchingStateRestoreListener extends MockStateRestoreListener implements BatchingStateRestoreCallback {
-
-    private final Collection<KeyValue<byte[], byte[]>> restoredRecords = new ArrayList<>();
-
-    @Override
-    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        restoredRecords.addAll(records);
-    }
-
-    @Override
-    public void restore(final byte[] key, final byte[] value) {
-        throw new IllegalStateException("Should not be called");
-
-    }
-
-    public Collection<KeyValue<byte[], byte[]>> getRestoredRecords() {
-        return restoredRecords;
-    }
+public interface BatchWritingStore {
+    void addToBatch(final KeyValue<byte[], byte[]> record,
+                    final WriteBatch batch) throws RocksDBException;
+    void write(final WriteBatch batch) throws RocksDBException;
 }

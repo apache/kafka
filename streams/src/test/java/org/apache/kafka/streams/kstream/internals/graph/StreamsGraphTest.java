@@ -194,9 +194,9 @@ public class StreamsGraphTest {
     }
 
     // no need to optimize as user has already performed the repartitioning manually
+    @Deprecated
     @Test
     public void shouldNotOptimizeWhenAThroughOperationIsDone() {
-
         final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
         final Topology noOptimziation = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
 
@@ -254,6 +254,7 @@ public class StreamsGraphTest {
 
     }
 
+    @Deprecated // specifically testing the deprecated variant
     private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -304,7 +305,7 @@ public class StreamsGraphTest {
         return repartitionTopicsFound.size();
     }
 
-    private String expectedJoinedTopology = "Topologies:\n"
+    private final String expectedJoinedTopology = "Topologies:\n"
                                             + "   Sub-topology: 0\n"
                                             + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                             + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -326,7 +327,7 @@ public class StreamsGraphTest {
                                             + "      --> none\n"
                                             + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n";
 
-    private String expectedJoinedFilteredTopology = "Topologies:\n"
+    private final String expectedJoinedFilteredTopology = "Topologies:\n"
                                                     + "   Sub-topology: 0\n"
                                                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                                     + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -351,7 +352,7 @@ public class StreamsGraphTest {
                                                     + "      --> none\n"
                                                     + "      <-- KSTREAM-MERGE-0000000006\n\n";
 
-    private String expectedFullTopology = "Topologies:\n"
+    private final String expectedFullTopology = "Topologies:\n"
                                           + "   Sub-topology: 0\n"
                                           + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                           + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -382,7 +383,7 @@ public class StreamsGraphTest {
                                           + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
 
 
-    private String expectedMergeOptimizedTopology = "Topologies:\n" +
+    private final String expectedMergeOptimizedTopology = "Topologies:\n" +
         "   Sub-topology: 0\n" +
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input_topic])\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +

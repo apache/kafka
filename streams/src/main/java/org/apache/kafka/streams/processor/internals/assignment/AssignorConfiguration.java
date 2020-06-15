@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -54,6 +54,9 @@ public final class AssignorConfiguration {
     private final Map<String, ?> internalConfigs;
 
     public AssignorConfiguration(final Map<String, ?> configs) {
+        // NOTE: If you add a new config to pass through to here, be sure to test it in a real
+        // application. Since we filter out some configurations, we may have to explicitly copy
+        // them over when we construct the Consumer.
         streamsConfig = new QuietStreamsConfig(configs);
         internalConfigs = configs;
 
@@ -292,10 +295,6 @@ public final class AssignorConfiguration {
         return adminClient;
     }
 
-    public int adminClientTimeout() {
-        return streamsConfig.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
-    }
-
     public InternalTopicManager internalTopicManager() {
         return new InternalTopicManager(adminClient, streamsConfig);
     }
@@ -347,22 +346,28 @@ public final class AssignorConfiguration {
         public final long probingRebalanceIntervalMs;
 
         private AssignmentConfigs(final StreamsConfig configs) {
-            this(
-                configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
-                configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
-                configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
-                configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG)
-            );
+            acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
+            maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
+            numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+            probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
                           final Long probingRebalanceIntervalMs) {
-            this.acceptableRecoveryLag = acceptableRecoveryLag;
-            this.maxWarmupReplicas = maxWarmupReplicas;
-            this.numStandbyReplicas = numStandbyReplicas;
-            this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;
+            this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
+            this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
+            this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
+            this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
+        }
+
+        private static <T> T validated(final String configKey, final T value) {
+            final ConfigDef.Validator validator = StreamsConfig.configDef().configKeys().get(configKey).validator;
+            if (validator != null) {
+                validator.ensureValid(configKey, value);
+            }
+            return value;
         }
 
         @Override

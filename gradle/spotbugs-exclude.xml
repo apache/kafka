@@ -244,12 +244,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- The code generator generates useless condition. Disable the check temporarily. -->
-        <Class name="org.apache.kafka.common.message.JoinGroupResponseData"/>
-        <Bug pattern="UC_USELESS_CONDITION"/>
-    </Match>
-
-    <Match>
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->

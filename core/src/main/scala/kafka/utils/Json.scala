@@ -20,7 +20,6 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
-import scala.collection._
 import scala.reflect.ClassTag
 
 /**
@@ -63,32 +62,6 @@ object Json {
   def parseBytesAs[T](input: Array[Byte])(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
-  }
-
-  /**
-   * Encode an object into a JSON string. This method accepts any type T where
-   *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
-   * Any other type will result in an exception.
-   * 
-   * This implementation is inefficient, so we recommend `encodeAsString` or `encodeAsBytes` (the latter is preferred
-   * if possible). This method supports scala Map implementations while the other two do not. Once this functionality
-   * is no longer required, we can remove this method.
-   */
-  def legacyEncodeAsString(obj: Any): String = {
-    obj match {
-      case null => "null"
-      case b: Boolean => b.toString
-      case s: String => mapper.writeValueAsString(s)
-      case n: Number => n.toString
-      case m: Map[_, _] => "{" +
-        m.map {
-          case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
-          case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
-        }.mkString(",") + "}"
-      case a: Array[_] => legacyEncodeAsString(a.toSeq)
-      case i: Iterable[_] => "[" + i.map(legacyEncodeAsString).mkString(",") + "]"
-      case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
-    }
   }
 
   /**

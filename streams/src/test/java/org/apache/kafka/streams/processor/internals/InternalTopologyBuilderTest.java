@@ -25,6 +25,7 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -62,7 +63,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreBuilder<?> storeBuilder = new MockKeyValueStoreBuilder("store", false);
+    private final StoreBuilder<?> storeBuilder = new MockKeyValueStoreBuilder("testStore", false);
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -371,12 +372,113 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void testAddStateStoreWithDuplicates() {
+    public void shouldNotAllowToAddStoresWithSameName() {
+        final StoreBuilder<KeyValueStore<Object, Object>> otherBuilder =
+            new MockKeyValueStoreBuilder("testStore", false);
+
         builder.addStateStore(storeBuilder);
-        try {
-            builder.addStateStore(storeBuilder);
-            fail("Should throw TopologyException with store name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+
+        final TopologyException exception = assertThrows(
+            TopologyException.class,
+            () -> builder.addStateStore(otherBuilder)
+        );
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Invalid topology: A different StateStore has already been added with the name testStore")
+        );
+    }
+
+    @Test
+    public void shouldNotAllowToAddStoresWithSameNameWhenFirstStoreIsGlobal() {
+        final StoreBuilder<KeyValueStore<Object, Object>> globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+
+        builder.addGlobalStore(
+            globalBuilder,
+            "global-store",
+            null,
+            null,
+            null,
+            "global-topic",
+            "global-processor",
+            new MockProcessorSupplier<>()
+        );
+
+        final TopologyException exception = assertThrows(
+            TopologyException.class,
+            () -> builder.addStateStore(storeBuilder)
+        );
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Invalid topology: A different GlobalStateStore has already been added with the name testStore")
+        );
+    }
+
+    @Test
+    public void shouldNotAllowToAddStoresWithSameNameWhenSecondStoreIsGlobal() {
+        final StoreBuilder<KeyValueStore<Object, Object>> globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+
+        builder.addStateStore(storeBuilder);
+
+        final TopologyException exception = assertThrows(
+            TopologyException.class,
+            () -> builder.addGlobalStore(
+                globalBuilder,
+                "global-store",
+                null,
+                null,
+                null,
+                "global-topic",
+                "global-processor",
+                new MockProcessorSupplier<>()
+            )
+        );
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Invalid topology: A different StateStore has already been added with the name testStore")
+        );
+    }
+
+    @Test
+    public void shouldNotAllowToAddGlobalStoresWithSameName() {
+        final StoreBuilder<KeyValueStore<Object, Object>> firstGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+        final StoreBuilder<KeyValueStore<Object, Object>> secondGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+
+        builder.addGlobalStore(
+            firstGlobalBuilder,
+            "global-store",
+            null,
+            null,
+            null,
+            "global-topic",
+            "global-processor",
+            new MockProcessorSupplier<>()
+        );
+
+        final TopologyException exception = assertThrows(
+            TopologyException.class,
+            () -> builder.addGlobalStore(
+                secondGlobalBuilder,
+                "global-store-2",
+                null,
+                null,
+                null,
+                "global-topic",
+                "global-processor-2",
+                new MockProcessorSupplier<>()
+            )
+        );
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Invalid topology: A different GlobalStateStore has already been added with the name testStore")
+        );
     }
 
     @Test
@@ -393,6 +495,22 @@ public class InternalTopologyBuilderTest {
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
+    }
+
+    @Test
+    public void shouldAllowAddingSameStoreBuilderMultipleTimes() {
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addStateStore(storeBuilder);
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-2", storeBuilder.name());
+
+        assertEquals(1, builder.buildTopology().stateStores().size());
     }
 
     @Test
@@ -629,7 +747,7 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
-        assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("store"));
+        assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
 
     @Test
@@ -639,7 +757,7 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
-        assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("store"));
+        assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
 
     @Test
@@ -651,7 +769,7 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
-        assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("store"));
+        assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
 
     @Test
@@ -701,11 +819,11 @@ public class InternalTopologyBuilderTest {
         builder.buildTopology();
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-testStore-changelog");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals("appId-store-changelog", topicConfig.name());
+        assertEquals("appId-testStore-changelog", topicConfig.name());
         assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
     }
 

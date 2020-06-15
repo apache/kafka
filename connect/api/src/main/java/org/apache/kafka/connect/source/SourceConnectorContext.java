@@ -14,15 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.connect.source;
 
-import org.apache.kafka.streams.KeyValue;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
+import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 
-public interface BulkLoadingStore {
-    void toggleDbForBulkLoading(final boolean prepareForBulkload);
-    void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatch batch) throws RocksDBException;
-    void write(final WriteBatch batch) throws RocksDBException;
+/**
+ * A context to allow a {@link SourceConnector} to interact with the Kafka Connect runtime.
+ */
+public interface SourceConnectorContext extends ConnectorContext {
+
+    /**
+     * Returns the {@link OffsetStorageReader} for this SourceConnectorContext.
+     * @return the OffsetStorageReader for this connector.
+     */
+    OffsetStorageReader offsetStorageReader();
 }

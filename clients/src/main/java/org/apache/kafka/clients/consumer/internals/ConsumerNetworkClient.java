@@ -95,6 +95,9 @@ public class ConsumerNetworkClient implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
+    public int defaultRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
 
     /**
      * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.

@@ -116,6 +116,7 @@ public class SslFactory implements Reconfigurable, Closeable {
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
         SslEngineFactory newSslEngineFactory = createNewSslEngineFactory(newConfigs);
         if (newSslEngineFactory != this.sslEngineFactory) {
+            Utils.closeQuietly(this.sslEngineFactory, "close stale ssl engine factory");
             this.sslEngineFactory = newSslEngineFactory;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
                     newSslEngineFactory.keystore(), newSslEngineFactory.truststore());

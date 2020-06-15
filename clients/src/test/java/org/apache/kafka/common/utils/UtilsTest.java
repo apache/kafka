@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.mockito.stubbing.OngoingStubbing;
@@ -38,8 +39,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
@@ -59,6 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -680,5 +685,41 @@ public class UtilsTest {
 
         assertThat(diff, is(mkSet("a", "b")));
         assertThat(diff.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testPropsToMap() {
+        assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, 2);
+            Utils.propsToMap(props);
+        });
+        assertValue(false);
+        assertValue(1);
+        assertValue("string");
+        assertValue(1.1);
+        assertValue(Collections.emptySet());
+        assertValue(Collections.emptyList());
+        assertValue(Collections.emptyMap());
+    }
+
+    private static void assertValue(Object value) {
+        Properties props = new Properties();
+        props.put("key", value);
+        assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCloseAllQuietly() {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        String msg = "you should fail";
+        AtomicInteger count = new AtomicInteger(0);
+        AutoCloseable c0 = () -> {
+            throw new RuntimeException(msg);
+        };
+        AutoCloseable c1 = count::incrementAndGet;
+        Utils.closeAllQuietly(exception, "test", Stream.of(c0, c1).toArray(AutoCloseable[]::new));
+        assertEquals(msg, exception.get().getMessage());
+        assertEquals(1, count.get());
     }
 }
