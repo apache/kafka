@@ -32,7 +32,7 @@ import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-
+import scala.util.control.Breaks._
 /**
  * Performance test for the full zookeeper consumer
  */
@@ -45,40 +45,47 @@ object ConsumerPerformance extends LazyLogging {
     val totalMessagesRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
-    val joinGroupTimeInMs = new AtomicLong(0)
+    var joinGroupTimeInMs: Double = 0
 
     if (!config.hideHeader)
       printHeader(config.showDetailedStats)
 
     var startMs, endMs = 0L
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
+    metrics = consumer.metrics.asScala
     startMs = System.currentTimeMillis
-    consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+    consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, startMs, metrics)
     endMs = System.currentTimeMillis
 
-    if (config.printMetrics) {
-      metrics = consumer.metrics.asScala
+    breakable {
+        for ((key,value) <- metrics) {
+           if(key.name() == "rebalance-latency-avg") {
+             joinGroupTimeInMs = value.metricValue.asInstanceOf[Double]
+             break
+           }
+        }
     }
+
     consumer.close()
     val elapsedSecs = (endMs - startMs) / 1000.0
-    val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
+    val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f".format(
+      println("%s, %s, %.4f, %.4f, %d, %.4f, %.4f, %.4f, %.4f, %.4f".format(
         config.dateFormat.format(startMs),
         config.dateFormat.format(endMs),
         totalMBRead,
         totalMBRead / elapsedSecs,
         totalMessagesRead.get,
         totalMessagesRead.get / elapsedSecs,
-        joinGroupTimeInMs.get,
+        joinGroupTimeInMs,
         fetchTimeInMs,
         totalMBRead / (fetchTimeInMs / 1000.0),
         totalMessagesRead.get / (fetchTimeInMs / 1000.0)
       ))
     }
 
-    if (metrics != null) {
+    if (config.printMetrics && metrics != null) {
       ToolsUtils.printMetrics(metrics)
     }
 
@@ -99,21 +106,14 @@ object ConsumerPerformance extends LazyLogging {
               config: ConsumerPerfConfig,
               totalMessagesRead: AtomicLong,
               totalBytesRead: AtomicLong,
-              joinTime: AtomicLong,
-              testStartTime: Long): Unit = {
+              testStartTime: Long,
+              metrics: mutable.Map[MetricName, _ <: Metric]): Unit = {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var joinTimeMsInSingleRound = 0L
-
-    consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        joinTime.addAndGet(System.currentTimeMillis - testStartTime)
-        joinTimeMsInSingleRound += System.currentTimeMillis - testStartTime
-      }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-      }})
+    var joinTimeMsInSingleRound: Double = 0
+    consumer.subscribe(topics.asJava)
 
     // Now start the benchmark
     var currentTimeMillis = System.currentTimeMillis
@@ -133,9 +133,19 @@ object ConsumerPerformance extends LazyLogging {
           bytesRead += record.value.size
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
-          if (config.showDetailedStats)
+          if (config.showDetailedStats) {
+            breakable {
+              for ((key,value) <- metrics) {
+                if(key.name() == "last-rebalance-seconds-ago") {
+                  joinTimeMsInSingleRound = value.metricValue.asInstanceOf[Double]
+                  break
+                }
+              }
+            }
             printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
               lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
+          }
+
           joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
@@ -159,7 +169,7 @@ object ConsumerPerformance extends LazyLogging {
                                startMs: Long,
                                endMs: Long,
                                dateFormat: SimpleDateFormat,
-                               periodicJoinTimeInMs: Long): Unit = {
+                               periodicJoinTimeInMs: Double): Unit = {
     printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
     printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, periodicJoinTimeInMs)
     println()
@@ -188,7 +198,7 @@ object ConsumerPerformance extends LazyLogging {
                                     lastMessagesRead: Long,
                                     startMs: Long,
                                     endMs: Long,
-                                    periodicJoinTimeInMs: Long): Unit = {
+                                    periodicJoinTimeInMs: Double): Unit = {
     val fetchTimeMs = endMs - startMs - periodicJoinTimeInMs
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMessagesRead = messagesRead - lastMessagesRead
@@ -196,7 +206,7 @@ object ConsumerPerformance extends LazyLogging {
       (0.0, 0.0)
     else
       (1000.0 * intervalMbRead / fetchTimeMs, 1000.0 * intervalMessagesRead / fetchTimeMs)
-    print(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
+    print(", %.4f, %.4f, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
