@@ -506,9 +506,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * You must commit a task and checkpoint the state manager before closing as this will release the state dir lock
      */
     private void close(final boolean clean) {
-        if (clean && commitNeeded ) {
+        if (clean && commitNeeded) {
             log.debug("Tried to close clean but there was an active scheduled checkpoint, this means we failed to"
-            + " commit and should close as dirty instead");
+                          + " commit and should close as dirty instead");
             throw new StreamsException("Tried to close dirty task as clean");
         }
         switch (state()) {
