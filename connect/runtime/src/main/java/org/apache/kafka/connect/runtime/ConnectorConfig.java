@@ -331,10 +331,10 @@ public class ConnectorConfig extends AbstractConfig {
                 return super.configDefsForClass(typeConfig)
                     .filter(entry -> {
                         // The implicit parameters mask any from the transformer with the same name
-                        if (PredicatedTransformation.PREDICATE_CONFIG.equals(entry.getValue())
-                                || PredicatedTransformation.NEGATE_CONFIG.equals(entry.getValue())) {
+                        if (PredicatedTransformation.PREDICATE_CONFIG.equals(entry.getKey())
+                                || PredicatedTransformation.NEGATE_CONFIG.equals(entry.getKey())) {
                             log.warn("Transformer config {} is masked by implicit config of that name",
-                                    entry.getValue());
+                                    entry.getKey());
                             return false;
                         } else {
                             return true;

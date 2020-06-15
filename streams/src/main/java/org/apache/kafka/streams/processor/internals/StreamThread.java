@@ -557,14 +557,6 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.commit(
-                        taskManager.tasks()
-                            .values()
-                            .stream()
-                            .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                            .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
-                            .collect(Collectors.toSet())
-                    );
                     taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
@@ -644,7 +636,7 @@ public class StreamThread extends Thread {
         if (records != null && !records.isEmpty()) {
             pollSensor.record(pollLatency, now);
             pollRecordsSensor.record(records.count(), now);
-            addRecordsToTasks(records);
+            taskManager.addRecordsToTasks(records);
         }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
@@ -817,25 +809,6 @@ public class StreamThread extends Thread {
             log.info(logMessage, topic, resetPolicy);
         }
         partitions.add(partition);
-    }
-
-    /**
-     * Take records and add them to each respective task
-     *
-     * @param records Records, can be null
-     */
-    private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        for (final TopicPartition partition : records.partitions()) {
-            final Task task = taskManager.taskForInputPartition(partition);
-
-            if (task == null) {
-                log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
-                    partition, taskManager.toString(">"));
-                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
-            }
-
-            task.addRecords(partition, records.records(partition));
-        }
     }
 
     /**

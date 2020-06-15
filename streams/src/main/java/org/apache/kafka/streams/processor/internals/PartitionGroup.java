@@ -243,10 +243,6 @@ public class PartitionGroup {
         return allBuffered;
     }
 
-    void close() {
-        clear();
-    }
-
     void clear() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();

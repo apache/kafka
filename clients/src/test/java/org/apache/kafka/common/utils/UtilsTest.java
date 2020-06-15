@@ -39,8 +39,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
@@ -704,5 +707,19 @@ public class UtilsTest {
         Properties props = new Properties();
         props.put("key", value);
         assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCloseAllQuietly() {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        String msg = "you should fail";
+        AtomicInteger count = new AtomicInteger(0);
+        AutoCloseable c0 = () -> {
+            throw new RuntimeException(msg);
+        };
+        AutoCloseable c1 = count::incrementAndGet;
+        Utils.closeAllQuietly(exception, "test", Stream.of(c0, c1).toArray(AutoCloseable[]::new));
+        assertEquals(msg, exception.get().getMessage());
+        assertEquals(1, count.get());
     }
 }

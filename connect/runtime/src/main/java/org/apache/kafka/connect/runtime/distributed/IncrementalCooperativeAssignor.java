@@ -66,6 +66,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
     protected int delay;
+    protected int previousGenerationId;
+    protected Set<String> previousMembers;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);
@@ -77,6 +79,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.scheduledRebalance = 0;
         this.candidateWorkersForReassignment = new LinkedHashSet<>();
         this.delay = 0;
+        this.previousGenerationId = -1;
+        this.previousMembers = Collections.emptySet();
     }
 
     @Override
@@ -159,6 +163,17 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
+        int lastCompletedGenerationId = coordinator.lastCompletedGenerationId();
+        if (previousGenerationId != lastCompletedGenerationId) {
+            log.debug("Clearing the view of previous assignments due to generation mismatch between "
+                    + "previous generation ID {} and last completed generation ID {}. This can "
+                    + "happen if the leader fails to sync the assignment within a rebalancing round. "
+                    + "The following view of previous assignments might be outdated and will be "
+                    + "ignored by the leader in the current computation of new assignments. "
+                    + "Possibly outdated previous assignments: {}",
+                    previousGenerationId, lastCompletedGenerationId, previousAssignment);
+            this.previousAssignment = ConnectorsAndTasks.EMPTY;
+        }
 
         ClusterConfigState snapshot = coordinator.configSnapshot();
         Set<String> configuredConnectors = new TreeSet<>(snapshot.connectors());
@@ -229,6 +244,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, ConnectorsAndTasks> toRevoke = computeDeleted(deleted, connectorAssignments, taskAssignments);
         log.debug("Connector and task to delete assignments: {}", toRevoke);
 
+        // Revoking redundant connectors/tasks if the the workers have duplicate assignments
+        toRevoke.putAll(computeDuplicatedAssignments(memberConfigs, connectorAssignments, taskAssignments));
+        log.debug("Connector and task to revoke assignments (include duplicated assignments): {}", toRevoke);
+
         // Recompute the complete assignment excluding the deleted connectors-and-tasks
         completeWorkerAssignment = workerAssignment(memberConfigs, deleted);
         connectorAssignments =
@@ -236,7 +255,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         taskAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
 
-        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
+        handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment, memberConfigs);
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
@@ -267,19 +286,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
         assignTasks(completeWorkerAssignment, newSubmissions.tasks());
-
         log.debug("Current complete assignments: {}", currentWorkerAssignment);
         log.debug("New complete assignments: {}", completeWorkerAssignment);
 
         Map<String, Collection<String>> currentConnectorAssignments =
                 currentWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::connectors));
-
         Map<String, Collection<ConnectorTaskId>> currentTaskAssignments =
                 currentWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
-
         Map<String, Collection<String>> incrementalConnectorAssignments =
                 diff(connectorAssignments, currentConnectorAssignments);
-
         Map<String, Collection<ConnectorTaskId>> incrementalTaskAssignments =
                 diff(taskAssignments, currentTaskAssignments);
 
@@ -292,9 +307,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
                                 incrementalTaskAssignments, toRevoke, delay, protocolVersion);
-
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
-
+        previousGenerationId = coordinator.generationId();
+        previousMembers = memberConfigs.keySet();
         log.debug("Actual assignments: {}", assignments);
         return serializeAssignments(assignments);
     }
@@ -348,10 +363,66 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return previousAssignment;
     }
 
+    private ConnectorsAndTasks duplicatedAssignments(Map<String, ExtendedWorkerState> memberConfigs) {
+        Set<String> connectors = memberConfigs.entrySet().stream()
+                .flatMap(memberConfig -> memberConfig.getValue().assignment().connectors().stream())
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue() > 1L)
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toSet());
+
+        Set<ConnectorTaskId> tasks = memberConfigs.values().stream()
+                .flatMap(state -> state.assignment().tasks().stream())
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue() > 1L)
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toSet());
+        return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
+    }
+
+    private Map<String, ConnectorsAndTasks> computeDuplicatedAssignments(Map<String, ExtendedWorkerState> memberConfigs,
+                                             Map<String, Collection<String>> connectorAssignments,
+                                             Map<String, Collection<ConnectorTaskId>> taskAssignment) {
+        ConnectorsAndTasks duplicatedAssignments = duplicatedAssignments(memberConfigs);
+        log.debug("Duplicated assignments: {}", duplicatedAssignments);
+
+        Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
+        if (!duplicatedAssignments.connectors().isEmpty()) {
+            connectorAssignments.entrySet().stream()
+                    .forEach(entry -> {
+                        Set<String> duplicatedConnectors = new HashSet<>(duplicatedAssignments.connectors());
+                        duplicatedConnectors.retainAll(entry.getValue());
+                        if (!duplicatedConnectors.isEmpty()) {
+                            toRevoke.computeIfAbsent(
+                                entry.getKey(),
+                                v -> new ConnectorsAndTasks.Builder().build()
+                            ).connectors().addAll(duplicatedConnectors);
+                        }
+                    });
+        }
+        if (!duplicatedAssignments.tasks().isEmpty()) {
+            taskAssignment.entrySet().stream()
+                    .forEach(entry -> {
+                        Set<ConnectorTaskId> duplicatedTasks = new HashSet<>(duplicatedAssignments.tasks());
+                        duplicatedTasks.retainAll(entry.getValue());
+                        if (!duplicatedTasks.isEmpty()) {
+                            toRevoke.computeIfAbsent(
+                                entry.getKey(),
+                                v -> new ConnectorsAndTasks.Builder().build()
+                            ).tasks().addAll(duplicatedTasks);
+                        }
+                    });
+        }
+        return toRevoke;
+    }
+
     // visible for testing
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
-                                         List<WorkerLoad> completeWorkerAssignment) {
+                                         List<WorkerLoad> completeWorkerAssignment,
+                                         Map<String, ExtendedWorkerState> memberConfigs) {
         if (lostAssignments.isEmpty()) {
             resetDelay();
             return;
@@ -360,6 +431,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         final long now = time.milliseconds();
         log.debug("Found the following connectors and tasks missing from previous assignments: "
                 + lostAssignments);
+
+        if (scheduledRebalance <= 0 && memberConfigs.keySet().containsAll(previousMembers)) {
+            log.debug("No worker seems to have departed the group during the rebalance. The "
+                    + "missing assignments that the leader is detecting are probably due to some "
+                    + "workers failing to receive the new assignments in the previous rebalance. "
+                    + "Will reassign missing tasks as new tasks");
+            newSubmissions.connectors().addAll(lostAssignments.connectors());
+            newSubmissions.tasks().addAll(lostAssignments.tasks());
+            return;
+        }
 
         if (scheduledRebalance > 0 && now >= scheduledRebalance) {
             // delayed rebalance expired and it's time to assign resources

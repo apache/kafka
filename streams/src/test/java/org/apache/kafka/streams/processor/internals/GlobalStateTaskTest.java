@@ -56,11 +56,9 @@ public class GlobalStateTaskTest {
     private final TopicPartition t1 = new TopicPartition(topic1, 1);
     private final TopicPartition t2 = new TopicPartition(topic2, 1);
     private final MockSourceNode<String, String> sourceOne = new MockSourceNode<>(
-        new String[]{topic1},
         new StringDeserializer(),
         new StringDeserializer());
     private final MockSourceNode<Integer, Integer>  sourceTwo = new MockSourceNode<>(
-        new String[]{topic2},
         new IntegerDeserializer(),
         new IntegerDeserializer());
     private final MockProcessorNode<?, ?> processorOne = new MockProcessorNode<>();

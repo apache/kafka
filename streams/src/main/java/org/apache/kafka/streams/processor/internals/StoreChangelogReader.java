@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -46,6 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 
 /**
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
@@ -524,13 +524,6 @@ public class StoreChangelogReader implements ChangelogReader {
             // do not trigger restore listener if we are processing standby tasks
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
-                    // first trigger the store's specific listener if its registered callback is also an lister,
-                    // then trigger the user registered global listener
-                    final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
-                    if (restoreCallback instanceof StateRestoreListener) {
-                        ((StateRestoreListener) restoreCallback).onBatchRestored(partition, storeName, currentOffset, numRecords);
-                    }
-
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
@@ -547,13 +540,6 @@ public class StoreChangelogReader implements ChangelogReader {
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
 
             try {
-                // first trigger the store's specific listener if its registered callback is also an listener,
-                // then trigger the user registered global listener
-                final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
-                if (restoreCallback instanceof StateRestoreListener) {
-                    ((StateRestoreListener) restoreCallback).onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
-                }
-
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
             } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
@@ -562,23 +548,14 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
-        if (partitions.isEmpty())
-            return Collections.emptyMap();
-
         final Map<TopicPartition, Long> committedOffsets;
         try {
-            // those do not have a committed offset would default to 0
-            committedOffsets =  mainConsumer.committed(partitions).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
         } catch (final TimeoutException e) {
-            // if it timed out we just retry next time.
+            // if it timed out we just retry next time
             return Collections.emptyMap();
-        } catch (final KafkaException e) {
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
-
         lastUpdateOffsetTime = time.milliseconds();
-
         return committedOffsets;
     }
 
@@ -797,13 +774,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
 
                 try {
-                    // first trigger the store's specific listener if its registered callback is also an lister,
-                    // then trigger the user registered global listener
-                    final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
-                    if (restoreCallback instanceof StateRestoreListener) {
-                        ((StateRestoreListener) restoreCallback).onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
-                    }
-
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
@@ -812,37 +782,14 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private RuntimeException invokeOnRestoreEnd(final TopicPartition partition,
-                                                final ChangelogMetadata changelogMetadata) {
-        // only trigger the store's specific listener to make sure we disable bulk loading before transition to standby
-        final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
-        final StateRestoreCallback restoreCallback = storeMetadata.restoreCallback();
-        final String storeName = storeMetadata.store().name();
-        if (restoreCallback instanceof StateRestoreListener) {
-            try {
-                ((StateRestoreListener) restoreCallback).onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
-            } catch (final RuntimeException e) {
-                return e;
-            }
-        }
-        return null;
-    }
-
     @Override
-    public void unregister(final Collection<TopicPartition> revokedChangelogs,
-                           final boolean triggerOnRestoreEnd) {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
+    public void unregister(final Collection<TopicPartition> revokedChangelogs) {
         // Only changelogs that are initialized have been added to the restore consumer's assignment
         final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();
 
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
             if (changelogMetadata != null) {
-                if (triggerOnRestoreEnd && changelogMetadata.state().equals(ChangelogState.RESTORING)) {
-                    firstException.compareAndSet(null, invokeOnRestoreEnd(partition, changelogMetadata));
-                }
-
                 if (!changelogMetadata.state().equals(ChangelogState.REGISTERED)) {
                     revokedInitializedChangelogs.add(partition);
                 }

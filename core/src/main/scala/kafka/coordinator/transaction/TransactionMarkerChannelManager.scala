@@ -79,7 +79,7 @@ object TransactionMarkerChannelManager {
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,
-      ClientDnsLookup.DEFAULT,
+      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
       new ApiVersions,
