@@ -16,12 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.skippedIdempotentUpdatesSensor;
+
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final KTableImpl<K, ?, V> parent;
@@ -76,20 +85,28 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
 
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
-        private TimestampedKeyValueStore<K, V> store;
+        private MeteredTimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private Sensor skippedIdempotentUpdatesSensor = null;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            final StateStore stateStore = context.getStateStore(queryableName);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                store = ((WrappedStateStore<MeteredTimestampedKeyValueStore<K, V>, K, V>) stateStore).wrapped();
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
+                skippedIdempotentUpdatesSensor = skippedIdempotentUpdatesSensor(
+                    Thread.currentThread().getName(), 
+                    context.taskId().toString(), 
+                    ((InternalProcessorContext) context).currentNode().name(), 
+                    (StreamsMetricsImpl) context.metrics()
+                );
             }
         }
 
@@ -103,8 +120,18 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
-                tupleForwarder.maybeForward(key, newValue, oldValue);
+                final ValueAndTimestamp<V> oldValueAndTimestamp = ValueAndTimestamp.make(oldValue, 0);
+                final byte[] serializedOldValue = store.getSerializedValue(oldValueAndTimestamp);
+                final ValueAndTimestamp<V> newValueAndTimestamp = ValueAndTimestamp.make(newValue,
+                                                                                         context().timestamp());
+
+                final boolean isDifferentValue = 
+                        store.putIfDifferentValues(key, newValueAndTimestamp, serializedOldValue);
+                if (isDifferentValue) {
+                    tupleForwarder.maybeForward(key, newValue, oldValue);
+                }  else {
+                    skippedIdempotentUpdatesSensor.record();
+                }
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
             }

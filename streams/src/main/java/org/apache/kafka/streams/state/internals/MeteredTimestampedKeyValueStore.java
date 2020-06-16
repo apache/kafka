@@ -92,6 +92,10 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
+    public byte[] getSerializedValue(final ValueAndTimestamp<V> value) {
+        return serdes.rawValue(value);
+    }
+
     public static class RawAndDeserializedValue<ValueType> {
         public final byte[] serializedValue;
         public final ValueAndTimestamp<ValueType> value;
