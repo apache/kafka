@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -43,6 +46,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
@@ -199,10 +204,17 @@ public class StoreChangelogReader implements ChangelogReader {
     // to update offset limit for standby tasks;
     private Consumer<byte[], byte[]> mainConsumer;
 
+    // the changelog reader needs the admin client to list end offsets
+    private Admin adminClient;
+
     private long lastUpdateOffsetTime;
 
     void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
         this.mainConsumer = consumer;
+    }
+
+    void setAdminClient(final Admin adminClient) {
+        this.adminClient = adminClient;
     }
 
     public StoreChangelogReader(final Time time,
@@ -564,8 +576,15 @@ public class StoreChangelogReader implements ChangelogReader {
             return Collections.emptyMap();
 
         try {
-            return restoreConsumer.endOffsets(partitions);
-        } catch (final TimeoutException e) {
+            if (adminClient != null) {
+                final ListOffsetsResult result = adminClient.listOffsets(partitions.stream().collect(
+                        Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())));
+                return result.all().get().entrySet().stream().collect(
+                        Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
+            } else {
+                return restoreConsumer.endOffsets(partitions);
+            }
+        } catch (final TimeoutException | InterruptedException | ExecutionException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
             log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);
             return Collections.emptyMap();

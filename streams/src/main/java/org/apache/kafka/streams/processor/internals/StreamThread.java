@@ -273,13 +273,13 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
-    private final Admin adminClient;
     private final ChangelogReader changelogReader;
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> mainConsumer;
     final Consumer<byte[], byte[]> restoreConsumer;
+    final Admin adminClient;
     final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
@@ -369,6 +369,7 @@ public class StreamThread extends Thread {
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         changelogReader.setMainConsumer(mainConsumer);
+        changelogReader.setAdminClient(adminClient);
         taskManager.setMainConsumer(mainConsumer);
 
         final StreamThread streamThread = new StreamThread(

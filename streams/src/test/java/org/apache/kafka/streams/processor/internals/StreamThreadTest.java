@@ -1634,6 +1634,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread("clientId", config, false);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer;
         final MockConsumer<byte[], byte[]> mockRestoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer;
+        final MockAdminClient mockAdminClient = (MockAdminClient) thread.adminClient;
 
         final TopicPartition topicPartition = new TopicPartition("topic", 0);
         final Set<TopicPartition> topicPartitionSet = Collections.singleton(topicPartition);
@@ -1674,7 +1675,7 @@ public class StreamThreadTest {
         final TopicPartition changelogPartition = new TopicPartition("stream-thread-test-count-changelog", 0);
         final Set<TopicPartition> changelogPartitionSet = Collections.singleton(changelogPartition);
         mockRestoreConsumer.updateBeginningOffsets(Collections.singletonMap(changelogPartition, 0L));
-        mockRestoreConsumer.updateEndOffsets(Collections.singletonMap(changelogPartition, 2L));
+        mockAdminClient.updateEndOffsets(Collections.singletonMap(changelogPartition, 2L));
 
         mockConsumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -1686,7 +1687,7 @@ public class StreamThreadTest {
 
             TestUtils.waitForCondition(
                 () -> mockRestoreConsumer.assignment().size() == 1,
-                "Never restore first record");
+                "Never get the assignment");
 
             mockRestoreConsumer.addRecord(new ConsumerRecord<>(
                 "stream-thread-test-count-changelog",
