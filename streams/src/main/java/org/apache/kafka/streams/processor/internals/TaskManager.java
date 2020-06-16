@@ -686,6 +686,7 @@ public class TaskManager {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         final Set<Task> tasksToClose = new HashSet<>();
+        final Set<Task> tasksToCommit = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : tasks.values()) {
@@ -693,8 +694,11 @@ public class TaskManager {
                 try {
                     task.suspend();
                     if (task.commitNeeded()) {
+                        tasksToCommit.add(task);
                         final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        if (task.isActive()) {
+                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        }
                     }
                     tasksToClose.add(task);
                 } catch (final TaskMigratedException e) {
@@ -712,12 +716,11 @@ public class TaskManager {
         try {
             if (clean) {
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-                for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
+                for (final Task task : tasksToCommit) {
                     try {
-                        final Task task = tasks.get(taskId);
                         task.postCommit();
                     } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + taskId, e);
+                        log.error("Exception caught while post-committing task " + task.id(), e);
                         firstException.compareAndSet(null, e);
                     }
                 }
@@ -852,16 +855,19 @@ public class TaskManager {
             for (final Task task : tasksToCommit) {
                 if (task.commitNeeded()) {
                     final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    if (task.isActive()) {
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
+                    }
                 }
             }
 
             commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
-                final Task task = tasks.get(taskId);
-                ++committed;
-                task.postCommit();
+            for (final Task task : tasksToCommit) {
+                if (task.commitNeeded()) {
+                    ++committed;
+                    task.postCommit();
+                }
             }
 
             return committed;

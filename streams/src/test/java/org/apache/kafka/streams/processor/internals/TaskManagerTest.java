@@ -635,6 +635,7 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
+        consumer.commitSync(eq(emptyMap()));
 
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
@@ -1664,7 +1665,8 @@ public class TaskManagerTest {
             .andReturn(Arrays.asList(task00, task01, task02)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andReturn(Arrays.asList(task03, task04, task05)).anyTimes();
-        expectLastCall();
+
+        consumer.commitSync(eq(emptyMap()));
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
