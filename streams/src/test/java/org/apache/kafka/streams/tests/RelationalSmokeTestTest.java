@@ -18,6 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -31,6 +32,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class RelationalSmokeTestTest extends SmokeTestUtil {
+
     @Test
     public void verifySmokeTestLogic() {
         try (final TopologyTestDriver driver =
@@ -39,6 +41,7 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
                                             "nothing:0",
                                             "test",
                                             "test",
+                                            StreamsConfig.AT_LEAST_ONCE,
                                             TestUtils.tempDirectory().getAbsolutePath()
                                         ))) {
 

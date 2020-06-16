@@ -123,6 +123,7 @@
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="record">
@@ -142,6 +143,7 @@
 
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.common.acl" />
+      <allow pkg="org.apache.kafka.common.feature" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />
@@ -243,6 +245,10 @@
       <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
 
+    <subpackage name="internals">
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
     <subpackage name="perf">
       <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
@@ -256,6 +262,7 @@
       <allow pkg="kafka.log" />
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="test">
@@ -357,6 +364,7 @@
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
+      <allow pkg="org.eclipse.jetty.util" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />

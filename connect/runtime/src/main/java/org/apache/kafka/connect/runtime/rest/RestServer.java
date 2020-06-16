@@ -46,6 +46,7 @@ import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
+import org.eclipse.jetty.servlets.HeaderFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
@@ -285,6 +286,11 @@ public class RestServer {
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
         }
 
+        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+        if (headerConfig != null && !headerConfig.trim().isEmpty()) {
+            configureHttpResponsHeaderFilter(context);
+        }
+
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
         slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
@@ -416,10 +422,21 @@ public class RestServer {
         }
     }
 
+    /**
+     * Locate a Jetty connector for the standard (non-admin) REST API that uses the given protocol.
+     * @param protocol the protocol for the connector (e.g., "http" or "https").
+     * @return a {@link ServerConnector} for the server that uses the requested protocol, or
+     * {@code null} if none exist.
+     */
     ServerConnector findConnector(String protocol) {
         for (Connector connector : jettyServer.getConnectors()) {
             String connectorName = connector.getName();
-            if (connectorName.startsWith(protocol) && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
+            // We set the names for these connectors when instantiating them, beginning with the
+            // protocol for the connector and then an underscore ("_"). We rely on that format here
+            // when trying to locate a connector with the requested protocol; if the naming format
+            // for the connectors we create is ever changed, we'll need to adjust the logic here
+            // accordingly.
+            if (connectorName.startsWith(protocol + "_") && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
                 return (ServerConnector) connector;
         }
 
@@ -461,4 +478,14 @@ public class RestServer {
             return base + path;
     }
 
+    /**
+     * Register header filter to ServletContextHandler.
+     * @param context The serverlet context handler
+     */
+    protected void configureHttpResponsHeaderFilter(ServletContextHandler context) {
+        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+        FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
+        headerFilterHolder.setInitParameter("headerConfig", headerConfig);
+        context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+    }
 }

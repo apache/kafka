@@ -32,7 +32,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -66,8 +65,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,10 +85,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -102,13 +103,12 @@ public class KStreamAggregationIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String streamOneInput;
-    private String userSessionsStream = "user-sessions";
+    private String userSessionsStream;
     private String outputTopic;
     private KGroupedStream<String, String> groupedStream;
     private Reducer<String> reducer;
@@ -116,13 +116,16 @@ public class KStreamAggregationIntegrationTest {
     private Aggregator<String, String, Integer> aggregator;
     private KStream<Integer, String> stream;
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" + testNo.incrementAndGet();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -674,7 +677,8 @@ public class KStreamAggregationIntegrationTest {
 
         // verify can query data via IQ
         final ReadOnlySessionStore<String, String> sessionStore =
-            kafkaStreams.store(StoreQueryParameters.fromNameAndType(userSessionsStore, QueryableStoreTypes.sessionStore()));
+            IntegrationTestUtils.getStore(userSessionsStore, kafkaStreams, QueryableStoreTypes.sessionStore());
+
         final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob");
         assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
         assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
@@ -788,9 +792,10 @@ public class KStreamAggregationIntegrationTest {
 
 
     private void createTopics() throws InterruptedException {
-        streamOneInput = "stream-one-" + testNo;
-        outputTopic = "output-" + testNo;
-        userSessionsStream = userSessionsStream + "-" + testNo;
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        streamOneInput = "stream-one-" + safeTestName;
+        outputTopic = "output-" + safeTestName;
+        userSessionsStream = "user-sessions-" + safeTestName;
         CLUSTER.createTopic(streamOneInput, 3, 1);
         CLUSTER.createTopics(userSessionsStream, outputTopic);
     }
@@ -803,17 +808,21 @@ public class KStreamAggregationIntegrationTest {
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
                                                                  final int numMessages)
-        throws InterruptedException {
+            throws Exception {
+
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
                                                                  final Class innerClass,
-                                                                 final int numMessages) throws InterruptedException {
+                                                                 final int numMessages)
+            throws Exception {
+
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
@@ -829,12 +838,13 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
-                                                                                              final Deserializer<V> valueDeserializer,
-                                                                                              final Class innerClass,
-                                                                                              final int numMessages) throws InterruptedException {
+                                                                              final Deserializer<V> valueDeserializer,
+                                                                              final Class innerClass,
+                                                                              final int numMessages) throws Exception {
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());

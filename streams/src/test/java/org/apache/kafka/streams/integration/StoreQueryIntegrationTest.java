@@ -24,10 +24,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -38,12 +38,12 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,12 +55,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertTrue;
 
 
 @Category({IntegrationTest.class})
@@ -73,6 +75,9 @@ public class StoreQueryIntegrationTest {
 
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @Rule
+    public TestName testName = new TestName();
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
@@ -115,18 +120,10 @@ public class StoreQueryIntegrationTest {
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
-        final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType));
+        final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
+        final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, queryableStoreType);
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType));
-
-        final boolean kafkaStreams1IsActive;
-        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
-            kafkaStreams1IsActive = true;
-        } else {
-            kafkaStreams1IsActive = false;
-        }
+        final boolean kafkaStreams1IsActive = (keyQueryMetadata.getActiveHost().port() % 2) == 1;
 
         // Assert that only active is able to query for a key by default
         assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
@@ -163,22 +160,17 @@ public class StoreQueryIntegrationTest {
 
         //key doesn't belongs to this partition
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
-        final boolean kafkaStreams1IsActive;
-        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
-            kafkaStreams1IsActive = true;
-        } else {
-            kafkaStreams1IsActive = false;
-        }
+        final boolean kafkaStreams1IsActive = (keyQueryMetadata.getActiveHost().port() % 2) == 1;
 
-        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+        StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam =
+            StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore())
+                .withPartition(keyPartition);
         ReadOnlyKeyValueStore<Integer, Integer> store1 = null;
         ReadOnlyKeyValueStore<Integer, Integer> store2 = null;
         if (kafkaStreams1IsActive) {
-            store1 = kafkaStreams1
-                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+            store1 = IntegrationTestUtils.getStore(kafkaStreams1, storeQueryParam);
         } else {
-            store2 = kafkaStreams2
-                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyPartition));
+            store2 = IntegrationTestUtils.getStore(kafkaStreams2, storeQueryParam);
         }
 
         if (kafkaStreams1IsActive) {
@@ -192,14 +184,14 @@ public class StoreQueryIntegrationTest {
         // Assert that only active for a specific requested partition serves key if stale stores and not enabled
         assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
 
+        storeQueryParam = StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore())
+            .withPartition(keyDontBelongPartition);
         ReadOnlyKeyValueStore<Integer, Integer> store3 = null;
         ReadOnlyKeyValueStore<Integer, Integer> store4 = null;
         if (!kafkaStreams1IsActive) {
-            store3 = kafkaStreams1
-                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
+            store3 = IntegrationTestUtils.getStore(kafkaStreams1, storeQueryParam);
         } else {
-            store4 = kafkaStreams2
-                    .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).withPartition(keyDontBelongPartition));
+            store4 = IntegrationTestUtils.getStore(kafkaStreams2, storeQueryParam);
         }
 
         // Assert that key is not served when wrong specific partition is requested
@@ -236,13 +228,13 @@ public class StoreQueryIntegrationTest {
 
         // Assert that both active and standby are able to query for a key
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils
+                .getStore(TABLE_NAME, kafkaStreams1, true, queryableStoreType);
             return store1.get(key) != null;
         }, "store1 cannot find results for key");
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores());
+            final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils
+                .getStore(TABLE_NAME, kafkaStreams2, true, queryableStoreType);
             return store2.get(key) != null;
         }, "store2 cannot find results for key");
     }
@@ -280,22 +272,93 @@ public class StoreQueryIntegrationTest {
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
 
         // Assert that both active and standby are able to query for a key
+        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param = StoreQueryParameters
+            .fromNameAndType(TABLE_NAME, queryableStoreType)
+            .enableStaleStores()
+            .withPartition(keyPartition);
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store1 = kafkaStreams1
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(kafkaStreams1, param);
             return store1.get(key) != null;
         }, "store1 cannot find results for key");
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store2 = kafkaStreams2
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyPartition));
+            final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(kafkaStreams2, param);
             return store2.get(key) != null;
         }, "store2 cannot find results for key");
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store3 = kafkaStreams1
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
+        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> otherParam = StoreQueryParameters
+            .fromNameAndType(TABLE_NAME, queryableStoreType)
+            .enableStaleStores()
+            .withPartition(keyDontBelongPartition);
+        final ReadOnlyKeyValueStore<Integer, Integer> store3 = IntegrationTestUtils.getStore(kafkaStreams1, otherParam);
+        final ReadOnlyKeyValueStore<Integer, Integer> store4 = IntegrationTestUtils.getStore(kafkaStreams2, otherParam);
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store4 = kafkaStreams2
-                .store(StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores().withPartition(keyDontBelongPartition));
+        // Assert that
+        assertThat(store3.get(key), is(nullValue()));
+        assertThat(store4.get(key), is(nullValue()));
+    }
+
+    @Test
+    public void shouldQuerySpecificStalePartitionStoresMultiStreamThreads() throws Exception {
+        final int batch1NumMessages = 100;
+        final int key = 1;
+        final Semaphore semaphore = new Semaphore(0);
+        final int numStreamThreads = 2;
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME)
+                        .withCachingDisabled())
+                .toStream()
+                .peek((k, v) -> semaphore.release());
+
+        final Properties streamsConfiguration1 = streamsConfiguration();
+        streamsConfiguration1.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
+
+        final Properties streamsConfiguration2 = streamsConfiguration();
+        streamsConfiguration2.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
+
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration1);
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration2);
+        final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
+
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+
+        assertTrue(kafkaStreams1.localThreadsMetadata().size() > 1);
+        assertTrue(kafkaStreams2.localThreadsMetadata().size() > 1);
+
+        produceValueRange(key, 0, batch1NumMessages);
+
+        // Assert that all messages in the first batch were processed in a timely manner
+        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer());
+
+        //key belongs to this partition
+        final int keyPartition = keyQueryMetadata.getPartition();
+
+        //key doesn't belongs to this partition
+        final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
+        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = QueryableStoreTypes.keyValueStore();
+
+        // Assert that both active and standby are able to query for a key
+        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param = StoreQueryParameters
+                .fromNameAndType(TABLE_NAME, queryableStoreType)
+                .enableStaleStores()
+                .withPartition(keyPartition);
+        TestUtils.waitForCondition(() -> {
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(kafkaStreams1, param);
+            return store1.get(key) != null;
+        }, "store1 cannot find results for key");
+        TestUtils.waitForCondition(() -> {
+            final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(kafkaStreams2, param);
+            return store2.get(key) != null;
+        }, "store2 cannot find results for key");
+
+        final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> otherParam = StoreQueryParameters
+                .fromNameAndType(TABLE_NAME, queryableStoreType)
+                .enableStaleStores()
+                .withPartition(keyDontBelongPartition);
+        final ReadOnlyKeyValueStore<Integer, Integer> store3 = IntegrationTestUtils.getStore(kafkaStreams1, otherParam);
+        final ReadOnlyKeyValueStore<Integer, Integer> store4 = IntegrationTestUtils.getStore(kafkaStreams2, otherParam);
 
         // Assert that
         assertThat(store3.get(key), is(nullValue()));
@@ -308,7 +371,7 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
+    private void produceValueRange(final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -324,13 +387,13 @@ public class StoreQueryIntegrationTest {
     }
 
     private Properties streamsConfiguration() {
-        final String applicationId = "streamsApp";
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(++port));
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);

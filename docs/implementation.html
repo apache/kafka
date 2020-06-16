@@ -67,7 +67,7 @@
     <p>On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
     producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
     be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying that the first and last sequence numbers of the incoming batch match the last from that producer). As a result,
-    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the baseTimestamp
+    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the firstTimestamp
     field is not preserved during compaction, so it will change if the first record in the batch is compacted away.</p>
 
     <h5><a id="controlbatch" href="#controlbatch">5.3.1.1 Control Batches</a></h5>
@@ -272,7 +272,7 @@
 
     <h4><a id="impl_zknotation" href="#impl_zknotation">Notation</a></h4>
     <p>
-    When an element in a path is denoted [xyz], that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example /topics/[topic] would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as [0...5] to indicate the subdirectories 0, 1, 2, 3, 4. An arrow -> is used to indicate the contents of a znode. For example /hello -> world would indicate a znode /hello containing the value "world".
+    When an element in a path is denoted <code>[xyz]</code>, that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example <code>/topics/[topic]</code> would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as <code>[0...5]</code> to indicate the subdirectories 0, 1, 2, 3, 4. An arrow <code>-></code> is used to indicate the contents of a znode. For example <code>/hello -> world</code> would indicate a znode /hello containing the value "world".
     </p>
 
     <h4><a id="impl_zkbroker" href="#impl_zkbroker">Broker Node Registry</a></h4>

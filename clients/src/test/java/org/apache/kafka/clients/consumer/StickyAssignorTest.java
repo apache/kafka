@@ -83,7 +83,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(r2partitions2.containsAll(r1partitions2));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
         assertFalse(Collections.disjoint(r2partitions2, r1partitions3));
 
         subscriptions.remove(consumer1);
@@ -97,7 +96,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(Collections.disjoint(r3partitions2, r3partitions3));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -130,7 +128,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(r2partitions2.containsAll(r1partitions2));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
 
         subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), r1partitions1, 1));
         subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), r2partitions2, 2));
@@ -146,7 +143,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertEquals(r1partitions3, r3partitions3);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -169,10 +165,10 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         TopicPartition tp5 = new TopicPartition(topic, 5);
 
         List<TopicPartition> c1partitions0 = partitions(tp0, tp1, tp4);
-        List<TopicPartition> c2partitions0 = partitions(tp0, tp2, tp3);
+        List<TopicPartition> c2partitions0 = partitions(tp0, tp1, tp2);
         List<TopicPartition> c3partitions0 = partitions(tp3, tp4, tp5);
         subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), c1partitions0, 1));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), c2partitions0, 1));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), c2partitions0, 2));
         subscriptions.put(consumer3, buildSubscriptionWithGeneration(topics(topic), c3partitions0, 2));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -181,12 +177,10 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> c3partitions = assignment.get(consumer3);
 
         assertTrue(c1partitions.size() == 2 && c2partitions.size() == 2 && c3partitions.size() == 2);
-        assertTrue(c1partitions0.containsAll(c1partitions));
         assertTrue(c2partitions0.containsAll(c2partitions));
         assertTrue(c3partitions0.containsAll(c3partitions));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -219,7 +213,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(c2partitions0.containsAll(c2partitions));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     private Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {

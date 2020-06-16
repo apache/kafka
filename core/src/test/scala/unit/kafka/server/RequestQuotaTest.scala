@@ -16,19 +16,22 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, LinkedHashMap, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
+import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -240,7 +243,16 @@ class RequestQuotaTest extends BaseRequestTest {
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>
-          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
+          val topicStates = Seq(
+            new StopReplicaTopicState()
+              .setTopicName(tp.topic())
+              .setPartitionStates(Seq(new StopReplicaPartitionState()
+                .setPartitionIndex(tp.partition())
+                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setDeletePartition(true)).asJava)
+          ).asJava
+          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
+            Int.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
@@ -395,7 +407,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
-          new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
+          new AddOffsetsToTxnRequest.Builder(new AddOffsetsToTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setGroupId("test-txn-group")
+          )
 
         case ApiKeys.END_TXN =>
           new EndTxnRequest.Builder(new EndTxnRequestData()
@@ -441,7 +458,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.ANY.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
-          new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
+          new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+              .setResourceType(ConfigResource.Type.TOPIC.id)
+              .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
@@ -451,7 +471,14 @@ class RequestQuotaTest extends BaseRequestTest {
               ))), true)
 
         case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
-          new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
+          val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+            .setPath(logDir)
+          dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+            .setName(tp.topic)
+            .setPartitions(Collections.singletonList(tp.partition)))
+          val data = new AlterReplicaLogDirsRequestData();
+          data.dirs.add(dir)
+          new AlterReplicaLogDirsRequest.Builder(data)
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
           val data = new DescribeLogDirsRequestData()

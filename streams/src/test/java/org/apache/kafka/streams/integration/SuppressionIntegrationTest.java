@@ -66,8 +66,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
@@ -150,7 +150,7 @@ public class SuppressionIntegrationTest {
             assertThat(suppressedRecords, is(true));
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -203,7 +203,7 @@ public class SuppressionIntegrationTest {
             assertThat(suppressedRecords, is(true));
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -272,7 +272,7 @@ public class SuppressionIntegrationTest {
             verifyErrorShutdown(driver);
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -314,7 +314,7 @@ public class SuppressionIntegrationTest {
             verifyErrorShutdown(driver);
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -374,7 +374,7 @@ public class SuppressionIntegrationTest {
             assertThat(suppressedRecords, is(true));
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -430,7 +430,7 @@ public class SuppressionIntegrationTest {
             assertThat(suppressedRecords, is(true));
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -492,7 +492,7 @@ public class SuppressionIntegrationTest {
             assertThat(suppressedRecords, is(true));
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 

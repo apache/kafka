@@ -28,7 +28,7 @@ import org.apache.kafka.streams.Topology;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public interface ProcessorSupplier<K, V> {
+public interface ProcessorSupplier<K, V> extends ConnectedStoreProvider {
 
     /**
      * Return a new {@link Processor} instance.

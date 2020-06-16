@@ -47,7 +47,7 @@ class TransactionsTest(Test):
         self.num_output_partitions = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
-        self.transaction_timeout = 10000
+        self.transaction_timeout = 40000
         self.consumer_group = "transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)

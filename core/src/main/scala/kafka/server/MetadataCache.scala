@@ -214,7 +214,7 @@ class MetadataCache(brokerId: Int) extends Logging {
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataPartitionState): Unit = {
-    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
+    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap.empty)
     infos(partitionId) = stateInfo
   }
 
@@ -290,13 +290,13 @@ class MetadataCache(brokerId: Int) extends Logging {
           case id => Some(id)
         }
 
-      updateMetadataRequest.liveBrokers.asScala.foreach { broker =>
+      updateMetadataRequest.liveBrokers.forEach { broker =>
         // `aliveNodes` is a hot path for metadata requests for large clusters, so we use java.util.HashMap which
         // is a bit faster than scala.collection.mutable.HashMap. When we drop support for Scala 2.10, we could
         // move to `AnyRefMap`, which has comparable performance.
         val nodes = new java.util.HashMap[ListenerName, Node]
         val endPoints = new mutable.ArrayBuffer[EndPoint]
-        broker.endpoints.asScala.foreach { ep =>
+        broker.endpoints.forEach { ep =>
           val listenerName = new ListenerName(ep.listener)
           endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
           nodes.put(listenerName, new Node(broker.id, ep.host, ep.port))
@@ -319,7 +319,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
-          partitionStates += (topic -> copy)
+          partitionStates(topic) = copy
         }
 
         val traceEnabled = stateChangeLogger.isTraceEnabled

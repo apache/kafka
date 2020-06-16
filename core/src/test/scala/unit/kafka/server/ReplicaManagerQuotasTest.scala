@@ -169,7 +169,7 @@ class ReplicaManagerQuotasTest {
         EasyMock.anyObject[TopicPartition], EasyMock.anyBoolean()))
         .andReturn(partition).anyTimes()
 
-      EasyMock.expect(replicaManager.shouldLeaderThrottle(EasyMock.anyObject[ReplicaQuota], EasyMock.anyObject[TopicPartition], EasyMock.anyObject[Int]))
+      EasyMock.expect(replicaManager.shouldLeaderThrottle(EasyMock.anyObject[ReplicaQuota], EasyMock.anyObject[Partition], EasyMock.anyObject[Int]))
         .andReturn(!isReplicaInSync).anyTimes()
       EasyMock.expect(partition.getReplica(1)).andReturn(None)
       EasyMock.replay(replicaManager, partition)

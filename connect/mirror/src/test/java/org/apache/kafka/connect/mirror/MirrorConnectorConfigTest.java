@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigDef;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
@@ -93,5 +95,28 @@ public class MirrorConnectorConfigTest {
         assertTrue(config.topicFilter().shouldReplicateTopic("topic1"));
         assertTrue(config.topicFilter().shouldReplicateTopic("topic2"));
         assertFalse(config.topicFilter().shouldReplicateTopic("topic3"));
+    }
+
+    @Test
+    public void testNonMutationOfConfigDef() {
+        Collection<String> taskSpecificProperties = Arrays.asList(
+            MirrorConnectorConfig.TASK_TOPIC_PARTITIONS,
+            MirrorConnectorConfig.TASK_CONSUMER_GROUPS
+        );
+
+        // Sanity check to make sure that these properties are actually defined for the task config,
+        // and that the task config class has been loaded and statically initialized by the JVM
+        ConfigDef taskConfigDef = MirrorTaskConfig.TASK_CONFIG_DEF;
+        taskSpecificProperties.forEach(taskSpecificProperty -> assertTrue(
+            taskSpecificProperty + " should be defined for task ConfigDef",
+            taskConfigDef.names().contains(taskSpecificProperty)
+        ));
+
+        // Ensure that the task config class hasn't accidentally modified the connector config
+        ConfigDef connectorConfigDef = MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        taskSpecificProperties.forEach(taskSpecificProperty -> assertFalse(
+            taskSpecificProperty + " should not be defined for connector ConfigDef",
+            connectorConfigDef.names().contains(taskSpecificProperty)
+        ));
     }
 }

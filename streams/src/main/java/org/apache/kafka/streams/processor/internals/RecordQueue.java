@@ -122,6 +122,7 @@ public class RecordQueue {
     public StampedRecord poll() {
         final StampedRecord recordToReturn = headRecord;
         headRecord = null;
+        partitionTime = Math.max(partitionTime, recordToReturn.timestamp);
 
         updateHead();
 
@@ -201,8 +202,6 @@ public class RecordQueue {
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
-
-            partitionTime = Math.max(partitionTime, timestamp);
         }
     }
 

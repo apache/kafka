@@ -86,13 +86,14 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         }
         final WindowedChangelogTopicConfig that = (WindowedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
-                Objects.equals(topicConfigs, that.topicConfigs) &&
-                Objects.equals(retentionMs, that.retentionMs);
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(retentionMs, that.retentionMs) &&
+               Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs, retentionMs);
+        return Objects.hash(name, topicConfigs, retentionMs, enforceNumberOfPartitions);
     }
 
     @Override
@@ -101,6 +102,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
                 ", retentionMs=" + retentionMs +
+                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
                 ")";
     }
 }

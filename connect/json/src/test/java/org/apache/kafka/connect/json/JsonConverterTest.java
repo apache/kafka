@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.json;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -65,8 +66,11 @@ import static org.junit.Assert.fail;
 public class JsonConverterTest {
     private static final String TOPIC = "topic";
 
-    ObjectMapper objectMapper = new ObjectMapper();
-    JsonConverter converter = new JsonConverter();
+    private final ObjectMapper objectMapper = new ObjectMapper()
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
+
+    private final JsonConverter converter = new JsonConverter();
 
     @Before
     public void setUp() {
@@ -267,6 +271,16 @@ public class JsonConverterTest {
         BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
         Schema schema = Decimal.schema(2);
         String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }, \"payload\": 1.56 }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void numericDecimalWithTrailingZerosToConnect() {
+        BigDecimal reference = new BigDecimal(new BigInteger("15600"), 4);
+        Schema schema = Decimal.schema(4);
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"4\" } }, \"payload\": 1.5600 }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, schemaAndValue.value());
@@ -634,7 +648,18 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void decimalToJsonWithoutSchema() throws IOException {
+    public void decimalWithTrailingZerosToNumericJson() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.DECIMAL_FORMAT_CONFIG, DecimalFormat.NUMERIC.name()), false);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, Decimal.schema(4), new BigDecimal(new BigInteger("15600"), 4)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"4\" } }"),
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue("expected node to be numeric", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber());
+        assertEquals(new BigDecimal("1.5600"), converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).decimalValue());
+    }
+
+    @Test
+    public void decimalToJsonWithoutSchema() {
         assertThrows(
             "expected data exception when serializing BigDecimal without schema",
             DataException.class,

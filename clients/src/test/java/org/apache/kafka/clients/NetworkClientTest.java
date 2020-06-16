@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
@@ -53,6 +54,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.junit.Assert.assertEquals;
@@ -860,6 +864,16 @@ public class NetworkClientTest {
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());
         assertTrue(client.canConnect(node, time.milliseconds()));
+    }
+
+    @Test
+    public void testCorrelationId() {
+        int count = 100;
+        Set<Integer> ids = IntStream.range(0, count)
+            .mapToObj(i -> client.nextCorrelationId())
+            .collect(Collectors.toSet());
+        assertEquals(count, ids.size());
+        ids.forEach(id -> assertTrue(id < SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID));
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {

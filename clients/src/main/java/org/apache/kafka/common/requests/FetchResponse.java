@@ -459,8 +459,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (PartitionData response : responseData.values())
-            updateErrorCounts(errorCounts, response.error);
+        responseData.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error)
+        );
         return errorCounts;
     }
 

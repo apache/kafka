@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import java.io.File;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public class GlobalStateManagerStub implements GlobalStateManager {
 
@@ -81,5 +82,10 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return offsets;
+    }
+
+    @Override
+    public TaskType taskType() {
+        return TaskType.GLOBAL;
     }
 }

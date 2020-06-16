@@ -32,6 +32,7 @@ public final class Heartbeat {
     private final Timer pollTimer;
 
     private volatile long lastHeartbeatSend = 0L;
+    private volatile boolean heartbeatInFlight = false;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {
@@ -56,60 +57,66 @@ public final class Heartbeat {
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    public void sentHeartbeat(long now) {
-        this.lastHeartbeatSend = now;
+    boolean hasInflight() {
+        return heartbeatInFlight;
+    }
+
+    void sentHeartbeat(long now) {
+        lastHeartbeatSend = now;
+        heartbeatInFlight = true;
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
-    public void failHeartbeat() {
+    void failHeartbeat() {
         update(time.milliseconds());
+        heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
     }
 
-    public void receiveHeartbeat() {
+    void receiveHeartbeat() {
         update(time.milliseconds());
+        heartbeatInFlight = false;
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
-    public boolean shouldHeartbeat(long now) {
+    boolean shouldHeartbeat(long now) {
         update(now);
         return heartbeatTimer.isExpired();
     }
     
-    public long lastHeartbeatSend() {
+    long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
 
-    public long timeToNextHeartbeat(long now) {
+    long timeToNextHeartbeat(long now) {
         update(now);
         return heartbeatTimer.remainingMs();
     }
 
-    public boolean sessionTimeoutExpired(long now) {
+    boolean sessionTimeoutExpired(long now) {
         update(now);
         return sessionTimer.isExpired();
     }
 
-    public void resetTimeouts() {
+    void resetTimeouts() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
-    public void resetSessionTimeout() {
+    void resetSessionTimeout() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
-    public boolean pollTimeoutExpired(long now) {
+    boolean pollTimeoutExpired(long now) {
         update(now);
         return pollTimer.isExpired();
     }
 
-    public long lastPollTime() {
+    long lastPollTime() {
         return pollTimer.currentTimeMs();
     }
-
 }

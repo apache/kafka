@@ -82,6 +82,9 @@ public class ConnectorsResource {
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
     public static final long REQUEST_TIMEOUT_MS = 90 * 1000;
+    // Mutable for integration testing; otherwise, some tests would take at least REQUEST_TIMEOUT_MS
+    // to run
+    private static long requestTimeoutMs = REQUEST_TIMEOUT_MS;
 
     private final Herder herder;
     private final WorkerConfig config;
@@ -95,6 +98,15 @@ public class ConnectorsResource {
         this.config = config;
         isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
+    }
+
+    // For testing purposes only
+    public static void setRequestTimeout(long requestTimeoutMs) {
+        ConnectorsResource.requestTimeoutMs = requestTimeoutMs;
+    }
+
+    public static void resetRequestTimeout() {
+        ConnectorsResource.requestTimeoutMs = REQUEST_TIMEOUT_MS;
     }
 
     @GET
@@ -330,7 +342,7 @@ public class ConnectorsResource {
                                               Translator<T, U> translator,
                                               Boolean forward) throws Throwable {
         try {
-            return cb.get(REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
 
@@ -341,7 +353,14 @@ public class ConnectorsResource {
                     // this gives two total hops to resolve the request before giving up.
                     boolean recursiveForward = forward == null;
                     RequestTargetException targetException = (RequestTargetException) cause;
-                    String forwardUrl = UriBuilder.fromUri(targetException.forwardUrl())
+                    String forwardedUrl = targetException.forwardUrl();
+                    if (forwardedUrl == null) {
+                        // the target didn't know of the leader at this moment.
+                        throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                                "Cannot complete request momentarily due to no known leader URL, "
+                                + "likely because a rebalance was underway.");
+                    }
+                    String forwardUrl = UriBuilder.fromUri(forwardedUrl)
                             .path(path)
                             .queryParam("forward", recursiveForward)
                             .build()

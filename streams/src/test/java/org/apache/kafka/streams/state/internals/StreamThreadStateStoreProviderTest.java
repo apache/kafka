@@ -29,8 +29,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -41,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -68,14 +71,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 public class StreamThreadStateStoreProviderTest {
 
@@ -323,16 +324,12 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
-    public void shouldThrowForInvalidPartitions() {
+    public void shouldReturnEmptyListForInvalidPartitions() {
         mockThread(true);
-        final InvalidStateStoreException thrown = assertThrows(
-            InvalidStateStoreException.class,
-            () -> provider.stores(
-                StoreQueryParameters
-                    .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
-                    .withPartition(2))
+        assertEquals(
+                Collections.emptyList(),
+                provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()).withPartition(2))
         );
-        assertThat(thrown.getMessage(), equalTo("The specified partition 2 for store kv-store does not exist."));
     }
 
     @Test
@@ -360,7 +357,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            StreamThread.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(
@@ -370,36 +367,40 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
-        final StreamThread.ProcessingMode processingMode;
-        if (StreamThread.eosAlphaEnabled(streamsConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamThread.eosBetaEnabled(streamsConfig)) {
-            processingMode = StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            processingMode = StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
             new StreamsProducer(
-                clientSupplier.getProducer(new HashMap<>()),
-                processingMode,
+                streamsConfig,
+                "threadId",
+                clientSupplier,
+                new TaskId(0, 0),
+                UUID.randomUUID(),
                 logContext
             ),
             streamsConfig.defaultProductionExceptionHandler(),
             new MockStreamsMetrics(metrics));
+        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            streamsConfig,
+            stateManager,
+            streamsMetrics,
+            null
+        );
         return new StreamTask(
             taskId,
             partitions,
             topology,
             clientSupplier.consumer,
             streamsConfig,
-            new MockStreamsMetrics(metrics),
+            streamsMetrics,
             stateDirectory,
-            null,
+            EasyMock.createNiceMock(ThreadCache.class),
             new MockTime(),
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private void mockThread(final boolean initialized) {

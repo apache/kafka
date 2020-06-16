@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -61,9 +61,15 @@ public class KTableKTableRightJoinTest {
         final MockProcessorContext context = new MockProcessorContext(props);
         context.setRecordMetadata("left", -1, -2, null, -3);
         join.init(context);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        join.process(null, new Change<>("new", "old"));
-        LogCaptureAppender.unregister(appender);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
+            join.process(null, new Change<>("new", "old"));
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
+            );
+        }
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(
@@ -71,6 +77,5 @@ public class KTableKTableRightJoinTest {
                 getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
         }
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 }

@@ -52,7 +52,7 @@ public class OffsetSpec {
     }
 
     /**
-     * Used to retrieve the the earliest offset whose timestamp is greater than
+     * Used to retrieve the earliest offset whose timestamp is greater than
      * or equal to the given timestamp in the corresponding partition
      * @param timestamp in milliseconds
      */

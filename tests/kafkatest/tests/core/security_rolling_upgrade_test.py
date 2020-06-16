@@ -96,10 +96,15 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.SIMPLE_AUTHORIZER)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):
+        # Enable the new internal listener on all brokers first
+        self.kafka.open_port(self.kafka.INTERBROKER_LISTENER_NAME)
+        self.kafka.port_mappings[self.kafka.INTERBROKER_LISTENER_NAME].security_protocol = broker_security_protocol
+        self.kafka.client_sasl_mechanism = broker_sasl_mechanism
+        self.bounce()
+
+        # Update inter-broker listener after all brokers have been updated to enable the new listener
         self.kafka.setup_interbroker_listener(broker_security_protocol, True)
         self.kafka.interbroker_sasl_mechanism = broker_sasl_mechanism
-        # kafka opens interbroker port automatically in start() but not in bounce()
-        self.kafka.open_port(self.kafka.INTERBROKER_LISTENER_NAME)
         self.bounce()
 
     def remove_separate_broker_listener(self, client_security_protocol, client_sasl_mechanism):

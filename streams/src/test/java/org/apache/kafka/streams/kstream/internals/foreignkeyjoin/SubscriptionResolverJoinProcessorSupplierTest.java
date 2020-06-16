@@ -82,7 +82,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
@@ -107,7 +107,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
@@ -132,7 +132,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
@@ -158,7 +158,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
@@ -184,7 +184,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );
@@ -210,7 +210,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             new SubscriptionResolverJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
-                "value-hash-dummy-topic",
+                () -> "value-hash-dummy-topic",
                 JOINER,
                 leftJoin
             );

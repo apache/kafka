@@ -75,6 +75,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private final List<CapturedForward> capturedForwards = new LinkedList<>();
     private boolean committed = false;
 
+
     /**
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */

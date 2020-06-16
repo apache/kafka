@@ -19,10 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -183,7 +184,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         metrics.checkpointLatency(MirrorUtils.unwrapPartition(record.sourcePartition()),
             Checkpoint.unwrapGroup(record.sourcePartition()),
             System.currentTimeMillis() - record.timestamp());

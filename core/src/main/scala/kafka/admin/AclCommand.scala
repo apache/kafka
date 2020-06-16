@@ -35,7 +35,6 @@ import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.jdk.CollectionConverters._
-import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.io.StdIn
 
@@ -223,7 +222,7 @@ object AclCommand extends Logging {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
           authorizer.createAcls(null,aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
-            result.exception.asScala.foreach { exception =>
+            result.exception.ifPresent { exception =>
               println(s"Error while adding ACLs: ${exception.getMessage}")
               println(Utils.stackTrace(exception))
             }
@@ -283,12 +282,12 @@ object AclCommand extends Logging {
         authorizer.deleteAcls(null, aclBindingFilters)
       }
       result.asScala.map(_.toCompletableFuture.get).foreach { result =>
-        result.exception.asScala.foreach { exception =>
+        result.exception.ifPresent { exception =>
           println(s"Error while removing ACLs: ${exception.getMessage}")
           println(Utils.stackTrace(exception))
         }
-        result.aclBindingDeleteResults.asScala.foreach { deleteResult =>
-          deleteResult.exception.asScala.foreach { exception =>
+        result.aclBindingDeleteResults.forEach { deleteResult =>
+          deleteResult.exception.ifPresent { exception =>
             println(s"Error while removing ACLs: ${exception.getMessage}")
             println(Utils.stackTrace(exception))
           }
@@ -444,20 +443,20 @@ object AclCommand extends Logging {
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
+      opts.options.valuesOf(opts.topicOpt).forEach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
 
     if (patternType == PatternType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
       resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
+      opts.options.valuesOf(opts.groupOpt).forEach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
 
     if (opts.options.has(opts.transactionalIdOpt))
-      opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
+      opts.options.valuesOf(opts.transactionalIdOpt).forEach(transactionalId =>
         resourceFilters += new ResourcePatternFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, patternType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
+      opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")

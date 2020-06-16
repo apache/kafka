@@ -291,14 +291,44 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowToAddStoreWithSameName() {
+    public void shouldNotAllowToAddStoreWithSameNameAndDifferentInstance() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
         topology.addStateStore(storeBuilder);
+
+        final StoreBuilder otherStoreBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+        EasyMock.expect(otherStoreBuilder.name()).andReturn("store").anyTimes();
+        EasyMock.expect(otherStoreBuilder.logConfig()).andReturn(Collections.emptyMap());
+        EasyMock.expect(otherStoreBuilder.loggingEnabled()).andReturn(false);
+        EasyMock.replay(otherStoreBuilder);
         try {
-            topology.addStateStore(storeBuilder);
-            fail("Should have thrown TopologyException for duplicate store name");
+            topology.addStateStore(otherStoreBuilder);
+            fail("Should have thrown TopologyException for same store name with different StoreBuilder");
         } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldAllowToShareStoreUsingSameStoreBuilder() {
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
+
+        topology.addSource("source", "topic-1");
+
+        topology.addProcessor("processor-1", new MockProcessorSupplierProvidingStore<>(storeBuilder), "source");
+        topology.addProcessor("processor-2", new MockProcessorSupplierProvidingStore<>(storeBuilder), "source");
+    }
+
+    private static class MockProcessorSupplierProvidingStore<K, V> extends MockProcessorSupplier<K, V> {
+        private final StoreBuilder<MockKeyValueStore> storeBuilder;
+
+        public MockProcessorSupplierProvidingStore(final StoreBuilder<MockKeyValueStore> storeBuilder) {
+            this.storeBuilder = storeBuilder;
+        }
+
+        @Override
+        public Set<StoreBuilder<?>> stores() {
+            return Collections.singleton(storeBuilder);
+        }
     }
 
     @Test
@@ -398,6 +428,7 @@ public class TopologyTest {
                 Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -409,6 +440,7 @@ public class TopologyTest {
                 Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -420,6 +452,7 @@ public class TopologyTest {
                 Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -440,6 +473,7 @@ public class TopologyTest {
                 Collections.singleton(expectedSourceNode3)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -453,6 +487,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -468,6 +503,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
 
@@ -484,6 +520,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -499,6 +536,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -514,6 +552,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -543,6 +582,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -572,6 +612,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -603,6 +644,7 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -633,12 +675,14 @@ public class TopologyTest {
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
     public void shouldDescribeGlobalStoreTopology() {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore", "source", "globalTopic", "processor", 0);
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -646,6 +690,7 @@ public class TopologyTest {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1", 0);
         addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
         assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
     @Test
@@ -1083,6 +1128,20 @@ public class TopologyTest {
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
             describe.toString());
+    }
+
+    @Test
+    public void topologyWithStaticTopicNameExtractorShouldRespectEqualHashcodeContract() {
+        final Topology topologyA = topologyWithStaticTopicName();
+        final Topology topologyB = topologyWithStaticTopicName();
+        assertThat(topologyA.describe(), equalTo(topologyB.describe()));
+        assertThat(topologyA.describe().hashCode(), equalTo(topologyB.describe().hashCode()));
+    }
+
+    private Topology topologyWithStaticTopicName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("from-topic-name").to("to-topic-name");
+        return builder.build();
     }
 
     private TopologyDescription.Source addSource(final String sourceName,

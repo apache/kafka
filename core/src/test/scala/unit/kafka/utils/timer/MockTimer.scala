@@ -20,9 +20,8 @@ import kafka.utils.MockTime
 
 import scala.collection.mutable
 
-class MockTimer extends Timer {
+class MockTimer(val time: MockTime = new MockTime) extends Timer {
 
-  val time = new MockTime
   private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()(Ordering[TimerTaskEntry].reverse)
 
   def add(timerTask: TimerTask): Unit = {
