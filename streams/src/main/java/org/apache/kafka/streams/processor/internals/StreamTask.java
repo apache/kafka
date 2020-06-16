@@ -417,15 +417,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         switch (state()) {
             case RESTORING:
-            case SUSPENDED:
-                maybeWriteCheckpoint();
+                writeCheckpoint();
 
                 break;
 
             case RUNNING:
                 if (!eosEnabled) {
-                    maybeWriteCheckpoint();
+                    writeCheckpoint();
                 }
+
+                break;
+
+            case SUSPENDED:
+                /*
+                 * We must clear the `PartitionGroup` only after committing, and not in `suspend()`,
+                 * because otherwise we lose the partition-time information.
+                 * We also must clear it when the task is revoked, and not in `close()`, as the consumer will clear
+                 * its internal buffer when the corresponding partition is revoked but the task may be reassigned
+                 */
+                partitionGroup.clear();
+
+                writeCheckpoint();
 
                 break;
 
@@ -484,9 +496,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while recycling active task " + id);
         }
 
-        // we cannot `clear()` the `PartitionGroup` in `suspend()` already, but only after committing,
-        // because otherwise we loose the partition-time information
-        partitionGroup.clear();
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
@@ -494,7 +503,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed clean and recycled state");
     }
 
-    private void maybeWriteCheckpoint() {
+    private void writeCheckpoint() {
         if (commitNeeded) {
             log.error("Tried to write a checkpoint with pending uncommitted data, should complete the commit first.");
             throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
@@ -507,7 +516,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void close(final boolean clean) {
         if (clean && commitNeeded) {
-            log.debug("Tried to close clean but there was an active scheduled checkpoint, this means we failed to"
+            log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
                           + " commit and should close as dirty instead");
             throw new StreamsException("Tried to close dirty task as clean");
         }

@@ -482,16 +482,10 @@ public class TaskManager {
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         for (final Task task : tasksToCommit) {
             final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-            if (!committableOffsets.isEmpty()) {
-                consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-            } else {
-                log.warn("Task {} claimed to need a commit but had no committable consumed offsets", task.id());
-            }
+            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
         }
 
-        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-        }
+        commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
         for (final Task task : tasksToCommit) {
             try {
@@ -700,9 +694,7 @@ public class TaskManager {
                     task.suspend();
                     if (task.commitNeeded()) {
                         final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                        if (!committableOffsets.isEmpty()) {
-                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                        }
+                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                     }
                     tasksToClose.add(task);
                 } catch (final TaskMigratedException e) {
@@ -718,16 +710,16 @@ public class TaskManager {
         }
 
         try {
-            if (clean && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
+            if (clean) {
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-            }
-            for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
-                try {
-                    final Task task = tasks.get(taskId);
-                    task.postCommit();
-                } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task " + taskId, e);
-                    firstException.compareAndSet(null, e);
+                for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
+                    try {
+                        final Task task = tasks.get(taskId);
+                        task.postCommit();
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + taskId, e);
+                        firstException.compareAndSet(null, e);
+                    }
                 }
             }
         } catch (final RuntimeException e) {
@@ -851,30 +843,25 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commit(final Collection<Task> tasks) {
+    int commit(final Collection<Task> tasksToCommit) {
         if (rebalanceInProgress) {
             return -1;
         } else {
             int committed = 0;
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : tasks) {
+            for (final Task task : tasksToCommit) {
                 if (task.commitNeeded()) {
                     final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-                    if (!offsetAndMetadata.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
-                    }
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
                 }
             }
 
-            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-            }
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : tasks) {
-                if (task.commitNeeded()) {
-                    ++committed;
-                    task.postCommit();
-                }
+            for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
+                final Task task = tasks.get(taskId);
+                ++committed;
+                task.postCommit();
             }
 
             return committed;
@@ -899,28 +886,30 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (processingMode == EXACTLY_ONCE_ALPHA) {
-            for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
-                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
-                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
-            }
-        } else {
-            final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-            if (processingMode == EXACTLY_ONCE_BETA) {
-                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+        if (!offsetsPerTask.isEmpty()) {
+            if (processingMode == EXACTLY_ONCE_ALPHA) {
+                for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
+                    activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
+                        .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                }
             } else {
-                try {
-                    mainConsumer.commitSync(allOffsets);
-                } catch (final CommitFailedException error) {
-                    throw new TaskMigratedException("Consumer committing offsets failed, " +
-                        "indicating the corresponding thread is no longer part of the group", error);
-                } catch (final TimeoutException error) {
-                    // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-                    throw new StreamsException("Timed out while committing offsets via consumer", error);
-                } catch (final KafkaException error) {
-                    throw new StreamsException("Error encountered committing offsets via consumer", error);
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                if (processingMode == EXACTLY_ONCE_BETA) {
+                    activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+                } else {
+                    try {
+                        mainConsumer.commitSync(allOffsets);
+                    } catch (final CommitFailedException error) {
+                        throw new TaskMigratedException("Consumer committing offsets failed, " +
+                                                            "indicating the corresponding thread is no longer part of the group", error);
+                    } catch (final TimeoutException error) {
+                        // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
+                        throw new StreamsException("Timed out while committing offsets via consumer", error);
+                    } catch (final KafkaException error) {
+                        throw new StreamsException("Error encountered committing offsets via consumer", error);
+                    }
                 }
             }
         }
