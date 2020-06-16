@@ -1049,6 +1049,77 @@ class Log(@volatile private var _dir: File,
   }
 
   /**
+   *  Append records to the active segment of the log.
+   *
+   * This method accepts a MemoryRecords with a buffer that contains one or more valid MemoryRecords and calls
+   * appendSingleBatch for each individually. This allows multiple batches to be aggregated in a single
+   * record_set, but still be processed without forcing offset assignment.
+   *
+   * @param records The log records to append
+   * @param origin Declares the origin of the append which affects required validations
+   * @param interBrokerProtocolVersion Inter-broker message protocol version
+   * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+   * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+   * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
+   * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
+   * @return Information about the appended messages including the first and last offset.
+   */
+  private def append(records: MemoryRecords,
+                                origin: AppendOrigin,
+                                interBrokerProtocolVersion: ApiVersion,
+                                assignOffsets: Boolean,
+                                leaderEpoch: Int): LogAppendInfo = {
+    val batches = records.batches()
+
+    if (batches.asScala.isEmpty) {
+      return analyzeAndValidateRecords(records, origin)
+    }
+    val remainingBytes = records.buffer().duplicate()
+    batches.asScala.map(b => {
+      // Create the current record set using only the first batch
+      val batchSize = b.sizeInBytes()
+      val batchBuffer = remainingBytes.slice()
+      batchBuffer.limit(batchSize)
+      val batchRecords = MemoryRecords.readableRecords(batchBuffer)
+
+      // Advance the position in remaining bytes
+      remainingBytes.position(remainingBytes.position() + batchSize)
+
+      // Append the single record batch to the log
+      appendSingleBatch(batchRecords, origin, interBrokerProtocolVersion, assignOffsets, leaderEpoch)
+    }).reduceLeft((info1, info2) => {
+      // Don't assume that the max timestamp is always in the later batch
+      var maxTimestamp = info1.maxTimestamp
+      var offsetofMaxTimestamp = info1.offsetOfMaxTimestamp
+      if (info2.maxTimestamp > info1.maxTimestamp) {
+        maxTimestamp = info2.maxTimestamp
+        offsetofMaxTimestamp = info2.offsetOfMaxTimestamp
+      }
+      var combinedRecordConversionStats = info1.recordConversionStats
+      combinedRecordConversionStats.add(info2.recordConversionStats)
+
+      // Combine the LogAppendInfo to maintain an overall result to return
+      LogAppendInfo(
+        info1.firstOffset,
+        info2.lastOffset,
+        maxTimestamp,
+        offsetofMaxTimestamp,
+        info1.logAppendTime,
+        info1.logStartOffset,
+        combinedRecordConversionStats,
+        info1.sourceCodec,
+        info1.targetCodec,
+        info1.shallowCount + info2.shallowCount,
+        info1.validBytes + info2.validBytes,
+        info1.offsetsMonotonic && info2.offsetsMonotonic,
+        info1.lastOffsetOfFirstBatch,
+        info1.recordErrors ++ info2.recordErrors,
+        info1.errorMessage + info2.errorMessage
+      )
+    })
+  }
+  /**
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
    *
    * This method will generally be responsible for assigning offsets to the messages,
@@ -1064,7 +1135,7 @@ class Log(@volatile private var _dir: File,
    * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords,
+  private def appendSingleBatch(records: MemoryRecords,
                      origin: AppendOrigin,
                      interBrokerProtocolVersion: ApiVersion,
                      assignOffsets: Boolean,

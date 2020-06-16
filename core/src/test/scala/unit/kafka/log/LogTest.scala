@@ -52,7 +52,6 @@ import scala.collection.mutable.ListBuffer
 import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
 class LogTest {
-  var config: KafkaConfig = null
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
@@ -60,10 +59,7 @@ class LogTest {
   def metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Before
-  def setUp(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
-    config = KafkaConfig.fromProps(props)
-  }
+  def setUp(): Unit = {}
 
   @After
   def tearDown(): Unit = {
@@ -1826,6 +1822,133 @@ class LogTest {
   }
 
   /**
+   * This test generates a single record set that is a concatenation of many valid record sets, and appends them to
+   * a log. It then checks to make sure we can read them all back.
+   */
+  @Test
+  def testAppendManyRecordSets() {
+    val msgFormatSet = Set(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+    msgFormatSet.foreach { magic =>
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.NONE, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.GZIP, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.SNAPPY, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.LZ4, magic)
+    }
+  }
+
+  def readUncommitted(log: Log, startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
+    log.read(startOffset,
+      maxLength = maxLength,
+      isolation = FetchLogEnd,
+      minOneMessage = false)
+  }
+
+  def appendManyRecordSets(log: Log,
+                           compressionType: CompressionType, magicValue: Byte) {
+    val values = (0 until 50).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record sets appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    for(value <- values) {
+      recordBuffer.put(
+        TestUtils.singletonRecords(
+          value = value, codec = compressionType, magicValue = magicValue).buffer())
+    }
+
+    // Close the buffer and create a MemoryRecords wrapping it
+    recordBuffer.flip()
+    recordBuffer.position(0)
+    val records = MemoryRecords.readableRecords(recordBuffer.slice())
+
+    log.appendAsLeader(records, leaderEpoch = 0)
+
+
+    for(i <- values.indices) {
+      val read = readUncommitted(log, i, 100, Some(i+1)).records.batches.iterator.next()
+      assertEquals("Offset read should match order appended.", i, read.lastOffset)
+      val actual = read.iterator.next()
+      assertNull("Key should be null", actual.key)
+      assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
+    }
+    assertEquals("Reading beyond the last message returns nothing.", 0,
+      readUncommitted(log, values.length, 100, None).records.batches.asScala.size)
+  }
+
+  /**
+   * This test makes sure that appending an empty record set does not fail. There should be no exception raised
+   */
+  @Test
+  def testAppendEmptyRecordSet() {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 71)
+    val log = createLog(logDir, logConfig)
+    log.appendAsFollower(MemoryRecords.withRecords(CompressionType.NONE))
+    log.appendAsFollower(MemoryRecords.withRecords(CompressionType.GZIP))
+    log.appendAsFollower(MemoryRecords.withRecords(CompressionType.LZ4))
+    log.appendAsFollower(MemoryRecords.withRecords(CompressionType.SNAPPY))
+  }
+
+  /**
+   * This test generates a single record set that is a concatenation of many valid record sets, with one empty record
+   * set in the middle, and appends them to a log. It then checks to make sure we can read them all back.
+   */
+  @Test
+  def testAppendManyRecordSetsWithEmpty() {
+    val msgFormatSet = Set(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+    msgFormatSet.foreach { magic =>
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.NONE, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.GZIP, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.SNAPPY, magic)
+      appendManyRecordSets(createLog(TestUtils.randomPartitionLogDir(tmpDir), LogTest.createLogConfig(segmentBytes = 100)),
+        CompressionType.LZ4, magic)
+    }
+
+  }
+
+  def appendManyRecordSetsWithEmpty(log: Log, compressionType: CompressionType, magicValue: Byte): Unit = {
+    val values1 = (0 until 50 by 2).map(id => TestUtils.randomBytes(10)).toArray
+    val values2 = (50 until 100 by 2).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record sets appended
+    val recordBuffer = ByteBuffer.allocate(4000)
+    for (v <- values1) {
+      recordBuffer.put(
+        TestUtils.singletonRecords(value = v, codec = compressionType, magicValue = magicValue).buffer()
+      )
+    }
+    recordBuffer.put(MemoryRecords.withRecords(magicValue, CompressionType.NONE).buffer())
+    for (v <- values2) {
+      recordBuffer.put(
+        TestUtils.singletonRecords(value = v, codec = compressionType, magicValue = magicValue).buffer()
+      )
+    }
+
+    // Close the buffer and create a MemoryRecords wrapping it
+    recordBuffer.flip()
+    recordBuffer.position(0)
+    val records = MemoryRecords.readableRecords(recordBuffer.slice())
+
+    log.appendAsLeader(records, leaderEpoch = 0)
+
+    val values = values1 ++ values2
+    for (i <- values.indices) {
+      val read = readUncommitted(log, i, 100, Some(i + 1)).records.batches.iterator.next()
+      assertEquals("Offset read should match order appended.", i, read.lastOffset)
+      val actual = read.iterator.next()
+      assertNull("Key should be null", actual.key)
+      assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
+    }
+    assertEquals("Reading beyond the last message returns nothing.", 0,
+      readUncommitted(log, values.length, 100, None).records.batches.asScala.size)
+  }
+
+  /**
    * This test covers an odd case where we have a gap in the offsets that falls at the end of a log segment.
    * Specifically we create a log where the last message in the first segment has offset 0. If we
    * then read offset 1, we should expect this read to come from the second segment, even though the
@@ -2557,7 +2680,7 @@ class LogTest {
     buffer.flip()
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
-    assertThrows[OffsetsOutOfOrderException] {
+    assertThrows[UnexpectedAppendOffsetException] {
       log.appendAsFollower(memoryRecords)
     }
   }
@@ -2581,31 +2704,38 @@ class LogTest {
   }
 
   @Test
-  def testAppendEmptyLogBelowLogStartOffsetThrowsException(): Unit = {
+  def testAppendEmptyLogBelowLogStartOffsetThrowsException() {
     createEmptyLogs(logDir, 7)
     val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
     assertEquals(7L, log.logStartOffset)
     assertEquals(7L, log.logEndOffset)
 
-    val firstOffset = 4L
-    val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
-    val compressionTypes = Seq(CompressionType.NONE, CompressionType.LZ4)
-    for (magic <- magicVals; compression <- compressionTypes) {
+    def testMain(magic: Byte, compression: CompressionType) {
+      val firstOffset = 4L
       val batch = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-                                         new SimpleRecord("k2".getBytes, "v2".getBytes),
-                                         new SimpleRecord("k3".getBytes, "v3".getBytes)),
-                                    magicValue = magic, codec = compression,
-                                    baseOffset = firstOffset)
+        new SimpleRecord("k2".getBytes, "v2".getBytes),
+        new SimpleRecord("k3".getBytes, "v3".getBytes)),
+        magicValue = magic, codec = compression,
+        baseOffset = firstOffset)
 
       withClue(s"Magic=$magic, compressionType=$compression") {
         val exception = intercept[UnexpectedAppendOffsetException] {
           log.appendAsFollower(records = batch)
         }
         assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#firstOffset",
-                     firstOffset, exception.firstOffset)
+          firstOffset, exception.firstOffset)
         assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#lastOffset",
-                     firstOffset + 2, exception.lastOffset)
+          firstOffset + 2, exception.lastOffset)
       }
+    }
+
+    // For this test, we need a batch with multiple records. It appears that the above TestUtils.records() actually
+    // returns multiple batches with single record for magic values V0 and V1 when compression type is NONE. Exclude
+    // these combinations.
+    testMain(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
+    val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+    for (magic <- magicVals) {
+      testMain(magic, CompressionType.LZ4)
     }
   }
 
