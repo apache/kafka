@@ -114,8 +114,8 @@ public class StandbyTask extends AbstractTask implements Task {
         switch (state()) {
             case CREATED:
             case RUNNING:
-                transitionTo(State.SUSPENDED);
                 log.info("Suspended {}", state());
+                transitionTo(State.SUSPENDED);
 
                 break;
 

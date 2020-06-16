@@ -249,8 +249,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
             case RESTORING:
-                transitionTo(State.SUSPENDED);
                 log.info("Suspended {}", state());
+                transitionTo(State.SUSPENDED);
 
                 break;
 
