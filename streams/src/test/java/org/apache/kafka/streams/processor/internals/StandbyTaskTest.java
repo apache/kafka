@@ -57,6 +57,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
+import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
+import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -139,7 +142,7 @@ public class StandbyTaskTest {
             try {
                 task.suspend();
             } catch (final IllegalStateException maybeSwallow) {
-                if (!maybeSwallow.getMessage().startsWith("Invalid transition from CLOSED to SUSPENDED")) {
+                if (!maybeSwallow.getMessage().startsWith("Illegal state CLOSED while suspending standby task")) {
                     throw maybeSwallow;
                 }
             }
@@ -171,16 +174,16 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
 
-        assertEquals(Task.State.CREATED, task.state());
+        assertEquals(CREATED, task.state());
 
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RUNNING, task.state());
+        assertEquals(RUNNING, task.state());
 
         // initialize should be idempotent
         task.initializeIfNeeded();
 
-        assertEquals(Task.State.RUNNING, task.state());
+        assertEquals(RUNNING, task.state());
 
         EasyMock.verify(stateManager);
     }
@@ -263,7 +266,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldCommitOnCloseClean() {
+    public void shouldSuspendAndCommitBeforeCloseClean() {
         stateManager.close();
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
@@ -286,6 +289,17 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldRequireSuspendingCreatedTasksBeforeClose() {
+        EasyMock.replay(stateManager);
+        task = createStandbyTask();
+        assertThat(task.state(), equalTo(CREATED));
+        assertThrows(IllegalStateException.class, () -> task.closeClean());
+
+        task.suspend();
+        task.closeClean();
     }
 
     @Test
@@ -355,7 +369,7 @@ public class StandbyTaskTest {
         task.prepareCommit();
         assertThrows(RuntimeException.class, task::postCommit);
 
-        assertEquals(Task.State.RUNNING, task.state());
+        assertEquals(RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
@@ -376,6 +390,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
+        task.suspend();
 
         task.closeDirty();
 
@@ -405,6 +420,7 @@ public class StandbyTaskTest {
         )));
 
         task = createStandbyTask();
+        task.suspend();
 
         task.closeDirty();
 
@@ -435,6 +451,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
 
+        task.suspend();
         task.closeDirty();
 
         final double expectedCloseTaskMetric = 1.0;
@@ -447,18 +464,38 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldRecycleTask() {
-        stateManager.flush();
-        EasyMock.expectLastCall();
         stateManager.recycle();
-        EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded();
+        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // CREATED
 
-        task.closeAndRecycleState();
+        task.initializeIfNeeded();
+        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RUNNING
+
+        task.suspend();
+        task.closeAndRecycleState(); // SUSPENDED
 
         EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldAlwaysSuspendCreatedTasks() {
+        EasyMock.replay(stateManager);
+        task = createStandbyTask();
+        assertThat(task.state(), equalTo(CREATED));
+        task.suspend();
+        assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldAlwaysSuspendRunningTasks() {
+        EasyMock.replay(stateManager);
+        task = createStandbyTask();
+        task.initializeIfNeeded();
+        assertThat(task.state(), equalTo(RUNNING));
+        task.suspend();
+        assertThat(task.state(), equalTo(SUSPENDED));
     }
 
     private StandbyTask createStandbyTask() {
