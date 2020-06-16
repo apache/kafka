@@ -32,7 +32,6 @@ import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.util.control.Breaks._
 /**
  * Performance test for the full zookeeper consumer
  */
@@ -57,14 +56,11 @@ object ConsumerPerformance extends LazyLogging {
     consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, startMs, metrics)
     endMs = System.currentTimeMillis
 
-    breakable {
-        for ((key,value) <- metrics) {
-           if(key.name() == "rebalance-latency-avg") {
-             joinGroupTimeInMs = value.metricValue.asInstanceOf[Double]
-             break
-           }
-        }
-    }
+    metrics.find {
+      case (name, _) => name.name() == "rebalance-latency-avg"
+    }.map {
+      case (_, metric) => joinGroupTimeInMs = metric.metricValue.asInstanceOf[Double]
+    }.getOrElse(0)
 
     consumer.close()
     val elapsedSecs = (endMs - startMs) / 1000.0
@@ -134,14 +130,11 @@ object ConsumerPerformance extends LazyLogging {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats) {
-            breakable {
-              for ((key,value) <- metrics) {
-                if(key.name() == "last-rebalance-seconds-ago") {
-                  joinTimeMsInSingleRound = value.metricValue.asInstanceOf[Double]
-                  break
-                }
-              }
-            }
+            metrics.find {
+              case (name, _) => name.name() == "last-rebalance-seconds-ago"
+            }.map {
+              case (_, metric) => joinTimeMsInSingleRound = metric.metricValue.asInstanceOf[Double]
+            }.getOrElse(0)
             printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
               lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
           }
