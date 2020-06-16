@@ -642,7 +642,7 @@ public class SubscriptionState {
     }
 
 
-    public synchronized void resetMissingPositions() {
+    public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
@@ -745,8 +745,10 @@ public class SubscriptionState {
             if (nextState.equals(newState)) {
                 this.fetchState = nextState;
                 runIfTransitioned.run();
-                if (this.position == null && nextState.hasPosition()) {
+                if (this.position == null && nextState.requiresPosition()) {
                     throw new IllegalStateException("Transitioned subscription state to " + nextState + ", but position is null");
+                } else if (!nextState.requiresPosition()) {
+                    this.position = null;
                 }
             }
         }
@@ -957,7 +959,7 @@ public class SubscriptionState {
         /**
          * Test if this state has a position
          */
-        boolean hasPosition();
+        boolean requiresPosition();
 
         /**
          * Test if this state is considered to have a valid position which can be used for fetching
@@ -977,7 +979,7 @@ public class SubscriptionState {
             }
 
             @Override
-            public boolean hasPosition() {
+            public boolean requiresPosition() {
                 return false;
             }
 
@@ -994,7 +996,7 @@ public class SubscriptionState {
             }
 
             @Override
-            public boolean hasPosition() {
+            public boolean requiresPosition() {
                 return true;
             }
 
@@ -1011,7 +1013,7 @@ public class SubscriptionState {
             }
 
             @Override
-            public boolean hasPosition() {
+            public boolean requiresPosition() {
                 return false;
             }
 
@@ -1028,7 +1030,7 @@ public class SubscriptionState {
             }
 
             @Override
-            public boolean hasPosition() {
+            public boolean requiresPosition() {
                 return true;
             }
 

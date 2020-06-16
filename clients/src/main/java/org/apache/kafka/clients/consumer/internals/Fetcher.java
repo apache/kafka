@@ -709,8 +709,7 @@ public class Fetcher<K, V> implements Closeable {
                             completedFetch.partition, completedFetch.nextFetchOffset, position);
                 }
             } else {
-                log.warn("Ignoring fetched records for {} at offset {} since the current position is undefined",
-                        completedFetch.partition, completedFetch.nextFetchOffset);
+                throw new IllegalStateException("Missing position for fetchable partition " + completedFetch.partition);
             }
         }
 
@@ -1141,8 +1140,7 @@ public class Fetcher<K, V> implements Closeable {
         for (TopicPartition partition : fetchablePartitions()) {
             FetchPosition position = this.subscriptions.position(partition);
             if (position == null) {
-                log.warn("Missing position inside fetch for partition {}", partition);
-                continue;
+                throw new IllegalStateException("Missing position for fetchable partition " + partition);
             }
 
             Optional<Node> leaderOpt = position.currentLeader.leader;
