@@ -1562,7 +1562,6 @@ class ReplicaManager(val config: KafkaConfig,
               s"state change with correlation identifier $correlationId from epoch ${partition.getLeaderEpoch} only for " +
               s"those leaderEpoch-updated partitions with leader $newLeaderBrokerId before ZooKeeper disconnect occurred.", e)
             error(s"ZooKeeper client occurred while rendering a $partition's follower through $zkClient.'", e)
-            responseMap.put(partition.topicPartition, Errors.NETWORK_EXCEPTION)
         }
       }
 
