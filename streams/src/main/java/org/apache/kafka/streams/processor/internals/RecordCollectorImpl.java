@@ -251,7 +251,7 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     @Override
     public void close() {
-        log.debug("Closing record collector");
+        log.info("Closing record collector");
 
         if (eosEnabled) {
             streamsProducer.abortTransaction();
