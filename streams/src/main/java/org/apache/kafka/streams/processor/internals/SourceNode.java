@@ -80,10 +80,13 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
             this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
         }
 
-        // if value deserializers are internal wrapping deserializers that may need to be given the default
+        // if deserializers are internal wrapping deserializers that may need to be given the default
         // then pass it the default one from the context
         if (valDeserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) valDeserializer).setIfUnset(context.valueSerde().deserializer());
+            ((WrappingNullableDeserializer) valDeserializer).setIfUnset(
+                    context.keySerde().deserializer(),
+                    context.valueSerde().deserializer()
+            );
         }
     }
 

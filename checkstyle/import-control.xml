@@ -262,6 +262,7 @@
       <allow pkg="kafka.log" />
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="test">

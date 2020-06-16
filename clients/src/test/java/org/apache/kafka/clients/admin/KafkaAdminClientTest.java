@@ -81,6 +81,7 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
@@ -174,6 +175,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -969,15 +971,87 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeConfigs() throws Exception {
+    public void testDescribeBrokerConfigs() throws Exception {
+        ConfigResource broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+        ConfigResource broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1");
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
-                Collections.singletonMap(new ConfigResource(ConfigResource.Type.BROKER, "0"),
-                    new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptySet()))));
-            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
-                new ConfigResource(ConfigResource.Type.BROKER, "0")));
-            result2.all().get();
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                            .setResourceName(broker0Resource.name()).setResourceType(broker0Resource.type().id()).setErrorCode(Errors.NONE.code())
+                            .setConfigs(emptyList())))), env.cluster().nodeById(0));
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                            .setResourceName(broker1Resource.name()).setResourceType(broker1Resource.type().id()).setErrorCode(Errors.NONE.code())
+                            .setConfigs(emptyList())))), env.cluster().nodeById(1));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                    broker0Resource,
+                    broker1Resource)).values();
+            assertEquals(new HashSet<>(asList(broker0Resource, broker1Resource)), result.keySet());
+            result.get(broker0Resource).get();
+            result.get(broker1Resource).get();
+        }
+    }
+
+    @Test
+    public void testDescribeBrokerAndLogConfigs() throws Exception {
+        ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+        ConfigResource brokerLoggerResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "0");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
+                new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                    .setResourceName(brokerResource.name()).setResourceType(brokerResource.type().id()).setErrorCode(Errors.NONE.code())
+                    .setConfigs(emptyList()),
+                new DescribeConfigsResponseData.DescribeConfigsResult()
+                    .setResourceName(brokerLoggerResource.name()).setResourceType(brokerLoggerResource.type().id()).setErrorCode(Errors.NONE.code())
+                    .setConfigs(emptyList())))), env.cluster().nodeById(0));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                    brokerResource,
+                    brokerLoggerResource)).values();
+            assertEquals(new HashSet<>(asList(brokerResource, brokerLoggerResource)), result.keySet());
+            result.get(brokerResource).get();
+            result.get(brokerLoggerResource).get();
+        }
+    }
+
+    @Test
+    public void testDescribeConfigsPartialResponse() throws Exception {
+        ConfigResource topic = new ConfigResource(ConfigResource.Type.TOPIC, "topic");
+        ConfigResource topic2 = new ConfigResource(ConfigResource.Type.TOPIC, "topic2");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                                    .setResourceName(topic.name()).setResourceType(topic.type().id()).setErrorCode(Errors.NONE.code())
+                                    .setConfigs(emptyList())))));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                    topic,
+                    topic2)).values();
+            assertEquals(new HashSet<>(asList(topic, topic2)), result.keySet());
+            result.get(topic);
+            TestUtils.assertFutureThrows(result.get(topic2), ApiException.class);
+        }
+    }
+
+    @Test
+    public void testDescribeConfigsUnrequested() throws Exception {
+        ConfigResource topic = new ConfigResource(ConfigResource.Type.TOPIC, "topic");
+        ConfigResource unrequested = new ConfigResource(ConfigResource.Type.TOPIC, "unrequested");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(topic.name()).setResourceType(topic.type().id()).setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList()),
+                new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(unrequested.name()).setResourceType(unrequested.type().id()).setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList())))));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                    topic)).values();
+            assertEquals(new HashSet<>(asList(topic)), result.keySet());
+            assertNotNull(result.get(topic).get());
+            assertNull(result.get(unrequested));
         }
     }
 
