@@ -50,7 +50,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Ignore, Test}
 import org.mockito.Mockito
 
 import scala.collection.JavaConverters._
@@ -250,6 +250,7 @@ class ReplicaManagerTest {
   }
 
   @Test
+  @Ignore // reenable once we upgrade to 2.5.0 KAFKA-9750
   def testFencedErrorCausedByBecomeLeader(): Unit = {
     testFencedErrorCausedByBecomeLeader(0)
     testFencedErrorCausedByBecomeLeader(1)
