@@ -462,9 +462,15 @@ public class TaskManager {
             remainingRevokedPartitions.removeAll(task.inputPartitions());
         }
 
-        final RuntimeException exception = firstException.get();
-        if (exception != null) {
-            throw exception;
+        if (!remainingRevokedPartitions.isEmpty()) {
+            log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
+                         "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+        }
+
+        final RuntimeException suspendException = firstException.get();
+        if (suspendException != null) {
+            throw suspendException;
         }
 
         // If using eos-beta, if we must commit any task then we must commit all of them
@@ -488,13 +494,17 @@ public class TaskManager {
         }
 
         for (final Task task : tasksToCommit) {
-            task.postCommit();
+            try {
+                task.postCommit();
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while post-committing task " + task.id(), e);
+                firstException.compareAndSet(null, e);
+            }
         }
 
-        if (!remainingRevokedPartitions.isEmpty()) {
-            log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
-                         "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+        final RuntimeException commitException = firstException.get();
+        if (commitException != null) {
+            throw commitException;
         }
     }
 
@@ -712,10 +722,16 @@ public class TaskManager {
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
             }
             for (final TaskId taskId : consumedOffsetsAndMetadataPerTask.keySet()) {
-                final Task task = tasks.get(taskId);
-                task.postCommit();
+                try {
+                    final Task task = tasks.get(taskId);
+                    task.postCommit();
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + taskId, e);
+                    firstException.compareAndSet(null, e);
+                }
             }
         } catch (final RuntimeException e) {
+            log.error("Exception caught while committing tasks during shutdown", e);
             firstException.compareAndSet(null, e);
         }
 
