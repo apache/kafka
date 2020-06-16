@@ -235,7 +235,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         setCurrentNode(child);
         child.process(key, value);
         if (child.isTerminalNode()) {
-            streamTask.maybeRecordE2ELatency(timestamp(), child.name());
+            streamTask.maybeRecordE2ELatency(timestamp(), currentSystemTimeMs(), child.name());
         }
     }
 

@@ -206,8 +206,6 @@ public class MetricsIntegrationTest {
     private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL = "expired-window-record-drop-total";
     private static final String E2E_LATENCY_MIN = "record-e2e-latency-min";
     private static final String E2E_LATENCY_MAX = "record-e2e-latency-max";
-    private static final String E2E_LATENCY_P99 = "record-e2e-latency-p99";
-    private static final String E2E_LATENCY_P90 = "record-e2e-latency-p90";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -608,8 +606,6 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
         checkMetricByName(listMetricProcessor, E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
-        checkMetricByName(listMetricProcessor, E2E_LATENCY_P99, numberOfSourceNodes + numberOfTerminalNodes);
-        checkMetricByName(listMetricProcessor, E2E_LATENCY_P90, numberOfSourceNodes + numberOfTerminalNodes);
     }
 
     private void checkKeyValueStoreMetrics(final String group0100To24,

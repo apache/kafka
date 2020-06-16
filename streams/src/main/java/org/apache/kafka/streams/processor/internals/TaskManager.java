@@ -671,15 +671,9 @@ public class TaskManager {
 
     // Note: this MUST be called *before* actually closing the task
     private void cleanupTask(final Task task) {
-        // 1. remove the input partitions from the materialized map;
-        // 2. remove the task metrics from the metrics registry
-
         for (final TopicPartition inputPartition : task.inputPartitions()) {
             partitionToTask.remove(inputPartition);
         }
-
-        final String threadId = Thread.currentThread().getName();
-        streamsMetrics.removeAllTaskLevelSensors(threadId, task.id().toString());
     }
 
     void shutdown(final boolean clean) {
