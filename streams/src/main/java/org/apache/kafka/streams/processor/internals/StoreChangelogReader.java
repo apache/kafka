@@ -205,7 +205,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Consumer<byte[], byte[]> mainConsumer;
 
     // the changelog reader needs the admin client to list end offsets
-    private Admin adminClient;
+    private final Admin adminClient;
 
     private long lastUpdateOffsetTime;
 
@@ -213,18 +213,16 @@ public class StoreChangelogReader implements ChangelogReader {
         this.mainConsumer = consumer;
     }
 
-    void setAdminClient(final Admin adminClient) {
-        this.adminClient = adminClient;
-    }
-
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
                                 final LogContext logContext,
+                                final Admin adminClient,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.time = time;
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
+        this.adminClient = adminClient;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
