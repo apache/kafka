@@ -97,7 +97,7 @@ object ConfigCommand extends Config {
     val adminZkClient = new AdminZkClient(zkClient)
     try {
       if (opts.options.has(opts.alterOpt))
-        alterConfig(zkClient, opts, adminZkClient)
+        alterConfig(opts, adminZkClient)
       else if (opts.options.has(opts.describeOpt))
         describeConfig(zkClient, opts, adminZkClient)
     } finally {

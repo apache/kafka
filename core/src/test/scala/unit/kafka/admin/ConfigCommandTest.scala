@@ -143,7 +143,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def shouldFailIfUnrecognisedEntityType(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test
@@ -162,7 +162,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
 
-    ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
@@ -181,7 +181,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
 
-    ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
@@ -200,7 +200,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
 
-    ConfigCommand.alterConfig(null, alterOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(alterOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
@@ -279,7 +279,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       override def changeTopicConfig(topic: String, configs: Properties): Unit = {}
     }
 
-    ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test (expected = classOf[IllegalArgumentException])
@@ -289,7 +289,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "leader.replication.throttled.rate=10"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test (expected = classOf[IllegalArgumentException])
@@ -299,7 +299,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "message.max.size=100000"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test (expected = classOf[IllegalArgumentException])
@@ -309,7 +309,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a="))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test (expected = classOf[IllegalArgumentException])
@@ -319,7 +319,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=[b,c,d=e"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test (expected = classOf[InvalidConfigException])
@@ -329,7 +329,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-type", "topics",
       "--alter",
       "--delete-config", "missing_config1, missing_config2"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test
@@ -355,7 +355,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
 
-    ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(createOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
@@ -393,14 +393,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     val optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=8192,password=abc, def]")
-    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 8192))
+    ConfigCommand.alterConfig(optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 8192))
     val optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]")
-    ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("SCRAM-SHA-256", "SCRAM-SHA-512"), 4096))
+    ConfigCommand.alterConfig(optsB, CredentialChange("userB", Set("SCRAM-SHA-256", "SCRAM-SHA-512"), 4096))
 
     val del256 = deleteOpts("userB", "SCRAM-SHA-256")
-    ConfigCommand.alterConfig(null, del256, CredentialChange("userB", Set("SCRAM-SHA-512"), 4096))
+    ConfigCommand.alterConfig(del256, CredentialChange("userB", Set("SCRAM-SHA-512"), 4096))
     val del512 = deleteOpts("userB", "SCRAM-SHA-512")
-    ConfigCommand.alterConfig(null, del512, CredentialChange("userB", Set(), 4096))
+    ConfigCommand.alterConfig(del512, CredentialChange("userB", Set(), 4096))
   }
 
   @Test
