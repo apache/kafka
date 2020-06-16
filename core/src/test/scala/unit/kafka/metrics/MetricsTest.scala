@@ -22,7 +22,7 @@ import java.util.Properties
 import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricPredicate
-import org.junit.Test
+import org.junit.{Ignore, Test}
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
@@ -76,6 +76,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
+  @Ignore // reenable once it's not prone to the failure identified in KAFKA-9786
   def testGeneralBrokerTopicMetricsAreGreedilyRegistered(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2, 1)
