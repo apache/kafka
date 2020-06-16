@@ -107,8 +107,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
-    private Map<TopicPartition, Long> checkpoint = null;
-
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
@@ -250,14 +248,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void suspend() {
         switch (state()) {
             case CREATED:
-            case SUSPENDED:
-                log.info("Skip suspending since state is {}", state());
-
-                break;
-
             case RESTORING:
+                log.info("Suspended {}", state());
                 transitionTo(State.SUSPENDED);
-                log.info("Suspended restoring");
 
                 break;
 
@@ -271,6 +264,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
 
                 break;
+
+            case SUSPENDED:
+                log.info("Skip suspending since state is {}", state());
+
+                break;
+
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
@@ -342,7 +341,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RUNNING:
             case RESTORING:
             case SUSPENDED:
-                maybeScheduleCheckpoint();
                 stateMgr.flush();
                 recordCollector.flush();
 
@@ -409,6 +407,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return committableOffsets;
     }
 
+    /**
+     * This should only be called if the attempted commit succeeded for this task
+     */
     @Override
     public void postCommit() {
         commitRequested = false;
@@ -416,22 +417,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         switch (state()) {
             case RESTORING:
-                writeCheckpointIfNeed();
+                writeCheckpoint();
 
                 break;
 
             case RUNNING:
-                if (!eosEnabled) { // if RUNNING, checkpoint only for non-eos
-                    writeCheckpointIfNeed();
+                if (!eosEnabled) {
+                    writeCheckpoint();
                 }
 
                 break;
 
             case SUSPENDED:
-                writeCheckpointIfNeed();
-                // we cannot `clear()` the `PartitionGroup` in `suspend()` already, but only after committing,
-                // because otherwise we loose the partition-time information
+                /*
+                 * We must clear the `PartitionGroup` only after committing, and not in `suspend()`,
+                 * because otherwise we lose the partition-time information.
+                 * We also must clear it when the task is revoked, and not in `close()`, as the consumer will clear
+                 * its internal buffer when the corresponding partition is revoked but the task may be reassigned
+                 */
                 partitionGroup.clear();
+
+                writeCheckpoint();
 
                 break;
 
@@ -474,27 +480,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeAndRecycleState() {
-        suspend();
-        prepareCommit();
-        writeCheckpointIfNeed();
-
         switch (state()) {
-            case CREATED:
             case SUSPENDED:
                 stateMgr.recycle();
                 recordCollector.close();
 
                 break;
 
-            case RESTORING: // we should have transitioned to `SUSPENDED` already
-            case RUNNING: // we should have transitioned to `SUSPENDED` already
+            case CREATED:
+            case RESTORING:
+            case RUNNING:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while recycling active task " + id);
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while recycling active task " + id);
         }
 
-        partitionGroup.clear();
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
@@ -502,56 +503,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed clean and recycled state");
     }
 
-    private void maybeScheduleCheckpoint() {
-        switch (state()) {
-            case RESTORING:
-            case SUSPENDED:
-                this.checkpoint = checkpointableOffsets();
-
-                break;
-
-            case RUNNING:
-                if (!eosEnabled) {
-                    this.checkpoint = checkpointableOffsets();
-                }
-
-                break;
-
-            case CREATED:
-            case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while scheduling checkpoint for active task " + id);
-
-            default:
-                throw new IllegalStateException("Unknown state " + state() + " while scheduling checkpoint for active task " + id);
-        }
-    }
-
-    private void writeCheckpointIfNeed() {
+    private void writeCheckpoint() {
         if (commitNeeded) {
+            log.error("Tried to write a checkpoint with pending uncommitted data, should complete the commit first.");
             throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
         }
-        if (checkpoint != null) {
-            stateMgr.checkpoint(checkpoint);
-            checkpoint = null;
-        }
+        stateMgr.checkpoint(checkpointableOffsets());
     }
 
     /**
-     * <pre>
-     * the following order must be followed:
-     *  1. checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
-     *  2. then if we are closing on EOS and dirty, wipe out the state store directory
-     *  3. finally release the state manager lock
-     * </pre>
+     * You must commit a task and checkpoint the state manager before closing as this will release the state dir lock
      */
     private void close(final boolean clean) {
-        if (clean) {
-            executeAndMaybeSwallow(true, this::writeCheckpointIfNeed, "state manager checkpoint", log);
+        if (clean && commitNeeded) {
+            log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
+                          + " commit and should close as dirty instead");
+            throw new StreamsException("Tried to close dirty task as clean");
         }
-
         switch (state()) {
-            case CREATED:
-            case RESTORING:
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector
                 // if the latter throws and we re-close dirty which would close the state manager again.
@@ -577,6 +546,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 log.trace("Skip closing since state is {}", state());
                 return;
 
+            case CREATED:
+            case RESTORING:
             case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing active task " + id);
 

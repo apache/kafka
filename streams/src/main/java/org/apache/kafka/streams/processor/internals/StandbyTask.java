@@ -111,11 +111,25 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void suspend() {
-        log.trace("No-op suspend with state {}", state());
-        if (state() == State.RUNNING) {
-            transitionTo(State.SUSPENDED);
-        } else if (state() == State.RESTORING) {
-            throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
+        switch (state()) {
+            case CREATED:
+            case RUNNING:
+                log.info("Suspended {}", state());
+                transitionTo(State.SUSPENDED);
+
+                break;
+
+            case SUSPENDED:
+                log.info("Skip suspending since state is {}", state());
+
+                break;
+
+            case RESTORING:
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while suspending standby task " + id);
+
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while suspending standby task " + id);
         }
     }
 
@@ -172,10 +186,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeAndRecycleState() {
-        suspend();
-        prepareCommit();
-
-        if (state() == State.CREATED || state() == State.SUSPENDED) {
+        if (state() == State.SUSPENDED) {
             stateMgr.recycle();
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
@@ -189,7 +200,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
     private void close(final boolean clean) {
         switch (state()) {
-            case CREATED:
             case SUSPENDED:
                 executeAndMaybeSwallow(
                     clean,
@@ -212,6 +222,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 log.trace("Skip closing since state is {}", state());
                 return;
 
+            case CREATED:
             case RESTORING: // a StandbyTask is never in RESTORING state
             case RUNNING:
                 throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
