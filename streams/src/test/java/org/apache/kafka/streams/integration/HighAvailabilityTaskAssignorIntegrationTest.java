@@ -95,6 +95,11 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
+        final Set<TopicPartition> inputTopicPartitions = mkSet(
+            new TopicPartition(inputTopic, 0),
+            new TopicPartition(inputTopic, 1)
+        );
+
         final String storeName = "store" + testId;
         final String storeChangelog = appId + "-store" + testId + "-changelog";
         final Set<TopicPartition> changelogTopicPartitions = mkSet(
@@ -133,14 +138,12 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             )
         );
 
-        final StringBuilder kiloBuilder = new StringBuilder(1000);
-        for (int i = 0; i < 1000; i++) {
-            kiloBuilder.append('0');
-        }
-        final String kilo = kiloBuilder.toString();
+        final String kilo = getKiloByteValue();
+
+        final int numberOfRecords = 500;
 
         try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < numberOfRecords; i++) {
                 producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
             }
         }
@@ -159,11 +162,18 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
              final Consumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
             kafkaStreams0.start();
 
+            // just make sure we actually wrote all the input records
+            TestUtils.waitForCondition(
+                () -> getEndOffsetSum(inputTopicPartitions, consumer) == numberOfRecords,
+                120_000L,
+                () -> "Input records haven't all been written to the input topic: " + getEndOffsetSum(inputTopicPartitions, consumer)
+            );
+
             // wait until all the input records are in the changelog
             TestUtils.waitForCondition(
-                () -> getChangelogOffsetSum(changelogTopicPartitions, consumer) == 1000,
+                () -> getEndOffsetSum(changelogTopicPartitions, consumer) == numberOfRecords,
                 120_000L,
-                () -> "Input records haven't all been written to the changelog: " + getChangelogOffsetSum(changelogTopicPartitions, consumer)
+                () -> "Input records haven't all been written to the changelog: " + getEndOffsetSum(changelogTopicPartitions, consumer)
             );
 
             final AtomicLong instance1TotalRestored = new AtomicLong(-1);
@@ -240,6 +250,14 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         }
     }
 
+    private String getKiloByteValue() {
+        final StringBuilder kiloBuilder = new StringBuilder(1000);
+        for (int i = 0; i < 1000; i++) {
+            kiloBuilder.append('0');
+        }
+        return kiloBuilder.toString();
+    }
+
     private void assertFalseNoRetry(final boolean assertion, final String message) {
         if (assertion) {
             throw new NoRetryException(
@@ -268,8 +286,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         );
     }
 
-    private static long getChangelogOffsetSum(final Set<TopicPartition> changelogTopicPartitions,
-                                              final Consumer<String, String> consumer) {
+    private static long getEndOffsetSum(final Set<TopicPartition> changelogTopicPartitions,
+                                        final Consumer<String, String> consumer) {
         long sum = 0;
         final Collection<Long> values = consumer.endOffsets(changelogTopicPartitions).values();
         for (final Long value : values) {
