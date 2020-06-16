@@ -26,11 +26,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final KTableImpl<K, ?, V> parent;
@@ -93,8 +91,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            final StateStore stateStore = context.getStateStore(queryableName);
             if (queryableName != null) {
+                final StateStore stateStore = context.getStateStore(queryableName);
                 store = ((WrappedStateStore<MeteredTimestampedKeyValueStore<K, V>, K, V>) stateStore).wrapped();
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
@@ -120,8 +118,18 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<V> oldValueAndTimestamp = ValueAndTimestamp.make(oldValue, 0);
-                final byte[] serializedOldValue = store.getSerializedValue(oldValueAndTimestamp);
+                final byte[] serializedOldValue;
+                if (oldValue != null) {
+                    // 0 is a dummy timestamp
+                    // we know that the old value must have a lesser timestamp than the new value
+                    // therefore, we assigned it this value to ensure that if the two values are equal
+                    // the new value is dropped
+                    final ValueAndTimestamp<V> oldValueAndTimestamp = ValueAndTimestamp.make(oldValue, 0);
+                    serializedOldValue = store.getSerializedValue(oldValueAndTimestamp);
+                } else {
+                    serializedOldValue = store.getWithBinary(key).serializedValue;
+                }
+
                 final ValueAndTimestamp<V> newValueAndTimestamp = ValueAndTimestamp.make(newValue,
                                                                                          context().timestamp());
 
