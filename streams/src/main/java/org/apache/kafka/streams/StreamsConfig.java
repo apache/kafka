@@ -523,12 +523,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
 
-    /**
-     * {@code topology.optimization}
-     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
-     */
-    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
-
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
@@ -557,6 +551,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
+
+    /**
+     * {@code topology.optimization}
+     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
+     */
+    @Deprecated
+    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
