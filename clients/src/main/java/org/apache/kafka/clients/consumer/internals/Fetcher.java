@@ -676,40 +676,40 @@ public class Fetcher<K, V> implements Closeable {
                     completedFetch.partition);
         } else {
             FetchPosition position = subscriptions.position(completedFetch.partition);
-            if (position != null) {
-                if (completedFetch.nextFetchOffset == position.offset) {
-                    List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
-
-                    log.trace("Returning {} fetched records at offset {} for assigned partition {}",
-                            partRecords.size(), position, completedFetch.partition);
-
-                    if (completedFetch.nextFetchOffset > position.offset) {
-                        FetchPosition nextPosition = new FetchPosition(
-                                completedFetch.nextFetchOffset,
-                                completedFetch.lastEpoch,
-                                position.currentLeader);
-                        log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
-                        subscriptions.position(completedFetch.partition, nextPosition);
-                    }
-
-                    Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
-                    if (partitionLag != null)
-                        this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
-
-                    Long lead = subscriptions.partitionLead(completedFetch.partition);
-                    if (lead != null) {
-                        this.sensors.recordPartitionLead(completedFetch.partition, lead);
-                    }
-
-                    return partRecords;
-                } else {
-                    // these records aren't next in line based on the last consumed position, ignore them
-                    // they must be from an obsolete request
-                    log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                            completedFetch.partition, completedFetch.nextFetchOffset, position);
-                }
-            } else {
+            if (position == null) {
                 throw new IllegalStateException("Missing position for fetchable partition " + completedFetch.partition);
+            }
+
+            if (completedFetch.nextFetchOffset == position.offset) {
+                List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
+
+                log.trace("Returning {} fetched records at offset {} for assigned partition {}",
+                        partRecords.size(), position, completedFetch.partition);
+
+                if (completedFetch.nextFetchOffset > position.offset) {
+                    FetchPosition nextPosition = new FetchPosition(
+                            completedFetch.nextFetchOffset,
+                            completedFetch.lastEpoch,
+                            position.currentLeader);
+                    log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
+                    subscriptions.position(completedFetch.partition, nextPosition);
+                }
+
+                Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
+                if (partitionLag != null)
+                    this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
+
+                Long lead = subscriptions.partitionLead(completedFetch.partition);
+                if (lead != null) {
+                    this.sensors.recordPartitionLead(completedFetch.partition, lead);
+                }
+
+                return partRecords;
+            } else {
+                // these records aren't next in line based on the last consumed position, ignore them
+                // they must be from an obsolete request
+                log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                        completedFetch.partition, completedFetch.nextFetchOffset, position);
             }
         }
 
