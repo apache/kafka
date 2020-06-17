@@ -792,7 +792,7 @@ public class SubscriptionState {
          * also will update the position with the current leader and epoch.
          *
          * @param currentLeaderAndEpoch leader and epoch to compare the offset with
-         * @return
+         * @return true if the position is now awaiting validation
          */
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
             if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
@@ -813,14 +813,11 @@ public class SubscriptionState {
 
         /**
          * For older versions of the API, we cannot perform offset validation so we simply transition directly to FETCHING
-         *
-         * @param currentLeaderAndEpoch
          */
         private void updatePositionLeaderNoValidation(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
             if (position != null) {
-                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 transitionState(FetchStates.FETCHING, () -> {
-                    this.position = newPosition;
+                    this.position = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                     this.nextRetryTimeMs = null;
                 });
             }
@@ -957,7 +954,7 @@ public class SubscriptionState {
         Collection<FetchState> validTransitions();
 
         /**
-         * Test if this state has a position
+         * Test if this state requires a position to be set
          */
         boolean requiresPosition();
 

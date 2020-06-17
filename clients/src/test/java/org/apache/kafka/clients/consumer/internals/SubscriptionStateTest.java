@@ -704,6 +704,22 @@ public class SubscriptionStateTest {
         assertTrue(state.hasValidPosition(tp0));
         assertFalse(state.awaitingValidation(tp0));
         assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Reset again, and complete it with a seek that would normally require validation
+        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(10), new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.of(2))));
+        // We are now in AWAIT_VALIDATION
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Now ensure next call to validate clears the validation state
+        assertFalse(state.maybeValidatePositionForCurrentLeader(oldApis, tp0, new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.of(2))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
     }
 
 }

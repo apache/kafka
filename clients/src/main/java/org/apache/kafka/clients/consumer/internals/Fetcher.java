@@ -1292,7 +1292,7 @@ public class Fetcher<K, V> implements Closeable {
                 if (!clearedReplicaId.isPresent()) {
                     // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
                     FetchPosition position = subscriptions.position(tp);
-                    if (position != null && fetchOffset != position.offset) {
+                    if (position == null || fetchOffset != position.offset) {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                                 "does not match the current offset {}", tp, fetchOffset, position);
                     } else {
