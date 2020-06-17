@@ -366,51 +366,6 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
-        Map<ConfigResource, KafkaFuture<Config>> topicConfigs = new HashMap<>();
-
-        if (timeoutNextRequests > 0) {
-            for (ConfigResource requestedResource : resources) {
-                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new TimeoutException());
-                topicConfigs.put(requestedResource, future);
-            }
-
-            --timeoutNextRequests;
-            return new DescribeConfigsResult(topicConfigs);
-        }
-
-        for (ConfigResource requestedResource : resources) {
-            if (requestedResource.type() != ConfigResource.Type.TOPIC) {
-                continue;
-            }
-            for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
-                String topicName = topicDescription.getKey();
-                if (topicName.equals(requestedResource.name()) && !topicDescription.getValue().markedForDeletion) {
-                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
-                        topicDescription.getValue().fetchesRemainingUntilVisible--;
-                    } else {
-                        TopicMetadata topicMetadata = topicDescription.getValue();
-                        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
-                        Collection<ConfigEntry> entries = new ArrayList<>();
-                        topicMetadata.configs.forEach((k, v) -> entries.add(new ConfigEntry(k, v)));
-                        future.complete(new Config(entries));
-                        topicConfigs.put(requestedResource, future);
-                        break;
-                    }
-                }
-            }
-            if (!topicConfigs.containsKey(requestedResource)) {
-                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new UnknownTopicOrPartitionException("Resource " + requestedResource + " not found."));
-                topicConfigs.put(requestedResource, future);
-            }
-        }
-
-        return new DescribeConfigsResult(topicConfigs);
-    }
-
-    @Override
     synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
 
@@ -535,6 +490,19 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+
+        if (timeoutNextRequests > 0) {
+            Map<ConfigResource, KafkaFuture<Config>> configs = new HashMap<>();
+            for (ConfigResource requestedResource : resources) {
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                configs.put(requestedResource, future);
+            }
+
+            --timeoutNextRequests;
+            return new DescribeConfigsResult(configs);
+        }
+
         Map<ConfigResource, KafkaFuture<Config>> results = new HashMap<>();
         for (ConfigResource resource : resources) {
             KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
@@ -551,7 +519,7 @@ public class MockAdminClient extends AdminClient {
     synchronized private Config getResourceDescription(ConfigResource resource) {
         switch (resource.type()) {
             case BROKER: {
-                int brokerId = Integer.valueOf(resource.name());
+                int brokerId = Integer.parseInt(resource.name());
                 if (brokerId >= brokerConfigs.size()) {
                     throw new InvalidRequestException("Broker " + resource.name() +
                         " not found.");
@@ -560,10 +528,13 @@ public class MockAdminClient extends AdminClient {
             }
             case TOPIC: {
                 TopicMetadata topicMetadata = allTopics.get(resource.name());
-                if (topicMetadata == null) {
-                    throw new UnknownTopicOrPartitionException();
+                if (topicMetadata != null && !topicMetadata.markedForDeletion) {
+                    if (topicMetadata.fetchesRemainingUntilVisible > 0)
+                        topicMetadata.fetchesRemainingUntilVisible = Math.max(0, topicMetadata.fetchesRemainingUntilVisible - 1);
+                    else return toConfigObject(topicMetadata.configs);
+
                 }
-                return toConfigObject(topicMetadata.configs);
+                throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
