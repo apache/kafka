@@ -85,6 +85,21 @@ public class StandbyTask extends AbstractTask {
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
+
+        if (eosEnabled) {
+            final Set<TopicPartition> partitionsToReinitialize = new HashSet<>();
+            for (final TopicPartition partition : stateMgr.checkpointed().keySet()) {
+                if (!stateMgr.hadCheckpoint(partition)) {
+                    partitionsToReinitialize.add(partition);
+                }
+
+            }
+
+            if (!partitionsToReinitialize.isEmpty()) {
+                reinitializeStateStoresForPartitions(partitionsToReinitialize);
+            }
+        }
+
         processorContext.initialize();
         taskInitialized = true;
         return true;
