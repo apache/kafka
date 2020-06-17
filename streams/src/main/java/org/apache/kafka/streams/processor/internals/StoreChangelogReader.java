@@ -574,15 +574,10 @@ public class StoreChangelogReader implements ChangelogReader {
             return Collections.emptyMap();
 
         try {
-            if (adminClient != null) {
-                final ListOffsetsResult result = adminClient.listOffsets(partitions.stream().collect(
-                        Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())));
-                return result.all().get().entrySet().stream().collect(
-                        Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
-            } else {
-                // we only fall back to use restore consumer if admin client is not set in TTD
-                return restoreConsumer.endOffsets(partitions);
-            }
+            final ListOffsetsResult result = adminClient.listOffsets(partitions.stream().collect(
+                    Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())));
+            return result.all().get().entrySet().stream().collect(
+                    Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
         } catch (final TimeoutException | InterruptedException | ExecutionException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
             log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);

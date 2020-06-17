@@ -67,8 +67,6 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ElectLeadersOptions;
 import org.apache.kafka.clients.admin.ElectLeadersResult;
-import org.apache.kafka.clients.admin.ElectPreferredLeadersOptions;
-import org.apache.kafka.clients.admin.ElectPreferredLeadersResult;
 import org.apache.kafka.clients.admin.ExpireDelegationTokenOptions;
 import org.apache.kafka.clients.admin.ExpireDelegationTokenResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
@@ -120,13 +118,14 @@ public class MockAdminClient extends AdminClient {
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
 
     @Override
-    synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
-        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
+    synchronized public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                                      final ListOffsetsOptions options) {
+        final Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
 
-        for (Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            OffsetSpec spec = entry.getValue();
-            KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
+        for (final Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            final OffsetSpec spec = entry.getValue();
+            final KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
 
             if (spec instanceof OffsetSpec.EarliestSpec)
                 future.complete(new ListOffsetsResult.ListOffsetsResultInfo(beginningOffsets.get(tp), -1, Optional.empty()));
@@ -141,7 +140,7 @@ public class MockAdminClient extends AdminClient {
         return new ListOffsetsResult(futures);
     }
 
-    public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
+    public synchronized void updateBeginningOffsets(final Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);
     }
 
@@ -152,187 +151,186 @@ public class MockAdminClient extends AdminClient {
     // ----------- APIs below are not used by TTD --------
 
     @Override
-    synchronized public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
+    synchronized public DescribeClusterResult describeCluster(final DescribeClusterOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
+    synchronized public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics, final CreateTopicsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ListTopicsResult listTopics(ListTopicsOptions options) {
+    synchronized public ListTopicsResult listTopics(final ListTopicsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+    synchronized public DescribeTopicsResult describeTopics(final Collection<String> topicNames, final DescribeTopicsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+    synchronized public DeleteTopicsResult deleteTopics(final Collection<String> topicsToDelete, final DeleteTopicsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
+    synchronized public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
+                                                                final CreatePartitionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
+    synchronized public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
+                                                          final DeleteRecordsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
+    synchronized public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
+    synchronized public RenewDelegationTokenResult renewDelegationToken(final byte[] hmac, final RenewDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
+    synchronized public ExpireDelegationTokenResult expireDelegationToken(final byte[] hmac, final ExpireDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
+    synchronized public DescribeDelegationTokenResult describeDelegationToken(final DescribeDelegationTokenOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
+    synchronized public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds, final DescribeConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+    synchronized public ListConsumerGroupsResult listConsumerGroups(final ListConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+    synchronized public DeleteConsumerGroupsResult deleteConsumerGroups(final Collection<String> groupIds, final DeleteConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Deprecated
-    @Override
-    synchronized public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+    synchronized public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(final String groupId,
+                                                                                    final Set<TopicPartition> partitions,
+                                                                                    final DeleteConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     synchronized public ElectLeadersResult electLeaders(
-            ElectionType electionType,
-            Set<TopicPartition> partitions,
-            ElectLeadersOptions options) {
+            final ElectionType electionType,
+            final Set<TopicPartition> partitions,
+            final ElectLeadersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
+    synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(final String groupId, final RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
+    synchronized public CreateAclsResult createAcls(final Collection<AclBinding> acls, final CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options) {
+    synchronized public DescribeAclsResult describeAcls(final AclBindingFilter filter, final DescribeAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
+    synchronized public DeleteAclsResult deleteAcls(final Collection<AclBindingFilter> filters, final DeleteAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+    synchronized public DescribeConfigsResult describeConfigs(final Collection<ConfigResource> resources, final DescribeConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     @Deprecated
-    synchronized public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+    synchronized public AlterConfigsResult alterConfigs(final Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public AlterConfigsResult incrementalAlterConfigs(
-            Map<ConfigResource, Collection<AlterConfigOp>> configs,
-            AlterConfigsOptions options) {
+    synchronized public AlterConfigsResult incrementalAlterConfigs(final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                   final AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     synchronized public AlterReplicaLogDirsResult alterReplicaLogDirs(
-            Map<TopicPartitionReplica, String> replicaAssignment,
-            AlterReplicaLogDirsOptions options) {
+            final Map<TopicPartitionReplica, String> replicaAssignment,
+            final AlterReplicaLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
-                                                              DescribeLogDirsOptions options) {
+    synchronized public DescribeLogDirsResult describeLogDirs(final Collection<Integer> brokers,
+                                                              final DescribeLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas,
-                                                                            DescribeReplicaLogDirsOptions options) {
+    synchronized public DescribeReplicaLogDirsResult describeReplicaLogDirs(final Collection<TopicPartitionReplica> replicas,
+                                                                            final DescribeReplicaLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     synchronized public AlterPartitionReassignmentsResult alterPartitionReassignments(
-            Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
-            AlterPartitionReassignmentsOptions options) {
+            final Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
+            final AlterPartitionReassignmentsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     synchronized public ListPartitionReassignmentsResult listPartitionReassignments(
-            Optional<Set<TopicPartition>> partitions,
-            ListPartitionReassignmentsOptions options) {
+            final Optional<Set<TopicPartition>> partitions,
+            final ListPartitionReassignmentsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
+    synchronized public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(final String groupId,
+                                                                                  final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                                                  final AlterConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
+    public DescribeClientQuotasResult describeClientQuotas(final ClientQuotaFilter filter, final DescribeClientQuotasOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
+    public AlterClientQuotasResult alterClientQuotas(final Collection<ClientQuotaAlteration> entries, final AlterClientQuotasOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    synchronized public void close(Duration timeout) {}
+    synchronized public void close(final Duration timeout) {}
 
     @Override
     synchronized public Map<MetricName, ? extends Metric> metrics() {
