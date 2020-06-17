@@ -1706,8 +1706,6 @@ class Log(@volatile private var _dir: File,
     lock synchronized {
       val deletable = deletableSegments(predicate)
       if (deletable.nonEmpty) {
-        info(s"Found deletable segments with base offsets" +
-          s" [${deletable.map(_.baseOffset).mkString(",")}]. Deleting ${deletable.size} segments.")
         deleteSegments(deletable)
       } else 0
     }
@@ -1791,12 +1789,12 @@ class Log(@volatile private var _dir: File,
         segment.largestRecordTimestamp match {
           case Some(ts) =>
             info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-              s" retentionMs breach based on the largest record timestamp from the segment, which" +
-              s" is $ts")
+              s" ${config.retentionMs} ms breach based on the largest record timestamp from the" +
+              s" segment, which is $ts")
           case None =>
             info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-              s" retentionMs breach based on the last modified timestamp from the segment, which" +
-              s" is ${segment.lastModified}")
+              s" ${config.retentionMs} ms breach based on the last modified timestamp from the" +
+              s" segment, which is ${segment.lastModified}")
         }
         true
       } else {
@@ -1814,8 +1812,8 @@ class Log(@volatile private var _dir: File,
       if (diff - segment.size >= 0) {
         diff -= segment.size
         info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-          s" retentionSize breach. Segment size is ${segment.size} and total log size after" +
-          s" deletion will be ${size - diff}")
+          s" ${config.retentionSize} breach. Segment size is ${segment.size} and total log size" +
+          s" after deletion will be ${size - diff}")
         true
       } else {
         false
@@ -1829,7 +1827,7 @@ class Log(@volatile private var _dir: File,
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
       if (nextSegmentOpt.exists(_.baseOffset <= logStartOffset)) {
         info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-          s" startOffset breach. logStartOffset is ${logStartOffset}")
+          s" startOffset breach. logStartOffset is $logStartOffset")
         true
       } else {
         false
