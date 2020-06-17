@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
+import org.apache.kafka.streams.internals.MockAdminClient;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -478,7 +479,7 @@ public class TopologyTestDriver implements Closeable {
                     mockWallClockTime,
                     streamsConfig,
                     logContext,
-                    null,
+                    createAdminClient(processorTopology.storeToChangelogTopic()),
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
                     stateRestoreListener),
                 processorTopology.storeToChangelogTopic(),
@@ -1268,5 +1269,14 @@ public class TopologyTestDriver implements Closeable {
             consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
         }
         return consumer;
+    }
+
+    private MockAdminClient createAdminClient(final Map<String, String> storeToChangelogTopic) {
+        final MockAdminClient adminClient = new MockAdminClient();
+        for (final Map.Entry<String, String> storeAndTopic : storeToChangelogTopic.entrySet()) {
+            final String topicName = storeAndTopic.getValue();
+            adminClient.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
+        }
+        return adminClient;
     }
 }
