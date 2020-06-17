@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -574,8 +576,10 @@ public class StoreChangelogReader implements ChangelogReader {
             return Collections.emptyMap();
 
         try {
-            final ListOffsetsResult result = adminClient.listOffsets(partitions.stream().collect(
-                    Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())));
+            final ListOffsetsResult result = adminClient.listOffsets(
+                    partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())),
+                    new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED)
+            );
             return result.all().get().entrySet().stream().collect(
                     Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
         } catch (final TimeoutException | InterruptedException | ExecutionException e) {
