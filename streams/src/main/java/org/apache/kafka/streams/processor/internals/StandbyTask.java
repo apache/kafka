@@ -44,6 +44,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Sensor closeTaskSensor;
     private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
+    private final StreamsMetricsImpl streamsMetrics;
 
     private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit;
 
@@ -52,7 +53,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param partitions     input topic partitions, used for thread metadata only
      * @param topology       the instance of {@link ProcessorTopology}
      * @param config         the {@link StreamsConfig} specified by the user
-     * @param metrics        the {@link StreamsMetrics} created by the thread
+     * @param streamsMetrics        the {@link StreamsMetrics} created by the thread
      * @param stateMgr       the {@link ProcessorStateManager} for this task
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
@@ -60,13 +61,14 @@ public class StandbyTask extends AbstractTask implements Task {
                 final Set<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final StreamsConfig config,
-                final StreamsMetricsImpl metrics,
+                final StreamsMetricsImpl streamsMetrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory,
                 final ThreadCache cache,
                 final InternalProcessorContext processorContext) {
         super(id, topology, stateDirectory, stateMgr, partitions);
         this.processorContext = processorContext;
+        this.streamsMetrics = streamsMetrics;
         processorContext.transitionToStandby(cache);
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
@@ -74,7 +76,7 @@ public class StandbyTask extends AbstractTask implements Task {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         eosEnabled = StreamThread.eosEnabled(config);
     }
 
@@ -174,18 +176,21 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeClean() {
+        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         close(true);
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
+        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         close(false);
         log.info("Closed dirty");
     }
 
     @Override
     public void closeAndRecycleState() {
+        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
         } else {
