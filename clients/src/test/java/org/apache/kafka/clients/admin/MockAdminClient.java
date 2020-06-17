@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -532,9 +531,7 @@ public class MockAdminClient extends AdminClient {
                 if (topicMetadata != null && !topicMetadata.markedForDeletion) {
                     if (topicMetadata.fetchesRemainingUntilVisible > 0)
                         topicMetadata.fetchesRemainingUntilVisible = Math.max(0, topicMetadata.fetchesRemainingUntilVisible - 1);
-                    else return new Config(topicMetadata.configs.entrySet().stream()
-                                .map(entry -> new ConfigEntry(entry.getKey(), entry.getValue()))
-                                .collect(Collectors.toList()));
+                    else return toConfigObject(topicMetadata.configs);
 
                 }
                 throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
