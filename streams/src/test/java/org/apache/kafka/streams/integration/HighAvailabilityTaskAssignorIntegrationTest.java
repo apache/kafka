@@ -129,40 +129,16 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         builder.table(inputTopic, materializedFunction.apply(storeName));
         final Topology topology = builder.build();
 
-        final Properties producerProperties = mkProperties(
-            mkMap(
-                mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
-                mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
-                mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
-            )
-        );
-
-        final String kilo = getKiloByteValue();
-
         final int numberOfRecords = 500;
 
-        try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
-            for (int i = 0; i < numberOfRecords; i++) {
-                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
-            }
-        }
-
-        final Properties consumerProperties = mkProperties(
-            mkMap(
-                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
-            )
-        );
-
+        produceTestData(inputTopic, numberOfRecords);
 
         try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
              final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
-             final Consumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
+             final Consumer<String, String> consumer = new KafkaConsumer<>(getConsumerProperties())) {
             kafkaStreams0.start();
 
-            // just make sure we actually wrote all the input records
+            // sanity check: just make sure we actually wrote all the input records
             TestUtils.waitForCondition(
                 () -> getEndOffsetSum(inputTopicPartitions, consumer) == numberOfRecords,
                 120_000L,
@@ -250,7 +226,36 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         }
     }
 
-    private String getKiloByteValue() {
+    private void produceTestData(final String inputTopic, final int numberOfRecords) {
+        final String kilo = getKiloByteValue();
+
+        final Properties producerProperties = mkProperties(
+            mkMap(
+                mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
+                mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
+                mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
+            )
+        );
+
+        try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
+            for (int i = 0; i < numberOfRecords; i++) {
+                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
+            }
+        }
+    }
+
+    private static Properties getConsumerProperties() {
+        return mkProperties(
+                mkMap(
+                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
+                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
+                )
+            );
+    }
+
+    private static String getKiloByteValue() {
         final StringBuilder kiloBuilder = new StringBuilder(1000);
         for (int i = 0; i < 1000; i++) {
             kiloBuilder.append('0');
@@ -258,7 +263,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         return kiloBuilder.toString();
     }
 
-    private void assertFalseNoRetry(final boolean assertion, final String message) {
+    private static void assertFalseNoRetry(final boolean assertion, final String message) {
         if (assertion) {
             throw new NoRetryException(
                 new AssertionError(
