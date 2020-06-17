@@ -999,17 +999,15 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldAddMinAndMaxAndP99AndP90MetricsToSensor() {
+    public void shouldAddMinAndMaxMetricsToSensor() {
         StreamsMetricsImpl
-            .addMinAndMaxAndP99AndP90ToSensor(sensor, group, tags, metricNamePrefix, description1, description2, description3, description4);
+            .addMinAndMaxToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
         final double valueToRecord1 = 18.0;
         final double valueToRecord2 = 42.0;
         verifyMetric(metricNamePrefix + "-min", description1, valueToRecord1, valueToRecord2, valueToRecord1);
         verifyMetric(metricNamePrefix + "-max", description2, valueToRecord1, valueToRecord2, valueToRecord2);
-        verifyMetricWithinError(metricNamePrefix + "-p99", description3, valueToRecord1, valueToRecord2, valueToRecord2, 1.0);
-        verifyMetricWithinError(metricNamePrefix + "-p90", description4, valueToRecord1, valueToRecord2, valueToRecord2, 1.0);
-        assertThat(metrics.metrics().size(), equalTo(4 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test

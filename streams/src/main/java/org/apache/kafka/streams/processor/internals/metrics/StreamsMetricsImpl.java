@@ -28,9 +28,6 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.Percentile;
-import org.apache.kafka.common.metrics.stats.Percentiles;
-import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -47,9 +44,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import java.util.Optional;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -153,9 +150,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
-
-    private static final int PERCENTILES_SIZE_IN_BYTES = 100 * 1000;    // 100 kB
-    private static double MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000d; // maximum latency is 10 days; values above that will be pinned
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -650,14 +644,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addMinAndMaxAndP99AndP90ToSensor(final Sensor sensor,
-                                                        final String group,
-                                                        final Map<String, String> tags,
-                                                        final String operation,
-                                                        final String descriptionOfMin,
-                                                        final String descriptionOfMax,
-                                                        final String descriptionOfP99,
-                                                        final String descriptionOfP90) {
+    public static void addMinAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String descriptionOfMin,
+                                            final String descriptionOfMax) {
         sensor.add(
             new MetricName(
                 operation + MIN_SUFFIX,
@@ -674,27 +666,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 descriptionOfMax,
                 tags),
             new Max()
-        );
-
-        sensor.add(
-            new Percentiles(
-                PERCENTILES_SIZE_IN_BYTES,
-                MAXIMUM_E2E_LATENCY,
-                BucketSizing.LINEAR,
-                new Percentile(
-                    new MetricName(
-                        operation + P99_SUFFIX,
-                        group,
-                        descriptionOfP99,
-                        tags),
-                    99),
-                new Percentile(
-                    new MetricName(
-                        operation + P90_SUFFIX,
-                        group,
-                        descriptionOfP90,
-                        tags),
-                    90))
         );
     }
 
