@@ -175,6 +175,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config).getOrElse(new ZKClientConfig())
   private var _zkClient: KafkaZkClient = null
+
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))).toMap
@@ -182,12 +183,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
 
+  private var _featureChangeListener: FinalizedFeatureChangeListener = null
+
   def clusterId: String = _clusterId
 
   // Visible for testing
   private[kafka] def zkClient = _zkClient
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
+
+  private[kafka] def featureChangeListener = _featureChangeListener
 
   newGauge("BrokerState", () => brokerState.currentState)
   newGauge("ClusterId", () => clusterId)
@@ -220,6 +225,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* setup zookeeper */
         initZkClient(time)
+
+        /* initialize features */
+        _featureChangeListener = new FinalizedFeatureChangeListener(_zkClient)
+        if (config.isFeatureVersioningEnabled) {
+          _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
+        }
 
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
@@ -472,7 +483,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     )
 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    BrokerInfo(Broker(config.brokerId, updatedEndpoints, config.rack), config.interBrokerProtocolVersion, jmxPort)
+    BrokerInfo(
+      Broker(config.brokerId, updatedEndpoints, config.rack, SupportedFeatures.get),
+      config.interBrokerProtocolVersion,
+      jmxPort)
   }
 
   /**
@@ -686,6 +700,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown(), this)
+
+        if (featureChangeListener != null)
+          CoreUtils.swallow(featureChangeListener.close(), this)
 
         if (zkClient != null)
           CoreUtils.swallow(zkClient.close(), this)

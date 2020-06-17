@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
 
@@ -118,6 +119,10 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
     public UUID processId() {
         return processId;
     }
@@ -148,10 +153,38 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
-        for (final Map.Entry<TaskId, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
-            final TaskId taskId = entry.getKey();
+    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> tasksWithChangelogs) throws TaskMigratedException {
+        final Map<Task, Collection<TopicPartition>> corruptedStandbyTasks = new HashMap<>();
+        final Map<Task, Collection<TopicPartition>> corruptedActiveTasks = new HashMap<>();
+
+        for (final Map.Entry<TaskId, Collection<TopicPartition>> taskEntry : tasksWithChangelogs.entrySet()) {
+            final TaskId taskId = taskEntry.getKey();
             final Task task = tasks.get(taskId);
+            if (task.isActive()) {
+                corruptedActiveTasks.put(task, taskEntry.getValue());
+            } else {
+                corruptedStandbyTasks.put(task, taskEntry.getValue());
+            }
+        }
+
+        // Make sure to clean up any corrupted standby tasks in their entirety before committing
+        // since TaskMigrated can be thrown and the resulting handleLostAll will only clean up active tasks
+        closeAndRevive(corruptedStandbyTasks);
+
+        commit(tasks()
+                   .values()
+                   .stream()
+                   .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                   .filter(t -> !tasksWithChangelogs.containsKey(t.id()))
+                   .collect(Collectors.toSet())
+        );
+
+        closeAndRevive(corruptedActiveTasks);
+    }
+
+    private void closeAndRevive(final Map<Task, Collection<TopicPartition>> taskWithChangelogs) {
+        for (final Map.Entry<Task, Collection<TopicPartition>> entry : taskWithChangelogs.entrySet()) {
+            final Task task = entry.getKey();
 
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
@@ -182,91 +215,54 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
-        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
-        final Set<Task> tasksToRecycle = new HashSet<>();
-
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );
 
-        // first rectify all existing tasks
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
 
-        final Set<Task> tasksToClose = new HashSet<>();
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        final Set<Task> additionalTasksForCommitting = new HashSet<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
+        final List<Task> tasksToClose = new LinkedList<>();
+        final Set<Task> tasksToRecycle = new HashSet<>();
         final Set<Task> dirtyTasks = new HashSet<>();
 
+        // first rectify all existing tasks
         for (final Task task : tasks.values()) {
             if (activeTasks.containsKey(task.id()) && task.isActive()) {
                 updateInputPartitionsAndResume(task, activeTasks.get(task.id()));
-                if (task.commitNeeded()) {
-                    additionalTasksForCommitting.add(task);
-                }
                 activeTasksToCreate.remove(task.id());
             } else if (standbyTasks.containsKey(task.id()) && !task.isActive()) {
                 updateInputPartitionsAndResume(task, standbyTasks.get(task.id()));
                 standbyTasksToCreate.remove(task.id());
-                // check for tasks that were owned previously but have changed active/standby status
             } else if (activeTasks.containsKey(task.id()) || standbyTasks.containsKey(task.id())) {
+                // check for tasks that were owned previously but have changed active/standby status
                 tasksToRecycle.add(task);
             } else {
-                try {
-                    task.suspend();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                    tasksToClose.add(task);
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
-                } catch (final RuntimeException e) {
-                    final String uncleanMessage = String.format(
-                        "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
-                        task.id());
-                    log.error(uncleanMessage, e);
-                    taskCloseExceptions.put(task.id(), e);
-                    // We've already recorded the exception (which is the point of clean).
-                    // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
-                    dirtyTasks.add(task);
-                }
-            }
-        }
-
-        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            try {
-                for (final Task task : additionalTasksForCommitting) {
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                    }
-                }
-
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-
-                for (final Task task : additionalTasksForCommitting) {
-                    task.postCommit();
-                }
-            } catch (final RuntimeException e) {
-                log.error("Failed to batch commit tasks, " +
-                    "will close all tasks involved in this commit as dirty by the end", e);
-                dirtyTasks.addAll(additionalTasksForCommitting);
-                dirtyTasks.addAll(tasksToClose);
-
-                tasksToClose.clear();
-                // Just add first taskId to re-throw by the end.
-                taskCloseExceptions.put(consumedOffsetsAndMetadataPerTask.keySet().iterator().next(), e);
+                tasksToClose.add(task);
             }
         }
 
         for (final Task task : tasksToClose) {
             try {
+                task.suspend(); // Should be a no-op for active tasks since they're suspended in handleRevocation
+                if (task.commitNeeded()) {
+                    if (task.isActive()) {
+                        log.error("Active task {} was revoked and should have already been committed", task.id());
+                        throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
+                    } else {
+                        task.prepareCommit();
+                        task.postCommit();
+                    }
+                }
                 completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
-                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
+                final String uncleanMessage = String.format(
+                    "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
+                    task.id());
                 log.error(uncleanMessage, e);
                 taskCloseExceptions.put(task.id(), e);
                 // We've already recorded the exception (which is the point of clean).
@@ -282,6 +278,7 @@ public class TaskManager {
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                 } else {
+                    oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -432,44 +429,76 @@ public class TaskManager {
     }
 
     /**
+     * Handle the revoked partitions and prepare for closing the associated tasks in {@link #handleAssignment(Map, Map)}
+     * We should commit the revoked tasks now as we will not officially own them anymore when {@link #handleAssignment(Map, Map)}
+     * is called. Note that only active task partitions are passed in from the rebalance listener, so we only need to
+     * consider/commit active tasks here
+     *
+     * If eos-beta is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
+     *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
-        final Set<TopicPartition> remainingPartitions = new HashSet<>(revokedPartitions);
+        final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        for (final Task task : tasks.values()) {
-            if (remainingPartitions.containsAll(task.inputPartitions())) {
-                task.suspend();
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+        final Set<Task> tasksToCommit = new HashSet<>();
+        final Set<Task> additionalTasksForCommitting = new HashSet<>();
 
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        for (final Task task : activeTaskIterable()) {
+            if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
+                try {
+                    task.suspend();
+                    if (task.commitNeeded()) {
+                        tasksToCommit.add(task);
+                    }
+                } catch (final RuntimeException e) {
+                    log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
+                    firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
                 }
-            } else if (task.isActive() && task.commitNeeded()) {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                if (!committableOffsets.isEmpty()) {
-                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                }
+            } else if (task.commitNeeded()) {
+                additionalTasksForCommitting.add(task);
             }
-            remainingPartitions.removeAll(task.inputPartitions());
+            remainingRevokedPartitions.removeAll(task.inputPartitions());
         }
 
-        if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-        }
-
-        for (final Task task : tasks.values()) {
-            if (consumedOffsetsAndMetadataPerTask.containsKey(task.id())) {
-                task.postCommit();
-            }
-        }
-
-        if (!remainingPartitions.isEmpty()) {
+        if (!remainingRevokedPartitions.isEmpty()) {
             log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
                          "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingPartitions);
+                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+        }
+
+        final RuntimeException suspendException = firstException.get();
+        if (suspendException != null) {
+            throw suspendException;
+        }
+
+        // If using eos-beta, if we must commit any task then we must commit all of them
+        // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
+        if (processingMode ==  EXACTLY_ONCE_BETA && !tasksToCommit.isEmpty()) {
+            tasksToCommit.addAll(additionalTasksForCommitting);
+        }
+
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        for (final Task task : tasksToCommit) {
+            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+        }
+
+        commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+        for (final Task task : tasksToCommit) {
+            try {
+                task.postCommit();
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while post-committing task " + task.id(), e);
+                firstException.compareAndSet(null, e);
+            }
+        }
+
+        final RuntimeException commitException = firstException.get();
+        if (commitException != null) {
+            throw commitException;
         }
     }
 
@@ -507,17 +536,24 @@ public class TaskManager {
 
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
-     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}
-     *
-     * @return Map from task id to its total offset summed across all state stores
+     * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
+     * Does not include stateless or non-logged tasks.
      */
     public Map<TaskId, Long> getTaskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
-        for (final TaskId id : lockedTaskDirectories) {
+        // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
+        // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
+        // just have an empty changelogOffsets map.
+        for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.keySet())) {
             final Task task = tasks.get(id);
             if (task != null) {
-                taskOffsetSums.put(id, sumOfChangelogOffsets(id, task.changelogOffsets()));
+                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                if (changelogOffsets.isEmpty()) {
+                    log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}", id);
+                } else {
+                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, changelogOffsets));
+                }
             } else {
                 final File checkpointFile = stateDirectory.checkpointFileFor(id);
                 try {
@@ -598,13 +634,14 @@ public class TaskManager {
             final long offset = changelogEntry.getValue();
 
 
-            if (offset == Task.LATEST_OFFSET) { // this condition can only be true for active tasks; never for standby
+            if (offset == Task.LATEST_OFFSET) {
+                // this condition can only be true for active tasks; never for standby
                 // for this case, the offset of all partitions is set to `LATEST_OFFSET`
                 // and we "forward" the sentinel value directly
                 return Task.LATEST_OFFSET;
             } else {
                 if (offset < 0) {
-                    throw new IllegalStateException("Offset should not be negative.");
+                    throw new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry);
                 }
                 offsetSum += offset;
                 if (offsetSum < 0) {
@@ -649,18 +686,21 @@ public class TaskManager {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         final Set<Task> tasksToClose = new HashSet<>();
+        final Set<Task> tasksToCommit = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : tasks.values()) {
             if (clean) {
                 try {
                     task.suspend();
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-
-                    tasksToClose.add(task);
-                    if (!committableOffsets.isEmpty()) {
-                        consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                    if (task.commitNeeded()) {
+                        tasksToCommit.add(task);
+                        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                        if (task.isActive()) {
+                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                        }
                     }
+                    tasksToClose.add(task);
                 } catch (final TaskMigratedException e) {
                     // just ignore the exception as it doesn't matter during shutdown
                     closeTaskDirty(task);
@@ -673,13 +713,25 @@ public class TaskManager {
             }
         }
 
-        if (clean && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
-            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        try {
+            if (clean) {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+                for (final Task task : tasksToCommit) {
+                    try {
+                        task.postCommit();
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        firstException.compareAndSet(null, e);
+                    }
+                }
+            }
+        } catch (final RuntimeException e) {
+            log.error("Exception caught while committing tasks during shutdown", e);
+            firstException.compareAndSet(null, e);
         }
 
         for (final Task task : tasksToClose) {
             try {
-                task.postCommit();
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
@@ -788,26 +840,24 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commit(final Collection<Task> tasks) {
+    int commit(final Collection<Task> tasksToCommit) {
         if (rebalanceInProgress) {
             return -1;
         } else {
             int committed = 0;
             final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : tasks) {
+            for (final Task task : tasksToCommit) {
                 if (task.commitNeeded()) {
                     final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-                    if (!offsetAndMetadata.isEmpty()) {
+                    if (task.isActive()) {
                         consumedOffsetsAndMetadataPerTask.put(task.id(), offsetAndMetadata);
                     }
                 }
             }
 
-            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-            }
+            commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-            for (final Task task : tasks) {
+            for (final Task task : tasksToCommit) {
                 if (task.commitNeeded()) {
                     ++committed;
                     task.postCommit();
@@ -836,28 +886,30 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        if (processingMode == EXACTLY_ONCE_ALPHA) {
-            for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
-                activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
-                    .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
-            }
-        } else {
-            final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-            if (processingMode == EXACTLY_ONCE_BETA) {
-                activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+        if (!offsetsPerTask.isEmpty()) {
+            if (processingMode == EXACTLY_ONCE_ALPHA) {
+                for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
+                    activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
+                        .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                }
             } else {
-                try {
-                    mainConsumer.commitSync(allOffsets);
-                } catch (final CommitFailedException error) {
-                    throw new TaskMigratedException("Consumer committing offsets failed, " +
-                        "indicating the corresponding thread is no longer part of the group", error);
-                } catch (final TimeoutException error) {
-                    // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-                    throw new StreamsException("Timed out while committing offsets via consumer", error);
-                } catch (final KafkaException error) {
-                    throw new StreamsException("Error encountered committing offsets via consumer", error);
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                if (processingMode == EXACTLY_ONCE_BETA) {
+                    activeTaskCreator.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+                } else {
+                    try {
+                        mainConsumer.commitSync(allOffsets);
+                    } catch (final CommitFailedException error) {
+                        throw new TaskMigratedException("Consumer committing offsets failed, " +
+                                                            "indicating the corresponding thread is no longer part of the group", error);
+                    } catch (final TimeoutException error) {
+                        // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
+                        throw new StreamsException("Timed out while committing offsets via consumer", error);
+                    } catch (final KafkaException error) {
+                        throw new StreamsException("Error encountered committing offsets via consumer", error);
+                    }
                 }
             }
         }
