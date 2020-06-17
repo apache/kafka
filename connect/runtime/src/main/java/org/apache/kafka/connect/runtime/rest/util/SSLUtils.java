@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
-import javax.net.ssl.X509ExtendedKeyManager;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -65,20 +64,7 @@ public class SSLUtils {
     public static SslContextFactory createClientSideSslContextFactory(WorkerConfig config) {
         Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing("listeners.https.");
 
-        // Override this method in order to avoid running into
-        // https://github.com/eclipse/jetty.project/issues/4385, which would otherwise cause this to
-        // break when the keystore contains multiple certificates.
-        // The override here matches the bug fix in Jetty for that issue:
-        // https://github.com/eclipse/jetty.project/pull/4404/files#diff-58640db0f8f2cd84b7e653d1c1540913R2188-R2193
-        // TODO: Remove this override when the version of Jetty for the framework is bumped to
-        //       9.4.25 or later
-        final SslContextFactory.Client ssl = new SslContextFactory.Client() {
-            @Override
-            @SuppressWarnings("deprecation")
-            protected X509ExtendedKeyManager newSniX509ExtendedKeyManager(X509ExtendedKeyManager keyManager) {
-                return keyManager;
-            }
-        };
+        final SslContextFactory.Client ssl = new SslContextFactory.Client();
 
         configureSslContextFactoryKeyStore(ssl, sslConfigValues);
         configureSslContextFactoryTrustStore(ssl, sslConfigValues);
