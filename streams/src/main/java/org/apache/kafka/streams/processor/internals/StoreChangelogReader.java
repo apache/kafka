@@ -580,6 +580,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 return result.all().get().entrySet().stream().collect(
                         Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
             } else {
+                // we only fall back to use restore consumer if admin client is not set in TTD
                 return restoreConsumer.endOffsets(partitions);
             }
         } catch (final TimeoutException | InterruptedException | ExecutionException e) {

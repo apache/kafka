@@ -478,6 +478,7 @@ public class TopologyTestDriver implements Closeable {
                     mockWallClockTime,
                     streamsConfig,
                     logContext,
+                    null,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
                     stateRestoreListener),
                 processorTopology.storeToChangelogTopic(),
@@ -1239,7 +1240,6 @@ public class TopologyTestDriver implements Closeable {
         public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
             throw new UnsupportedOperationException();
         }
-
     }
 
     private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {

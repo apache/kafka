@@ -147,8 +147,11 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
-    public MockAdminClient(List<Node> brokers,
-                           Node controller) {
+    public MockAdminClient() {
+        this(Collections.singletonList(Node.noNode()), Node.noNode());
+    }
+
+    public MockAdminClient(List<Node> brokers, Node controller) {
         this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
             Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
     }

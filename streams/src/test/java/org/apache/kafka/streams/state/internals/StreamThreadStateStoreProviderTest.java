@@ -364,7 +364,7 @@ public class StreamThreadStateStoreProviderTest {
                 new MockTime(),
                 streamsConfig,
                 logContext,
-                clientSupplier.getAdmin(new HashMap<>()),
+                clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
@@ -433,6 +433,7 @@ public class StreamThreadStateStoreProviderTest {
         clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
         clientSupplier.restoreConsumer.updateEndOffsets(offsets);
 
-
+        clientSupplier.adminClient.updateBeginningOffsets(offsets);
+        clientSupplier.adminClient.updateEndOffsets(offsets);
     }
 }
