@@ -800,7 +800,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, partitions.toSet)
 
     val producer = createProducer()
-    val producerRecords = partitions.flatMap(sendRecords(producer, partitionCount, _))
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 15, _))
     val consumerRecords = consumeRecords(consumer, producerRecords.size)
 
     val expected = producerRecords.map { record =>
