@@ -130,7 +130,7 @@ public class TransactionManagerTest {
 
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
-    private final ProducerMetadata metadata = new ProducerMetadata(0, 1000, Long.MAX_VALUE, Long.MAX_VALUE,
+    private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, Long.MAX_VALUE,
             logContext, new ClusterResourceListeners(), time);
     private final MockClient client = new MockClient(time, metadata);
     private final ApiVersions apiVersions = new ApiVersions();
@@ -139,6 +139,8 @@ public class TransactionManagerTest {
     private Sender sender = null;
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     @Before
     public void setup() {
@@ -156,7 +158,7 @@ public class TransactionManagerTest {
                 new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, 1000, apiVersions, autoDowngrade);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, apiVersions, autoDowngrade);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -165,7 +167,7 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
-                1000, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+                0L, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
@@ -413,7 +415,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * 0.2);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * RETRY_BACKOFF_JITTER);
     }
 
     @Test
@@ -438,7 +440,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * 0.2);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * RETRY_BACKOFF_JITTER);
     }
 
     @Test
@@ -463,14 +465,14 @@ public class TransactionManagerTest {
         assertNotNull(partitionHandler);
 
         for (int i = 0; partitionHandler.retryBackoffMs() < RETRY_BACKOFF_MAX_MS; i++) {
-            long expected = (long) Math.min(RETRY_BACKOFF_MAX_MS, DEFAULT_RETRY_BACKOFF_MS * Math.pow(2, i));
-            assertEquals(expected, partitionHandler.retryBackoffMs(), expected * 0.2);
+            long expected = (long) Math.min(RETRY_BACKOFF_MAX_MS, DEFAULT_RETRY_BACKOFF_MS * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
+            assertEquals(expected, partitionHandler.retryBackoffMs(), expected * RETRY_BACKOFF_JITTER);
 
             prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
             prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
             runUntil(() -> !client.hasPendingResponses());
         }
-        assertEquals(RETRY_BACKOFF_MAX_MS, partitionHandler.retryBackoffMs(), RETRY_BACKOFF_MAX_MS * 0.2);
+        assertEquals(RETRY_BACKOFF_MAX_MS, partitionHandler.retryBackoffMs(), RETRY_BACKOFF_MAX_MS * RETRY_BACKOFF_JITTER);
     }
 
     @Test(expected = IllegalStateException.class)

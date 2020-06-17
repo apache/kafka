@@ -105,6 +105,10 @@ public class SubscriptionState {
 
     private final GeometricProgression retryBackoff;
 
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+
     @Override
     public synchronized String toString() {
         return "SubscriptionState{" +
@@ -140,7 +144,8 @@ public class SubscriptionState {
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
+        this.retryBackoff = new GeometricProgression(
+                retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
     }
 
     /**

@@ -77,6 +77,8 @@ public class Metadata implements Closeable {
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
     private final GeometricProgression refreshBackoff;
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     /**
      * Create a new Metadata instance
@@ -109,7 +111,7 @@ public class Metadata implements Closeable {
         this.invalidTopics = Collections.emptySet();
         this.unauthorizedTopics = Collections.emptySet();
         this.refreshBackoff = new GeometricProgression(
-                refreshBackoffMs, 2, refreshBackoffMaxMs, 0.2);
+                refreshBackoffMs, RETRY_BACKOFF_EXP_BASE, refreshBackoffMaxMs, RETRY_BACKOFF_JITTER);
     }
 
     /**

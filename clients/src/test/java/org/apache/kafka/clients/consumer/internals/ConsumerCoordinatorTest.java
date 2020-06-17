@@ -186,8 +186,8 @@ public class ConsumerCoordinatorTest {
     @Before
     public void setup() {
         LogContext logContext = new LogContext();
-        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, 100, 1000);
-        this.metadata = new ConsumerMetadata(0, 1000, Long.MAX_VALUE, false,
+        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, 100, 100);
+        this.metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
@@ -1582,7 +1582,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private void testInternalTopicInclusion(boolean includeInternalTopics) {
-        metadata = new ConsumerMetadata(0, 1000, Long.MAX_VALUE, includeInternalTopics,
+        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, includeInternalTopics,
                 false, subscriptions, new LogContext(), new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false)) {

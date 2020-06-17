@@ -114,8 +114,8 @@ public class AbstractCoordinatorTest {
     private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
-        ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 1000, 60 * 60 * 1000L,
-                false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, 100, 1000),
+        ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMs, 60 * 60 * 1000L,
+                false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, 100, 100),
                 logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);

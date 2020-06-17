@@ -85,6 +85,8 @@ public final class RecordAccumulator {
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     /**
      * Create a new record accumulator
@@ -125,7 +127,8 @@ public final class RecordAccumulator {
         this.batchSize = batchSize;
         this.compression = compression;
         this.lingerMs = lingerMs;
-        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
+        this.retryBackoff = new GeometricProgression(
+                retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;

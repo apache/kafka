@@ -98,6 +98,8 @@ public class TransactionManager {
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
     private final boolean autoDowngradeTxnCommit;
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     private static class TopicPartitionBookkeeper {
 
@@ -306,7 +308,8 @@ public class TransactionManager {
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
-        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
+        this.retryBackoff = new GeometricProgression(
+                retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
         this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;

@@ -348,6 +348,10 @@ public class KafkaAdminClient extends AdminClient {
 
     private GeometricProgression retryBackoff;
 
+    private final static double RETRY_BACKOFF_JITTER = 0.2;
+
+    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+
     /**
      * Get or create a list value from a map.
      *
@@ -553,9 +557,9 @@ public class KafkaAdminClient extends AdminClient {
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         this.retryBackoff = new GeometricProgression(
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                2,
+                RETRY_BACKOFF_EXP_BASE,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
-                0.2);
+                RETRY_BACKOFF_JITTER);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -3687,10 +3691,6 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
 
         return new ListPartitionReassignmentsResult(partitionReassignmentsFuture);
-    }
-
-    private long calculateNextAllowedRetryMs(Call call, long now) {
-        return now + retryBackoff.term(call.tries);
     }
 
     private void handleNotControllerError(Errors error) throws ApiException {

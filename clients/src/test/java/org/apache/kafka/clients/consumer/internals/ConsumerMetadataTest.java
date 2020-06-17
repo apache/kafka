@@ -50,7 +50,7 @@ import static org.junit.Assert.assertTrue;
 public class ConsumerMetadataTest {
 
     private final Node node = new Node(1, "localhost", 9092);
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST, 100, 1000);
+    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST, 100, 100);
     private final Time time = new MockTime();
 
     @Test
@@ -168,7 +168,7 @@ public class ConsumerMetadataTest {
     private ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics) {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
-        return new ConsumerMetadata(refreshBackoffMs, 1000, expireMs, includeInternalTopics, false,
+        return new ConsumerMetadata(refreshBackoffMs, 0, expireMs, includeInternalTopics, false,
                 subscription, new LogContext(), new ClusterResourceListeners());
     }
 
