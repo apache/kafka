@@ -1752,6 +1752,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldUnregisterMetricsInCloseAndRecycle() {
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
+
+        task.suspend();
+        assertThat(getTaskMetrics(), not(empty()));
+        task.closeAndRecycleState();
+        assertThat(getTaskMetrics(), empty());
+    }
+
+    @Test
     public void closeShouldBeIdempotent() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
@@ -1800,10 +1814,7 @@ public class StreamTaskTest {
         assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RUNNING
 
         task.suspend();
-
-        assertThat(getTaskMetrics(), not(empty()));
         task.closeAndRecycleState(); // SUSPENDED
-        assertThat(getTaskMetrics(), empty());
 
         EasyMock.verify(stateManager, recordCollector);
     }
