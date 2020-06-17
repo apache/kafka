@@ -38,7 +38,7 @@ public class StoreQueryParameters<T> {
     }
 
     public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
-                                                          final QueryableStoreType<T>  queryableStoreType) {
+                                                              final QueryableStoreType<T>  queryableStoreType) {
         return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false);
     }
 
