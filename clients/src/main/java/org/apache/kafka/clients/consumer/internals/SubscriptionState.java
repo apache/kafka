@@ -464,7 +464,7 @@ public class SubscriptionState {
 
     /**
      * Attempt to complete validation with the end offset returned from the OffsetForLeaderEpoch request.
-     * @return The diverging offset if truncation was detected and no reset policy is defined.
+     * @return Log truncation details if detected and no reset policy is defined.
      */
     public synchronized Optional<LogTruncation> maybeCompleteValidation(TopicPartition tp,
                                                                         FetchPosition requestPosition,
