@@ -191,7 +191,7 @@ public class StandbyTask extends AbstractTask implements Task {
         switch (state()) {
             case CREATED:
             case SUSPENDED:
-                executeAndMaybeSwallow(
+                TaskManager.executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
                         log,
