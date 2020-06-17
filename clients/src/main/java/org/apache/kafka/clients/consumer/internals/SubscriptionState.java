@@ -27,6 +27,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.EpochEndOffset;
+import org.apache.kafka.common.utils.GeometricProgression;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -102,6 +103,8 @@ public class SubscriptionState {
 
     private int assignmentId = 0;
 
+    private final GeometricProgression retryBackoff;
+
     @Override
     public synchronized String toString() {
         return "SubscriptionState{" +
@@ -128,7 +131,8 @@ public class SubscriptionState {
         }
     }
 
-    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
+    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy,
+                             long retryBackoffMs, long retryBackoffMaxMs) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new HashSet<>();
@@ -136,6 +140,7 @@ public class SubscriptionState {
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+        this.retryBackoff = new GeometricProgression(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
     }
 
     /**
@@ -696,14 +701,35 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
-    synchronized void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+    synchronized void requestFailed(Set<TopicPartition> partitions, long now) {
         for (TopicPartition partition : partitions) {
             // by the time the request failed, the assignment may no longer
             // contain this partition any more, in which case we would just ignore.
             final TopicPartitionState state = assignedStateOrNull(partition);
             if (state != null)
-                state.requestFailed(nextRetryTimeMs);
+                incrementRetryBackoff(state, now);
         }
+    }
+
+    synchronized void requestSuccess(Set<TopicPartition> partitions, long now) {
+        for (TopicPartition partition : partitions) {
+            final TopicPartitionState state = assignment.stateValue(partition);
+            if (state != null)
+                resetRetryBackoff(state);
+        }
+    }
+
+    private void incrementRetryBackoff(TopicPartitionState state, long now) {
+        int attempts = state.getAndIncrementAttempts();
+        long retryBackoffMs = retryBackoff.term(attempts);
+        // TODO: Remove the line below before merging
+        System.out.println("retryBackoffMs = " + retryBackoffMs + " now = " + now);
+        long nextRetryTimeMs = now + retryBackoffMs;
+        state.requestFailed(nextRetryTimeMs);
+    }
+
+    private void resetRetryBackoff(TopicPartitionState state) {
+        state.resetAttempts();
     }
 
     synchronized void movePartitionToEnd(TopicPartition tp) {
@@ -712,6 +738,14 @@ public class SubscriptionState {
 
     public synchronized ConsumerRebalanceListener rebalanceListener() {
         return rebalanceListener;
+    }
+
+    // Visible for testing
+    long nextAllowedRetry(TopicPartition tp) {
+        TopicPartitionState state = this.assignment.stateValue(tp);
+        if (state == null)
+            throw new IllegalStateException("No current assignment for partition " + tp);
+        return state.nextRetryTimeMs;
     }
 
     private static class TopicPartitionState {
@@ -727,6 +761,7 @@ public class SubscriptionState {
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
+        private int attempts = 0;
 
         TopicPartitionState() {
             this.paused = false;
@@ -738,6 +773,14 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+        public int getAndIncrementAttempts() {
+            return this.attempts++;
+        }
+
+        public void resetAttempts() {
+            this.attempts = 0;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {

@@ -156,7 +156,7 @@ public class OffsetForLeaderEpochClientTest {
     private void buildDependencies(OffsetResetStrategy offsetResetStrategy) {
         LogContext logContext = new LogContext();
         time = new MockTime(1);
-        subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        subscriptions = new SubscriptionState(logContext, offsetResetStrategy, 100, 1000);
         metadata = new ConsumerMetadata(0, 1000, Long.MAX_VALUE, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);

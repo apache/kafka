@@ -50,7 +50,7 @@ import static org.junit.Assert.assertTrue;
 public class ConsumerMetadataTest {
 
     private final Node node = new Node(1, "localhost", 9092);
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST, 100, 1000);
     private final Time time = new MockTime();
 
     @Test

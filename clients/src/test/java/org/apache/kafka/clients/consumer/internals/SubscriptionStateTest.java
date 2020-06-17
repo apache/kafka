@@ -47,7 +47,7 @@ import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
 
-    private SubscriptionState state = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+    private SubscriptionState state = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST, 100, 1000);
     private final String topic = "test";
     private final String topic1 = "test1";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -632,7 +632,7 @@ public class SubscriptionStateTest {
     @Test
     public void testTruncationDetectionWithoutResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE, 100, 1000);
         state.assignFromUser(Collections.singleton(tp0));
 
         int currentEpoch = 10;

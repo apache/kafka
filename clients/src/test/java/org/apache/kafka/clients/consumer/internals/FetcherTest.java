@@ -158,6 +158,7 @@ public class FetcherTest {
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
+    private long retryBackoffMaxMs = 1000;
     private long requestTimeoutMs = 30000;
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
@@ -1477,7 +1478,8 @@ public class FetcherTest {
         assertFalse(subscriptions.isFetchable(tp0));
 
         // Fail with LEADER_NOT_AVAILABLE
-        time.sleep(retryBackoffMs);
+        long currentRetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        time.sleep(currentRetryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP,
             Optional.of(validLeaderEpoch)), listOffsetResponse(Errors.LEADER_NOT_AVAILABLE, 1L, 5L), false);
         fetcher.resetOffsetsIfNeeded();
@@ -1487,7 +1489,8 @@ public class FetcherTest {
         assertFalse(subscriptions.isFetchable(tp0));
 
         // Back to normal
-        time.sleep(retryBackoffMs);
+        currentRetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        time.sleep(currentRetryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
                 listOffsetResponse(Errors.NONE, 1L, 5L), false);
         fetcher.resetOffsetsIfNeeded();
@@ -1496,6 +1499,135 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(subscriptions.position(tp0).offset, 5L);
+    }
+
+    private void resetOffset(Set<TopicPartition> tps, boolean successful) {
+        Errors retriableError = successful ? Errors.NONE : Errors.OFFSET_NOT_AVAILABLE;
+        Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
+        for (TopicPartition tp : tps) {
+            allPartitionData.put(tp, new ListOffsetResponse.PartitionData(
+                    retriableError, 1L, 5L, Optional.empty()));
+        }
+        client.prepareResponse(
+                body -> true,
+                new ListOffsetResponse(allPartitionData),
+                false);
+        fetcher.resetOffsetsIfNeeded();
+        time.resetAutoTickedCounter();
+        consumerClient.pollNoWakeup();
+    }
+
+    @Test
+    public void testResetOffsetsExponentialBackoff() {
+        buildFetcher();
+        assignFromUser(Utils.mkSet(tp0, tp1));
+        long tp0RetryBackoffMs = 0;
+        long tp1RetryBackoffMs = 0;
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Test exponential retry backoff functionality on tp0
+        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * 0.8; i++) {
+            resetOffset(singleton(tp0), false);
+            tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(2, i));
+            // Adjust the expected value since the mock time will auto-tick
+            assertEquals(expected, tp0RetryBackoffMs, expected * 0.2 + time.autoTickedMs());
+            // TODO: Remove the line below before merging
+            System.out.println(tp0RetryBackoffMs + " " + time.milliseconds());
+            time.sleep(tp0RetryBackoffMs);
+        }
+
+        // Test if the retry backoff values for tp0 and tp1 are isolated
+        subscriptions.requestOffsetReset(tp1, OffsetResetStrategy.LATEST);
+        resetOffset(Utils.mkSet(tp0, tp1), false);
+        tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
+        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * 0.2 + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * 0.2 + time.autoTickedMs());
+        time.sleep(Math.max(tp0RetryBackoffMs, tp1RetryBackoffMs));
+
+        // Should reset retry backoff upon a success
+        resetOffset(Utils.mkSet(tp0, tp1), true);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp1, OffsetResetStrategy.LATEST);
+
+        resetOffset(Utils.mkSet(tp0, tp1), false);
+        tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
+        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * 0.2 + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * 0.2 + time.autoTickedMs());
+    }
+
+    private void validateOffsets(Set<TopicPartition> tps, int leaderEpoch, Node node, boolean successful) {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
+        Errors retriableError = successful ? Errors.NONE : Errors.LEADER_NOT_AVAILABLE;
+        for (TopicPartition tp : tps) {
+            endOffsetMap.put(tp, new EpochEndOffset(retriableError, leaderEpoch, 30L));
+            partitionCounts.put(tp.topic(), 4);
+        }
+        metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> leaderEpoch), false, 0L);
+        OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
+        client.prepareResponseFrom(resp, node);
+        fetcher.validateOffsetsIfNeeded();
+        time.resetAutoTickedCounter();
+        consumerClient.pollNoWakeup();
+    }
+
+    @Test
+    public void testValidateOffsetsExponentialBackoff() {
+        buildFetcher();
+        assignFromUser(Utils.mkSet(tp0, tp1));
+
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+
+        final int leaderEpoch = 1;
+        Node node = metadata.fetch().nodes().get(0);
+        assertFalse(client.isConnected(node.idString()));
+
+        // Seek and validate tp0 only
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                metadata.currentLeader(tp0).leader, Optional.of(leaderEpoch));
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(leaderEpoch), leaderAndEpoch));
+        apiVersions.update(node.idString(), NodeApiVersions.create());
+
+        long tp0RetryBackoffMs = 0;
+        long tp1RetryBackoffMs = 0;
+
+        // Test exponential retry backoff functionality on tp0
+        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * 0.8; i++) {
+            metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> leaderEpoch), false, 0L);
+            validateOffsets(singleton(tp0), leaderEpoch, node, false);
+            tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(2, i));
+            // Adjust the expected value since the mock time will auto-tick
+            assertEquals(expected, tp0RetryBackoffMs, expected * 0.2 + time.autoTickedMs());
+            // TODO: Remove the line below before merging
+            System.out.println(tp0RetryBackoffMs + " " + time.milliseconds());
+            time.sleep(tp0RetryBackoffMs);
+        }
+
+        // Seek and validate tp1, test if the retry backoff values for tp0 and tp1 are isolated
+        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(20L, Optional.of(leaderEpoch), leaderAndEpoch));
+        validateOffsets(Utils.mkSet(tp0, tp1), leaderEpoch, node, false);
+        tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
+        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * 0.2 + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * 0.2 + time.autoTickedMs());
+        time.sleep(Math.max(tp0RetryBackoffMs, tp1RetryBackoffMs));
+
+        // Should reset retry backoff upon success
+        validateOffsets(Utils.mkSet(tp0, tp1), leaderEpoch, node, true);
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(leaderEpoch), leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(20L, Optional.of(leaderEpoch), leaderAndEpoch));
+        validateOffsets(Utils.mkSet(tp0, tp1), leaderEpoch, node, false);
+        tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
+        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * 0.2 + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * 0.2 + time.autoTickedMs());
     }
 
     @Test
@@ -1589,7 +1721,8 @@ public class FetcherTest {
         assertFalse(client.hasPendingMetadataUpdates());
 
         // Next fetch succeeds
-        time.sleep(retryBackoffMs);
+        long currentRetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        time.sleep(currentRetryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.resetOffsetsIfNeeded();
@@ -1672,7 +1805,8 @@ public class FetcherTest {
         assertFalse(subscriptions.hasValidPosition(tp0));
 
         // Next one succeeds
-        time.sleep(retryBackoffMs);
+        long currentRetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        time.sleep(currentRetryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.resetOffsetsIfNeeded();
@@ -1734,7 +1868,7 @@ public class FetcherTest {
     @Test(timeout = 10000)
     public void testEarlierOffsetResetArrivesLate() throws InterruptedException {
         LogContext lc = new LogContext();
-        buildFetcher(spy(new SubscriptionState(lc, OffsetResetStrategy.EARLIEST)), lc);
+        buildFetcher(spy(new SubscriptionState(lc, OffsetResetStrategy.EARLIEST, retryBackoffMs, retryBackoffMaxMs)), lc);
         assignFromUser(singleton(tp0));
 
         ExecutorService es = Executors.newSingleThreadExecutor();
@@ -1851,7 +1985,8 @@ public class FetcherTest {
         assertFalse(subscriptions.hasValidPosition(tp0));
 
         // Next one succeeds
-        time.sleep(retryBackoffMs);
+        long currentRetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
+        time.sleep(currentRetryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.resetOffsetsIfNeeded();
@@ -3222,7 +3357,8 @@ public class FetcherTest {
             topicPartitions.add(new TopicPartition(topicName, i));
 
         LogContext logContext = new LogContext();
-        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST), logContext);
+        buildDependencies(new MetricConfig(), Long.MAX_VALUE,
+                new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, retryBackoffMs, retryBackoffMaxMs), logContext);
 
         fetcher = new Fetcher<byte[], byte[]>(
                 new LogContext(),
@@ -3242,6 +3378,7 @@ public class FetcherTest {
                 metricsRegistry,
                 time,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
                 apiVersions) {
@@ -4395,7 +4532,7 @@ public class FetcherTest {
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy, retryBackoffMs, retryBackoffMaxMs);
         buildFetcher(metricConfig, keyDeserializer, valueDeserializer, maxPollRecords, isolationLevel, metadataExpireMs,
                 subscriptionState, logContext);
     }
@@ -4432,6 +4569,7 @@ public class FetcherTest {
                 metricsRegistry,
                 time,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 requestTimeoutMs,
                 isolationLevel,
                 apiVersions);
@@ -4443,7 +4581,7 @@ public class FetcherTest {
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;
-        metadata = new ConsumerMetadata(0, 1000, metadataExpireMs, false, false,
+        metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);

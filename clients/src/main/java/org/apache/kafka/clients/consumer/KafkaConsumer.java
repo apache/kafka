@@ -719,7 +719,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.valueDeserializer = valueDeserializer;
             }
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-            this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+            this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy, retryBackoffMs, retryBackoffMaxMs);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                     valueDeserializer, metrics.reporters(), interceptorList);
             this.metadata = new ConsumerMetadata(retryBackoffMs,
@@ -801,6 +801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricsRegistry,
                     this.time,
                     this.retryBackoffMs,
+                    this.retryBackoffMaxMs,
                     this.requestTimeoutMs,
                     isolationLevel,
                     apiVersions);

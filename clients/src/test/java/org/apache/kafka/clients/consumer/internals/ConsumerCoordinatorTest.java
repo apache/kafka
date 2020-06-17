@@ -186,7 +186,7 @@ public class ConsumerCoordinatorTest {
     @Before
     public void setup() {
         LogContext logContext = new LogContext();
-        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
+        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST, 100, 1000);
         this.metadata = new ConsumerMetadata(0, 1000, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
