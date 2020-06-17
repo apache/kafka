@@ -1190,7 +1190,7 @@ public class FetcherTest {
         assertEquals(0, fetcher.fetchedRecords().size());
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
         assertNull(subscriptions.validPosition(tp0));
-        assertNotNull(subscriptions.position(tp0));
+        assertNull(subscriptions.position(tp0));
     }
 
     @Test
@@ -3854,8 +3854,6 @@ public class FetcherTest {
             return partitionData.currentLeaderEpoch.equals(Optional.of(epochOne)) && partitionData.leaderEpoch == epochOne;
         }, new OffsetsForLeaderEpochResponse(singletonMap(tp0, epochEndOffset)));
         consumerClient.poll(time.timer(Duration.ZERO));
-
-        assertEquals(initialOffset, subscriptions.position(tp0).offset);
 
         if (offsetResetStrategy == OffsetResetStrategy.NONE) {
             OffsetOutOfRangeException thrown =

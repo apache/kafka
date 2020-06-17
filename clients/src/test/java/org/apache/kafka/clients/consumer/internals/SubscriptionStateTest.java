@@ -43,6 +43,7 @@ import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
@@ -210,7 +211,7 @@ public class SubscriptionStateTest {
         state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertNotNull(state.position(tp0));
+        assertNull(state.position(tp0));
 
         // seek should clear the reset and make the partition fetchable
         state.seek(tp0, 0);
@@ -600,7 +601,7 @@ public class SubscriptionStateTest {
         assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(initialPosition, state.position(tp0));
+        assertNull(state.position(tp0));
     }
 
     @Test
