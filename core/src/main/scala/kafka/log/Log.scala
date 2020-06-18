@@ -1812,8 +1812,8 @@ class Log(@volatile private var _dir: File,
       if (diff - segment.size >= 0) {
         diff -= segment.size
         info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
-          s" ${config.retentionSize} breach. Segment size is ${segment.size} and total log size" +
-          s" after deletion will be ${size - diff}")
+          s" retention size in bytes ${config.retentionSize} breach. Segment size is" +
+          s" ${segment.size} and total log size after deletion will be ${size - diff}")
         true
       } else {
         false
