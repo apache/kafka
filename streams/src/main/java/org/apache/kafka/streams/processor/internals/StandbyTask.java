@@ -88,6 +88,7 @@ public class StandbyTask extends AbstractTask {
 
         if (eosEnabled) {
             final Set<TopicPartition> partitionsToReinitialize = new HashSet<>();
+            // the state manager actually returns the next checkpoint to be written
             for (final TopicPartition partition : stateMgr.checkpointed().keySet()) {
                 if (!stateMgr.hadCheckpoint(partition)) {
                     partitionsToReinitialize.add(partition);

@@ -52,6 +52,8 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 public class StandbyTaskEOSIntegrationTest {
 
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
+    private final static int KEY_0 = 0;
+    private final static int KEY_1 = 1;
 
     private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 
@@ -81,7 +83,7 @@ public class StandbyTaskEOSIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
-                new KeyValue<>(0, 0)
+                new KeyValue<>(KEY_0, 0)
             ),
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
@@ -117,7 +119,7 @@ public class StandbyTaskEOSIntegrationTest {
                         storeName,
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     ).enableStaleStores()
-                ).get(0) != null,
+                ).get(KEY_0) != null,
                 REBALANCE_TIMEOUT,
                 "Could not get key from standby store"
             );
@@ -128,7 +130,7 @@ public class StandbyTaskEOSIntegrationTest {
                         storeName,
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     )
-                ).get(0) != null,
+                ).get(KEY_0) != null,
                 "Could not get key from main store"
             );
 
@@ -173,7 +175,7 @@ public class StandbyTaskEOSIntegrationTest {
                         storeName,
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     ).enableStaleStores()
-                ).get(0) != null,
+                ).get(KEY_0) != null,
                 "Could not get key from recovered standby store"
             );
 
@@ -184,7 +186,7 @@ public class StandbyTaskEOSIntegrationTest {
                         storeName,
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     )
-                ).get(0) != null,
+                ).get(KEY_0) != null,
                 REBALANCE_TIMEOUT,
                 "Could not get key from recovered main store"
             );
@@ -194,7 +196,7 @@ public class StandbyTaskEOSIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
                 Collections.singletonList(
-                    new KeyValue<>(1, 0)
+                    new KeyValue<>(KEY_1, 0)
                 ),
                 TestUtils.producerConfig(
                     CLUSTER.bootstrapServers(),
