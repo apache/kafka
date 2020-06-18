@@ -145,32 +145,6 @@ class ReassignPartitionsCommandArgsTest {
     shouldFailWith("Command must include exactly one action", args)
   }
 
-  @Test
-  def testAlterThrottleWithValidInterBrokerThrottle(): Unit = {
-    val args = Array(
-      "--alter-throttle",
-      "--bootstrap-server", "localhost:1234",
-      "--throttle", "5")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
-  def testAlterThrottleWithValidLogDirThrottle(): Unit = {
-    val args = Array(
-      "--alter-throttle",
-      "--bootstrap-server", "localhost:1234",
-      "--replica-alter-log-dirs-throttle", "5")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
-  def testAlterThrottleFailsWithZookeeperOption(): Unit = {
-    val args = Array(
-      "--alter-throttle",
-      "--zookeeper", "localhost:1234")
-    shouldFailWith("Option \"[zookeeper]\" can't be used with action \"[alter-throttle]\"", args)
-  }
-
   ///// Test --execute
   @Test
   def shouldNotAllowExecuteWithTopicsOption(): Unit = {

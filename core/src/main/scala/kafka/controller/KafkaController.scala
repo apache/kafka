@@ -817,8 +817,14 @@ class KafkaController(val config: KafkaConfig,
         info(s"Skipping reassignment of $tp since the topic is currently being deleted")
         new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
       } else {
-        val assignedReplicas = controllerContext.partitionReplicaAssignment(tp)
-        if (assignedReplicas.nonEmpty) {
+        val assignment = controllerContext.partitionFullReplicaAssignment(tp)
+        if (assignment == ReplicaAssignment.empty) {
+          new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
+        } else if (assignment == reassignment) {
+          info(s"Skipping assignment update of partition $tp to $reassignment since it " +
+            "matches the existing assignment")
+          ApiError.NONE
+        } else {
           try {
             onPartitionReassignment(tp, reassignment)
             ApiError.NONE
@@ -830,8 +836,6 @@ class KafkaController(val config: KafkaConfig,
               error(s"Error completing reassignment of partition $tp", e)
               new ApiError(Errors.UNKNOWN_SERVER_ERROR)
           }
-        } else {
-            new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
         }
       }
 

@@ -180,7 +180,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     // Now update the throttle and verify the reassignment completes
     val updatedThrottle = 300000L
-    runAlterThrottles(cluster.adminClient, interBrokerThrottle = updatedThrottle, replicaAlterLogDirsThrottle = -1L)
+    runExecuteAssignment(cluster.adminClient, additional = true, assignment, updatedThrottle, -1L)
     waitForInterBrokerThrottle(Set(0, 1, 2, 3), updatedThrottle)
 
     val finalAssignment = Map(
@@ -457,8 +457,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     // Now increase the throttle and verify that the log dir movement completes
     val updatedLogDirThrottle = 3000000L
-    runAlterThrottles(cluster.adminClient, interBrokerThrottle = -1L,
-      replicaAlterLogDirsThrottle = updatedLogDirThrottle)
+    runExecuteAssignment(cluster.adminClient, additional = true, reassignment.json,
+      interBrokerThrottle = -1L, replicaAlterLogDirsThrottle = updatedLogDirThrottle)
     waitForLogDirThrottle(Set(0), updatedLogDirThrottle)
 
     waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
@@ -558,15 +558,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       s"replicaAlterLogDirsThrottle=${replicaAlterLogDirsThrottle}))")
     executeAssignment(adminClient, additional, reassignmentJson,
       interBrokerThrottle, replicaAlterLogDirsThrottle)
-  }
-
-  private def runAlterThrottles(admin: Admin,
-                                interBrokerThrottle: Long,
-                                replicaAlterLogDirsThrottle: Long): Unit = {
-    println(s"==> alterThrottles(adminClient, " +
-      s"interBrokerThrottle=${interBrokerThrottle}, " +
-      s"replicaAlterLogDirsThrottle=${replicaAlterLogDirsThrottle}))")
-    alterThrottles(admin, interBrokerThrottle, replicaAlterLogDirsThrottle)
   }
 
   private def runExecuteAssignment(zkClient: KafkaZkClient,
