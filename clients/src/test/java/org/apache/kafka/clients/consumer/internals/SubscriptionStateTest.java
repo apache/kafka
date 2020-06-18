@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
@@ -210,7 +210,7 @@ public class SubscriptionStateTest {
         state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertNotNull(state.position(tp0));
+        assertNull(state.position(tp0));
 
         // seek should clear the reset and make the partition fetchable
         state.seek(tp0, 0);
@@ -600,7 +600,7 @@ public class SubscriptionStateTest {
         assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(initialPosition, state.position(tp0));
+        assertNull(state.position(tp0));
     }
 
     @Test
@@ -671,6 +671,55 @@ public class SubscriptionStateTest {
             revokedCount++;
         }
 
+    }
+
+    @Test
+    public void resetOffsetNoValidation() {
+        // Check that offset reset works when we can't validate offsets (older brokers)
+
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        // Reset offsets
+        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+
+        // Attempt to validate with older API version, should do nothing
+        ApiVersions oldApis = new ApiVersions();
+        oldApis.update("1", NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
+        assertFalse(state.maybeValidatePositionForCurrentLeader(oldApis, tp0, new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.empty())));
+        assertFalse(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertTrue(state.isOffsetResetNeeded(tp0));
+
+        // Complete the reset via unvalidated seek
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Next call to validate offsets does nothing
+        assertFalse(state.maybeValidatePositionForCurrentLeader(oldApis, tp0, new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.empty())));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Reset again, and complete it with a seek that would normally require validation
+        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(10), new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.of(2))));
+        // We are now in AWAIT_VALIDATION
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Now ensure next call to validate clears the validation state
+        assertFalse(state.maybeValidatePositionForCurrentLeader(oldApis, tp0, new Metadata.LeaderAndEpoch(
+                Optional.of(broker1), Optional.of(2))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
     }
 
 }
