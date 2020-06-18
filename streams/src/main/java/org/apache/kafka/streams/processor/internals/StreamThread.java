@@ -273,14 +273,12 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
-    private final Admin adminClient;
     private final ChangelogReader changelogReader;
-
-    // package-private for testing
-    final ConsumerRebalanceListener rebalanceListener;
-    final Consumer<byte[], byte[]> mainConsumer;
-    final Consumer<byte[], byte[]> restoreConsumer;
-    final InternalTopologyBuilder builder;
+    private final ConsumerRebalanceListener rebalanceListener;
+    private final Consumer<byte[], byte[]> mainConsumer;
+    private final Consumer<byte[], byte[]> restoreConsumer;
+    private final Admin adminClient;
+    private final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -309,6 +307,7 @@ public class StreamThread extends Thread {
             time,
             config,
             logContext,
+            adminClient,
             restoreConsumer,
             userStateRestoreListener
         );
@@ -1020,4 +1019,23 @@ public class StreamThread extends Thread {
         return numIterations;
     }
 
+    ConsumerRebalanceListener rebalanceListener() {
+        return rebalanceListener;
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
+    Consumer<byte[], byte[]> restoreConsumer() {
+        return restoreConsumer;
+    };
+
+    Admin adminClient() {
+        return adminClient;
+    }
+
+    InternalTopologyBuilder internalTopologyBuilder() {
+        return builder;
+    };
 }

@@ -64,6 +64,8 @@ public class MockAdminClient extends AdminClient {
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
         new HashMap<>();
+    private final Map<TopicPartition, Long> beginningOffsets;
+    private final Map<TopicPartition, Long> endOffsets;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -145,8 +147,11 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
-    public MockAdminClient(List<Node> brokers,
-                           Node controller) {
+    public MockAdminClient() {
+        this(Collections.singletonList(Node.noNode()), Node.noNode());
+    }
+
+    public MockAdminClient(List<Node> brokers, Node controller) {
         this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
             Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
     }
@@ -167,6 +172,8 @@ public class MockAdminClient extends AdminClient {
         for (int i = 0; i < brokers.size(); i++) {
             this.brokerConfigs.add(new HashMap<>());
         }
+        this.beginningOffsets = new HashMap<>();
+        this.endOffsets = new HashMap<>();
     }
 
     synchronized public void controller(Node controller) {
@@ -789,7 +796,24 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implement yet");
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            OffsetSpec spec = entry.getValue();
+            KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
+
+            if (spec instanceof OffsetSpec.TimestampSpec)
+                throw new UnsupportedOperationException("Not implement yet");
+            else if (spec instanceof OffsetSpec.EarliestSpec)
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(beginningOffsets.get(tp), -1, Optional.empty()));
+            else
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(endOffsets.get(tp), -1, Optional.empty()));
+
+            futures.put(tp, future);
+        }
+
+        return new ListOffsetsResult(futures);
     }
 
     @Override
@@ -804,6 +828,14 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public void close(Duration timeout) {}
+
+    public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
+        beginningOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
+        endOffsets.putAll(newOffsets);
+    }
 
     private final static class TopicMetadata {
         final boolean isInternalTopic;
