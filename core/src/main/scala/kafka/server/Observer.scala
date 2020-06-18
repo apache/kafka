@@ -100,6 +100,7 @@ object Observer extends Logging {
         requestDesc += " null"
       } else {
         requestDesc += (" header: " + request.header)
+        requestDesc += (" connection ID: " + request.context.connectionId)
         requestDesc += (" from service with principal: " +
           request.session.sanitizedUser +
           " IP address: " + request.session.clientAddress)
