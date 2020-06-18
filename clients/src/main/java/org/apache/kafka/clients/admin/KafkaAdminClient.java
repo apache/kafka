@@ -727,12 +727,9 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
-        final void updateTriesBaseOn(Call failedCall) {
+        final void incrementRetryBackoff(Call failedCall, long now) {
+            this.nextAllowedTryMs = now + retryBackoff.term(tries);
             this.tries = failedCall.tries + 1;
-        }
-
-        final void updateNextAllowedTryMs(long now) {
-            this.nextAllowedTryMs = now + retryBackoff.term(Math.max(0, tries - 1));
         }
 
         /**
@@ -750,7 +747,7 @@ public class KafkaAdminClient extends AdminClient {
                 // If the call was aborted while in flight due to a timeout, deliver a
                 // TimeoutException. In this case, we do not get any more retries - the call has
                 // failed. We increment tries anyway in order to display an accurate log message.
-                updateTriesBaseOn(this);
+                tries++;
                 failWithTimeout(now, throwable);
                 return;
             }
@@ -764,8 +761,7 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
 
-            updateTriesBaseOn(this);
-            updateNextAllowedTryMs(now);
+            incrementRetryBackoff(this, now);
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
@@ -2827,8 +2823,7 @@ public class KafkaAdminClient extends AdminClient {
 
         Call call = nextCall.get();
 
-        call.updateTriesBaseOn(failedCall);
-        call.updateNextAllowedTryMs(time.milliseconds());
+        call.incrementRetryBackoff(failedCall, time.milliseconds());
 
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
         runnable.call(findCoordinatorCall, time.milliseconds());
@@ -3987,9 +3982,8 @@ public class KafkaAdminClient extends AdminClient {
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
                         rescheduleMetadataTask(operationContext, () -> {
                             List<Call> listOffsetsCalls = getListOffsetsCalls(operationContext, retryTopicPartitionOffsets, futures);
-                            listOffsetsCalls.forEach(call -> {
-                                call.updateTriesBaseOn(this);
-                                call.updateNextAllowedTryMs(time.milliseconds());});
+                            listOffsetsCalls.forEach(call ->
+                                call.incrementRetryBackoff(this, time.milliseconds()));
                             return listOffsetsCalls;
                         });
                     }

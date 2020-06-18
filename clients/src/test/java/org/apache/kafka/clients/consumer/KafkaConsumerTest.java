@@ -2217,7 +2217,7 @@ public class KafkaConsumerTest {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
-        long retryBackoffMaxMs = 1000;
+        long retryBackoffMaxMs = 100;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 30000;
         int minBytes = 1;
@@ -2298,7 +2298,7 @@ public class KafkaConsumerTest {
                 subscription,
                 metadata,
                 retryBackoffMs,
-                1000,
+                retryBackoffMaxMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,

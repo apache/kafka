@@ -743,7 +743,7 @@ public class Fetcher<K, V> implements Closeable {
                         subscriptions.requestFailed(result.partitionsToRetry, time.milliseconds());
                         metadata.requestUpdate();
                     }
-                    subscriptions.requestSuccess(result.fetchedOffsets.keySet(), time.milliseconds());
+                    subscriptions.requestSucceeded(result.fetchedOffsets.keySet(), time.milliseconds());
 
                     for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
                         TopicPartition partition = fetchedOffset.getKey();
@@ -818,7 +818,7 @@ public class Fetcher<K, V> implements Closeable {
                         subscriptions.requestFailed(offsetsResult.partitionsToRetry(), time.milliseconds());
                         metadata.requestUpdate();
                     }
-                    subscriptions.requestSuccess(offsetsResult.endOffsets().keySet(), time.milliseconds());
+                    subscriptions.requestSucceeded(offsetsResult.endOffsets().keySet(), time.milliseconds());
                     // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.

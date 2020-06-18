@@ -799,7 +799,7 @@ public class RecordAccumulatorTest {
         batch.close();
         // Enqueue the batch to the accumulator as if the batch was created by the accumulator.
         accum.reenqueue(batch, now);
-        time.sleep(121L);
+        time.sleep(101L * ((long) (1 + RETRY_BACKOFF_JITTER)));
         // Drain the batch.
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertTrue("The batch should be ready", result.readyNodes.size() > 0);

@@ -1255,14 +1255,13 @@ public class TransactionManager {
         void reenqueue() {
             synchronized (TransactionManager.this) {
                 this.isRetry = true;
-                this.attempts++;
-                this.retryBackoffMs = retryBackoff.term(attempts);
+                this.retryBackoffMs = retryBackoff.term(this.attempts++);
                 enqueueRequest(this);
             }
         }
 
         long retryBackoffMs() {
-            return this.retryBackoffMs;
+            return retryBackoffMs;
         }
 
         @Override
@@ -1310,7 +1309,9 @@ public class TransactionManager {
             return isRetry;
         }
 
-        int Attempts() { return attempts; }
+        int Attempts() {
+            return attempts;
+        }
 
         boolean isEndTxn() {
             return false;

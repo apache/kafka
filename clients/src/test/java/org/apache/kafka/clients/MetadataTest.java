@@ -159,7 +159,7 @@ public class MetadataTest {
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * RETRY_BACKOFF_JITTER);
 
         // refreshBackoffMs elapsed.
-        now += refreshBackoffMs * 1.2 + 1;
+        now += refreshBackoffMs * (1 + RETRY_BACKOFF_JITTER) + 1;
         // It should return 0 to let next try.
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));

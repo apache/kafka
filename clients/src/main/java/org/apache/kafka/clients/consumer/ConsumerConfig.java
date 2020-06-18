@@ -432,8 +432,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.LONG,
                                         1000L,
                                         atLeast(0L),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
+                                        Importance.LOW,
+                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         "latest",

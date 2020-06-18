@@ -1504,7 +1504,7 @@ public class FetcherTest {
     }
 
     private void resetOffset(Set<TopicPartition> tps, boolean successful) {
-        Errors retriableError = successful ? Errors.NONE : Errors.OFFSET_NOT_AVAILABLE;
+        Errors retriableError = successful ? Errors.NONE : Errors.UNKNOWN_LEADER_EPOCH;
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         for (TopicPartition tp : tps) {
             allPartitionData.put(tp, new ListOffsetResponse.PartitionData(

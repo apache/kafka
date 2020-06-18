@@ -716,7 +716,7 @@ public class SubscriptionState {
         }
     }
 
-    synchronized void requestSuccess(Set<TopicPartition> partitions, long now) {
+    synchronized void requestSucceeded(Set<TopicPartition> partitions, long now) {
         for (TopicPartition partition : partitions) {
             final TopicPartitionState state = assignment.stateValue(partition);
             if (state != null)
@@ -730,7 +730,7 @@ public class SubscriptionState {
         // TODO: Remove the line below before merging
         System.out.println("retryBackoffMs = " + retryBackoffMs + " now = " + now);
         long nextRetryTimeMs = now + retryBackoffMs;
-        state.requestFailed(nextRetryTimeMs);
+        state.setNextAllowedRetry(nextRetryTimeMs);
     }
 
     private void resetRetryBackoff(TopicPartitionState state) {
@@ -884,10 +884,6 @@ public class SubscriptionState {
         }
 
         private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
-            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
-        }
-
-        private void requestFailed(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
