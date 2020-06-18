@@ -190,6 +190,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Keeping this class for compatibility. It's deprecated and will be removed in the next major release -->
+        <Source name="MessageFormatter.scala"/>
+        <Package name="kafka.common"/>
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a warning about some static initializers in Schema using instances of a
              subclass. -->
         <Or>
